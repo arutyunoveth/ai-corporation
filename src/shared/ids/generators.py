@@ -180,3 +180,31 @@ def next_ceo_approval_set_id(session: Session, column: ColumnElement[str]) -> st
 
 def next_ceo_approval_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="CA", column=column)
+
+
+def next_bid_document_collection_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="BDCS", column=column)
+
+
+def next_bid_package_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="BPS", column=column)
+
+
+def next_bid_package_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="BP", column=column)
+
+
+def next_bid_completeness_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="BCS", column=column)
+
+
+def next_bid_completeness_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="BC", column=column)
+
+
+def next_submission_readiness_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SRS", column=column)
+
+
+def next_submission_readiness_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SR", column=column)

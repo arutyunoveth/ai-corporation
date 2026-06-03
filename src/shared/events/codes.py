@@ -77,6 +77,18 @@ EVENT_CODES = {
     "ceo_approval_package_built",
     "ceo_decision_recorded",
     "ceo_approval_failed",
+    "bid_document_collection_started",
+    "bid_document_collection_built",
+    "bid_document_collection_failed",
+    "bid_package_build_started",
+    "bid_package_built",
+    "bid_package_failed",
+    "bid_completeness_check_started",
+    "bid_completeness_checked",
+    "bid_completeness_failed",
+    "submission_readiness_build_started",
+    "submission_readiness_built",
+    "submission_readiness_failed",
 }
 
 DECISION_CODES = {

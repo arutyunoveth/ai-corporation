@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 
+from src.modules.bid_completeness.router import router as bid_completeness_router
+from src.modules.bid_documents.router import router as bid_documents_router
+from src.modules.bid_packages.router import router as bid_packages_router
 from src.modules.cash_gap.router import router as cash_gap_router
 from src.modules.ceo_approval.router import router as ceo_approval_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
@@ -19,6 +22,7 @@ from src.modules.quote_comparison.router import router as quote_comparison_route
 from src.modules.quote_repository.router import router as quote_repository_router
 from src.modules.rfq_generator.router import router as rfq_generator_router
 from src.modules.status_engine.router import router as status_router
+from src.modules.submission_readiness.router import router as submission_readiness_router
 from src.modules.supplier_communications.router import router as supplier_communications_router
 from src.modules.supplier_registry.router import router as supplier_registry_router
 from src.modules.supplier_search.router import router as supplier_search_router
@@ -60,6 +64,10 @@ app.include_router(finance_memo_router)
 app.include_router(contract_risks_router)
 app.include_router(integrated_risk_memo_router)
 app.include_router(ceo_approval_router)
+app.include_router(bid_documents_router)
+app.include_router(bid_packages_router)
+app.include_router(bid_completeness_router)
+app.include_router(submission_readiness_router)
 
 
 @app.get("/health")

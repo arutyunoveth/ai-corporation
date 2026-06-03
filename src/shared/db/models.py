@@ -1,3 +1,14 @@
+from src.modules.bid_completeness.models import (
+    BidCompletenessFlag,
+    BidCompletenessRecord,
+    BidCompletenessSet,
+)
+from src.modules.bid_documents.models import (
+    BidDocumentCollectionBinding,
+    BidDocumentCollectionRow,
+    BidDocumentCollectionSet,
+)
+from src.modules.bid_packages.models import BidPackageItem, BidPackageRecord, BidPackageSet
 from src.modules.ceo_approval.models import CEOApprovalCondition, CEOApprovalRecord, CEOApprovalSet
 from src.modules.compliance_matrix.models import ComplianceMatrix, ComplianceMatrixRow
 from src.modules.contract_risks.models import ContractRiskFlag, ContractRiskRecord, ContractRiskSet
@@ -41,6 +52,11 @@ from src.modules.supplier_verification.models import (
     SupplierVerificationSet,
 )
 from src.modules.status_engine.models import DealStatusHistory, StatusTransitionRule
+from src.modules.submission_readiness.models import (
+    SubmissionReadinessFlag,
+    SubmissionReadinessRecord,
+    SubmissionReadinessSet,
+)
 from src.modules.tender_screening.models import TenderScreeningRecord
 from src.modules.tender_intake.models import TenderIntakeRecord, TenderSourcePayload
 from src.modules.tender_summary.models import TenderSummary, TenderSummarySourceLink
@@ -48,6 +64,15 @@ from src.modules.tender_summary.models import TenderSummary, TenderSummarySource
 __all__ = [
     "ArtifactLink",
     "ArtifactVersion",
+    "BidCompletenessFlag",
+    "BidCompletenessRecord",
+    "BidCompletenessSet",
+    "BidDocumentCollectionBinding",
+    "BidDocumentCollectionRow",
+    "BidDocumentCollectionSet",
+    "BidPackageItem",
+    "BidPackageRecord",
+    "BidPackageSet",
     "CEOApprovalCondition",
     "CEOApprovalRecord",
     "CEOApprovalSet",
@@ -108,6 +133,9 @@ __all__ = [
     "SupplierVerificationFlag",
     "SupplierVerificationRecord",
     "SupplierVerificationSet",
+    "SubmissionReadinessFlag",
+    "SubmissionReadinessRecord",
+    "SubmissionReadinessSet",
     "TenderScreeningRecord",
     "TenderIntakeRecord",
     "TenderSourcePayload",

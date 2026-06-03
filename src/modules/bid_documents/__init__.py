@@ -1,0 +1,1 @@
+"""Bid document collection module."""

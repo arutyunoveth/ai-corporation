@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, and Sprint 4B risk + approval foundation for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, and Sprint 5A bid-prep foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -28,6 +28,10 @@ Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation,
 - `M-026` Contract Risk Parser
 - `M-027` Integrated Risk Memo Builder
 - `M-028` CEO Approval Cockpit
+- `M-029` Bid Document Collector
+- `M-030` Bid Package Builder
+- `M-031` Bid Completeness Checker
+- `M-032` Submission Readiness Gate
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -45,6 +49,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - persisted supplier verification runs, comparison rows, and recommendations
 - persisted cost model, cash gap, financing strategy, and finance memo records
 - persisted contract risks, integrated risk memos, and CEO approval decisions
+- persisted bid document collections, bid packages, completeness checks, and submission readiness gates
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -93,6 +98,13 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `IRM-YYYY-NNNNNN`
   - `CAS-YYYY-NNNNNN`
   - `CA-YYYY-NNNNNN`
+  - `BDCS-YYYY-NNNNNN`
+  - `BPS-YYYY-NNNNNN`
+  - `BP-YYYY-NNNNNN`
+  - `BCS-YYYY-NNNNNN`
+  - `BC-YYYY-NNNNNN`
+  - `SRS-YYYY-NNNNNN`
+  - `SR-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -251,6 +263,22 @@ pytest
 - `GET /ceo-approval/{ceo_approval_set_id}`
 - `GET /ceo-approval`
 - `GET /ceo-approval/records/{ceo_approval_id}`
+- `POST /bid-documents/collect`
+- `GET /bid-documents/{bid_document_collection_set_id}`
+- `GET /bid-documents`
+- `GET /bid-documents/rows/{bid_document_collection_set_id}`
+- `POST /bid-packages/build`
+- `GET /bid-packages/{bid_package_set_id}`
+- `GET /bid-packages`
+- `GET /bid-packages/records/{bid_package_id}`
+- `POST /bid-completeness/check`
+- `GET /bid-completeness/{bid_completeness_set_id}`
+- `GET /bid-completeness`
+- `GET /bid-completeness/records/{bid_completeness_id}`
+- `POST /submission-readiness/build`
+- `GET /submission-readiness/{submission_readiness_set_id}`
+- `GET /submission-readiness`
+- `GET /submission-readiness/records/{submission_readiness_id}`
 
 ## Source Of Truth
 
@@ -264,15 +292,18 @@ pytest
 - [docs/01_sprints/Sprint_3B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_3B_Technical_Spec.md)
 - [docs/01_sprints/Sprint_4A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_4A_Technical_Spec.md)
 - [docs/01_sprints/Sprint_4B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_4B_Technical_Spec.md)
+- [docs/01_sprints/Sprint_5A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_5A_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
 - [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
 - [docs/03_entities/Entity_Catalog_Sprint_3A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3A.md)
 - [docs/03_entities/Entity_Catalog_Sprint_3B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3B.md)
 - [docs/03_entities/Entity_Catalog_Sprint_4A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_4A.md)
 - [docs/03_entities/Entity_Catalog_Sprint_4B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_4B.md)
+- [docs/03_entities/Entity_Catalog_Sprint_5A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_5A.md)
 - [docs/00_architecture/implementation_summary_sprint_2a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2a.md)
 - [docs/00_architecture/implementation_summary_sprint_2b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2b.md)
 - [docs/00_architecture/implementation_summary_sprint_3a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3a.md)
 - [docs/00_architecture/implementation_summary_sprint_3b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3b.md)
 - [docs/00_architecture/implementation_summary_sprint_4a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_4a.md)
 - [docs/00_architecture/implementation_summary_sprint_4b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_4b.md)
+- [docs/00_architecture/implementation_summary_sprint_5a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_5a.md)
