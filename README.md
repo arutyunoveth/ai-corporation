@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, Sprint 6B closure / incident / KPI foundation, and Sprint 7A operational intelligence foundation for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, Sprint 6B closure / incident / KPI foundation, Sprint 7A operational intelligence foundation, and Sprint 7B orchestration / optimization foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -48,6 +48,9 @@ Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation,
 - `M-048` Operational Dashboard Backbone
 - `M-049` Archive Export & Handover
 - `M-050` Learning Automation Engine
+- `M-051` Workflow Orchestration Backbone
+- `M-052` Optimization Recommendation Engine
+- `M-053` Operator Copilot Feed
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -70,6 +73,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - persisted delivery launch controls, execution command centers, milestones, fulfillment, shipping/acceptance, and payment collection records
 - persisted incidents, deal closure/archive snapshots, and KPI/learning outputs
 - persisted dashboard snapshots, archive export manifests, and automated learning recommendations
+- persisted workflow runs, optimization recommendations, and operator copilot feeds
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -166,6 +170,13 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `AE-YYYY-NNNNNN`
   - `LAS-YYYY-NNNNNN`
   - `LA-YYYY-NNNNNN`
+  - `WRS-YYYY-NNNNNN`
+  - `WR-YYYY-NNNNNN`
+  - `WS-YYYY-NNNNNN`
+  - `ORS-YYYY-NNNNNN`
+  - `OR-YYYY-NNNNNN`
+  - `CFS-YYYY-NNNNNN`
+  - `CF-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -415,6 +426,18 @@ pytest
 - `GET /learning-automation/{learning_automation_set_id}`
 - `GET /learning-automation`
 - `GET /learning-automation/records/{learning_automation_id}`
+- `POST /workflow-runs/build`
+- `GET /workflow-runs/{workflow_run_set_id}`
+- `GET /workflow-runs`
+- `GET /workflow-runs/records/{workflow_run_id}`
+- `POST /optimization/build`
+- `GET /optimization/{optimization_recommendation_set_id}`
+- `GET /optimization`
+- `GET /optimization/records/{optimization_recommendation_id}`
+- `POST /copilot-feed/build`
+- `GET /copilot-feed/{copilot_feed_set_id}`
+- `GET /copilot-feed`
+- `GET /copilot-feed/records/{copilot_feed_id}`
 
 ## Source Of Truth
 
@@ -433,6 +456,7 @@ pytest
 - [docs/01_sprints/Sprint_6A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_6A_Technical_Spec.md)
 - [docs/01_sprints/Sprint_6B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_6B_Technical_Spec.md)
 - [docs/01_sprints/Sprint_7A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_7A_Technical_Spec.md)
+- [docs/01_sprints/Sprint_7B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_7B_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
 - [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
 - [docs/03_entities/Entity_Catalog_Sprint_3A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3A.md)
@@ -444,6 +468,7 @@ pytest
 - [docs/03_entities/Entity_Catalog_Sprint_6A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_6A.md)
 - [docs/03_entities/Entity_Catalog_Sprint_6B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_6B.md)
 - [docs/03_entities/Entity_Catalog_Sprint_7A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_7A.md)
+- [docs/03_entities/Entity_Catalog_Sprint_7B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_7B.md)
 - [docs/00_architecture/implementation_summary_sprint_2a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2a.md)
 - [docs/00_architecture/implementation_summary_sprint_2b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2b.md)
 - [docs/00_architecture/implementation_summary_sprint_3a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3a.md)
@@ -455,3 +480,4 @@ pytest
 - [docs/00_architecture/implementation_summary_sprint_6a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_6a.md)
 - [docs/00_architecture/implementation_summary_sprint_6b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_6b.md)
 - [docs/00_architecture/implementation_summary_sprint_7a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_7a.md)
+- [docs/00_architecture/implementation_summary_sprint_7b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_7b.md)

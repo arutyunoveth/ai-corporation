@@ -9,6 +9,7 @@ from src.modules.bid_documents.models import (
     BidDocumentCollectionSet,
 )
 from src.modules.archive_export.models import ArchiveExportItem, ArchiveExportRecord, ArchiveExportSet
+from src.modules.copilot_feed.models import CopilotFeedItem, CopilotFeedRecord, CopilotFeedSet
 from src.modules.bid_packages.models import BidPackageItem, BidPackageRecord, BidPackageSet
 from src.modules.ceo_approval.models import CEOApprovalCondition, CEOApprovalRecord, CEOApprovalSet
 from src.modules.compliance_matrix.models import ComplianceMatrix, ComplianceMatrixRow
@@ -72,6 +73,11 @@ from src.modules.outcome_intake.models import (
     OutcomeIntakeRecord,
     OutcomeIntakeSet,
 )
+from src.modules.optimization.models import (
+    OptimizationRecommendationRecord,
+    OptimizationRecommendationSet,
+    OptimizationSignalRecord,
+)
 from src.modules.quote_repository.models import QuoteArtifactBinding, QuoteRecord, QuoteSet
 from src.modules.quote_comparison.models import (
     QuoteComparisonRecommendation,
@@ -120,6 +126,7 @@ from src.modules.submission_receipts.models import (
 from src.modules.tender_screening.models import TenderScreeningRecord
 from src.modules.tender_intake.models import TenderIntakeRecord, TenderSourcePayload
 from src.modules.tender_summary.models import TenderSummary, TenderSummarySourceLink
+from src.modules.workflow_runs.models import WorkflowRunRecord, WorkflowRunSet, WorkflowStepRecord
 
 __all__ = [
     "ArtifactLink",
@@ -127,6 +134,9 @@ __all__ = [
     "ArchiveExportItem",
     "ArchiveExportRecord",
     "ArchiveExportSet",
+    "CopilotFeedItem",
+    "CopilotFeedRecord",
+    "CopilotFeedSet",
     "BidCompletenessFlag",
     "BidCompletenessRecord",
     "BidCompletenessSet",
@@ -200,6 +210,9 @@ __all__ = [
     "OutcomeIntakeBinding",
     "OutcomeIntakeRecord",
     "OutcomeIntakeSet",
+    "OptimizationRecommendationRecord",
+    "OptimizationRecommendationSet",
+    "OptimizationSignalRecord",
     "PaymentCollectionEvent",
     "PaymentCollectionRecord",
     "PaymentCollectionSet",
@@ -249,4 +262,7 @@ __all__ = [
     "TenderSourcePayload",
     "TenderSummary",
     "TenderSummarySourceLink",
+    "WorkflowRunRecord",
+    "WorkflowRunSet",
+    "WorkflowStepRecord",
 ]

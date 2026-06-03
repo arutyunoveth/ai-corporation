@@ -372,3 +372,31 @@ def next_learning_automation_set_id(session: Session, column: ColumnElement[str]
 
 def next_learning_automation_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="LA", column=column)
+
+
+def next_workflow_run_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="WRS", column=column)
+
+
+def next_workflow_run_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="WR", column=column)
+
+
+def next_workflow_step_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="WS", column=column)
+
+
+def next_optimization_recommendation_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ORS", column=column)
+
+
+def next_optimization_recommendation_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="OR", column=column)
+
+
+def next_copilot_feed_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CFS", column=column)
+
+
+def next_copilot_feed_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CF", column=column)

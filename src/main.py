@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from src.modules.archive_export.router import router as archive_export_router
+from src.modules.copilot_feed.router import router as copilot_feed_router
 from src.modules.bid_completeness.router import router as bid_completeness_router
 from src.modules.bid_documents.router import router as bid_documents_router
 from src.modules.bid_packages.router import router as bid_packages_router
@@ -29,6 +30,7 @@ from src.modules.learning_automation.router import router as learning_automation
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.post_submission.router import router as post_submission_router
 from src.modules.outcome_intake.router import router as outcome_intake_router
+from src.modules.optimization.router import router as optimization_router
 from src.modules.payment_collection.router import router as payment_collection_router
 from src.modules.quote_comparison.router import router as quote_comparison_router
 from src.modules.quote_repository.router import router as quote_repository_router
@@ -46,6 +48,7 @@ from src.modules.supplier_verification.router import router as supplier_verifica
 from src.modules.tender_screening.router import router as tender_screening_router
 from src.modules.tender_intake.router import router as tender_intake_router
 from src.modules.tender_summary.router import router as tender_summary_router
+from src.modules.workflow_runs.router import router as workflow_runs_router
 from src.shared.api.errors import register_exception_handlers
 from src.shared.config.settings import get_settings
 
@@ -57,6 +60,9 @@ register_exception_handlers(app)
 app.include_router(deals_router)
 app.include_router(dashboard_snapshots_router)
 app.include_router(archive_export_router)
+app.include_router(workflow_runs_router)
+app.include_router(optimization_router)
+app.include_router(copilot_feed_router)
 app.include_router(deal_closure_router)
 app.include_router(delivery_launch_router)
 app.include_router(delivery_milestones_router)

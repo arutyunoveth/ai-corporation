@@ -139,6 +139,15 @@ EVENT_CODES = {
     "learning_automation_built",
     "learning_recommendation_recorded",
     "learning_automation_failed",
+    "workflow_run_built",
+    "workflow_step_recorded",
+    "workflow_run_failed",
+    "optimization_recommendations_built",
+    "optimization_signal_recorded",
+    "optimization_recommendations_failed",
+    "copilot_feed_built",
+    "copilot_feed_item_recorded",
+    "copilot_feed_failed",
 }
 
 DECISION_CODES = {

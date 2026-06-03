@@ -116,6 +116,18 @@ from .sprint7a import (
     LearningAutomationStatus,
     LearningRecommendationType,
 )
+from .sprint7b import (
+    CopilotFeedItemType,
+    CopilotFeedStatus,
+    CopilotPriority,
+    OptimizationRecommendationType,
+    OptimizationScopeType,
+    OptimizationStatus,
+    WorkflowScopeType,
+    WorkflowStatus,
+    WorkflowStepStatus,
+    WorkflowStepType,
+)
 
 __all__ = [
     "ArtifactType",
@@ -212,4 +224,14 @@ __all__ = [
     "LearningAutomationScopeType",
     "LearningAutomationStatus",
     "LearningRecommendationType",
+    "WorkflowScopeType",
+    "WorkflowStatus",
+    "WorkflowStepType",
+    "WorkflowStepStatus",
+    "OptimizationScopeType",
+    "OptimizationStatus",
+    "OptimizationRecommendationType",
+    "CopilotFeedStatus",
+    "CopilotFeedItemType",
+    "CopilotPriority",
 ]
