@@ -1,0 +1,1 @@
+"""Integrated risk memo module."""

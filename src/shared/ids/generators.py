@@ -156,3 +156,27 @@ def next_finance_memo_set_id(session: Session, column: ColumnElement[str]) -> st
 
 def next_finance_memo_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="FM", column=column)
+
+
+def next_contract_risk_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CRS", column=column)
+
+
+def next_contract_risk_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CR", column=column)
+
+
+def next_integrated_risk_memo_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IRMS", column=column)
+
+
+def next_integrated_risk_memo_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IRM", column=column)
+
+
+def next_ceo_approval_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CAS", column=column)
+
+
+def next_ceo_approval_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CA", column=column)

@@ -1,4 +1,6 @@
+from src.modules.ceo_approval.models import CEOApprovalCondition, CEOApprovalRecord, CEOApprovalSet
 from src.modules.compliance_matrix.models import ComplianceMatrix, ComplianceMatrixRow
+from src.modules.contract_risks.models import ContractRiskFlag, ContractRiskRecord, ContractRiskSet
 from src.modules.cost_model.models import CostModelLine, CostModelRecord, CostModelSet
 from src.modules.cash_gap.models import CashGapRecord, CashGapScenario, CashGapSet
 from src.modules.deal_registry.models import Deal, DealExternalRef, DealTag
@@ -13,6 +15,11 @@ from src.modules.financing_strategy.models import (
     FinancingStrategySet,
 )
 from src.modules.initial_tech_risks.models import InitialTechRiskFlag, InitialTechRiskFlagSet
+from src.modules.integrated_risk_memo.models import (
+    IntegratedRiskItem,
+    IntegratedRiskMemoRecord,
+    IntegratedRiskMemoSet,
+)
 from src.modules.priority_scoring.models import PriorityScoreRecord
 from src.modules.quote_repository.models import QuoteArtifactBinding, QuoteRecord, QuoteSet
 from src.modules.quote_comparison.models import (
@@ -41,8 +48,14 @@ from src.modules.tender_summary.models import TenderSummary, TenderSummarySource
 __all__ = [
     "ArtifactLink",
     "ArtifactVersion",
+    "CEOApprovalCondition",
+    "CEOApprovalRecord",
+    "CEOApprovalSet",
     "ComplianceMatrix",
     "ComplianceMatrixRow",
+    "ContractRiskFlag",
+    "ContractRiskRecord",
+    "ContractRiskSet",
     "CostModelLine",
     "CostModelRecord",
     "CostModelSet",
@@ -69,6 +82,9 @@ __all__ = [
     "FinancingStrategySet",
     "InitialTechRiskFlag",
     "InitialTechRiskFlagSet",
+    "IntegratedRiskItem",
+    "IntegratedRiskMemoRecord",
+    "IntegratedRiskMemoSet",
     "PriorityScoreRecord",
     "QuoteArtifactBinding",
     "QuoteComparisonRecommendation",

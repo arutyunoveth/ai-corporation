@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 
 from src.modules.cash_gap.router import router as cash_gap_router
+from src.modules.ceo_approval.router import router as ceo_approval_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
+from src.modules.contract_risks.router import router as contract_risks_router
 from src.modules.cost_model.router import router as cost_model_router
 from src.modules.deal_registry.router import router as deals_router
 from src.modules.document_store.router import router as artifacts_router
@@ -11,6 +13,7 @@ from src.modules.event_log.router import router as event_log_router
 from src.modules.finance_memo.router import router as finance_memo_router
 from src.modules.financing_strategy.router import router as financing_strategy_router
 from src.modules.initial_tech_risks.router import router as initial_tech_risks_router
+from src.modules.integrated_risk_memo.router import router as integrated_risk_memo_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.quote_comparison.router import router as quote_comparison_router
 from src.modules.quote_repository.router import router as quote_repository_router
@@ -54,6 +57,9 @@ app.include_router(cost_model_router)
 app.include_router(cash_gap_router)
 app.include_router(financing_strategy_router)
 app.include_router(finance_memo_router)
+app.include_router(contract_risks_router)
+app.include_router(integrated_risk_memo_router)
+app.include_router(ceo_approval_router)
 
 
 @app.get("/health")

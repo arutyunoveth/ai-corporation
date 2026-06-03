@@ -68,6 +68,15 @@ EVENT_CODES = {
     "finance_memo_build_started",
     "finance_memo_built",
     "finance_memo_failed",
+    "contract_risk_build_started",
+    "contract_risk_built",
+    "contract_risk_failed",
+    "integrated_risk_memo_build_started",
+    "integrated_risk_memo_built",
+    "integrated_risk_memo_failed",
+    "ceo_approval_package_built",
+    "ceo_decision_recorded",
+    "ceo_approval_failed",
 }
 
 DECISION_CODES = {
@@ -75,4 +84,5 @@ DECISION_CODES = {
     "DEAL_MARKED_REJECTED_EARLY",
     "APPROVE_TO_BID",
     "DECLINE_TO_BID",
+    "CEO_APPROVAL_DECISION",
 }

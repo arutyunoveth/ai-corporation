@@ -50,6 +50,15 @@ from .sprint4a import (
     FinancingFeasibilityStatus,
     FinancingStrategyStatus,
 )
+from .sprint4b import (
+    ApprovalDecision,
+    ApprovalStatus,
+    ContractClauseType,
+    ContractRiskStatus,
+    IntegratedRiskMemoStatus,
+    RiskSeverity,
+    RiskSourceType,
+)
 
 __all__ = [
     "ArtifactType",
@@ -92,4 +101,11 @@ __all__ = [
     "FinanceRecommendation",
     "FinancingFeasibilityStatus",
     "FinancingStrategyStatus",
+    "ApprovalDecision",
+    "ApprovalStatus",
+    "ContractClauseType",
+    "ContractRiskStatus",
+    "IntegratedRiskMemoStatus",
+    "RiskSeverity",
+    "RiskSourceType",
 ]
