@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.DS_Store
+*.pyc
+*.pyo
+*.pyd
+dist/
+build/
+*.egg-info/
+alembic.log
+.env
+ai_corporation.db
