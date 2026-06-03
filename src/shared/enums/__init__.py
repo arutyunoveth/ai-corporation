@@ -106,6 +106,16 @@ from .sprint6b import (
     KPIStatus,
     LearningNoteType,
 )
+from .sprint7a import (
+    ArchiveExportFormat,
+    ArchiveExportItemRole,
+    ArchiveExportStatus,
+    DashboardScopeType,
+    DashboardSnapshotStatus,
+    LearningAutomationScopeType,
+    LearningAutomationStatus,
+    LearningRecommendationType,
+)
 
 __all__ = [
     "ArtifactType",
@@ -194,4 +204,12 @@ __all__ = [
     "IncidentType",
     "KPIStatus",
     "LearningNoteType",
+    "ArchiveExportFormat",
+    "ArchiveExportItemRole",
+    "ArchiveExportStatus",
+    "DashboardScopeType",
+    "DashboardSnapshotStatus",
+    "LearningAutomationScopeType",
+    "LearningAutomationStatus",
+    "LearningRecommendationType",
 ]

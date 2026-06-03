@@ -131,6 +131,14 @@ EVENT_CODES = {
     "kpi_learning_built",
     "learning_note_recorded",
     "kpi_learning_failed",
+    "dashboard_snapshot_built",
+    "dashboard_snapshot_failed",
+    "archive_export_built",
+    "archive_export_failed",
+    "archive_export_marked_exported",
+    "learning_automation_built",
+    "learning_recommendation_recorded",
+    "learning_automation_failed",
 }
 
 DECISION_CODES = {

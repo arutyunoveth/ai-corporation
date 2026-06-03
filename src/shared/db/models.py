@@ -8,6 +8,7 @@ from src.modules.bid_documents.models import (
     BidDocumentCollectionRow,
     BidDocumentCollectionSet,
 )
+from src.modules.archive_export.models import ArchiveExportItem, ArchiveExportRecord, ArchiveExportSet
 from src.modules.bid_packages.models import BidPackageItem, BidPackageRecord, BidPackageSet
 from src.modules.ceo_approval.models import CEOApprovalCondition, CEOApprovalRecord, CEOApprovalSet
 from src.modules.compliance_matrix.models import ComplianceMatrix, ComplianceMatrixRow
@@ -16,6 +17,11 @@ from src.modules.cost_model.models import CostModelLine, CostModelRecord, CostMo
 from src.modules.cash_gap.models import CashGapRecord, CashGapScenario, CashGapSet
 from src.modules.deal_closure.models import DealArchiveSnapshot, DealClosureRecord, DealClosureSet
 from src.modules.deal_registry.models import Deal, DealExternalRef, DealTag
+from src.modules.dashboard_snapshots.models import (
+    DashboardMetricRecord,
+    DashboardSnapshotRecord,
+    DashboardSnapshotSet,
+)
 from src.modules.delivery_launch.models import DeliveryLaunchFlag, DeliveryLaunchRecord, DeliveryLaunchSet
 from src.modules.delivery_milestones.models import (
     DeliveryMilestoneEvent,
@@ -45,6 +51,11 @@ from src.modules.integrated_risk_memo.models import (
     IntegratedRiskMemoSet,
 )
 from src.modules.kpi_learning.models import KPILearningRecord, KPILearningSet, LearningNoteRecord
+from src.modules.learning_automation.models import (
+    LearningAutomationRecord,
+    LearningAutomationSet,
+    LearningRecommendationRecord,
+)
 from src.modules.priority_scoring.models import PriorityScoreRecord
 from src.modules.post_submission.models import (
     PostSubmissionEvent,
@@ -113,6 +124,9 @@ from src.modules.tender_summary.models import TenderSummary, TenderSummarySource
 __all__ = [
     "ArtifactLink",
     "ArtifactVersion",
+    "ArchiveExportItem",
+    "ArchiveExportRecord",
+    "ArchiveExportSet",
     "BidCompletenessFlag",
     "BidCompletenessRecord",
     "BidCompletenessSet",
@@ -140,6 +154,9 @@ __all__ = [
     "DealClosureRecord",
     "DealClosureSet",
     "Deal",
+    "DashboardMetricRecord",
+    "DashboardSnapshotRecord",
+    "DashboardSnapshotSet",
     "DealExternalRef",
     "DealStatusHistory",
     "DealTag",
@@ -176,6 +193,9 @@ __all__ = [
     "IntegratedRiskMemoSet",
     "KPILearningRecord",
     "KPILearningSet",
+    "LearningAutomationRecord",
+    "LearningAutomationSet",
+    "LearningRecommendationRecord",
     "LearningNoteRecord",
     "OutcomeIntakeBinding",
     "OutcomeIntakeRecord",

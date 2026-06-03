@@ -348,3 +348,27 @@ def next_kpi_learning_id(session: Session, column: ColumnElement[str]) -> str:
 
 def next_learning_note_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="LN", column=column)
+
+
+def next_dashboard_snapshot_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DSS", column=column)
+
+
+def next_dashboard_snapshot_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DSH", column=column)
+
+
+def next_archive_export_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="AES", column=column)
+
+
+def next_archive_export_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="AE", column=column)
+
+
+def next_learning_automation_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LAS", column=column)
+
+
+def next_learning_automation_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LA", column=column)

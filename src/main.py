@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from src.modules.archive_export.router import router as archive_export_router
 from src.modules.bid_completeness.router import router as bid_completeness_router
 from src.modules.bid_documents.router import router as bid_documents_router
 from src.modules.bid_packages.router import router as bid_packages_router
@@ -8,6 +9,7 @@ from src.modules.ceo_approval.router import router as ceo_approval_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
 from src.modules.contract_risks.router import router as contract_risks_router
 from src.modules.cost_model.router import router as cost_model_router
+from src.modules.dashboard_snapshots.router import router as dashboard_snapshots_router
 from src.modules.deal_registry.router import router as deals_router
 from src.modules.deal_closure.router import router as deal_closure_router
 from src.modules.delivery_launch.router import router as delivery_launch_router
@@ -23,6 +25,7 @@ from src.modules.initial_tech_risks.router import router as initial_tech_risks_r
 from src.modules.incidents.router import router as incidents_router
 from src.modules.integrated_risk_memo.router import router as integrated_risk_memo_router
 from src.modules.kpi_learning.router import router as kpi_learning_router
+from src.modules.learning_automation.router import router as learning_automation_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.post_submission.router import router as post_submission_router
 from src.modules.outcome_intake.router import router as outcome_intake_router
@@ -52,6 +55,8 @@ app = FastAPI(title=settings.app_name, debug=settings.debug)
 register_exception_handlers(app)
 
 app.include_router(deals_router)
+app.include_router(dashboard_snapshots_router)
+app.include_router(archive_export_router)
 app.include_router(deal_closure_router)
 app.include_router(delivery_launch_router)
 app.include_router(delivery_milestones_router)
@@ -82,6 +87,7 @@ app.include_router(finance_memo_router)
 app.include_router(contract_risks_router)
 app.include_router(integrated_risk_memo_router)
 app.include_router(kpi_learning_router)
+app.include_router(learning_automation_router)
 app.include_router(ceo_approval_router)
 app.include_router(bid_documents_router)
 app.include_router(bid_packages_router)
