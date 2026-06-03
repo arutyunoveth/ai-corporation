@@ -6,6 +6,15 @@ from src.modules.document_store.models import ArtifactLink, ArtifactVersion, Doc
 from src.modules.event_log.models import DecisionRecord, EventRecord
 from src.modules.initial_tech_risks.models import InitialTechRiskFlag, InitialTechRiskFlagSet
 from src.modules.priority_scoring.models import PriorityScoreRecord
+from src.modules.quote_repository.models import QuoteArtifactBinding, QuoteRecord, QuoteSet
+from src.modules.rfq_generator.models import RFQArtifactBinding, RFQBatch, RFQRecord
+from src.modules.supplier_communications.models import (
+    SupplierCommunicationSet,
+    SupplierCommunicationThread,
+    SupplierMessageRecord,
+)
+from src.modules.supplier_registry.models import SupplierContact, SupplierExternalRef, SupplierProfile, SupplierTag
+from src.modules.supplier_search.models import SupplierShortlist, SupplierShortlistRow
 from src.modules.status_engine.models import DealStatusHistory, StatusTransitionRule
 from src.modules.tender_screening.models import TenderScreeningRecord
 from src.modules.tender_intake.models import TenderIntakeRecord, TenderSourcePayload
@@ -31,7 +40,22 @@ __all__ = [
     "InitialTechRiskFlag",
     "InitialTechRiskFlagSet",
     "PriorityScoreRecord",
+    "QuoteArtifactBinding",
+    "QuoteRecord",
+    "QuoteSet",
+    "RFQArtifactBinding",
+    "RFQBatch",
+    "RFQRecord",
     "StatusTransitionRule",
+    "SupplierCommunicationSet",
+    "SupplierCommunicationThread",
+    "SupplierContact",
+    "SupplierExternalRef",
+    "SupplierMessageRecord",
+    "SupplierProfile",
+    "SupplierShortlist",
+    "SupplierShortlistRow",
+    "SupplierTag",
     "TenderScreeningRecord",
     "TenderIntakeRecord",
     "TenderSourcePayload",

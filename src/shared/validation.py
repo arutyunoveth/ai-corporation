@@ -30,3 +30,9 @@ def require_non_empty_list(values: list, field_name: str) -> list:
     if not values:
         raise ValidationError(f"{field_name} must not be empty")
     return values
+
+
+def require_positive_number(value: float | int, field_name: str) -> float | int:
+    if value <= 0:
+        raise ValidationError(f"{field_name} must be > 0")
+    return value

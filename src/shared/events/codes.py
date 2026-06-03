@@ -35,6 +35,21 @@ EVENT_CODES = {
     "initial_tech_risk_build_started",
     "initial_tech_risk_built",
     "initial_tech_risk_build_failed",
+    "supplier_profile_created",
+    "supplier_profile_updated",
+    "supplier_shortlist_build_started",
+    "supplier_shortlist_built",
+    "supplier_shortlist_failed",
+    "rfq_batch_build_started",
+    "rfq_batch_built",
+    "rfq_batch_sent",
+    "rfq_batch_failed",
+    "supplier_communication_set_created",
+    "supplier_message_recorded",
+    "supplier_reply_received",
+    "quote_registered",
+    "quote_revised",
+    "quote_withdrawn",
 }
 
 DECISION_CODES = {

@@ -76,3 +76,39 @@ def next_document_requirement_set_id(session: Session, column: ColumnElement[str
 
 def next_risk_flag_set_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="IRF", column=column)
+
+
+def next_supplier_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SUP", column=column)
+
+
+def next_supplier_shortlist_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SSL", column=column)
+
+
+def next_rfq_batch_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="RB", column=column)
+
+
+def next_rfq_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="RFQ", column=column)
+
+
+def next_supplier_communication_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SCS", column=column)
+
+
+def next_supplier_thread_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SCT", column=column)
+
+
+def next_supplier_message_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SM", column=column)
+
+
+def next_quote_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="QS", column=column)
+
+
+def next_quote_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="Q", column=column)

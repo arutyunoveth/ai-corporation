@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, and Sprint 2B analysis foundation for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, and Sprint 3A supplier-side foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -14,6 +14,11 @@ Sprint 1 foundation, Sprint 2A intake foundation, and Sprint 2B analysis foundat
 - `M-013` Compliance Matrix Builder
 - `M-014` Document Requirement Extractor
 - `M-015` Initial Tech Risk Flags
+- `M-006` Supplier Registry
+- `M-016` Supplier Search
+- `M-017` RFQ Generator
+- `M-018` Supplier Communication Tracker
+- `M-019` TKP Repository
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -27,6 +32,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - formal document sets and ingestion runs
 - persisted tender summaries with source lineage
 - persisted screening, priority scoring, compliance matrix, document requirement, and initial tech risk records
+- persisted supplier profiles, shortlists, RFQ batches, communication threads, and quotes
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -49,6 +55,15 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `CM-YYYY-NNNNNN`
   - `DRS-YYYY-NNNNNN`
   - `IRF-YYYY-NNNNNN`
+  - `SUP-YYYY-NNNNNN`
+  - `SSL-YYYY-NNNNNN`
+  - `RB-YYYY-NNNNNN`
+  - `RFQ-YYYY-NNNNNN`
+  - `SCS-YYYY-NNNNNN`
+  - `SCT-YYYY-NNNNNN`
+  - `SM-YYYY-NNNNNN`
+  - `QS-YYYY-NNNNNN`
+  - `Q-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -148,6 +163,28 @@ pytest
 - `POST /initial-tech-risks/build`
 - `GET /initial-tech-risks/{risk_flag_set_id}`
 - `GET /initial-tech-risks`
+- `POST /suppliers`
+- `GET /suppliers/{supplier_id}`
+- `GET /suppliers`
+- `PATCH /suppliers/{supplier_id}`
+- `POST /suppliers/{supplier_id}/contacts`
+- `POST /suppliers/{supplier_id}/tags`
+- `POST /supplier-search/build`
+- `GET /supplier-search/{supplier_shortlist_id}`
+- `GET /supplier-search`
+- `POST /rfq/batches/build`
+- `GET /rfq/batches/{rfq_batch_id}`
+- `GET /rfq/batches`
+- `GET /rfq/records/{rfq_id}`
+- `POST /supplier-communications/sets/build`
+- `GET /supplier-communications/sets/{supplier_communication_set_id}`
+- `GET /supplier-communications/sets`
+- `POST /supplier-communications/threads/{supplier_thread_id}/messages`
+- `GET /supplier-communications/threads/{supplier_thread_id}`
+- `POST /quotes/register`
+- `GET /quotes/{quote_id}`
+- `GET /quotes`
+- `GET /quote-sets/{quote_set_id}`
 
 ## Source Of Truth
 
@@ -157,7 +194,10 @@ pytest
 - [docs/01_sprints/MVP_First_Wave_Backlog.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/MVP_First_Wave_Backlog.md)
 - [docs/01_sprints/Sprint_1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_1_Technical_Spec.md)
 - [docs/01_sprints/Sprint_2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_2_Technical_Spec.md)
+- [docs/01_sprints/Sprint_3A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_3A_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
 - [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
+- [docs/03_entities/Entity_Catalog_Sprint_3A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3A.md)
 - [docs/00_architecture/implementation_summary_sprint_2a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2a.md)
 - [docs/00_architecture/implementation_summary_sprint_2b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2b.md)
+- [docs/00_architecture/implementation_summary_sprint_3a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3a.md)
