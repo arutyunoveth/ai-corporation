@@ -56,3 +56,23 @@ def next_ingestion_run_id(session: Session, column: ColumnElement[str]) -> str:
 
 def next_tender_summary_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="TS", column=column)
+
+
+def next_screening_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SCR", column=column)
+
+
+def next_priority_score_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PRS", column=column)
+
+
+def next_compliance_matrix_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CM", column=column)
+
+
+def next_document_requirement_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DRS", column=column)
+
+
+def next_risk_flag_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IRF", column=column)

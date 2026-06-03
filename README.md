@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation and Sprint 2A intake layer for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, and Sprint 2B analysis foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -9,6 +9,11 @@ Sprint 1 foundation and Sprint 2A intake layer for the AI Corporation tender bus
 - `M-008` Tender Intake Pipeline
 - `M-011` Document Ingestion Layer
 - `M-012` Tender Summary Builder
+- `M-009` Tender Screening Engine
+- `M-010` Priority Scoring Engine
+- `M-013` Compliance Matrix Builder
+- `M-014` Document Requirement Extractor
+- `M-015` Initial Tech Risk Flags
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -21,6 +26,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - tender intake records and normalized source payload snapshots
 - formal document sets and ingestion runs
 - persisted tender summaries with source lineage
+- persisted screening, priority scoring, compliance matrix, document requirement, and initial tech risk records
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -38,6 +44,11 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `DS-YYYY-NNNNNN`
   - `DIR-YYYY-NNNNNN`
   - `TS-YYYY-NNNNNN`
+  - `SCR-YYYY-NNNNNN`
+  - `PRS-YYYY-NNNNNN`
+  - `CM-YYYY-NNNNNN`
+  - `DRS-YYYY-NNNNNN`
+  - `IRF-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -122,6 +133,21 @@ pytest
 - `POST /tender-summaries`
 - `GET /tender-summaries/{tender_summary_id}`
 - `GET /tender-summaries`
+- `POST /screening/run`
+- `GET /screening/{screening_id}`
+- `GET /screening`
+- `POST /priority-scoring/run`
+- `GET /priority-scoring/{priority_score_id}`
+- `GET /priority-scoring`
+- `POST /compliance-matrix/build`
+- `GET /compliance-matrix/{compliance_matrix_id}`
+- `GET /compliance-matrix`
+- `POST /document-requirements/extract`
+- `GET /document-requirements/{document_requirement_set_id}`
+- `GET /document-requirements`
+- `POST /initial-tech-risks/build`
+- `GET /initial-tech-risks/{risk_flag_set_id}`
+- `GET /initial-tech-risks`
 
 ## Source Of Truth
 
@@ -133,3 +159,5 @@ pytest
 - [docs/01_sprints/Sprint_2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_2_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
 - [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
+- [docs/00_architecture/implementation_summary_sprint_2a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2a.md)
+- [docs/00_architecture/implementation_summary_sprint_2b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2b.md)

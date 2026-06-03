@@ -24,3 +24,9 @@ def compute_payload_hash(payload_json: dict) -> str:
 def require_same_reference(expected: str, actual: str, field_name: str) -> None:
     if expected != actual:
         raise ValidationError(f"{field_name} does not match the referenced object")
+
+
+def require_non_empty_list(values: list, field_name: str) -> list:
+    if not values:
+        raise ValidationError(f"{field_name} must not be empty")
+    return values

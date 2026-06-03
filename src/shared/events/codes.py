@@ -20,6 +20,21 @@ EVENT_CODES = {
     "tender_summary_build_started",
     "tender_summary_built",
     "tender_summary_failed",
+    "tender_screening_started",
+    "tender_screening_completed",
+    "tender_screening_failed",
+    "priority_scoring_started",
+    "priority_scoring_completed",
+    "priority_scoring_failed",
+    "compliance_matrix_build_started",
+    "compliance_matrix_built",
+    "compliance_matrix_failed",
+    "document_requirements_extraction_started",
+    "document_requirements_extracted",
+    "document_requirements_extraction_failed",
+    "initial_tech_risk_build_started",
+    "initial_tech_risk_built",
+    "initial_tech_risk_build_failed",
 }
 
 DECISION_CODES = {
