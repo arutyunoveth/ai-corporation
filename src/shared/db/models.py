@@ -1,9 +1,17 @@
 from src.modules.compliance_matrix.models import ComplianceMatrix, ComplianceMatrixRow
+from src.modules.cost_model.models import CostModelLine, CostModelRecord, CostModelSet
+from src.modules.cash_gap.models import CashGapRecord, CashGapScenario, CashGapSet
 from src.modules.deal_registry.models import Deal, DealExternalRef, DealTag
 from src.modules.document_ingestion.models import DocumentIngestionRun, DocumentSet, DocumentSetItem
 from src.modules.document_requirements.models import DocumentRequirementRow, DocumentRequirementSet
 from src.modules.document_store.models import ArtifactLink, ArtifactVersion, DocumentArtifact
 from src.modules.event_log.models import DecisionRecord, EventRecord
+from src.modules.finance_memo.models import FinanceMemoFlag, FinanceMemoRecord, FinanceMemoSet
+from src.modules.financing_strategy.models import (
+    FinancingStrategyOption,
+    FinancingStrategyRecord,
+    FinancingStrategySet,
+)
 from src.modules.initial_tech_risks.models import InitialTechRiskFlag, InitialTechRiskFlagSet
 from src.modules.priority_scoring.models import PriorityScoreRecord
 from src.modules.quote_repository.models import QuoteArtifactBinding, QuoteRecord, QuoteSet
@@ -35,6 +43,12 @@ __all__ = [
     "ArtifactVersion",
     "ComplianceMatrix",
     "ComplianceMatrixRow",
+    "CostModelLine",
+    "CostModelRecord",
+    "CostModelSet",
+    "CashGapRecord",
+    "CashGapScenario",
+    "CashGapSet",
     "Deal",
     "DealExternalRef",
     "DealStatusHistory",
@@ -47,6 +61,12 @@ __all__ = [
     "DocumentSet",
     "DocumentSetItem",
     "EventRecord",
+    "FinanceMemoFlag",
+    "FinanceMemoRecord",
+    "FinanceMemoSet",
+    "FinancingStrategyOption",
+    "FinancingStrategyRecord",
+    "FinancingStrategySet",
     "InitialTechRiskFlag",
     "InitialTechRiskFlagSet",
     "PriorityScoreRecord",

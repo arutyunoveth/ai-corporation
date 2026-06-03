@@ -124,3 +124,35 @@ def next_supplier_verification_id(session: Session, column: ColumnElement[str]) 
 
 def next_quote_comparison_set_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="QCS", column=column)
+
+
+def next_cost_model_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CMS", column=column)
+
+
+def next_cost_model_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CMD", column=column)
+
+
+def next_cash_gap_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CGS", column=column)
+
+
+def next_cash_gap_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CG", column=column)
+
+
+def next_financing_strategy_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="FSS", column=column)
+
+
+def next_financing_strategy_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="FS", column=column)
+
+
+def next_finance_memo_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="FMS", column=column)
+
+
+def next_finance_memo_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="FM", column=column)

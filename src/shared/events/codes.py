@@ -56,6 +56,18 @@ EVENT_CODES = {
     "quote_comparison_build_started",
     "quote_comparison_built",
     "quote_comparison_failed",
+    "cost_model_build_started",
+    "cost_model_built",
+    "cost_model_failed",
+    "cash_gap_build_started",
+    "cash_gap_built",
+    "cash_gap_failed",
+    "financing_strategy_build_started",
+    "financing_strategy_built",
+    "financing_strategy_failed",
+    "finance_memo_build_started",
+    "finance_memo_built",
+    "finance_memo_failed",
 }
 
 DECISION_CODES = {
