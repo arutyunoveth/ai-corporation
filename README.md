@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, and Sprint 3A supplier-side foundation for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, and Sprint 3B supplier quality foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -19,6 +19,8 @@ Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation,
 - `M-017` RFQ Generator
 - `M-018` Supplier Communication Tracker
 - `M-019` TKP Repository
+- `M-020` Supplier Verification
+- `M-021` Quote Comparison Engine
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -33,6 +35,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - persisted tender summaries with source lineage
 - persisted screening, priority scoring, compliance matrix, document requirement, and initial tech risk records
 - persisted supplier profiles, shortlists, RFQ batches, communication threads, and quotes
+- persisted supplier verification runs, comparison rows, and recommendations
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -64,6 +67,9 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `SM-YYYY-NNNNNN`
   - `QS-YYYY-NNNNNN`
   - `Q-YYYY-NNNNNN`
+  - `SVS-YYYY-NNNNNN`
+  - `SV-YYYY-NNNNNN`
+  - `QCS-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -185,6 +191,14 @@ pytest
 - `GET /quotes/{quote_id}`
 - `GET /quotes`
 - `GET /quote-sets/{quote_set_id}`
+- `POST /supplier-verification/build`
+- `GET /supplier-verification/{supplier_verification_set_id}`
+- `GET /supplier-verification`
+- `GET /supplier-verification/records/{supplier_verification_id}`
+- `POST /quote-comparison/build`
+- `GET /quote-comparison/{quote_comparison_set_id}`
+- `GET /quote-comparison`
+- `GET /quote-comparison/recommendation/{quote_comparison_set_id}`
 
 ## Source Of Truth
 
@@ -195,9 +209,12 @@ pytest
 - [docs/01_sprints/Sprint_1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_1_Technical_Spec.md)
 - [docs/01_sprints/Sprint_2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_2_Technical_Spec.md)
 - [docs/01_sprints/Sprint_3A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_3A_Technical_Spec.md)
+- [docs/01_sprints/Sprint_3B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_3B_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
 - [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
 - [docs/03_entities/Entity_Catalog_Sprint_3A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3A.md)
+- [docs/03_entities/Entity_Catalog_Sprint_3B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3B.md)
 - [docs/00_architecture/implementation_summary_sprint_2a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2a.md)
 - [docs/00_architecture/implementation_summary_sprint_2b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2b.md)
 - [docs/00_architecture/implementation_summary_sprint_3a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3a.md)
+- [docs/00_architecture/implementation_summary_sprint_3b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3b.md)

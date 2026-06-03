@@ -50,6 +50,12 @@ EVENT_CODES = {
     "quote_registered",
     "quote_revised",
     "quote_withdrawn",
+    "supplier_verification_build_started",
+    "supplier_verification_built",
+    "supplier_verification_failed",
+    "quote_comparison_build_started",
+    "quote_comparison_built",
+    "quote_comparison_failed",
 }
 
 DECISION_CODES = {

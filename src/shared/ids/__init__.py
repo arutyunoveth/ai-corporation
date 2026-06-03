@@ -20,7 +20,10 @@ from .generators import (
     next_supplier_message_id,
     next_supplier_shortlist_id,
     next_supplier_thread_id,
+    next_supplier_verification_id,
+    next_supplier_verification_set_id,
     next_tender_summary_id,
+    next_quote_comparison_set_id,
 )
 
 __all__ = [
@@ -45,5 +48,8 @@ __all__ = [
     "next_supplier_message_id",
     "next_supplier_shortlist_id",
     "next_supplier_thread_id",
+    "next_supplier_verification_id",
+    "next_supplier_verification_set_id",
     "next_tender_summary_id",
+    "next_quote_comparison_set_id",
 ]

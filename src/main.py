@@ -8,12 +8,14 @@ from src.modules.document_requirements.router import router as document_requirem
 from src.modules.event_log.router import router as event_log_router
 from src.modules.initial_tech_risks.router import router as initial_tech_risks_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
+from src.modules.quote_comparison.router import router as quote_comparison_router
 from src.modules.quote_repository.router import router as quote_repository_router
 from src.modules.rfq_generator.router import router as rfq_generator_router
 from src.modules.status_engine.router import router as status_router
 from src.modules.supplier_communications.router import router as supplier_communications_router
 from src.modules.supplier_registry.router import router as supplier_registry_router
 from src.modules.supplier_search.router import router as supplier_search_router
+from src.modules.supplier_verification.router import router as supplier_verification_router
 from src.modules.tender_screening.router import router as tender_screening_router
 from src.modules.tender_intake.router import router as tender_intake_router
 from src.modules.tender_summary.router import router as tender_summary_router
@@ -42,6 +44,8 @@ app.include_router(supplier_search_router)
 app.include_router(rfq_generator_router)
 app.include_router(supplier_communications_router)
 app.include_router(quote_repository_router)
+app.include_router(supplier_verification_router)
+app.include_router(quote_comparison_router)
 
 
 @app.get("/health")

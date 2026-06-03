@@ -35,6 +35,12 @@ from .sprint3a import (
     SupplierStatus,
     SupplierThreadStatus,
 )
+from .sprint3b import (
+    QuoteComparisonStatus,
+    SupplierVerificationResult,
+    SupplierVerificationStatus,
+    VerificationFlagSeverity,
+)
 
 __all__ = [
     "ArtifactType",
@@ -66,4 +72,8 @@ __all__ = [
     "SupplierShortlistStatus",
     "SupplierStatus",
     "SupplierThreadStatus",
+    "QuoteComparisonStatus",
+    "SupplierVerificationResult",
+    "SupplierVerificationStatus",
+    "VerificationFlagSeverity",
 ]

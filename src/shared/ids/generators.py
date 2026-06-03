@@ -112,3 +112,15 @@ def next_quote_set_id(session: Session, column: ColumnElement[str]) -> str:
 
 def next_quote_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="Q", column=column)
+
+
+def next_supplier_verification_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SVS", column=column)
+
+
+def next_supplier_verification_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SV", column=column)
+
+
+def next_quote_comparison_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="QCS", column=column)
