@@ -18,11 +18,15 @@ from src.modules.financing_strategy.router import router as financing_strategy_r
 from src.modules.initial_tech_risks.router import router as initial_tech_risks_router
 from src.modules.integrated_risk_memo.router import router as integrated_risk_memo_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
+from src.modules.post_submission.router import router as post_submission_router
+from src.modules.outcome_intake.router import router as outcome_intake_router
 from src.modules.quote_comparison.router import router as quote_comparison_router
 from src.modules.quote_repository.router import router as quote_repository_router
 from src.modules.rfq_generator.router import router as rfq_generator_router
 from src.modules.status_engine.router import router as status_router
 from src.modules.submission_readiness.router import router as submission_readiness_router
+from src.modules.submission_control.router import router as submission_control_router
+from src.modules.submission_receipts.router import router as submission_receipts_router
 from src.modules.supplier_communications.router import router as supplier_communications_router
 from src.modules.supplier_registry.router import router as supplier_registry_router
 from src.modules.supplier_search.router import router as supplier_search_router
@@ -68,6 +72,10 @@ app.include_router(bid_documents_router)
 app.include_router(bid_packages_router)
 app.include_router(bid_completeness_router)
 app.include_router(submission_readiness_router)
+app.include_router(submission_control_router)
+app.include_router(submission_receipts_router)
+app.include_router(post_submission_router)
+app.include_router(outcome_intake_router)
 
 
 @app.get("/health")

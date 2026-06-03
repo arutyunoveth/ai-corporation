@@ -89,6 +89,19 @@ EVENT_CODES = {
     "submission_readiness_build_started",
     "submission_readiness_built",
     "submission_readiness_failed",
+    "submission_control_built",
+    "submission_execution_started",
+    "submission_attempt_recorded",
+    "submission_execution_failed",
+    "submission_execution_submitted",
+    "submission_receipt_registered",
+    "submission_receipt_failed",
+    "post_submission_tracker_built",
+    "post_submission_event_recorded",
+    "post_submission_tracker_closed",
+    "outcome_intake_recorded",
+    "outcome_intake_revised",
+    "outcome_intake_failed",
 }
 
 DECISION_CODES = {

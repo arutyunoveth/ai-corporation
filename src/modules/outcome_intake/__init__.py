@@ -1,0 +1,1 @@
+"""Outcome intake module."""

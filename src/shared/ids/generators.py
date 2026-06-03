@@ -208,3 +208,43 @@ def next_submission_readiness_set_id(session: Session, column: ColumnElement[str
 
 def next_submission_readiness_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="SR", column=column)
+
+
+def next_submission_execution_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SES", column=column)
+
+
+def next_submission_execution_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SE", column=column)
+
+
+def next_submission_attempt_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SA", column=column)
+
+
+def next_submission_receipt_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SRSR", column=column)
+
+
+def next_submission_receipt_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SRR", column=column)
+
+
+def next_post_submission_tracker_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PSTS", column=column)
+
+
+def next_post_submission_tracker_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PST", column=column)
+
+
+def next_post_submission_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PSE", column=column)
+
+
+def next_outcome_intake_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="OIS", column=column)
+
+
+def next_outcome_intake_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="OI", column=column)

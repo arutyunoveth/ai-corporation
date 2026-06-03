@@ -1,0 +1,1 @@
+"""Submission receipts module."""

@@ -32,6 +32,16 @@ from src.modules.integrated_risk_memo.models import (
     IntegratedRiskMemoSet,
 )
 from src.modules.priority_scoring.models import PriorityScoreRecord
+from src.modules.post_submission.models import (
+    PostSubmissionEvent,
+    PostSubmissionTrackerRecord,
+    PostSubmissionTrackerSet,
+)
+from src.modules.outcome_intake.models import (
+    OutcomeIntakeBinding,
+    OutcomeIntakeRecord,
+    OutcomeIntakeSet,
+)
 from src.modules.quote_repository.models import QuoteArtifactBinding, QuoteRecord, QuoteSet
 from src.modules.quote_comparison.models import (
     QuoteComparisonRecommendation,
@@ -56,6 +66,16 @@ from src.modules.submission_readiness.models import (
     SubmissionReadinessFlag,
     SubmissionReadinessRecord,
     SubmissionReadinessSet,
+)
+from src.modules.submission_control.models import (
+    SubmissionAttempt,
+    SubmissionExecutionRecord,
+    SubmissionExecutionSet,
+)
+from src.modules.submission_receipts.models import (
+    SubmissionReceiptBinding,
+    SubmissionReceiptRecord,
+    SubmissionReceiptSet,
 )
 from src.modules.tender_screening.models import TenderScreeningRecord
 from src.modules.tender_intake.models import TenderIntakeRecord, TenderSourcePayload
@@ -110,6 +130,12 @@ __all__ = [
     "IntegratedRiskItem",
     "IntegratedRiskMemoRecord",
     "IntegratedRiskMemoSet",
+    "OutcomeIntakeBinding",
+    "OutcomeIntakeRecord",
+    "OutcomeIntakeSet",
+    "PostSubmissionEvent",
+    "PostSubmissionTrackerRecord",
+    "PostSubmissionTrackerSet",
     "PriorityScoreRecord",
     "QuoteArtifactBinding",
     "QuoteComparisonRecommendation",
@@ -136,6 +162,12 @@ __all__ = [
     "SubmissionReadinessFlag",
     "SubmissionReadinessRecord",
     "SubmissionReadinessSet",
+    "SubmissionAttempt",
+    "SubmissionExecutionRecord",
+    "SubmissionExecutionSet",
+    "SubmissionReceiptBinding",
+    "SubmissionReceiptRecord",
+    "SubmissionReceiptSet",
     "TenderScreeningRecord",
     "TenderIntakeRecord",
     "TenderSourcePayload",
