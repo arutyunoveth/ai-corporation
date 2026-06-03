@@ -248,3 +248,67 @@ def next_outcome_intake_set_id(session: Session, column: ColumnElement[str]) -> 
 
 def next_outcome_intake_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="OI", column=column)
+
+
+def next_delivery_launch_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DLS", column=column)
+
+
+def next_delivery_launch_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DLC", column=column)
+
+
+def next_execution_command_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ECS", column=column)
+
+
+def next_execution_command_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="EC", column=column)
+
+
+def next_delivery_milestone_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DMS", column=column)
+
+
+def next_delivery_milestone_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DM", column=column)
+
+
+def next_delivery_milestone_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DME", column=column)
+
+
+def next_supplier_fulfillment_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SFS", column=column)
+
+
+def next_supplier_fulfillment_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SF", column=column)
+
+
+def next_supplier_fulfillment_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SFE", column=column)
+
+
+def next_shipping_acceptance_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SAS", column=column)
+
+
+def next_shipping_acceptance_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SHA", column=column)
+
+
+def next_shipping_acceptance_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SAE", column=column)
+
+
+def next_payment_collection_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PCS", column=column)
+
+
+def next_payment_collection_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PC", column=column)
+
+
+def next_payment_collection_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PCE", column=column)

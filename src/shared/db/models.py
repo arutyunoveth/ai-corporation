@@ -15,10 +15,21 @@ from src.modules.contract_risks.models import ContractRiskFlag, ContractRiskReco
 from src.modules.cost_model.models import CostModelLine, CostModelRecord, CostModelSet
 from src.modules.cash_gap.models import CashGapRecord, CashGapScenario, CashGapSet
 from src.modules.deal_registry.models import Deal, DealExternalRef, DealTag
+from src.modules.delivery_launch.models import DeliveryLaunchFlag, DeliveryLaunchRecord, DeliveryLaunchSet
+from src.modules.delivery_milestones.models import (
+    DeliveryMilestoneEvent,
+    DeliveryMilestoneRecord,
+    DeliveryMilestoneSet,
+)
 from src.modules.document_ingestion.models import DocumentIngestionRun, DocumentSet, DocumentSetItem
 from src.modules.document_requirements.models import DocumentRequirementRow, DocumentRequirementSet
 from src.modules.document_store.models import ArtifactLink, ArtifactVersion, DocumentArtifact
 from src.modules.event_log.models import DecisionRecord, EventRecord
+from src.modules.execution_command.models import (
+    ExecutionCommandBinding,
+    ExecutionCommandRecord,
+    ExecutionCommandSet,
+)
 from src.modules.finance_memo.models import FinanceMemoFlag, FinanceMemoRecord, FinanceMemoSet
 from src.modules.financing_strategy.models import (
     FinancingStrategyOption,
@@ -37,6 +48,11 @@ from src.modules.post_submission.models import (
     PostSubmissionTrackerRecord,
     PostSubmissionTrackerSet,
 )
+from src.modules.payment_collection.models import (
+    PaymentCollectionEvent,
+    PaymentCollectionRecord,
+    PaymentCollectionSet,
+)
 from src.modules.outcome_intake.models import (
     OutcomeIntakeBinding,
     OutcomeIntakeRecord,
@@ -49,10 +65,20 @@ from src.modules.quote_comparison.models import (
     QuoteComparisonSet,
 )
 from src.modules.rfq_generator.models import RFQArtifactBinding, RFQBatch, RFQRecord
+from src.modules.shipping_acceptance.models import (
+    ShippingAcceptanceEvent,
+    ShippingAcceptanceRecord,
+    ShippingAcceptanceSet,
+)
 from src.modules.supplier_communications.models import (
     SupplierCommunicationSet,
     SupplierCommunicationThread,
     SupplierMessageRecord,
+)
+from src.modules.supplier_fulfillment.models import (
+    SupplierFulfillmentEvent,
+    SupplierFulfillmentRecord,
+    SupplierFulfillmentSet,
 )
 from src.modules.supplier_registry.models import SupplierContact, SupplierExternalRef, SupplierProfile, SupplierTag
 from src.modules.supplier_search.models import SupplierShortlist, SupplierShortlistRow
@@ -112,6 +138,12 @@ __all__ = [
     "DealStatusHistory",
     "DealTag",
     "DecisionRecord",
+    "DeliveryLaunchFlag",
+    "DeliveryLaunchRecord",
+    "DeliveryLaunchSet",
+    "DeliveryMilestoneEvent",
+    "DeliveryMilestoneRecord",
+    "DeliveryMilestoneSet",
     "DocumentRequirementRow",
     "DocumentRequirementSet",
     "DocumentArtifact",
@@ -119,6 +151,9 @@ __all__ = [
     "DocumentSet",
     "DocumentSetItem",
     "EventRecord",
+    "ExecutionCommandBinding",
+    "ExecutionCommandRecord",
+    "ExecutionCommandSet",
     "FinanceMemoFlag",
     "FinanceMemoRecord",
     "FinanceMemoSet",
@@ -133,6 +168,9 @@ __all__ = [
     "OutcomeIntakeBinding",
     "OutcomeIntakeRecord",
     "OutcomeIntakeSet",
+    "PaymentCollectionEvent",
+    "PaymentCollectionRecord",
+    "PaymentCollectionSet",
     "PostSubmissionEvent",
     "PostSubmissionTrackerRecord",
     "PostSubmissionTrackerSet",
@@ -146,11 +184,17 @@ __all__ = [
     "RFQArtifactBinding",
     "RFQBatch",
     "RFQRecord",
+    "ShippingAcceptanceEvent",
+    "ShippingAcceptanceRecord",
+    "ShippingAcceptanceSet",
     "StatusTransitionRule",
     "SupplierCommunicationSet",
     "SupplierCommunicationThread",
     "SupplierContact",
     "SupplierExternalRef",
+    "SupplierFulfillmentEvent",
+    "SupplierFulfillmentRecord",
+    "SupplierFulfillmentSet",
     "SupplierMessageRecord",
     "SupplierProfile",
     "SupplierShortlist",

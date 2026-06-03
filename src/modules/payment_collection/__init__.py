@@ -1,0 +1,1 @@
+"""Payment collection module."""
