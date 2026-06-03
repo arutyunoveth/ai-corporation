@@ -96,6 +96,16 @@ from .sprint6a import (
     SupplierFulfillmentState,
     SupplierFulfillmentStatus,
 )
+from .sprint6b import (
+    DealClosureCode,
+    DealClosureStatus,
+    EscalationLevel,
+    EscalationStatus,
+    IncidentStatus,
+    IncidentType,
+    KPIStatus,
+    LearningNoteType,
+)
 
 __all__ = [
     "ArtifactType",
@@ -176,4 +186,12 @@ __all__ = [
     "ShippingAcceptanceStatus",
     "SupplierFulfillmentState",
     "SupplierFulfillmentStatus",
+    "DealClosureCode",
+    "DealClosureStatus",
+    "EscalationLevel",
+    "EscalationStatus",
+    "IncidentStatus",
+    "IncidentType",
+    "KPIStatus",
+    "LearningNoteType",
 ]

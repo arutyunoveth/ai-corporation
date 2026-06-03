@@ -312,3 +312,39 @@ def next_payment_collection_id(session: Session, column: ColumnElement[str]) -> 
 
 def next_payment_collection_event_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="PCE", column=column)
+
+
+def next_incident_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="INS", column=column)
+
+
+def next_incident_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="INC", column=column)
+
+
+def next_escalation_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ESC", column=column)
+
+
+def next_deal_closure_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DCS", column=column)
+
+
+def next_deal_closure_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DC", column=column)
+
+
+def next_archive_snapshot_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DAS", column=column)
+
+
+def next_kpi_learning_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="KLS", column=column)
+
+
+def next_kpi_learning_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="KLR", column=column)
+
+
+def next_learning_note_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LN", column=column)

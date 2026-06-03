@@ -120,6 +120,17 @@ EVENT_CODES = {
     "payment_collection_built",
     "payment_collection_event_recorded",
     "payment_collection_failed",
+    "incident_set_built",
+    "incident_recorded",
+    "incident_escalated",
+    "incident_resolved",
+    "deal_closure_built",
+    "deal_closed",
+    "deal_archive_snapshot_created",
+    "deal_closure_failed",
+    "kpi_learning_built",
+    "learning_note_recorded",
+    "kpi_learning_failed",
 }
 
 DECISION_CODES = {

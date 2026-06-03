@@ -14,6 +14,7 @@ from src.modules.compliance_matrix.models import ComplianceMatrix, ComplianceMat
 from src.modules.contract_risks.models import ContractRiskFlag, ContractRiskRecord, ContractRiskSet
 from src.modules.cost_model.models import CostModelLine, CostModelRecord, CostModelSet
 from src.modules.cash_gap.models import CashGapRecord, CashGapScenario, CashGapSet
+from src.modules.deal_closure.models import DealArchiveSnapshot, DealClosureRecord, DealClosureSet
 from src.modules.deal_registry.models import Deal, DealExternalRef, DealTag
 from src.modules.delivery_launch.models import DeliveryLaunchFlag, DeliveryLaunchRecord, DeliveryLaunchSet
 from src.modules.delivery_milestones.models import (
@@ -37,11 +38,13 @@ from src.modules.financing_strategy.models import (
     FinancingStrategySet,
 )
 from src.modules.initial_tech_risks.models import InitialTechRiskFlag, InitialTechRiskFlagSet
+from src.modules.incidents.models import EscalationRecord, IncidentRecord, IncidentSet
 from src.modules.integrated_risk_memo.models import (
     IntegratedRiskItem,
     IntegratedRiskMemoRecord,
     IntegratedRiskMemoSet,
 )
+from src.modules.kpi_learning.models import KPILearningRecord, KPILearningSet, LearningNoteRecord
 from src.modules.priority_scoring.models import PriorityScoreRecord
 from src.modules.post_submission.models import (
     PostSubmissionEvent,
@@ -133,6 +136,9 @@ __all__ = [
     "CashGapRecord",
     "CashGapScenario",
     "CashGapSet",
+    "DealArchiveSnapshot",
+    "DealClosureRecord",
+    "DealClosureSet",
     "Deal",
     "DealExternalRef",
     "DealStatusHistory",
@@ -162,9 +168,15 @@ __all__ = [
     "FinancingStrategySet",
     "InitialTechRiskFlag",
     "InitialTechRiskFlagSet",
+    "IncidentRecord",
+    "IncidentSet",
+    "EscalationRecord",
     "IntegratedRiskItem",
     "IntegratedRiskMemoRecord",
     "IntegratedRiskMemoSet",
+    "KPILearningRecord",
+    "KPILearningSet",
+    "LearningNoteRecord",
     "OutcomeIntakeBinding",
     "OutcomeIntakeRecord",
     "OutcomeIntakeSet",

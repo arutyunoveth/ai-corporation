@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, and Sprint 6A execution and delivery foundation for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, and Sprint 6B closure / incident / KPI foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -42,6 +42,9 @@ Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation,
 - `M-042` Supplier Fulfillment Tracker
 - `M-043` Shipping & Acceptance Tracker
 - `M-044` Payment Collection Tracker
+- `M-045` Incident & Escalation Desk
+- `M-046` Deal Closure & Archive
+- `M-047` KPI & Learning Loop
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -62,6 +65,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - persisted bid document collections, bid packages, completeness checks, and submission readiness gates
 - persisted submission execution sets, attempts, receipts, post-submission trackers, and explicit outcomes
 - persisted delivery launch controls, execution command centers, milestones, fulfillment, shipping/acceptance, and payment collection records
+- persisted incidents, deal closure/archive snapshots, and KPI/learning outputs
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -143,6 +147,15 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `PCS-YYYY-NNNNNN`
   - `PC-YYYY-NNNNNN`
   - `PCE-YYYY-NNNNNN`
+  - `INS-YYYY-NNNNNN`
+  - `INC-YYYY-NNNNNN`
+  - `ESC-YYYY-NNNNNN`
+  - `DCS-YYYY-NNNNNN`
+  - `DC-YYYY-NNNNNN`
+  - `DAS-YYYY-NNNNNN`
+  - `KLS-YYYY-NNNNNN`
+  - `KLR-YYYY-NNNNNN`
+  - `LN-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -365,6 +378,21 @@ pytest
 - `GET /payment-collection/{payment_collection_set_id}`
 - `GET /payment-collection`
 - `GET /payment-collection/records/{payment_collection_id}`
+- `POST /incidents/build`
+- `POST /incidents/register`
+- `POST /incidents/escalate`
+- `GET /incidents/{incident_set_id}`
+- `GET /incidents`
+- `GET /incidents/records/{incident_id}`
+- `POST /deal-closure/build`
+- `POST /deal-closure/close`
+- `GET /deal-closure/{deal_closure_set_id}`
+- `GET /deal-closure`
+- `GET /deal-closure/records/{deal_closure_id}`
+- `POST /kpi-learning/build`
+- `GET /kpi-learning/{kpi_learning_set_id}`
+- `GET /kpi-learning`
+- `GET /kpi-learning/records/{kpi_learning_id}`
 
 ## Source Of Truth
 
@@ -381,6 +409,7 @@ pytest
 - [docs/01_sprints/Sprint_5A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_5A_Technical_Spec.md)
 - [docs/01_sprints/Sprint_5B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_5B_Technical_Spec.md)
 - [docs/01_sprints/Sprint_6A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_6A_Technical_Spec.md)
+- [docs/01_sprints/Sprint_6B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_6B_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
 - [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
 - [docs/03_entities/Entity_Catalog_Sprint_3A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3A.md)
@@ -390,6 +419,7 @@ pytest
 - [docs/03_entities/Entity_Catalog_Sprint_5A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_5A.md)
 - [docs/03_entities/Entity_Catalog_Sprint_5B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_5B.md)
 - [docs/03_entities/Entity_Catalog_Sprint_6A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_6A.md)
+- [docs/03_entities/Entity_Catalog_Sprint_6B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_6B.md)
 - [docs/00_architecture/implementation_summary_sprint_2a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2a.md)
 - [docs/00_architecture/implementation_summary_sprint_2b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2b.md)
 - [docs/00_architecture/implementation_summary_sprint_3a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3a.md)
@@ -399,3 +429,4 @@ pytest
 - [docs/00_architecture/implementation_summary_sprint_5a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_5a.md)
 - [docs/00_architecture/implementation_summary_sprint_5b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_5b.md)
 - [docs/00_architecture/implementation_summary_sprint_6a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_6a.md)
+- [docs/00_architecture/implementation_summary_sprint_6b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_6b.md)
