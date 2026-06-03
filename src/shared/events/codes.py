@@ -8,6 +8,18 @@ EVENT_CODES = {
     "artifact_version_added",
     "artifact_linked",
     "decision_recorded",
+    "tender_intake_received",
+    "tender_intake_normalized",
+    "tender_intake_linked",
+    "tender_intake_failed",
+    "document_set_created",
+    "document_ingestion_started",
+    "document_ingestion_completed",
+    "document_ingestion_partial",
+    "document_ingestion_failed",
+    "tender_summary_build_started",
+    "tender_summary_built",
+    "tender_summary_failed",
 }
 
 DECISION_CODES = {
@@ -16,4 +28,3 @@ DECISION_CODES = {
     "APPROVE_TO_BID",
     "DECLINE_TO_BID",
 }
-

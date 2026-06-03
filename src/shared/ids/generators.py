@@ -41,3 +41,18 @@ def next_event_id(session: Session, column: ColumnElement[str]) -> str:
 def next_decision_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="DEC", column=column)
 
+
+def next_intake_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="INT", column=column)
+
+
+def next_document_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DS", column=column)
+
+
+def next_ingestion_run_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DIR", column=column)
+
+
+def next_tender_summary_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="TS", column=column)

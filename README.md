@@ -1,20 +1,26 @@
 # ai-corporation
 
-Sprint 1 foundation for the AI Corporation tender business platform. This iteration implements the core backend skeleton for:
+Sprint 1 foundation and Sprint 2A intake layer for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
 - `M-003` Document Store
 - `M-004` Event Log & Decision Journal
+- `M-008` Tender Intake Pipeline
+- `M-011` Document Ingestion Layer
+- `M-012` Tender Summary Builder
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
-## Sprint 1 Scope
+## Current Scope
 
 - canonical deal records with `deal_id`
 - formal status transitions and append-only history
 - artifact storage metadata with versioning and links
 - append-only event and decision journals
+- tender intake records and normalized source payload snapshots
+- formal document sets and ingestion runs
+- persisted tender summaries with source lineage
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -28,6 +34,10 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `ART-YYYY-NNNNNN`
   - `EVT-YYYY-NNNNNN`
   - `DEC-YYYY-NNNNNN`
+  - `INT-YYYY-NNNNNN`
+  - `DS-YYYY-NNNNNN`
+  - `DIR-YYYY-NNNNNN`
+  - `TS-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -102,6 +112,16 @@ pytest
 - `POST /decisions`
 - `GET /events`
 - `GET /decisions`
+- `POST /intake/tenders`
+- `GET /intake/tenders/{intake_id}`
+- `GET /intake/tenders`
+- `POST /document-ingestion/sets`
+- `GET /document-ingestion/sets/{document_set_id}`
+- `GET /document-ingestion/sets`
+- `POST /document-ingestion/sets/{document_set_id}/runs`
+- `POST /tender-summaries`
+- `GET /tender-summaries/{tender_summary_id}`
+- `GET /tender-summaries`
 
 ## Source Of Truth
 
@@ -110,4 +130,6 @@ pytest
 - [docs/01_sprints/MVP_First_Wave_Roadmap_and_High_Level_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/MVP_First_Wave_Roadmap_and_High_Level_Spec.md)
 - [docs/01_sprints/MVP_First_Wave_Backlog.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/MVP_First_Wave_Backlog.md)
 - [docs/01_sprints/Sprint_1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_1_Technical_Spec.md)
+- [docs/01_sprints/Sprint_2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_2_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
+- [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
