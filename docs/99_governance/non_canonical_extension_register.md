@@ -23,10 +23,10 @@ Two classes exist:
 | Outcome Intake | legacy `outcome_intake` contour | Useful formal outcome capture | Helper under canonical M-033 and M-034 |
 | Delivery Launch Control | current `M-039` | Useful award-to-execution launch control | Helper around canonical M-036 Execution Plan Builder |
 | Execution Command Center | current `M-040` | Useful execution cockpit | Helper around canonical M-036 and M-038 |
-| Delivery Milestone Tracker | current `M-041` | Useful milestone trace | Helper around canonical M-036 and M-038 |
-| Supplier Fulfillment Tracker | current `M-042` | Useful vendor-side execution tracking | Helper around canonical M-037 and M-038 |
+| Delivery Milestone Tracker | current `M-041` | Useful milestone trace | Helper around canonical M-036 and M-039 |
+| Supplier Fulfillment Tracker | current `M-042` | Useful vendor-side execution tracking | Helper around canonical M-038 and M-039 |
 | Shipping & Acceptance Tracker | current `M-043` | Useful logistics and acceptance trace | Split between canonical M-039 and M-041 |
-| Payment Collection Tracker | current `M-044` | Useful receivables tracking | Helper under canonical M-043 Payment Tracker |
+| Payment Collection Tracker | current `M-044` | Useful receivables tracking and invoice-state context | Helper under canonical M-043 Payment Tracker and M-044 Claims Trigger Engine |
 | Incident & Escalation Desk | current `M-045` | Useful operational incident handling | Helper under canonical M-040 Incident Register |
 | Deal Closure & Archive | current `M-046` | Useful closure state and archive snapshot | Split between canonical M-045 and archive helper |
 | KPI & Learning Loop | current `M-047` | Useful KPI and retrospective signals | Split between canonical M-046, M-047, M-048 |

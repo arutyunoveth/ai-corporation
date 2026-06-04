@@ -82,12 +82,12 @@ flowchart TD
   end
 
   subgraph EXEC[Execution & Closure]
-    M039[M-039 Delivery Launch]
-    M040[M-040 Execution Command Center]
-    M041[M-041 Milestone Tracker]
-    M042[M-042 Supplier Fulfillment]
-    M043[M-043 Shipping & Acceptance]
-    M044[M-044 Payment Collection]
+    M039[M-039 Logistics Tracker]
+    M040[M-040 Incident Register]
+    M041[M-041 Acceptance Control]
+    M042[M-042 Closing Docs Pack]
+    M043[M-043 Payment Tracker]
+    M044[M-044 Claims Trigger]
     M045[M-045 Incident Desk]
     M046[M-046 Closure & Archive]
   end

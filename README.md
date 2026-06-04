@@ -8,7 +8,7 @@ This repository currently contains:
 - canonical slots that are only partial or mismatched
 - useful internal/platform extensions that drifted beyond the locked canonical range
 
-The repository now includes the reconciliation layer plus Recovery Sprints R1, R2, and R3, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`, and the full recovery band `M-031..M-038` without destructive refactor.
+The repository now includes the reconciliation layer plus Recovery Sprints R1, R2, R3, and R4, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`, and the full recovery bands `M-031..M-044` without destructive refactor.
 
 ## Reconciliation Docs
 
@@ -19,12 +19,15 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - [implementation_summary_recovery_sprint_r1.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r1.md)
 - [implementation_summary_recovery_sprint_r2.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r2.md)
 - [implementation_summary_recovery_sprint_r3.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r3.md)
+- [implementation_summary_recovery_sprint_r4.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r4.md)
 - [Recovery_Sprint_R1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R1_Technical_Spec.md)
 - [Recovery_Sprint_R2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R2_Technical_Spec.md)
 - [Recovery_Sprint_R3_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R3_Technical_Spec.md)
+- [Recovery_Sprint_R4_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R4_Technical_Spec.md)
 - [Entity_Catalog_Recovery_Sprint_R1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R1.md)
 - [Entity_Catalog_Recovery_Sprint_R2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R2.md)
 - [Entity_Catalog_Recovery_Sprint_R3.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R3.md)
+- [Entity_Catalog_Recovery_Sprint_R4.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R4.md)
 
 ## Governance Status
 
@@ -39,12 +42,12 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - `M-011`
 - `M-012`
 - `M-013` through `M-030`
-- `M-031` through `M-038`
+- `M-031` through `M-044`
 - `M-051`
 
 ### Canonical Modules With Registry Mismatch
 
-- `M-039` through `M-050`
+- `M-045` through `M-050`
 - `M-052`, `M-053`, `M-054`, `M-055`
 
 ### Non-Canonical / Internal Extensions
@@ -87,6 +90,12 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - canonical execution plans, milestones, and planning assumptions
 - canonical purchase order sets, records, items, and links
 - canonical supplier progress sets, records, events, and alerts
+- canonical logistics tracking sets, records, events, and links
+- canonical incident register sets, records, events, and flags
+- canonical acceptance control sets, records, remarks, and resolution items
+- canonical closing docs sets, records, items, and flags
+- canonical payment tracking sets, records, events, and alerts
+- canonical claim trigger sets, records, flags, and links
 - persisted submission execution sets, attempts, receipts, post-submission trackers, and explicit outcomes
 - persisted delivery launch controls, execution command centers, milestones, fulfillment, shipping/acceptance, and payment collection records
 - persisted incidents, deal closure/archive snapshots, and KPI/learning outputs
@@ -196,6 +205,21 @@ These extensions remain useful, but they are not part of the locked canonical bu
   - `SPS-YYYY-NNNNNN`
   - `SP-YYYY-NNNNNN`
   - `SPE-YYYY-NNNNNN`
+  - `LTS-YYYY-NNNNNN`
+  - `LT-YYYY-NNNNNN`
+  - `LTE-YYYY-NNNNNN`
+  - `IRS-YYYY-NNNNNN`
+  - `IR-YYYY-NNNNNN`
+  - `IRE-YYYY-NNNNNN`
+  - `ACS-YYYY-NNNNNN`
+  - `ACC-YYYY-NNNNNN`
+  - `CDS-YYYY-NNNNNN`
+  - `CD-YYYY-NNNNNN`
+  - `PTS-YYYY-NNNNNN`
+  - `PT-YYYY-NNNNNN`
+  - `PTE-YYYY-NNNNNN`
+  - `CTS-YYYY-NNNNNN`
+  - `CT-YYYY-NNNNNN`
   - `SAS-YYYY-NNNNNN`
   - `SHA-YYYY-NNNNNN`
   - `SAE-YYYY-NNNNNN`
@@ -455,6 +479,33 @@ pytest
 - `GET /supplier-fulfillment/{supplier_fulfillment_set_id}`
 - `GET /supplier-fulfillment`
 - `GET /supplier-fulfillment/records/{supplier_fulfillment_id}`
+- `POST /logistics-tracking/build`
+- `POST /logistics-tracking/events`
+- `GET /logistics-tracking/{logistics_tracking_set_id}`
+- `GET /logistics-tracking`
+- `GET /logistics-tracking/records/{logistics_tracking_id}`
+- `POST /incident-register/build`
+- `POST /incident-register/events`
+- `GET /incident-register/{incident_register_set_id}`
+- `GET /incident-register`
+- `GET /incident-register/records/{incident_register_id}`
+- `POST /acceptance-control/build`
+- `GET /acceptance-control/{acceptance_control_set_id}`
+- `GET /acceptance-control`
+- `GET /acceptance-control/records/{acceptance_control_id}`
+- `POST /closing-docs/build`
+- `GET /closing-docs/{closing_docs_set_id}`
+- `GET /closing-docs`
+- `GET /closing-docs/records/{closing_docs_id}`
+- `POST /payment-tracking/build`
+- `POST /payment-tracking/events`
+- `GET /payment-tracking/{payment_tracking_set_id}`
+- `GET /payment-tracking`
+- `GET /payment-tracking/records/{payment_tracking_id}`
+- `POST /claim-triggers/build`
+- `GET /claim-triggers/{claim_trigger_set_id}`
+- `GET /claim-triggers`
+- `GET /claim-triggers/records/{claim_trigger_id}`
 - `POST /shipping-acceptance/build`
 - `POST /shipping-acceptance/events`
 - `GET /shipping-acceptance/{shipping_acceptance_set_id}`

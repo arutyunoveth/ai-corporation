@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from src.modules.action_queue.router import router as action_queue_router
 from src.modules.action_console.router import router as action_console_router
+from src.modules.acceptance_control.router import router as acceptance_control_router
 from src.modules.archive_export.router import router as archive_export_router
 from src.modules.connector_registry.router import router as connector_registry_router
 from src.modules.copilot_feed.router import router as copilot_feed_router
@@ -10,6 +11,8 @@ from src.modules.bid_documents.router import router as bid_documents_router
 from src.modules.bid_packages.router import router as bid_packages_router
 from src.modules.cash_gap.router import router as cash_gap_router
 from src.modules.ceo_approval.router import router as ceo_approval_router
+from src.modules.claim_triggers.router import router as claim_triggers_router
+from src.modules.closing_docs.router import router as closing_docs_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
 from src.modules.contract_risks.router import router as contract_risks_router
 from src.modules.contract_negotiation.router import router as contract_negotiation_router
@@ -31,12 +34,14 @@ from src.modules.external_execution.router import router as external_execution_r
 from src.modules.finance_memo.router import router as finance_memo_router
 from src.modules.financing_strategy.router import router as financing_strategy_router
 from src.modules.initial_tech_risks.router import router as initial_tech_risks_router
+from src.modules.incident_register.router import router as incident_register_router
 from src.modules.incidents.router import router as incidents_router
 from src.modules.intake_priority.router import router as intake_priority_router
 from src.modules.integration_tasks.router import router as integration_tasks_router
 from src.modules.integrated_risk_memo.router import router as integrated_risk_memo_router
 from src.modules.kpi_learning.router import router as kpi_learning_router
 from src.modules.learning_automation.router import router as learning_automation_router
+from src.modules.logistics_tracking.router import router as logistics_tracking_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.post_submission.router import router as post_submission_router
 from src.modules.procedure_monitor.router import router as procedure_monitor_router
@@ -45,6 +50,7 @@ from src.modules.outcome_intake.router import router as outcome_intake_router
 from src.modules.optimization.router import router as optimization_router
 from src.modules.operator_sessions.router import router as operator_sessions_router
 from src.modules.payment_collection.router import router as payment_collection_router
+from src.modules.payment_tracking.router import router as payment_tracking_router
 from src.modules.quote_comparison.router import router as quote_comparison_router
 from src.modules.quote_repository.router import router as quote_repository_router
 from src.modules.requirement_extraction.router import router as requirement_extraction_router
@@ -88,6 +94,7 @@ app.include_router(connector_registry_router)
 app.include_router(workspace_feed_router)
 app.include_router(action_queue_router)
 app.include_router(action_console_router)
+app.include_router(acceptance_control_router)
 app.include_router(customer_registry_router)
 app.include_router(integration_tasks_router)
 app.include_router(intake_priority_router)
@@ -124,6 +131,8 @@ app.include_router(supplier_verification_router)
 app.include_router(quote_comparison_router)
 app.include_router(cost_model_router)
 app.include_router(cash_gap_router)
+app.include_router(closing_docs_router)
+app.include_router(claim_triggers_router)
 app.include_router(financing_strategy_router)
 app.include_router(finance_memo_router)
 app.include_router(contract_risks_router)
@@ -131,6 +140,7 @@ app.include_router(contract_negotiation_router)
 app.include_router(integrated_risk_memo_router)
 app.include_router(kpi_learning_router)
 app.include_router(learning_automation_router)
+app.include_router(logistics_tracking_router)
 app.include_router(ceo_approval_router)
 app.include_router(bid_documents_router)
 app.include_router(bid_packages_router)
@@ -145,7 +155,9 @@ app.include_router(supplier_contracts_router)
 app.include_router(purchase_orders_router)
 app.include_router(outcome_intake_router)
 app.include_router(payment_collection_router)
+app.include_router(payment_tracking_router)
 app.include_router(shipping_acceptance_router)
+app.include_router(incident_register_router)
 app.include_router(supplier_fulfillment_router)
 app.include_router(supplier_progress_router)
 

@@ -584,3 +584,63 @@ def next_supplier_progress_id(session: Session, column: ColumnElement[str]) -> s
 
 def next_supplier_progress_event_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="SPE", column=column)
+
+
+def next_logistics_tracking_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LTS", column=column)
+
+
+def next_logistics_tracking_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LT", column=column)
+
+
+def next_logistics_tracking_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LTE", column=column)
+
+
+def next_incident_register_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IRS", column=column)
+
+
+def next_incident_register_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IR", column=column)
+
+
+def next_incident_register_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IRE", column=column)
+
+
+def next_acceptance_control_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ACS", column=column)
+
+
+def next_acceptance_control_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ACC", column=column)
+
+
+def next_closing_docs_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CDS", column=column)
+
+
+def next_closing_docs_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CD", column=column)
+
+
+def next_payment_tracking_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PTS", column=column)
+
+
+def next_payment_tracking_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PT", column=column)
+
+
+def next_payment_tracking_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PTE", column=column)
+
+
+def next_claim_trigger_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CTS", column=column)
+
+
+def next_claim_trigger_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CT", column=column)

@@ -115,12 +115,12 @@
 | ID | Название | Контур | Приоритет | Роль |
 |---|---|---|---|---|
 | M-038 | Win/Loss Postmortem | Learning | P1 | Разбор исхода сделки |
-| M-039 | Delivery Launch Control | Execution | P0 | Запуск исполнения по выигранной сделке |
-| M-040 | Execution Command Center | Execution | P0 | Центральный cockpit исполнения |
-| M-041 | Delivery Milestone Tracker | Execution | P0 | Контроль milestones |
-| M-042 | Supplier Fulfillment Tracker | Execution | P0 | Vendor-side исполнение |
-| M-043 | Shipping & Acceptance Tracker | Execution | P0 | Отгрузка, доставка, приемка |
-| M-044 | Payment Collection Tracker | Execution | P0 | Дебиторка и сбор оплаты |
+| M-039 | Logistics Tracker | Execution | P0 | Канонический трекер доставки, ETA и shipment refs |
+| M-040 | Incident Register | Execution | P0 | Канонический реестр инцидентов и отклонений |
+| M-041 | Acceptance Control | Execution | P0 | Канонический контроль приемки и замечаний |
+| M-042 | Closing Docs Pack Builder | Execution | P0 | Канонический сборщик закрывающих документов |
+| M-043 | Payment Tracker | Execution | P0 | Канонический трекер оплат и дебиторки |
+| M-044 | Claims Trigger Engine | Execution | P0 | Канонический триггер претензионного контура |
 | M-045 | Incident & Escalation Desk | Execution | P0 | Инциденты и эскалации |
 | M-046 | Deal Closure & Archive | Closure | P0 | Закрытие и архив сделки |
 

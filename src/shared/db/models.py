@@ -1,5 +1,11 @@
 from src.modules.action_queue.models import ActionQueueApproval, ActionQueueRecord, ActionQueueSet
 from src.modules.action_console.models import ActionConsoleItem, ActionConsoleRecord, ActionConsoleSet
+from src.modules.acceptance_control.models import (
+    AcceptanceControlRecord,
+    AcceptanceControlSet,
+    AcceptanceRemark,
+    AcceptanceResolutionItem,
+)
 from src.modules.bid_completeness.models import (
     BidCompletenessFlag,
     BidCompletenessRecord,
@@ -12,6 +18,12 @@ from src.modules.bid_documents.models import (
     BidDocumentCollectionSet,
 )
 from src.modules.archive_export.models import ArchiveExportItem, ArchiveExportRecord, ArchiveExportSet
+from src.modules.claim_triggers.models import (
+    ClaimTriggerFlag,
+    ClaimTriggerLink,
+    ClaimTriggerRecord,
+    ClaimTriggerSet,
+)
 from src.modules.execution_ledger.models import ExecutionLedgerRecord, ExecutionLedgerSet, ExecutionResultRecord
 from src.modules.external_execution.models import (
     ExternalExecutionRecord,
@@ -22,6 +34,7 @@ from src.modules.connector_registry.models import ConnectorRegistryRecord, Conne
 from src.modules.copilot_feed.models import CopilotFeedItem, CopilotFeedRecord, CopilotFeedSet
 from src.modules.bid_packages.models import BidPackageItem, BidPackageRecord, BidPackageSet
 from src.modules.ceo_approval.models import CEOApprovalCondition, CEOApprovalRecord, CEOApprovalSet
+from src.modules.closing_docs.models import ClosingDocsFlag, ClosingDocsItem, ClosingDocsRecord, ClosingDocsSet
 from src.modules.compliance_matrix.models import ComplianceMatrix, ComplianceMatrixRow
 from src.modules.contract_risks.models import ContractRiskFlag, ContractRiskRecord, ContractRiskSet
 from src.modules.contract_negotiation.models import (
@@ -80,6 +93,18 @@ from src.modules.learning_automation.models import (
     LearningAutomationSet,
     LearningRecommendationRecord,
 )
+from src.modules.logistics_tracking.models import (
+    LogisticsTrackingEvent,
+    LogisticsTrackingLink,
+    LogisticsTrackingRecord,
+    LogisticsTrackingSet,
+)
+from src.modules.incident_register.models import (
+    IncidentRegisterEvent,
+    IncidentRegisterFlag,
+    IncidentRegisterRecord,
+    IncidentRegisterSet,
+)
 from src.modules.priority_scoring.models import PriorityScoreRecord
 from src.modules.post_submission.models import (
     PostSubmissionEvent,
@@ -102,6 +127,12 @@ from src.modules.payment_collection.models import (
     PaymentCollectionEvent,
     PaymentCollectionRecord,
     PaymentCollectionSet,
+)
+from src.modules.payment_tracking.models import (
+    PaymentTrackingAlert,
+    PaymentTrackingEvent,
+    PaymentTrackingRecord,
+    PaymentTrackingSet,
 )
 from src.modules.outcome_intake.models import (
     OutcomeIntakeBinding,
@@ -207,6 +238,10 @@ __all__ = [
     "ActionConsoleItem",
     "ActionConsoleRecord",
     "ActionConsoleSet",
+    "AcceptanceControlRecord",
+    "AcceptanceControlSet",
+    "AcceptanceRemark",
+    "AcceptanceResolutionItem",
     "ArtifactLink",
     "ArtifactVersion",
     "ArchiveExportItem",
@@ -246,6 +281,14 @@ __all__ = [
     "CashGapRecord",
     "CashGapScenario",
     "CashGapSet",
+    "ClaimTriggerFlag",
+    "ClaimTriggerLink",
+    "ClaimTriggerRecord",
+    "ClaimTriggerSet",
+    "ClosingDocsFlag",
+    "ClosingDocsItem",
+    "ClosingDocsRecord",
+    "ClosingDocsSet",
     "CustomerContour",
     "CustomerExternalRef",
     "CustomerProfile",
@@ -312,6 +355,14 @@ __all__ = [
     "LearningAutomationSet",
     "LearningRecommendationRecord",
     "LearningNoteRecord",
+    "LogisticsTrackingEvent",
+    "LogisticsTrackingLink",
+    "LogisticsTrackingRecord",
+    "LogisticsTrackingSet",
+    "IncidentRegisterEvent",
+    "IncidentRegisterFlag",
+    "IncidentRegisterRecord",
+    "IncidentRegisterSet",
     "OutcomeIntakeBinding",
     "OutcomeIntakeRecord",
     "OutcomeIntakeSet",
@@ -324,6 +375,10 @@ __all__ = [
     "PaymentCollectionEvent",
     "PaymentCollectionRecord",
     "PaymentCollectionSet",
+    "PaymentTrackingAlert",
+    "PaymentTrackingEvent",
+    "PaymentTrackingRecord",
+    "PaymentTrackingSet",
     "PostSubmissionEvent",
     "PostSubmissionTrackerRecord",
     "PostSubmissionTrackerSet",

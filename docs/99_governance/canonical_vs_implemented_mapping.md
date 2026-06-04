@@ -50,12 +50,12 @@
 | M-036 | Execution Plan Builder | Implemented as canonical execution plan set/record/milestone/assumption layer over helper milestone context | EXACT | Keep |
 | M-037 | Purchase Order Manager | Implemented as canonical purchase order set/record/item/link layer over contract and execution plan context | EXACT | Keep |
 | M-038 | Supplier Progress Monitor | Implemented as canonical supplier progress set/record/event/alert layer over purchase order and fulfillment helpers | EXACT | Keep |
-| M-039 | Logistics Tracker | Current `M-039` is delivery launch control | MISMATCH | Recover logistics tracker; keep launch control as helper contour |
-| M-040 | Incident Register | Current `M-040` is execution command center | MISMATCH | Recover incident register |
-| M-041 | Acceptance Control | Current `M-041` is delivery milestone tracker | MISMATCH | Recover acceptance control |
-| M-042 | Closing Docs Pack Builder | Current `M-042` is supplier fulfillment tracker | MISMATCH | Recover canonical closing docs module |
-| M-043 | Payment Tracker | Current `M-043` is shipping and acceptance tracker | MISMATCH | Recover canonical payment tracker |
-| M-044 | Claims Trigger Engine | Current `M-044` is payment collection tracker | MISMATCH | Recover canonical claims trigger |
+| M-039 | Logistics Tracker | Implemented as canonical logistics tracking set/record/event/link layer over purchase order, supplier progress, and shipping helpers | EXACT | Keep |
+| M-040 | Incident Register | Implemented as canonical incident register set/record/event/flag layer over logistics and helper incident/payment context | EXACT | Keep |
+| M-041 | Acceptance Control | Implemented as canonical acceptance set/record/remark/resolution layer over logistics and shipping helpers | EXACT | Keep |
+| M-042 | Closing Docs Pack Builder | Implemented as canonical closing docs set/record/item/flag layer over acceptance and delivery context | EXACT | Keep |
+| M-043 | Payment Tracker | Implemented as canonical payment tracking set/record/event/alert layer over closing docs and collection helpers | EXACT | Keep |
+| M-044 | Claims Trigger Engine | Implemented as canonical claim trigger set/record/flag/link layer over payment and incident context | EXACT | Keep |
 | M-045 | Deal Closure Report | Current `M-045` is incident and escalation desk | MISMATCH | Recover canonical closure report |
 | M-046 | Postmortem Builder | Current `M-046` is deal closure and archive | MISMATCH | Recover canonical postmortem builder |
 | M-047 | Supplier Rating Updater | Current `M-047` is KPI and learning loop | MISMATCH | Recover canonical supplier rating updater |
@@ -72,13 +72,13 @@
 
 | Status | Count | Canonical IDs |
 |---|---:|---|
-| EXACT | 39 | M-001..M-038, M-051 |
+| EXACT | 45 | M-001..M-044, M-051 |
 | PARTIAL | 0 | None |
-| MISMATCH | 16 | M-039..M-050, M-052..M-055 |
+| MISMATCH | 10 | M-045..M-050, M-052..M-055 |
 | MISSING | 0 | None |
 
 ## Key Findings
 
-1. Early intake and analysis recovery is canonical through `M-012`, and late submission plus execution-entry recovery is now canonical through `M-038`.
-2. Registry drift is now concentrated in `M-039..M-055`.
+1. Early intake and analysis recovery is canonical through `M-012`, and late delivery/payment recovery is now canonical through `M-044`.
+2. Registry drift is now concentrated in `M-045..M-055`.
 3. The main remaining governance problem is reuse of later canonical IDs for helper/platform concepts, not lack of useful implementation.

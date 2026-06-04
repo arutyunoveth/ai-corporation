@@ -187,6 +187,20 @@ from .recovery_r3 import (
     SupplierProgressStatus,
     SupplierReadinessState,
 )
+from .recovery_r4 import (
+    AcceptanceResolutionState,
+    AcceptanceStatus,
+    ClaimTriggerStatus,
+    ClosingDocItemStatus,
+    ClosingDocsStatus,
+    IncidentRegisterEventType,
+    IncidentRegisterStatus,
+    IncidentRegisterType,
+    LogisticsEventType,
+    LogisticsStatus,
+    PaymentTrackingEventType,
+    PaymentTrackingStatus,
+)
 
 __all__ = [
     "ArtifactType",
@@ -340,4 +354,16 @@ __all__ = [
     "SupplierProgressEventType",
     "SupplierProgressStatus",
     "SupplierReadinessState",
+    "AcceptanceResolutionState",
+    "AcceptanceStatus",
+    "ClaimTriggerStatus",
+    "ClosingDocItemStatus",
+    "ClosingDocsStatus",
+    "IncidentRegisterEventType",
+    "IncidentRegisterStatus",
+    "IncidentRegisterType",
+    "LogisticsEventType",
+    "LogisticsStatus",
+    "PaymentTrackingEventType",
+    "PaymentTrackingStatus",
 ]

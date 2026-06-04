@@ -208,6 +208,21 @@ EVENT_CODES = {
     "supplier_progress_built",
     "supplier_progress_event_recorded",
     "supplier_progress_failed",
+    "logistics_tracking_built",
+    "logistics_tracking_event_recorded",
+    "logistics_tracking_failed",
+    "incident_register_built",
+    "incident_register_event_recorded",
+    "incident_register_failed",
+    "acceptance_control_built",
+    "acceptance_control_failed",
+    "closing_docs_built",
+    "closing_docs_failed",
+    "payment_tracking_built",
+    "payment_tracking_event_recorded",
+    "payment_tracking_failed",
+    "claim_trigger_built",
+    "claim_trigger_failed",
 }
 
 DECISION_CODES = {
