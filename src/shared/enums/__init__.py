@@ -128,6 +128,21 @@ from .sprint7b import (
     WorkflowStepStatus,
     WorkflowStepType,
 )
+from .sprint8a import (
+    ActionExecutionStatus,
+    ActionQueueStatus,
+    ActionType,
+    ConnectorRegistryStatus,
+    ConnectorScopeType,
+    ConnectorStatus,
+    ConnectorSyncStatus,
+    ConnectorType,
+    QueueApprovalStatus,
+    WorkspaceItemType,
+    WorkspacePriority,
+    WorkspaceScopeType,
+    WorkspaceStatus,
+)
 
 __all__ = [
     "ArtifactType",
@@ -234,4 +249,17 @@ __all__ = [
     "CopilotFeedStatus",
     "CopilotFeedItemType",
     "CopilotPriority",
+    "ConnectorScopeType",
+    "ConnectorType",
+    "ConnectorRegistryStatus",
+    "ConnectorStatus",
+    "ConnectorSyncStatus",
+    "WorkspaceScopeType",
+    "WorkspaceStatus",
+    "WorkspaceItemType",
+    "WorkspacePriority",
+    "ActionQueueStatus",
+    "ActionType",
+    "ActionExecutionStatus",
+    "QueueApprovalStatus",
 ]

@@ -148,6 +148,18 @@ EVENT_CODES = {
     "copilot_feed_built",
     "copilot_feed_item_recorded",
     "copilot_feed_failed",
+    "connector_registry_built",
+    "connector_sync_started",
+    "connector_sync_finished",
+    "connector_sync_failed",
+    "workspace_feed_built",
+    "workspace_feed_item_recorded",
+    "workspace_feed_failed",
+    "action_queue_built",
+    "action_queue_item_recorded",
+    "action_queue_approved",
+    "action_queue_rejected",
+    "action_queue_failed",
 }
 
 DECISION_CODES = {

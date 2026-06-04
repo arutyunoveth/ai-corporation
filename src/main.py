@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 
+from src.modules.action_queue.router import router as action_queue_router
 from src.modules.archive_export.router import router as archive_export_router
+from src.modules.connector_registry.router import router as connector_registry_router
 from src.modules.copilot_feed.router import router as copilot_feed_router
 from src.modules.bid_completeness.router import router as bid_completeness_router
 from src.modules.bid_documents.router import router as bid_documents_router
@@ -49,6 +51,7 @@ from src.modules.tender_screening.router import router as tender_screening_route
 from src.modules.tender_intake.router import router as tender_intake_router
 from src.modules.tender_summary.router import router as tender_summary_router
 from src.modules.workflow_runs.router import router as workflow_runs_router
+from src.modules.workspace_feed.router import router as workspace_feed_router
 from src.shared.api.errors import register_exception_handlers
 from src.shared.config.settings import get_settings
 
@@ -63,6 +66,9 @@ app.include_router(archive_export_router)
 app.include_router(workflow_runs_router)
 app.include_router(optimization_router)
 app.include_router(copilot_feed_router)
+app.include_router(connector_registry_router)
+app.include_router(workspace_feed_router)
+app.include_router(action_queue_router)
 app.include_router(deal_closure_router)
 app.include_router(delivery_launch_router)
 app.include_router(delivery_milestones_router)

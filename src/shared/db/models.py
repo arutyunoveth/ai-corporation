@@ -1,3 +1,4 @@
+from src.modules.action_queue.models import ActionQueueApproval, ActionQueueRecord, ActionQueueSet
 from src.modules.bid_completeness.models import (
     BidCompletenessFlag,
     BidCompletenessRecord,
@@ -9,6 +10,7 @@ from src.modules.bid_documents.models import (
     BidDocumentCollectionSet,
 )
 from src.modules.archive_export.models import ArchiveExportItem, ArchiveExportRecord, ArchiveExportSet
+from src.modules.connector_registry.models import ConnectorRegistryRecord, ConnectorRegistrySet, ConnectorSyncRun
 from src.modules.copilot_feed.models import CopilotFeedItem, CopilotFeedRecord, CopilotFeedSet
 from src.modules.bid_packages.models import BidPackageItem, BidPackageRecord, BidPackageSet
 from src.modules.ceo_approval.models import CEOApprovalCondition, CEOApprovalRecord, CEOApprovalSet
@@ -127,13 +129,20 @@ from src.modules.tender_screening.models import TenderScreeningRecord
 from src.modules.tender_intake.models import TenderIntakeRecord, TenderSourcePayload
 from src.modules.tender_summary.models import TenderSummary, TenderSummarySourceLink
 from src.modules.workflow_runs.models import WorkflowRunRecord, WorkflowRunSet, WorkflowStepRecord
+from src.modules.workspace_feed.models import WorkspaceFeedItem, WorkspaceFeedRecord, WorkspaceFeedSet
 
 __all__ = [
+    "ActionQueueApproval",
+    "ActionQueueRecord",
+    "ActionQueueSet",
     "ArtifactLink",
     "ArtifactVersion",
     "ArchiveExportItem",
     "ArchiveExportRecord",
     "ArchiveExportSet",
+    "ConnectorRegistryRecord",
+    "ConnectorRegistrySet",
+    "ConnectorSyncRun",
     "CopilotFeedItem",
     "CopilotFeedRecord",
     "CopilotFeedSet",
@@ -265,4 +274,7 @@ __all__ = [
     "WorkflowRunRecord",
     "WorkflowRunSet",
     "WorkflowStepRecord",
+    "WorkspaceFeedItem",
+    "WorkspaceFeedRecord",
+    "WorkspaceFeedSet",
 ]

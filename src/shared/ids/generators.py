@@ -400,3 +400,31 @@ def next_copilot_feed_set_id(session: Session, column: ColumnElement[str]) -> st
 
 def next_copilot_feed_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="CF", column=column)
+
+
+def next_connector_registry_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CRG", column=column)
+
+
+def next_connector_registry_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CRR", column=column)
+
+
+def next_connector_sync_run_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CSR", column=column)
+
+
+def next_workspace_feed_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="WFS", column=column)
+
+
+def next_workspace_feed_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="WF", column=column)
+
+
+def next_action_queue_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="AQS", column=column)
+
+
+def next_action_queue_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="AQ", column=column)

@@ -1,0 +1,149 @@
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from src.modules.copilot_feed.models import CopilotFeedItem, CopilotFeedRecord, CopilotFeedSet
+from src.modules.deal_registry.models import Deal
+from src.modules.execution_command.models import ExecutionCommandSet
+from src.modules.optimization.models import OptimizationRecommendationRecord, OptimizationRecommendationSet
+from src.modules.workflow_runs.models import WorkflowRunRecord, WorkflowRunSet, WorkflowStepRecord
+from src.shared.enums import OptimizationScopeType, WorkflowScopeType
+from src.shared.errors import NotFoundError
+
+
+def ensure_scope_exists(session: Session, scope_type: str, scope_ref: str) -> None:
+    if scope_type == WorkflowScopeType.DEAL:
+        deal = session.scalar(select(Deal).where(Deal.deal_id == scope_ref, Deal.is_deleted.is_(False)))
+        if not deal:
+            raise NotFoundError(f"Deal '{scope_ref}' was not found")
+    elif scope_type == WorkflowScopeType.EXECUTION:
+        execution_set = session.scalar(
+            select(ExecutionCommandSet).where(ExecutionCommandSet.execution_command_set_id == scope_ref)
+        )
+        if not execution_set:
+            raise NotFoundError(f"Execution command set '{scope_ref}' was not found")
+
+
+def resolve_scope_deal_id(session: Session, scope_type: str, scope_ref: str) -> str | None:
+    if scope_type == WorkflowScopeType.DEAL:
+        return scope_ref
+    if scope_type == WorkflowScopeType.EXECUTION:
+        execution_set = session.scalar(
+            select(ExecutionCommandSet).where(ExecutionCommandSet.execution_command_set_id == scope_ref)
+        )
+        return execution_set.deal_id if execution_set else None
+    return None
+
+
+def latest_workflow_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[WorkflowRunSet | None, WorkflowRunRecord | None, list[WorkflowStepRecord]]:
+    workflow_set = session.scalar(
+        select(WorkflowRunSet)
+        .where(WorkflowRunSet.scope_type == scope_type, WorkflowRunSet.scope_ref == scope_ref)
+        .order_by(WorkflowRunSet.created_at.desc(), WorkflowRunSet.id.desc())
+        .limit(1)
+    )
+    if not workflow_set:
+        return None, None, []
+    workflow_record = session.scalar(
+        select(WorkflowRunRecord)
+        .where(WorkflowRunRecord.workflow_run_set_id == workflow_set.workflow_run_set_id)
+        .order_by(WorkflowRunRecord.created_at.desc(), WorkflowRunRecord.id.desc())
+        .limit(1)
+    )
+    if not workflow_record:
+        return workflow_set, None, []
+    steps = list(
+        session.scalars(
+            select(WorkflowStepRecord)
+            .where(WorkflowStepRecord.workflow_run_id == workflow_record.workflow_run_id)
+            .order_by(WorkflowStepRecord.created_at.asc(), WorkflowStepRecord.id.asc())
+        )
+    )
+    return workflow_set, workflow_record, steps
+
+
+def latest_optimization_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[OptimizationRecommendationSet | None, list[OptimizationRecommendationRecord], str | None]:
+    candidates: list[tuple[OptimizationScopeType, str]] = []
+    if scope_type == WorkflowScopeType.DEAL:
+        candidates.append((OptimizationScopeType.DEAL, scope_ref))
+    elif scope_type == WorkflowScopeType.PORTFOLIO:
+        candidates.append((OptimizationScopeType.PORTFOLIO, scope_ref))
+        candidates.append((OptimizationScopeType.PROCESS, scope_ref))
+    elif scope_type == WorkflowScopeType.PIPELINE:
+        candidates.append((OptimizationScopeType.PROCESS, scope_ref))
+        candidates.append((OptimizationScopeType.PORTFOLIO, "GLOBAL"))
+    else:
+        candidates.append((OptimizationScopeType.PROCESS, scope_ref))
+        execution_set = session.scalar(
+            select(ExecutionCommandSet).where(ExecutionCommandSet.execution_command_set_id == scope_ref)
+        )
+        if execution_set:
+            candidates.append((OptimizationScopeType.DEAL, execution_set.deal_id))
+
+    for optimization_scope, candidate_ref in candidates:
+        optimization_set = session.scalar(
+            select(OptimizationRecommendationSet)
+            .where(
+                OptimizationRecommendationSet.scope_type == optimization_scope,
+                OptimizationRecommendationSet.scope_ref == candidate_ref,
+            )
+            .order_by(
+                OptimizationRecommendationSet.created_at.desc(),
+                OptimizationRecommendationSet.id.desc(),
+            )
+            .limit(1)
+        )
+        if optimization_set:
+            records = list(
+                session.scalars(
+                    select(OptimizationRecommendationRecord)
+                    .where(
+                        OptimizationRecommendationRecord.optimization_recommendation_set_id
+                        == optimization_set.optimization_recommendation_set_id
+                    )
+                    .order_by(
+                        OptimizationRecommendationRecord.created_at.asc(),
+                        OptimizationRecommendationRecord.id.asc(),
+                    )
+                )
+            )
+            return optimization_set, records, candidate_ref
+    return None, [], None
+
+
+def latest_copilot_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[CopilotFeedSet | None, CopilotFeedRecord | None, list[CopilotFeedItem]]:
+    feed_set = session.scalar(
+        select(CopilotFeedSet)
+        .where(CopilotFeedSet.scope_type == scope_type, CopilotFeedSet.scope_ref == scope_ref)
+        .order_by(CopilotFeedSet.created_at.desc(), CopilotFeedSet.id.desc())
+        .limit(1)
+    )
+    if not feed_set:
+        return None, None, []
+    feed_record = session.scalar(
+        select(CopilotFeedRecord)
+        .where(CopilotFeedRecord.copilot_feed_set_id == feed_set.copilot_feed_set_id)
+        .order_by(CopilotFeedRecord.created_at.desc(), CopilotFeedRecord.id.desc())
+        .limit(1)
+    )
+    if not feed_record:
+        return feed_set, None, []
+    items = list(
+        session.scalars(
+            select(CopilotFeedItem)
+            .where(CopilotFeedItem.copilot_feed_id == feed_record.copilot_feed_id)
+            .order_by(CopilotFeedItem.created_at.asc(), CopilotFeedItem.id.asc())
+        )
+    )
+    return feed_set, feed_record, items
