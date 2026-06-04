@@ -10,6 +10,8 @@ This repository currently contains:
 
 The repository now includes the reconciliation layer plus Recovery Sprints R1, R2, R3, R4, and R5, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`, and the full recovery bands `M-031..M-048` without destructive refactor.
 
+The project is now in a separate launch-readiness phase. Recovery is closed, but launch approval still depends on honest handling of deferred late slots and operational compensating controls.
+
 ## Reconciliation Docs
 
 - [canonical_module_registry_locked.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_module_registry_locked.md)
@@ -33,6 +35,10 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - [Entity_Catalog_Recovery_Sprint_R4.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R4.md)
 - [Entity_Catalog_Recovery_Sprint_R5.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R5.md)
 - [Final_Recovery_Audit.md](/Users/master/Documents/AI-Corporation/docs/99_governance/Final_Recovery_Audit.md)
+- [Launch_Readiness_Gap_Audit.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_Readiness_Gap_Audit.md)
+- [Launch_L1_Minimum_Baseline.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Minimum_Baseline.md)
+- [Deferred_Modules_Risk_Assessment.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Deferred_Modules_Risk_Assessment.md)
+- [Launch_L1_Go_NoGo_Checklist.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Go_NoGo_Checklist.md)
 
 ## Governance Status
 
@@ -100,6 +106,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Registry reconciliation is now complete for `M-052..M-055`; no unresolved locked-registry mismatches remain.
 - AI/LLM, prompt, agent, and external platform execution work remain intentionally deferred.
 - Before Launch Sprint `L1`, the remaining governance gate is to keep reserved `M-049/M-050` closed until a dedicated post-launch AI/runtime phase is approved.
+- Launch readiness is audited separately from recovery completion; the current decision is `GO with restrictions` for a controlled operator-assisted pilot, not for unattended or autonomous launch.
 
 ## Current Scope
 
