@@ -199,6 +199,15 @@ EVENT_CODES = {
     "intake_priority_failed",
     "requirement_extraction_built",
     "requirement_extraction_failed",
+    "supplier_contract_built",
+    "supplier_contract_failed",
+    "execution_plan_built",
+    "execution_plan_failed",
+    "purchase_order_built",
+    "purchase_order_failed",
+    "supplier_progress_built",
+    "supplier_progress_event_recorded",
+    "supplier_progress_failed",
 }
 
 DECISION_CODES = {

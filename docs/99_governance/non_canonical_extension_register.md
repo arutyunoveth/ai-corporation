@@ -18,13 +18,13 @@ Two classes exist:
 | Legacy Tender Summary Builder package | legacy `tender_summary` contour | Useful persisted intake artifact kept for backward compatibility | Internal helper / submodule under canonical M-008, M-011, M-012 |
 | Submission Readiness Gate | legacy `submission_readiness` contour | Useful pre-submit gating logic | Helper under canonical M-031 completeness and readiness reporting |
 | Submission Control | legacy `submission_control` contour | Useful controlled submission execution | Internal submission helper under canonical M-032/M-033 recovery |
-| Submission Receipt Registry | current `M-035` | Useful persisted evidence layer | Helper under canonical M-032 Submission Archive |
-| Post-Submission Tracker | current `M-036` | Useful ongoing status timeline | Helper under canonical M-033 Tender Procedure Monitor |
-| Outcome Intake | current `M-037` | Useful formal outcome capture | Helper under canonical M-033 and M-034 |
+| Submission Receipt Registry | legacy `submission_receipts` contour | Useful persisted evidence layer | Helper under canonical M-032 Submission Archive |
+| Post-Submission Tracker | legacy `post_submission` contour | Useful ongoing status timeline | Helper under canonical M-033 Tender Procedure Monitor |
+| Outcome Intake | legacy `outcome_intake` contour | Useful formal outcome capture | Helper under canonical M-033 and M-034 |
 | Delivery Launch Control | current `M-039` | Useful award-to-execution launch control | Helper around canonical M-036 Execution Plan Builder |
 | Execution Command Center | current `M-040` | Useful execution cockpit | Helper around canonical M-036 and M-038 |
-| Delivery Milestone Tracker | current `M-041` | Useful milestone trace | Helper around canonical M-036, M-038, M-041 |
-| Supplier Fulfillment Tracker | current `M-042` | Useful vendor-side execution tracking | Helper around canonical M-037, M-038 |
+| Delivery Milestone Tracker | current `M-041` | Useful milestone trace | Helper around canonical M-036 and M-038 |
+| Supplier Fulfillment Tracker | current `M-042` | Useful vendor-side execution tracking | Helper around canonical M-037 and M-038 |
 | Shipping & Acceptance Tracker | current `M-043` | Useful logistics and acceptance trace | Split between canonical M-039 and M-041 |
 | Payment Collection Tracker | current `M-044` | Useful receivables tracking | Helper under canonical M-043 Payment Tracker |
 | Incident & Escalation Desk | current `M-045` | Useful operational incident handling | Helper under canonical M-040 Incident Register |

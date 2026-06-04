@@ -75,9 +75,10 @@ flowchart TD
     M032[M-032 Submission Archive]
     M033[M-033 Tender Procedure Monitor]
     M034[M-034 Contract Negotiation Workspace]
-    M035[M-035 Submission Receipt Registry]
-    M036[M-036 Post-Submission Tracker]
-    M037[M-037 Outcome Intake]
+    M035[M-035 Supplier Contract Draft]
+    M036[M-036 Execution Plan Builder]
+    M037[M-037 Purchase Order Manager]
+    M038[M-038 Supplier Progress Monitor]
   end
 
   subgraph EXEC[Execution & Closure]
@@ -269,9 +270,10 @@ flowchart TD
 33. M-032 Submission Archive
 34. M-033 Tender Procedure Monitor
 35. M-034 Contract Negotiation Workspace
-36. M-035 Submission Receipt Registry
-37. M-036 Post-Submission Tracker
-38. M-037 Outcome Intake
+36. M-035 Supplier Back-to-Back Contract Draft
+37. M-036 Execution Plan Builder
+38. M-037 Purchase Order Manager
+39. M-038 Supplier Progress Monitor
 
 ---
 

@@ -25,6 +25,7 @@ from src.modules.document_ingestion.router import router as document_ingestion_r
 from src.modules.document_requirements.router import router as document_requirements_router
 from src.modules.event_log.router import router as event_log_router
 from src.modules.execution_command.router import router as execution_command_router
+from src.modules.execution_plans.router import router as execution_plans_router
 from src.modules.execution_ledger.router import router as execution_ledger_router
 from src.modules.external_execution.router import router as external_execution_router
 from src.modules.finance_memo.router import router as finance_memo_router
@@ -39,6 +40,7 @@ from src.modules.learning_automation.router import router as learning_automation
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.post_submission.router import router as post_submission_router
 from src.modules.procedure_monitor.router import router as procedure_monitor_router
+from src.modules.purchase_orders.router import router as purchase_orders_router
 from src.modules.outcome_intake.router import router as outcome_intake_router
 from src.modules.optimization.router import router as optimization_router
 from src.modules.operator_sessions.router import router as operator_sessions_router
@@ -54,7 +56,9 @@ from src.modules.submission_control.router import router as submission_control_r
 from src.modules.submission_archive.router import router as submission_archive_router
 from src.modules.submission_receipts.router import router as submission_receipts_router
 from src.modules.supplier_communications.router import router as supplier_communications_router
+from src.modules.supplier_contracts.router import router as supplier_contracts_router
 from src.modules.supplier_fulfillment.router import router as supplier_fulfillment_router
+from src.modules.supplier_progress.router import router as supplier_progress_router
 from src.modules.supplier_registry.router import router as supplier_registry_router
 from src.modules.supplier_search.router import router as supplier_search_router
 from src.modules.supplier_verification.router import router as supplier_verification_router
@@ -97,6 +101,7 @@ app.include_router(status_router)
 app.include_router(artifacts_router)
 app.include_router(event_log_router)
 app.include_router(execution_command_router)
+app.include_router(execution_plans_router)
 app.include_router(tender_import_router)
 app.include_router(tender_intake_router)
 app.include_router(tender_normalization_router)
@@ -136,10 +141,13 @@ app.include_router(submission_control_router)
 app.include_router(submission_receipts_router)
 app.include_router(post_submission_router)
 app.include_router(procedure_monitor_router)
+app.include_router(supplier_contracts_router)
+app.include_router(purchase_orders_router)
 app.include_router(outcome_intake_router)
 app.include_router(payment_collection_router)
 app.include_router(shipping_acceptance_router)
 app.include_router(supplier_fulfillment_router)
+app.include_router(supplier_progress_router)
 
 
 @app.get("/health")

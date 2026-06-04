@@ -54,6 +54,12 @@ from src.modules.execution_command.models import (
     ExecutionCommandRecord,
     ExecutionCommandSet,
 )
+from src.modules.execution_plans.models import (
+    ExecutionPlanAssumption,
+    ExecutionPlanMilestone,
+    ExecutionPlanRecord,
+    ExecutionPlanSet,
+)
 from src.modules.finance_memo.models import FinanceMemoFlag, FinanceMemoRecord, FinanceMemoSet
 from src.modules.financing_strategy.models import (
     FinancingStrategyOption,
@@ -85,6 +91,12 @@ from src.modules.procedure_monitor.models import (
     ProcedureMonitorEvent,
     ProcedureMonitorRecord,
     ProcedureMonitorSet,
+)
+from src.modules.purchase_orders.models import (
+    PurchaseOrderItem,
+    PurchaseOrderLink,
+    PurchaseOrderRecord,
+    PurchaseOrderSet,
 )
 from src.modules.payment_collection.models import (
     PaymentCollectionEvent,
@@ -123,6 +135,18 @@ from src.modules.supplier_fulfillment.models import (
     SupplierFulfillmentEvent,
     SupplierFulfillmentRecord,
     SupplierFulfillmentSet,
+)
+from src.modules.supplier_contracts.models import (
+    SupplierContractComment,
+    SupplierContractObligation,
+    SupplierContractRecord,
+    SupplierContractSet,
+)
+from src.modules.supplier_progress.models import (
+    SupplierProgressAlert,
+    SupplierProgressEvent,
+    SupplierProgressRecord,
+    SupplierProgressSet,
 )
 from src.modules.customer_registry.models import CustomerContour, CustomerExternalRef, CustomerProfile
 from src.modules.intake_priority.models import IntakePriorityFactor, IntakePriorityRecord, IntakePrioritySet
@@ -252,6 +276,10 @@ __all__ = [
     "ExecutionCommandBinding",
     "ExecutionCommandRecord",
     "ExecutionCommandSet",
+    "ExecutionPlanAssumption",
+    "ExecutionPlanMilestone",
+    "ExecutionPlanRecord",
+    "ExecutionPlanSet",
     "ExecutionLedgerRecord",
     "ExecutionLedgerSet",
     "ExecutionResultRecord",
@@ -304,6 +332,10 @@ __all__ = [
     "ProcedureMonitorRecord",
     "ProcedureMonitorSet",
     "PriorityScoreRecord",
+    "PurchaseOrderItem",
+    "PurchaseOrderLink",
+    "PurchaseOrderRecord",
+    "PurchaseOrderSet",
     "QuoteArtifactBinding",
     "QuoteComparisonRecommendation",
     "QuoteComparisonRow",
@@ -324,11 +356,19 @@ __all__ = [
     "SupplierCommunicationThread",
     "SupplierContact",
     "SupplierExternalRef",
+    "SupplierContractComment",
+    "SupplierContractObligation",
+    "SupplierContractRecord",
+    "SupplierContractSet",
     "SupplierFulfillmentEvent",
     "SupplierFulfillmentRecord",
     "SupplierFulfillmentSet",
     "SupplierMessageRecord",
     "SupplierProfile",
+    "SupplierProgressAlert",
+    "SupplierProgressEvent",
+    "SupplierProgressRecord",
+    "SupplierProgressSet",
     "SupplierShortlist",
     "SupplierShortlistRow",
     "SupplierTag",

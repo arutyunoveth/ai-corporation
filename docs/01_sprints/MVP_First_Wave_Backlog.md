@@ -842,6 +842,7 @@
 - M-035
 - M-036
 - M-037
+- M-038
 
 ---
 
@@ -980,65 +981,92 @@
 
 ---
 
-## E6. M-035 Submission Receipt Registry
+## E7. M-035 Supplier Back-to-Back Contract Draft
 ### User stories
-- сохранить proof of submission;
-- зафиксировать tracking/portal number.
+- собрать supplier-side draft под customer obligations;
+- видеть mirrored obligations и contract comments.
 
 ### Сущности
-- `submission_receipt`
-- `submission_receipt_artifact`
+- `supplier_contract_record`
+- `supplier_contract_obligation`
+- `supplier_contract_comment`
 
 ### API
-- `register_submission_receipt`
+- `build_supplier_contract`
 
 ### Зависимости
-- M-033
-- M-003
+- M-034
+- M-021
 
 ### DoD
-- receipt exists as formal record.
+- supplier draft exists as formal object.
 
 ---
 
-## E7. M-036 Post-Submission Tracker
+## E8. M-036 Execution Plan Builder
 ### User stories
-- вести timeline after submission;
-- ловить clarifications and status changes.
+- собрать baseline plan исполнения;
+- видеть formal milestones и assumptions.
 
 ### Сущности
-- `post_submission_tracker`
-- `post_submission_event`
+- `execution_plan_record`
+- `execution_plan_milestone`
+- `execution_plan_assumption`
 
 ### API
-- `record_post_submission_event`
-- `update_post_submission_status`
+- `build_execution_plan`
 
 ### Зависимости
 - M-035
+- helper milestone context
 
 ### DoD
-- submitted deals stay visible after submission.
+- execution plan exists as formal object.
 
 ---
 
-## E8. M-037 Outcome Intake
+## E9. M-037 Purchase Order Manager
 ### User stories
-- formalize award/loss/rejection outcome;
-- route to next branch correctly.
+- создать formal PO поставщику;
+- видеть item-level supplier order scope.
 
 ### Сущности
-- `deal_outcome`
+- `purchase_order_record`
+- `purchase_order_item`
+- `purchase_order_link`
 
 ### API
-- `register_deal_outcome`
+- `build_purchase_order`
 
 ### Зависимости
+- M-035
 - M-036
 
 ### DoD
-- outcome explicit;
-- route explicit.
+- PO exists as formal object.
+
+---
+
+## E10. M-038 Supplier Progress Monitor
+### User stories
+- видеть supplier readiness timeline;
+- фиксировать delays и progress alerts.
+
+### Сущности
+- `supplier_progress_record`
+- `supplier_progress_event`
+- `supplier_progress_alert`
+
+### API
+- `build_supplier_progress`
+- `register_supplier_progress_event`
+
+### Зависимости
+- M-037
+- helper supplier fulfillment context
+
+### DoD
+- supplier progress trace explicit.
 
 ---
 
@@ -1100,6 +1128,7 @@
 - M-035
 - M-036
 - M-037
+- M-038
 
 ---
 

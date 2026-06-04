@@ -103,9 +103,10 @@
 | M-032 | Submission Archive | Submission | P0 | Архив поданной версии заявки |
 | M-033 | Tender Procedure Monitor | Submission | P0 | Мониторинг хода процедуры после подачи |
 | M-034 | Contract Negotiation Workspace | Submission | P1 | Workspace контрактования после победы |
-| M-035 | Submission Receipt Registry | Submission | P0 | Доказательства подачи |
-| M-036 | Post-Submission Tracker | Submission | P0 | Трекинг статуса после подачи |
-| M-037 | Contract Award / Loss Decision Intake | Submission | P0 | Formal intake результата закупки |
+| M-035 | Supplier Back-to-Back Contract Draft | Execution Entry | P0 | Draft договора поставщику под customer obligation |
+| M-036 | Execution Plan Builder | Execution Entry | P0 | Baseline план исполнения и milestones |
+| M-037 | Purchase Order Manager | Execution Entry | P0 | Formal PO и supplier order control |
+| M-038 | Supplier Progress Monitor | Execution Entry | P0 | Мониторинг готовности и задержек у поставщика |
 
 ---
 

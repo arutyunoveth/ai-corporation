@@ -544,3 +544,43 @@ def next_contract_negotiation_set_id(session: Session, column: ColumnElement[str
 
 def next_contract_negotiation_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="CN", column=column)
+
+
+def next_supplier_contract_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SCS", column=column)
+
+
+def next_supplier_contract_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SC", column=column)
+
+
+def next_execution_plan_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="EPS", column=column)
+
+
+def next_execution_plan_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="EP", column=column)
+
+
+def next_execution_plan_milestone_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="EPM", column=column)
+
+
+def next_purchase_order_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="POS", column=column)
+
+
+def next_purchase_order_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PO", column=column)
+
+
+def next_supplier_progress_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SPS", column=column)
+
+
+def next_supplier_progress_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SP", column=column)
+
+
+def next_supplier_progress_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SPE", column=column)

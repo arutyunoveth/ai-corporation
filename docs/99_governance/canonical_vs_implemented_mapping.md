@@ -46,10 +46,10 @@
 | M-032 | Submission Archive | Implemented as canonical archive set/record/item layer over submitted execution and receipt evidence | EXACT | Keep |
 | M-033 | Tender Procedure Monitor | Implemented as canonical procedure monitor over helper post-submission and outcome contours | EXACT | Keep |
 | M-034 | Contract Negotiation Workspace | Implemented as canonical negotiation workspace over won outcome and contract risk helpers | EXACT | Keep |
-| M-035 | Supplier Back-to-Back Contract Draft | Current `M-035` is submission receipt registry | MISMATCH | Recover canonical supplier contract draft |
-| M-036 | Execution Plan Builder | Current `M-036` is post-submission tracker | MISMATCH | Recover canonical execution plan builder |
-| M-037 | Purchase Order Manager | Current `M-037` is outcome intake | MISMATCH | Recover canonical PO manager |
-| M-038 | Supplier Progress Monitor | Not found as canonical top-level | MISSING | Add later |
+| M-035 | Supplier Back-to-Back Contract Draft | Implemented as canonical supplier contract set/record/obligation/comment layer over negotiation and quote helpers | EXACT | Keep |
+| M-036 | Execution Plan Builder | Implemented as canonical execution plan set/record/milestone/assumption layer over helper milestone context | EXACT | Keep |
+| M-037 | Purchase Order Manager | Implemented as canonical purchase order set/record/item/link layer over contract and execution plan context | EXACT | Keep |
+| M-038 | Supplier Progress Monitor | Implemented as canonical supplier progress set/record/event/alert layer over purchase order and fulfillment helpers | EXACT | Keep |
 | M-039 | Logistics Tracker | Current `M-039` is delivery launch control | MISMATCH | Recover logistics tracker; keep launch control as helper contour |
 | M-040 | Incident Register | Current `M-040` is execution command center | MISMATCH | Recover incident register |
 | M-041 | Acceptance Control | Current `M-041` is delivery milestone tracker | MISMATCH | Recover acceptance control |
@@ -72,13 +72,13 @@
 
 | Status | Count | Canonical IDs |
 |---|---:|---|
-| EXACT | 35 | M-001..M-034, M-051 |
+| EXACT | 39 | M-001..M-038, M-051 |
 | PARTIAL | 0 | None |
-| MISMATCH | 19 | M-035..M-037, M-039..M-050, M-052..M-055 |
-| MISSING | 1 | M-038 |
+| MISMATCH | 16 | M-039..M-050, M-052..M-055 |
+| MISSING | 0 | None |
 
 ## Key Findings
 
-1. Early intake and analysis recovery is canonical through `M-012`, and late submission recovery is now canonical through `M-034`.
-2. Registry drift is now concentrated mostly in `M-035..M-055`, plus the still-missing `M-038`.
+1. Early intake and analysis recovery is canonical through `M-012`, and late submission plus execution-entry recovery is now canonical through `M-038`.
+2. Registry drift is now concentrated in `M-039..M-055`.
 3. The main remaining governance problem is reuse of later canonical IDs for helper/platform concepts, not lack of useful implementation.

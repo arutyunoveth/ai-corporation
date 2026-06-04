@@ -204,9 +204,10 @@
 - M-032 Submission Archive
 - M-033 Tender Procedure Monitor
 - M-034 Contract Negotiation Workspace
-- M-035 Submission Receipt Registry
-- M-036 Post-Submission Tracker
-- M-037 Contract Award / Loss Decision Intake
+- M-035 Supplier Back-to-Back Contract Draft
+- M-036 Execution Plan Builder
+- M-037 Purchase Order Manager
+- M-038 Supplier Progress Monitor
 
 ### Что делаем
 - собираем source docs заявки;

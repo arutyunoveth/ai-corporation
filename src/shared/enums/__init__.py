@@ -178,6 +178,15 @@ from .recovery_r2 import (
     SubmissionArchiveItemRole,
     SubmissionArchiveStatus,
 )
+from .recovery_r3 import (
+    ExecutionPlanStatus,
+    PurchaseOrderStatus,
+    SupplierContractObligationStatus,
+    SupplierContractStatus,
+    SupplierProgressEventType,
+    SupplierProgressStatus,
+    SupplierReadinessState,
+)
 
 __all__ = [
     "ArtifactType",
@@ -324,4 +333,11 @@ __all__ = [
     "ProcedureStatus",
     "SubmissionArchiveItemRole",
     "SubmissionArchiveStatus",
+    "ExecutionPlanStatus",
+    "PurchaseOrderStatus",
+    "SupplierContractObligationStatus",
+    "SupplierContractStatus",
+    "SupplierProgressEventType",
+    "SupplierProgressStatus",
+    "SupplierReadinessState",
 ]

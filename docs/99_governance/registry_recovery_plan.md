@@ -9,7 +9,8 @@ Return the project to the locked canonical business registry `M-001..M-055` with
 - Governance lock: completed
 - Recovery Sprint R1: completed for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`
 - Recovery Sprint R2: completed for `M-031`, `M-032`, `M-033`, `M-034`
-- Remaining recovery focus: `M-035..M-055` canonical reconciliation plus missing `M-038`
+- Recovery Sprint R3: completed for `M-035`, `M-036`, `M-037`, `M-038`
+- Remaining recovery focus: `M-039..M-055` canonical reconciliation
 
 ## Phase 1. Governance Lock And Documentation
 
@@ -41,13 +42,12 @@ Return the project to the locked canonical business registry `M-001..M-055` with
 
 1. Recover missing canonical modules first:
    - `M-005`
-   - `M-038`
 2. Recover partial modules next:
    - `M-007`
    - `M-008`
    - `M-010`
 3. Then resolve highest-risk mismatches:
-   - `M-035..M-037`
+   - `M-039..M-048`
    - `M-052..M-055`
 4. Only after canonical coverage is stabilized should deeper package/schema refactoring be considered.
 
@@ -80,7 +80,7 @@ Recover canonical submission semantics:
 - `M-036`
 - `M-037`
 
-Status: partially completed in Recovery Sprint R2 for `M-031`, `M-032`, `M-033`, `M-034`.
+Status: completed in Recovery Sprints R2 and R3.
 
 ### Step 4
 
@@ -88,6 +88,8 @@ Recover canonical execution / closure semantics:
 
 - `M-038`
 - `M-039..M-048`
+
+Status: started in Recovery Sprint R3 with `M-038` completed.
 
 ### Step 5
 
