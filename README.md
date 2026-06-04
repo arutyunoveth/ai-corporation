@@ -48,6 +48,9 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [Pre_L1_Ops_Visibility_Package.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Pre_L1_Ops_Visibility_Package.md)
 - [Pre_L1_Attention_and_Red_Flags.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Pre_L1_Attention_and_Red_Flags.md)
 - [Pre_L1_Owner_Overview.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Pre_L1_Owner_Overview.md)
+- [Repository_Sync_Integrity_Report.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Repository_Sync_Integrity_Report.md)
+- [Dry_Run_0_Entry_Criteria.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Entry_Criteria.md)
+- [Repository_Public_State_Checklist.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Repository_Public_State_Checklist.md)
 
 ## Governance Status
 
@@ -118,6 +121,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Launch readiness is audited separately from recovery completion; the current decision is `GO with restrictions` for a controlled operator-assisted pilot, not for unattended or autonomous launch.
 - Launch Sprint `L1` is therefore allowed only as a controlled pilot with a runbook, checklist, pilot playbook, and mandatory human control gates.
 - A pre-L1 ops visibility mini-gap closure now adds an internal `launch_visibility` helper for pilot attention aggregation and owner/operator overview without reopening `M-049/M-050` or reclassifying `M-052..M-055`.
+- The immediate next repository gate is `Dry Run 0`, not direct real-pilot execution.
 
 ## Current Scope
 
@@ -177,6 +181,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Default status on create: `NEW`
 - Business IDs are generated in application code with DB uniqueness guarantees and retry-friendly formatting.
 - AI/LLM, prompt, agent, and external platform execution work are intentionally deferred until after recovery review and Launch Sprint `L1`.
+- Public repository state is now synchronized for `Dry Run 0` entry under existing `L1` restrictions.
 - The list below is an implementation inventory and includes both canonical-business refs and internal-extension refs currently present in code:
   - `DL-YYYY-NNNNNN`
   - `CUS-YYYY-NNNNNN`

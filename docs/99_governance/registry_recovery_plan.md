@@ -44,6 +44,7 @@ After Registry Reconciliation Sprint `R6`, the repository is ready for a Launch 
 - keep reserved AI/runtime slots `M-049`, `M-050` closed until a dedicated post-launch AI/runtime phase is approved
 - accept `M-052..M-055` as reconciled non-runtime platform/governance slots
 - proceed without adding fake runtime modules for those late slots
+- use `Dry Run 0` as the next operational step before any real pilot launch
 
 ## Non-Goals Still Preserved
 

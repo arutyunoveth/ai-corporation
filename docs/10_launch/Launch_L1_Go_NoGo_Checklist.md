@@ -2,6 +2,8 @@
 
 Use this checklist before approving Launch Sprint `L1`.
 
+In the current repository phase, this checklist supports `Dry Run 0` entry first, then real pilot approval only after successful dry-run review.
+
 ## Go / No-Go Checks
 
 - [ ] Full recovery and registry reconciliation remain accepted in governance docs.

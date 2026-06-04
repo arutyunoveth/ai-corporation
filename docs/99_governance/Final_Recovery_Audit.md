@@ -77,3 +77,4 @@ Full exact runtime coverage is intentionally not the goal across the whole lock 
 2. Keep `M-049` and `M-050` closed until a dedicated post-launch AI/runtime phase is approved.
 3. Treat `M-052..M-055` as reconciled non-runtime slots and avoid creating fake platform modules before there is a real product need.
 4. Keep AI/LLM integration deferred until after Launch Sprint `L1`.
+5. Use `Dry Run 0` as the immediate next operational gate before any real pilot execution.

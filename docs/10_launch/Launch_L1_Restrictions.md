@@ -6,6 +6,8 @@ This document defines the non-negotiable operating limits for Launch Sprint `L1`
 
 `L1` is approved only as a controlled pilot launch.
 
+The immediate next execution gate before any real pilot remains `Dry Run 0`.
+
 ## Allowed Launch Shape
 
 - internal
