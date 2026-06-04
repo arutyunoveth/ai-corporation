@@ -1,5 +1,10 @@
 # Единый реестр модулей ИИ-компании для тендерного бизнеса
 
+> Reconciliation note:
+> this file reflects a historical implementation-oriented registry snapshot and is no longer the final governance lock by itself.
+> The active canonical lock lives in [canonical_module_registry_locked.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_module_registry_locked.md).
+> The canonical-vs-implemented delta lives in [canonical_vs_implemented_mapping.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_vs_implemented_mapping.md).
+
 ## 1. Назначение документа
 
 Этот документ — **единый реестр модулей системы**.  

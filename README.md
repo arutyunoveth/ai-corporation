@@ -1,58 +1,56 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, Sprint 6B closure / incident / KPI foundation, Sprint 7A operational intelligence foundation, Sprint 7B orchestration / optimization foundation, Sprint 8A connectors / workspace / controlled-action foundation, Sprint 8B richer integrations / operator session / gated execution foundation, and Sprint 9A vendor execution gateway foundation for the AI Corporation tender business platform. The current repository implements:
+Canonical business registry is locked to `M-001..M-055`.
 
-- `M-001` Deal Registry
-- `M-002` Status Model Engine
-- `M-003` Document Store
-- `M-004` Event Log & Decision Journal
-- `M-008` Tender Intake Pipeline
-- `M-011` Document Ingestion Layer
-- `M-012` Tender Summary Builder
-- `M-009` Tender Screening Engine
-- `M-010` Priority Scoring Engine
-- `M-013` Compliance Matrix Builder
-- `M-014` Document Requirement Extractor
-- `M-015` Initial Tech Risk Flags
-- `M-006` Supplier Registry
-- `M-016` Supplier Search
-- `M-017` RFQ Generator
-- `M-018` Supplier Communication Tracker
-- `M-019` TKP Repository
-- `M-020` Supplier Verification
-- `M-021` Quote Comparison Engine
-- `M-022` Cost Model Engine
-- `M-023` Cash Gap Calculator
-- `M-024` Financing Strategy Engine
-- `M-025` Finance Memo Builder
-- `M-026` Contract Risk Parser
-- `M-027` Integrated Risk Memo Builder
-- `M-028` CEO Approval Cockpit
-- `M-029` Bid Document Collector
-- `M-030` Bid Package Builder
-- `M-031` Bid Completeness Checker
-- `M-032` Submission Readiness Gate
-- `M-033` Submission Control
-- `M-035` Submission Receipt Registry
-- `M-036` Post-Submission Tracker
-- `M-037` Outcome Intake
-- `M-039` Delivery Launch Control
-- `M-040` Execution Command Center
-- `M-041` Delivery Milestone Tracker
-- `M-042` Supplier Fulfillment Tracker
-- `M-043` Shipping & Acceptance Tracker
-- `M-044` Payment Collection Tracker
-- `M-045` Incident & Escalation Desk
-- `M-046` Deal Closure & Archive
-- `M-047` KPI & Learning Loop
-- `M-048` Operational Dashboard Backbone
-- `M-049` Archive Export & Handover
-- `M-050` Learning Automation Engine
-- `M-051` Workflow Orchestration Backbone
-- `M-052` Optimization Recommendation Engine
-- `M-053` Operator Copilot Feed
-- `M-054` Connector Registry & Sync Backbone
-- `M-055` Operator Workspace Feed API
+This repository currently contains:
+
+- canonical modules that match the locked registry
+- canonical slots that are only partial or mismatched
+- useful internal/platform extensions that drifted beyond the locked canonical range
+
+This step introduces an explicit reconciliation layer so the repo no longer treats drift as if it were new official canon.
+
+## Reconciliation Docs
+
+- [canonical_module_registry_locked.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_module_registry_locked.md)
+- [canonical_vs_implemented_mapping.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_vs_implemented_mapping.md)
+- [non_canonical_extension_register.md](/Users/master/Documents/AI-Corporation/docs/99_governance/non_canonical_extension_register.md)
+- [registry_recovery_plan.md](/Users/master/Documents/AI-Corporation/docs/99_governance/registry_recovery_plan.md)
+
+## Governance Status
+
+### Canonical Modules Implemented Exactly
+
+- `M-001`, `M-002`, `M-003`, `M-004`
+- `M-006`
+- `M-009`
+- `M-011`
+- `M-013` through `M-030`
+- `M-051`
+
+### Canonical Modules Implemented Partially
+
+- `M-007`
+- `M-008`
+- `M-010`
+- `M-031`
+
+### Canonical Modules With Registry Mismatch
+
+- `M-012`
+- `M-032`, `M-033`
+- `M-035`, `M-036`, `M-037`
+- `M-039` through `M-050`
+- `M-052`, `M-053`, `M-054`, `M-055`
+
+### Canonical Modules Missing
+
+- `M-005`
+- `M-034`
+- `M-038`
+
+### Non-Canonical / Internal Extensions
+
 - `M-056` Controlled Action Queue
 - `M-057` Integration Task Adapter Layer
 - `M-058` Operator Session Workspace
@@ -61,10 +59,11 @@ Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation,
 - `M-061` Operator Action Console Backbone
 - `M-062` External Execution Gateway Ledger
 
-The implementation follows the source-of-truth documents committed under `docs/`.
+These extensions remain useful, but they are not part of the locked canonical business registry.
 
 ## Current Scope
 
+- governance reconciliation layer for canonical-vs-implemented mapping
 - canonical deal records with `deal_id`
 - formal status transitions and append-only history
 - artifact storage metadata with versioning and links
@@ -85,7 +84,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - persisted workflow runs, optimization recommendations, and operator copilot feeds
 - persisted connector registries, connector sync runs, workspace feeds, and controlled action queues
 - persisted integration tasks, operator sessions, and gated execution ledger runs/results
-- persisted vendor connector profiles, operator action console snapshots, and external execution gateway calls/results
+- persisted vendor connector profiles, operator action console snapshots, and external execution gateway calls/results as non-canonical internal extensions
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -94,7 +93,8 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - Runtime target: PostgreSQL
 - Test runtime: SQLite in-memory for fast integration coverage
 - Default status on create: `NEW`
-- Business IDs are generated in application code with DB uniqueness guarantees and retry-friendly formatting:
+- Business IDs are generated in application code with DB uniqueness guarantees and retry-friendly formatting.
+- The list below is an implementation inventory and includes both canonical-business refs and internal-extension refs currently present in code:
   - `DL-YYYY-NNNNNN`
   - `ART-YYYY-NNNNNN`
   - `EVT-YYYY-NNNNNN`
@@ -513,6 +513,8 @@ pytest
 
 ## Source Of Truth
 
+- Reconciliation governance: [docs/99_governance/canonical_module_registry_locked.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_module_registry_locked.md), [docs/99_governance/canonical_vs_implemented_mapping.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_vs_implemented_mapping.md), [docs/99_governance/non_canonical_extension_register.md](/Users/master/Documents/AI-Corporation/docs/99_governance/non_canonical_extension_register.md), [docs/99_governance/registry_recovery_plan.md](/Users/master/Documents/AI-Corporation/docs/99_governance/registry_recovery_plan.md)
+Historical architecture / implementation snapshots:
 - [docs/00_architecture/Unified_Module_Registry.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/Unified_Module_Registry.md)
 - [docs/00_architecture/Module_Dependency_Map_and_MVP_Core.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/Module_Dependency_Map_and_MVP_Core.md)
 - [docs/01_sprints/MVP_First_Wave_Roadmap_and_High_Level_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/MVP_First_Wave_Roadmap_and_High_Level_Spec.md)

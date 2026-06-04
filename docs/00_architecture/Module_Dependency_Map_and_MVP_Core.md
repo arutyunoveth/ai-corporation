@@ -1,5 +1,10 @@
 # Карта зависимостей модулей и MVP-ядро первой волны
 
+> Reconciliation note:
+> this dependency map is preserved as a historical architecture/implementation snapshot.
+> It does not override the locked canonical registry in [canonical_module_registry_locked.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_module_registry_locked.md).
+> For current governance status and drift analysis, use [canonical_vs_implemented_mapping.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_vs_implemented_mapping.md) and [non_canonical_extension_register.md](/Users/master/Documents/AI-Corporation/docs/99_governance/non_canonical_extension_register.md).
+
 ## 1. Назначение документа
 
 Этот документ нужен, чтобы:
