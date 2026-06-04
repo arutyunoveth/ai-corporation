@@ -72,8 +72,9 @@ flowchart TD
     M029[M-029 Bid Document Collector]
     M030[M-030 Bid Package Builder]
     M031[M-031 Bid Completeness Checker]
-    M032[M-032 Submission Readiness Gate]
-    M033[M-033 Submission Control]
+    M032[M-032 Submission Archive]
+    M033[M-033 Tender Procedure Monitor]
+    M034[M-034 Contract Negotiation Workspace]
     M035[M-035 Submission Receipt Registry]
     M036[M-036 Post-Submission Tracker]
     M037[M-037 Outcome Intake]
@@ -265,11 +266,12 @@ flowchart TD
 30. M-029 Bid Document Collector
 31. M-030 Bid Package Builder
 32. M-031 Bid Completeness Checker
-33. M-032 Submission Readiness Gate
-34. M-033 Submission Control
-35. M-035 Submission Receipt Registry
-36. M-036 Post-Submission Tracker
-37. M-037 Outcome Intake
+33. M-032 Submission Archive
+34. M-033 Tender Procedure Monitor
+35. M-034 Contract Negotiation Workspace
+36. M-035 Submission Receipt Registry
+37. M-036 Post-Submission Tracker
+38. M-037 Outcome Intake
 
 ---
 
@@ -306,7 +308,7 @@ flowchart TD
 Именно она отвечает на вопрос “идем или не идем”.
 
 ### Балка 5: Submission discipline
-- M-029 → M-030 → M-031 → M-032 → M-033  
+- M-029 → M-030 → M-031 → M-032 → M-033 → M-034  
 Если тут разрыв, заявка превращается обратно в ручной хаос.
 
 ### Балка 6: Runtime engine

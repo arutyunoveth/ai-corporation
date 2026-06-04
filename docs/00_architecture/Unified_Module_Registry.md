@@ -100,8 +100,9 @@
 | M-029 | Bid Document Collector | Bid Prep | P0 | Сбор документов заявки |
 | M-030 | Bid Package Builder | Bid Prep | P0 | Формальная сборка пакета заявки |
 | M-031 | Bid Completeness Checker | Bid Prep | P0 | Проверка комплектности |
-| M-032 | Submission Readiness Gate | Bid Prep | P0 | Финальный readiness gate |
-| M-033 | Submission Control | Submission | P0 | Контролируемая подача заявки |
+| M-032 | Submission Archive | Submission | P0 | Архив поданной версии заявки |
+| M-033 | Tender Procedure Monitor | Submission | P0 | Мониторинг хода процедуры после подачи |
+| M-034 | Contract Negotiation Workspace | Submission | P1 | Workspace контрактования после победы |
 | M-035 | Submission Receipt Registry | Submission | P0 | Доказательства подачи |
 | M-036 | Post-Submission Tracker | Submission | P0 | Трекинг статуса после подачи |
 | M-037 | Contract Award / Loss Decision Intake | Submission | P0 | Formal intake результата закупки |

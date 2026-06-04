@@ -12,6 +12,7 @@ from src.modules.cash_gap.router import router as cash_gap_router
 from src.modules.ceo_approval.router import router as ceo_approval_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
 from src.modules.contract_risks.router import router as contract_risks_router
+from src.modules.contract_negotiation.router import router as contract_negotiation_router
 from src.modules.cost_model.router import router as cost_model_router
 from src.modules.customer_registry.router import router as customer_registry_router
 from src.modules.dashboard_snapshots.router import router as dashboard_snapshots_router
@@ -37,6 +38,7 @@ from src.modules.kpi_learning.router import router as kpi_learning_router
 from src.modules.learning_automation.router import router as learning_automation_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.post_submission.router import router as post_submission_router
+from src.modules.procedure_monitor.router import router as procedure_monitor_router
 from src.modules.outcome_intake.router import router as outcome_intake_router
 from src.modules.optimization.router import router as optimization_router
 from src.modules.operator_sessions.router import router as operator_sessions_router
@@ -49,6 +51,7 @@ from src.modules.shipping_acceptance.router import router as shipping_acceptance
 from src.modules.status_engine.router import router as status_router
 from src.modules.submission_readiness.router import router as submission_readiness_router
 from src.modules.submission_control.router import router as submission_control_router
+from src.modules.submission_archive.router import router as submission_archive_router
 from src.modules.submission_receipts.router import router as submission_receipts_router
 from src.modules.supplier_communications.router import router as supplier_communications_router
 from src.modules.supplier_fulfillment.router import router as supplier_fulfillment_router
@@ -119,6 +122,7 @@ app.include_router(cash_gap_router)
 app.include_router(financing_strategy_router)
 app.include_router(finance_memo_router)
 app.include_router(contract_risks_router)
+app.include_router(contract_negotiation_router)
 app.include_router(integrated_risk_memo_router)
 app.include_router(kpi_learning_router)
 app.include_router(learning_automation_router)
@@ -127,9 +131,11 @@ app.include_router(bid_documents_router)
 app.include_router(bid_packages_router)
 app.include_router(bid_completeness_router)
 app.include_router(submission_readiness_router)
+app.include_router(submission_archive_router)
 app.include_router(submission_control_router)
 app.include_router(submission_receipts_router)
 app.include_router(post_submission_router)
+app.include_router(procedure_monitor_router)
 app.include_router(outcome_intake_router)
 app.include_router(payment_collection_router)
 app.include_router(shipping_acceptance_router)

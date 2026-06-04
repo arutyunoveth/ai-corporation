@@ -512,3 +512,35 @@ def next_requirement_extraction_set_id(session: Session, column: ColumnElement[s
 
 def next_requirement_extraction_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="REQ", column=column)
+
+
+def next_bid_readiness_report_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="BRR", column=column)
+
+
+def next_submission_archive_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SAS", column=column)
+
+
+def next_submission_archive_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SAR", column=column)
+
+
+def next_procedure_monitor_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PMS", column=column)
+
+
+def next_procedure_monitor_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PM", column=column)
+
+
+def next_procedure_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PME", column=column)
+
+
+def next_contract_negotiation_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CNS", column=column)
+
+
+def next_contract_negotiation_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CN", column=column)

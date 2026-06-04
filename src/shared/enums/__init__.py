@@ -171,6 +171,13 @@ from .recovery_r1 import (
     TenderImportRunStatus,
     TenderNormalizationStatus,
 )
+from .recovery_r2 import (
+    ContractNegotiationStatus,
+    ProcedureMonitorEventType,
+    ProcedureStatus,
+    SubmissionArchiveItemRole,
+    SubmissionArchiveStatus,
+)
 
 __all__ = [
     "ArtifactType",
@@ -312,4 +319,9 @@ __all__ = [
     "TenderNormalizationStatus",
     "PrioritizationStatus",
     "RequirementExtractionStatus",
+    "ContractNegotiationStatus",
+    "ProcedureMonitorEventType",
+    "ProcedureStatus",
+    "SubmissionArchiveItemRole",
+    "SubmissionArchiveStatus",
 ]

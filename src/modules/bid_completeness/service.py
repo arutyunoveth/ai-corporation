@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from src.modules.bid_completeness.models import (
     BidCompletenessFlag,
     BidCompletenessRecord,
+    BidReadinessReport,
     BidCompletenessSet,
 )
 from src.modules.bid_completeness.schemas import CheckBidCompletenessRequest
@@ -20,7 +21,7 @@ from src.shared.enums import (
     RiskSeverity,
 )
 from src.shared.errors import NotFoundError
-from src.shared.ids import next_bid_completeness_id, next_bid_completeness_set_id
+from src.shared.ids import next_bid_completeness_id, next_bid_completeness_set_id, next_bid_readiness_report_id
 from src.shared.validation import require_same_reference
 
 
@@ -53,10 +54,26 @@ def _get_flags(session: Session, bid_completeness_id: str) -> list[BidCompletene
     )
 
 
+def _get_reports(session: Session, bid_completeness_set_id: str) -> list[BidReadinessReport]:
+    return list(
+        session.scalars(
+            select(BidReadinessReport)
+            .where(BidReadinessReport.bid_completeness_set_id == bid_completeness_set_id)
+            .order_by(BidReadinessReport.created_at.asc(), BidReadinessReport.id.asc())
+        )
+    )
+
+
 def check_bid_completeness(session: Session, payload: CheckBidCompletenessRequest) -> BidCompletenessSet:
     package_set, package_records = get_bid_package_set(session, payload.bid_package_set_id)
     require_same_reference(payload.deal_id, package_set.deal_id, "deal_id")
-    requirement_set, requirement_rows = get_document_requirement_set(session, payload.document_requirement_set_id)
+    requirement_set_id = payload.document_requirement_set_id
+    if requirement_set_id is None:
+        collection_set, _collection_rows, _bindings = get_bid_document_collection_set(
+            session, package_set.bid_document_collection_set_id
+        )
+        requirement_set_id = collection_set.document_requirement_set_id
+    requirement_set, requirement_rows = get_document_requirement_set(session, requirement_set_id)
     require_same_reference(payload.deal_id, requirement_set.deal_id, "deal_id")
     collection_set, collection_rows, _bindings = get_bid_document_collection_set(session, package_set.bid_document_collection_set_id)
 
@@ -151,6 +168,21 @@ def check_bid_completeness(session: Session, payload: CheckBidCompletenessReques
         session.flush()
         for flag_data in flags_data:
             session.add(BidCompletenessFlag(bid_completeness_id=record.bid_completeness_id, **flag_data))
+        blocking_issue_count = sum(1 for flag_data in flags_data if flag_data["severity"] in {RiskSeverity.HIGH, RiskSeverity.CRITICAL})
+        readiness_summary = (
+            f"Readiness contour for package {package_set.bid_package_set_id}: "
+            f"status={completeness_status}, blocking_issues={blocking_issue_count}, "
+            f"mandatory_present={mandatory_present}/{mandatory_total}."
+        )
+        report = BidReadinessReport(
+            bid_readiness_report_id=next_bid_readiness_report_id(
+                session, BidReadinessReport.bid_readiness_report_id
+            ),
+            bid_completeness_set_id=completeness_set.bid_completeness_set_id,
+            readiness_summary=readiness_summary,
+            blocking_issue_count=blocking_issue_count,
+        )
+        session.add(report)
         completeness_set.completeness_status = completeness_status
         completeness_set.updated_at = utcnow()
         session.add(completeness_set)
@@ -164,6 +196,18 @@ def check_bid_completeness(session: Session, payload: CheckBidCompletenessReques
                 "bid_completeness_set_id": completeness_set.bid_completeness_set_id,
                 "bid_completeness_id": record.bid_completeness_id,
                 "completeness_status": str(completeness_status),
+            },
+        )
+        append_event_record(
+            session,
+            deal_id=payload.deal_id,
+            event_code="bid_readiness_report_built",
+            source_module_id="M-031",
+            severity=EventSeverity.INFO,
+            payload_json={
+                "bid_completeness_set_id": completeness_set.bid_completeness_set_id,
+                "bid_readiness_report_id": report.bid_readiness_report_id,
+                "blocking_issue_count": blocking_issue_count,
             },
         )
         session.commit()
@@ -188,10 +232,14 @@ def check_bid_completeness(session: Session, payload: CheckBidCompletenessReques
 def get_bid_completeness_set(
     session: Session,
     bid_completeness_set_id: str,
-) -> tuple[BidCompletenessSet, list[tuple[BidCompletenessRecord, list[BidCompletenessFlag]]]]:
+) -> tuple[BidCompletenessSet, list[tuple[BidCompletenessRecord, list[BidCompletenessFlag]]], list[BidReadinessReport]]:
     completeness_set = _get_set(session, bid_completeness_set_id)
     records = _get_records(session, bid_completeness_set_id)
-    return completeness_set, [(record, _get_flags(session, record.bid_completeness_id)) for record in records]
+    return (
+        completeness_set,
+        [(record, _get_flags(session, record.bid_completeness_id)) for record in records],
+        _get_reports(session, bid_completeness_set_id),
+    )
 
 
 def list_bid_completeness_sets(

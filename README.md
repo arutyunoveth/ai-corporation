@@ -8,7 +8,7 @@ This repository currently contains:
 - canonical slots that are only partial or mismatched
 - useful internal/platform extensions that drifted beyond the locked canonical range
 
-The repository now includes the reconciliation layer plus Recovery Sprint R1, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, and `M-012` without destructive refactor.
+The repository now includes the reconciliation layer plus Recovery Sprints R1 and R2, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`, `M-031`, `M-032`, `M-033`, and `M-034` without destructive refactor.
 
 ## Reconciliation Docs
 
@@ -17,8 +17,11 @@ The repository now includes the reconciliation layer plus Recovery Sprint R1, so
 - [non_canonical_extension_register.md](/Users/master/Documents/AI-Corporation/docs/99_governance/non_canonical_extension_register.md)
 - [registry_recovery_plan.md](/Users/master/Documents/AI-Corporation/docs/99_governance/registry_recovery_plan.md)
 - [implementation_summary_recovery_sprint_r1.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r1.md)
+- [implementation_summary_recovery_sprint_r2.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r2.md)
 - [Recovery_Sprint_R1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R1_Technical_Spec.md)
+- [Recovery_Sprint_R2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R2_Technical_Spec.md)
 - [Entity_Catalog_Recovery_Sprint_R1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R1.md)
+- [Entity_Catalog_Recovery_Sprint_R2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R2.md)
 
 ## Governance Status
 
@@ -33,22 +36,17 @@ The repository now includes the reconciliation layer plus Recovery Sprint R1, so
 - `M-011`
 - `M-012`
 - `M-013` through `M-030`
+- `M-031`, `M-032`, `M-033`, `M-034`
 - `M-051`
-
-### Canonical Modules Implemented Partially
-
-- `M-031`
 
 ### Canonical Modules With Registry Mismatch
 
-- `M-032`, `M-033`
 - `M-035`, `M-036`, `M-037`
 - `M-039` through `M-050`
 - `M-052`, `M-053`, `M-054`, `M-055`
 
 ### Canonical Modules Missing
 
-- `M-034`
 - `M-038`
 
 ### Non-Canonical / Internal Extensions
@@ -83,7 +81,10 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - persisted supplier verification runs, comparison rows, and recommendations
 - persisted cost model, cash gap, financing strategy, and finance memo records
 - persisted contract risks, integrated risk memos, and CEO approval decisions
-- persisted bid document collections, bid packages, completeness checks, and submission readiness gates
+- persisted bid document collections, bid packages, completeness checks, bid readiness reports, and submission readiness helper gates
+- canonical submission archive sets, records, and archive items
+- canonical procedure monitor sets, records, events, and alerts
+- canonical contract negotiation workspaces, issues, and comments
 - persisted submission execution sets, attempts, receipts, post-submission trackers, and explicit outcomes
 - persisted delivery launch controls, execution command centers, milestones, fulfillment, shipping/acceptance, and payment collection records
 - persisted incidents, deal closure/archive snapshots, and KPI/learning outputs
@@ -155,8 +156,15 @@ These extensions remain useful, but they are not part of the locked canonical bu
   - `BP-YYYY-NNNNNN`
   - `BCS-YYYY-NNNNNN`
   - `BC-YYYY-NNNNNN`
+  - `BRR-YYYY-NNNNNN`
   - `SRS-YYYY-NNNNNN`
   - `SR-YYYY-NNNNNN`
+  - `SAR-YYYY-NNNNNN`
+  - `PMS-YYYY-NNNNNN`
+  - `PM-YYYY-NNNNNN`
+  - `PME-YYYY-NNNNNN`
+  - `CNS-YYYY-NNNNNN`
+  - `CN-YYYY-NNNNNN`
   - `SES-YYYY-NNNNNN`
   - `SE-YYYY-NNNNNN`
   - `SA-YYYY-NNNNNN`

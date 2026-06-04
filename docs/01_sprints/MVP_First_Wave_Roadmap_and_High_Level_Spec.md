@@ -201,8 +201,9 @@
 - M-029 Bid Document Collector
 - M-030 Bid Package Builder
 - M-031 Bid Completeness Checker
-- M-032 Submission Readiness Gate
-- M-033 Submission Control
+- M-032 Submission Archive
+- M-033 Tender Procedure Monitor
+- M-034 Contract Negotiation Workspace
 - M-035 Submission Receipt Registry
 - M-036 Post-Submission Tracker
 - M-037 Contract Award / Loss Decision Intake

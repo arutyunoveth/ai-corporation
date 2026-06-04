@@ -42,10 +42,10 @@
 | M-028 | CEO Approval Cockpit | Implemented | EXACT | Keep |
 | M-029 | Bid Document Collector | Implemented | EXACT | Keep |
 | M-030 | Bid Package Builder | Implemented | EXACT | Keep |
-| M-031 | Bid Completeness Checker | Implemented, but part of readiness logic drifted outward | PARTIAL | Pull readiness logic closer to canonical completeness contour |
-| M-032 | Submission Archive | Current `M-032` is submission readiness gate, not archive | MISMATCH | Recover M-032 as archive module; keep current readiness as helper/submodule |
-| M-033 | Tender Procedure Monitor | Current `M-033` is submission control | MISMATCH | Recover M-033 monitor; reclass current submission control as helper contour |
-| M-034 | Contract Negotiation Workspace | Not found | MISSING | Add later as canonical business module |
+| M-031 | Bid Completeness Checker | Implemented as canonical completeness set/record/flag layer with explicit `bid_readiness_reports`; legacy submission readiness remains helper contour | EXACT | Keep |
+| M-032 | Submission Archive | Implemented as canonical archive set/record/item layer over submitted execution and receipt evidence | EXACT | Keep |
+| M-033 | Tender Procedure Monitor | Implemented as canonical procedure monitor over helper post-submission and outcome contours | EXACT | Keep |
+| M-034 | Contract Negotiation Workspace | Implemented as canonical negotiation workspace over won outcome and contract risk helpers | EXACT | Keep |
 | M-035 | Supplier Back-to-Back Contract Draft | Current `M-035` is submission receipt registry | MISMATCH | Recover canonical supplier contract draft |
 | M-036 | Execution Plan Builder | Current `M-036` is post-submission tracker | MISMATCH | Recover canonical execution plan builder |
 | M-037 | Purchase Order Manager | Current `M-037` is outcome intake | MISMATCH | Recover canonical PO manager |
@@ -72,13 +72,13 @@
 
 | Status | Count | Canonical IDs |
 |---|---:|---|
-| EXACT | 31 | M-001..M-030, M-051 |
-| PARTIAL | 1 | M-031 |
-| MISMATCH | 21 | M-032, M-033, M-035..M-037, M-039..M-050, M-052..M-055 |
-| MISSING | 2 | M-034, M-038 |
+| EXACT | 35 | M-001..M-034, M-051 |
+| PARTIAL | 0 | None |
+| MISMATCH | 19 | M-035..M-037, M-039..M-050, M-052..M-055 |
+| MISSING | 1 | M-038 |
 
 ## Key Findings
 
-1. Early intake and analysis recovery is now canonical through `M-012`.
-2. Registry drift is now concentrated mostly in later submission / execution / governance / platform contours.
-3. The main remaining governance problem is still reuse of canonical IDs for non-canonical concepts, not lack of useful implementation.
+1. Early intake and analysis recovery is canonical through `M-012`, and late submission recovery is now canonical through `M-034`.
+2. Registry drift is now concentrated mostly in `M-035..M-055`, plus the still-missing `M-038`.
+3. The main remaining governance problem is reuse of later canonical IDs for helper/platform concepts, not lack of useful implementation.

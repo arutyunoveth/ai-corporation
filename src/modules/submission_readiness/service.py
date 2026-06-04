@@ -68,7 +68,9 @@ def _merge_recommendations(*values: str) -> str:
 
 
 def build_submission_readiness(session: Session, payload: BuildSubmissionReadinessRequest) -> SubmissionReadinessSet:
-    completeness_set, completeness_records = get_bid_completeness_set(session, payload.bid_completeness_set_id)
+    completeness_set, completeness_records, _readiness_reports = get_bid_completeness_set(
+        session, payload.bid_completeness_set_id
+    )
     approval_set, approval_records = get_ceo_approval_set(session, payload.ceo_approval_set_id)
     finance_set, finance_records = get_finance_memo_set(session, payload.finance_memo_set_id)
     risk_set, risk_records = get_integrated_risk_memo_set(session, payload.integrated_risk_memo_set_id)

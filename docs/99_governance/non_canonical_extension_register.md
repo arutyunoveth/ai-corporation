@@ -16,11 +16,11 @@ Two classes exist:
 | Current implemented module | Current slot | Why it is useful | Recommended canonical destination |
 |---|---|---|---|
 | Legacy Tender Summary Builder package | legacy `tender_summary` contour | Useful persisted intake artifact kept for backward compatibility | Internal helper / submodule under canonical M-008, M-011, M-012 |
-| Submission Readiness Gate | current `M-032` | Useful pre-submit gating logic | Helper under M-031 / future canonical submission archive flow |
-| Submission Control | current `M-033` | Useful controlled submission execution | Internal submission helper under canonical M-032/M-033 recovery |
+| Submission Readiness Gate | legacy `submission_readiness` contour | Useful pre-submit gating logic | Helper under canonical M-031 completeness and readiness reporting |
+| Submission Control | legacy `submission_control` contour | Useful controlled submission execution | Internal submission helper under canonical M-032/M-033 recovery |
 | Submission Receipt Registry | current `M-035` | Useful persisted evidence layer | Helper under canonical M-032 Submission Archive |
 | Post-Submission Tracker | current `M-036` | Useful ongoing status timeline | Helper under canonical M-033 Tender Procedure Monitor |
-| Outcome Intake | current `M-037` | Useful formal outcome capture | Helper under canonical M-033 Tender Procedure Monitor |
+| Outcome Intake | current `M-037` | Useful formal outcome capture | Helper under canonical M-033 and M-034 |
 | Delivery Launch Control | current `M-039` | Useful award-to-execution launch control | Helper around canonical M-036 Execution Plan Builder |
 | Execution Command Center | current `M-040` | Useful execution cockpit | Helper around canonical M-036 and M-038 |
 | Delivery Milestone Tracker | current `M-041` | Useful milestone trace | Helper around canonical M-036, M-038, M-041 |

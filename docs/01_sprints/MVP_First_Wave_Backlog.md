@@ -838,6 +838,7 @@
 - M-031
 - M-032
 - M-033
+- M-034
 - M-035
 - M-036
 - M-037
@@ -910,47 +911,71 @@
 
 ---
 
-## E4. M-032 Submission Readiness Gate
+## E4. M-032 Submission Archive
 ### User stories
-- проверить approval + package + completeness together;
-- разрешить или запретить submission.
+- собрать архив поданной версии заявки;
+- сохранить package + receipt evidence в formal archive.
 
 ### Сущности
-- `submission_readiness_record`
-- `submission_readiness_unresolved_item`
+- `submission_archive_record`
+- `submission_archive_item`
 
 ### API
-- `check_submission_readiness`
+- `build_submission_archive`
 
 ### Зависимости
-- M-028
 - M-030
-- M-031
+- M-035
 
 ### DoD
-- ready/not-ready explicit.
+- archive exists as formal object.
 
 ---
 
-## E5. M-033 Submission Control
+## E5. M-033 Tender Procedure Monitor
 ### User stories
-- formalize submission execution;
-- track attempts and outcome.
+- вести formal monitoring статуса процедуры после подачи;
+- видеть timeline, alerts и final outcome context.
 
 ### Сущности
-- `submission_execution`
-- `submission_attempt`
+- `procedure_monitor_record`
+- `procedure_monitor_event`
+- `procedure_monitor_alert`
 
 ### API
-- `start_submission`
-- `finish_submission`
-- `retry_submission`
+- `build_procedure_monitor`
+- `register_procedure_monitor_event`
 
 ### Зависимости
 - M-032
-- M-055
+- M-036
+- M-037
 
 ### DoD
+- monitor timeline explicit;
+- alerts explicit.
+
+---
+
+## E6. M-034 Contract Negotiation Workspace
+### User stories
+- открыть formal workspace контрактования после победы;
+- фиксировать issues и comments по договорным условиям.
+
+### Сущности
+- `contract_negotiation_record`
+- `contract_negotiation_issue`
+- `contract_negotiation_comment`
+
+### API
+- `build_contract_negotiation_workspace`
+
+### Зависимости
+- M-026
+- M-033
+
+### DoD
+- workspace exists as formal object.
 - submission traceable end-to-end.
 
 ---

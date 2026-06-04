@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, status
 from src.modules.bid_completeness.schemas import (
     BidCompletenessFlagResponse,
     BidCompletenessRecordResponse,
+    BidReadinessReportResponse,
     BidCompletenessSetResponse,
     CheckBidCompletenessRequest,
 )
@@ -33,7 +34,7 @@ def _to_record_response(result: tuple) -> BidCompletenessRecordResponse:
 
 
 def _to_set_response(result: tuple) -> BidCompletenessSetResponse:
-    completeness_set, records = result
+    completeness_set, records, readiness_reports = result
     return BidCompletenessSetResponse(
         bid_completeness_set_id=completeness_set.bid_completeness_set_id,
         deal_id=completeness_set.deal_id,
@@ -42,6 +43,7 @@ def _to_set_response(result: tuple) -> BidCompletenessSetResponse:
         created_at=completeness_set.created_at,
         updated_at=completeness_set.updated_at,
         records=[_to_record_response(item) for item in records],
+        readiness_reports=[BidReadinessReportResponse.model_validate(item) for item in readiness_reports],
     )
 
 

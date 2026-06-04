@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from pydantic import Field
+
 from src.shared.enums import BidCompletenessStatus, RiskSeverity
 from src.shared.types.common import APIModel
 
@@ -7,7 +9,7 @@ from src.shared.types.common import APIModel
 class CheckBidCompletenessRequest(APIModel):
     deal_id: str
     bid_package_set_id: str
-    document_requirement_set_id: str
+    document_requirement_set_id: str | None = None
 
 
 class BidCompletenessFlagResponse(APIModel):
@@ -16,6 +18,15 @@ class BidCompletenessFlagResponse(APIModel):
     summary: str
     source_ref: str | None
     created_at: datetime
+
+
+class BidReadinessReportResponse(APIModel):
+    bid_readiness_report_id: str
+    bid_completeness_set_id: str
+    readiness_summary: str
+    blocking_issue_count: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class BidCompletenessRecordResponse(APIModel):
@@ -27,7 +38,7 @@ class BidCompletenessRecordResponse(APIModel):
     summary_text: str
     created_at: datetime
     updated_at: datetime
-    flags: list[BidCompletenessFlagResponse]
+    flags: list[BidCompletenessFlagResponse] = Field(default_factory=list)
 
 
 class BidCompletenessSetResponse(APIModel):
@@ -37,4 +48,5 @@ class BidCompletenessSetResponse(APIModel):
     completeness_status: BidCompletenessStatus
     created_at: datetime
     updated_at: datetime
-    records: list[BidCompletenessRecordResponse]
+    records: list[BidCompletenessRecordResponse] = Field(default_factory=list)
+    readiness_reports: list[BidReadinessReportResponse] = Field(default_factory=list)

@@ -65,3 +65,22 @@ class BidCompletenessFlag(UUIDPrimaryKeyMixin, Base):
         Index("ix_bid_completeness_flags_completeness_id", "bid_completeness_id"),
         Index("ix_bid_completeness_flags_severity", "severity"),
     )
+
+
+class BidReadinessReport(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "bid_readiness_reports"
+
+    bid_readiness_report_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    bid_completeness_set_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("bid_completeness_sets.bid_completeness_set_id"),
+        nullable=False,
+    )
+    readiness_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    blocking_issue_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_bid_readiness_reports_set_id", "bid_completeness_set_id"),
+    )
