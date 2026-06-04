@@ -5,10 +5,10 @@ Canonical business registry is locked to `M-001..M-055`.
 This repository currently contains:
 
 - canonical modules that match the locked registry
-- canonical slots that are only partial or mismatched
+- reserved canonical slots intentionally deferred until post-recovery AI/runtime work
 - useful internal/platform extensions that drifted beyond the locked canonical range
 
-The repository now includes the reconciliation layer plus Recovery Sprints R1, R2, R3, and R4, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`, and the full recovery bands `M-031..M-044` without destructive refactor.
+The repository now includes the reconciliation layer plus Recovery Sprints R1, R2, R3, R4, and R5, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`, and the full recovery bands `M-031..M-048` without destructive refactor.
 
 ## Reconciliation Docs
 
@@ -20,14 +20,18 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - [implementation_summary_recovery_sprint_r2.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r2.md)
 - [implementation_summary_recovery_sprint_r3.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r3.md)
 - [implementation_summary_recovery_sprint_r4.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r4.md)
+- [implementation_summary_recovery_sprint_r5.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r5.md)
 - [Recovery_Sprint_R1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R1_Technical_Spec.md)
 - [Recovery_Sprint_R2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R2_Technical_Spec.md)
 - [Recovery_Sprint_R3_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R3_Technical_Spec.md)
 - [Recovery_Sprint_R4_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R4_Technical_Spec.md)
+- [Recovery_Sprint_R5_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R5_Technical_Spec.md)
 - [Entity_Catalog_Recovery_Sprint_R1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R1.md)
 - [Entity_Catalog_Recovery_Sprint_R2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R2.md)
 - [Entity_Catalog_Recovery_Sprint_R3.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R3.md)
 - [Entity_Catalog_Recovery_Sprint_R4.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R4.md)
+- [Entity_Catalog_Recovery_Sprint_R5.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R5.md)
+- [Final_Recovery_Audit.md](/Users/master/Documents/AI-Corporation/docs/99_governance/Final_Recovery_Audit.md)
 
 ## Governance Status
 
@@ -42,12 +46,18 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - `M-011`
 - `M-012`
 - `M-013` through `M-030`
-- `M-031` through `M-044`
+- `M-031` through `M-048`
 - `M-051`
+
+### Reserved Canonical Modules
+
+- `M-049`
+- `M-050`
+
+These canonical slots exist in the locked registry and in the original recovery plan, but Recovery Sprint R5 leaves them intentionally deferred because this phase explicitly forbids AI/LLM integration.
 
 ### Canonical Modules With Registry Mismatch
 
-- `M-045` through `M-050`
 - `M-052`, `M-053`, `M-054`, `M-055`
 
 ### Non-Canonical / Internal Extensions
@@ -61,6 +71,28 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - `M-062` External Execution Gateway Ledger
 
 These extensions remain useful, but they are not part of the locked canonical business registry.
+
+### Recovery R5 Notes
+
+- Helper/internal compatibility contours still present:
+  - `incidents`
+  - `deal_closure`
+  - `kpi_learning`
+  - `archive_export`
+  - `dashboard_snapshots`
+  - `submission_*`
+  - `delivery_launch`
+  - `execution_command`
+  - `delivery_milestones`
+  - `supplier_fulfillment`
+  - `shipping_acceptance`
+  - `payment_collection`
+- Known ID prefix overlaps:
+  - `SAS` -> canonical `submission_archive_set_id`, helper `shipping_acceptance_set_id`
+  - `SCS` -> helper `supplier_communication_set_id`, canonical `supplier_contract_set_id`
+  - `ACS` -> canonical `acceptance_control_set_id`, non-canonical `action_console_set_id`
+- Recovery Sprint `R5` intentionally defers AI/LLM, prompt, agent, and external platform execution work.
+- Before Launch Sprint `L1`, the repo still needs an explicit decision on reserved `M-049/M-050` and later platform reconciliation for `M-052..M-055`.
 
 ## Current Scope
 
@@ -96,10 +128,15 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - canonical closing docs sets, records, items, and flags
 - canonical payment tracking sets, records, events, and alerts
 - canonical claim trigger sets, records, flags, and links
+- canonical deal closure report sets, records, and source links
+- canonical postmortem sets, records, findings, and action items
+- canonical supplier rating update sets, records, and factor breakdowns
+- canonical knowledge asset sets, records, payloads, and source links
 - persisted submission execution sets, attempts, receipts, post-submission trackers, and explicit outcomes
 - persisted delivery launch controls, execution command centers, milestones, fulfillment, shipping/acceptance, and payment collection records
 - persisted incidents, deal closure/archive snapshots, and KPI/learning outputs
 - persisted dashboard snapshots, archive export manifests, and automated learning recommendations
+- helper closure, KPI, archive export, and dashboard contours preserved as compatibility bridges under recovered `M-045..M-048`
 - persisted workflow runs, optimization recommendations, and operator copilot feeds
 - persisted connector registries, connector sync runs, workspace feeds, and controlled action queues
 - persisted integration tasks, operator sessions, and gated execution ledger runs/results
@@ -113,6 +150,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Test runtime: SQLite in-memory for fast integration coverage
 - Default status on create: `NEW`
 - Business IDs are generated in application code with DB uniqueness guarantees and retry-friendly formatting.
+- AI/LLM, prompt, agent, and external platform execution work are intentionally deferred until after recovery review and Launch Sprint `L1`.
 - The list below is an implementation inventory and includes both canonical-business refs and internal-extension refs currently present in code:
   - `DL-YYYY-NNNNNN`
   - `CUS-YYYY-NNNNNN`
@@ -220,6 +258,14 @@ These extensions remain useful, but they are not part of the locked canonical bu
   - `PTE-YYYY-NNNNNN`
   - `CTS-YYYY-NNNNNN`
   - `CT-YYYY-NNNNNN`
+  - `DCRS-YYYY-NNNNNN`
+  - `DCR-YYYY-NNNNNN`
+  - `POMS-YYYY-NNNNNN`
+  - `POM-YYYY-NNNNNN`
+  - `SRTS-YYYY-NNNNNN`
+  - `SRT-YYYY-NNNNNN`
+  - `KAS-YYYY-NNNNNN`
+  - `KA-YYYY-NNNNNN`
   - `SAS-YYYY-NNNNNN`
   - `SHA-YYYY-NNNNNN`
   - `SAE-YYYY-NNNNNN`

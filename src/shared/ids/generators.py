@@ -644,3 +644,35 @@ def next_claim_trigger_set_id(session: Session, column: ColumnElement[str]) -> s
 
 def next_claim_trigger_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="CT", column=column)
+
+
+def next_deal_closure_report_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DCRS", column=column)
+
+
+def next_deal_closure_report_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="DCR", column=column)
+
+
+def next_postmortem_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="POMS", column=column)
+
+
+def next_postmortem_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="POM", column=column)
+
+
+def next_supplier_rating_update_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SRTS", column=column)
+
+
+def next_supplier_rating_update_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="SRT", column=column)
+
+
+def next_knowledge_asset_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="KAS", column=column)
+
+
+def next_knowledge_asset_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="KA", column=column)

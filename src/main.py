@@ -12,6 +12,7 @@ from src.modules.bid_packages.router import router as bid_packages_router
 from src.modules.cash_gap.router import router as cash_gap_router
 from src.modules.ceo_approval.router import router as ceo_approval_router
 from src.modules.claim_triggers.router import router as claim_triggers_router
+from src.modules.deal_closure_reports.router import router as deal_closure_reports_router
 from src.modules.closing_docs.router import router as closing_docs_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
 from src.modules.contract_risks.router import router as contract_risks_router
@@ -40,9 +41,11 @@ from src.modules.intake_priority.router import router as intake_priority_router
 from src.modules.integration_tasks.router import router as integration_tasks_router
 from src.modules.integrated_risk_memo.router import router as integrated_risk_memo_router
 from src.modules.kpi_learning.router import router as kpi_learning_router
+from src.modules.knowledge_assets.router import router as knowledge_assets_router
 from src.modules.learning_automation.router import router as learning_automation_router
 from src.modules.logistics_tracking.router import router as logistics_tracking_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
+from src.modules.postmortems.router import router as postmortems_router
 from src.modules.post_submission.router import router as post_submission_router
 from src.modules.procedure_monitor.router import router as procedure_monitor_router
 from src.modules.purchase_orders.router import router as purchase_orders_router
@@ -64,6 +67,7 @@ from src.modules.submission_receipts.router import router as submission_receipts
 from src.modules.supplier_communications.router import router as supplier_communications_router
 from src.modules.supplier_contracts.router import router as supplier_contracts_router
 from src.modules.supplier_fulfillment.router import router as supplier_fulfillment_router
+from src.modules.supplier_ratings.router import router as supplier_ratings_router
 from src.modules.supplier_progress.router import router as supplier_progress_router
 from src.modules.supplier_registry.router import router as supplier_registry_router
 from src.modules.supplier_search.router import router as supplier_search_router
@@ -133,6 +137,10 @@ app.include_router(cost_model_router)
 app.include_router(cash_gap_router)
 app.include_router(closing_docs_router)
 app.include_router(claim_triggers_router)
+app.include_router(deal_closure_reports_router)
+app.include_router(postmortems_router)
+app.include_router(supplier_ratings_router)
+app.include_router(knowledge_assets_router)
 app.include_router(financing_strategy_router)
 app.include_router(finance_memo_router)
 app.include_router(contract_risks_router)

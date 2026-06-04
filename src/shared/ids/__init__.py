@@ -152,8 +152,16 @@ from .generators import (
     next_payment_tracking_set_id,
     next_claim_trigger_id,
     next_claim_trigger_set_id,
+    next_deal_closure_report_id,
+    next_deal_closure_report_set_id,
+    next_postmortem_id,
+    next_postmortem_set_id,
     next_purchase_order_id,
     next_purchase_order_set_id,
+    next_knowledge_asset_id,
+    next_knowledge_asset_set_id,
+    next_supplier_rating_update_id,
+    next_supplier_rating_update_set_id,
 )
 
 __all__ = [
@@ -310,6 +318,14 @@ __all__ = [
     "next_payment_tracking_set_id",
     "next_claim_trigger_id",
     "next_claim_trigger_set_id",
+    "next_deal_closure_report_id",
+    "next_deal_closure_report_set_id",
+    "next_postmortem_id",
+    "next_postmortem_set_id",
     "next_purchase_order_id",
     "next_purchase_order_set_id",
+    "next_knowledge_asset_id",
+    "next_knowledge_asset_set_id",
+    "next_supplier_rating_update_id",
+    "next_supplier_rating_update_set_id",
 ]

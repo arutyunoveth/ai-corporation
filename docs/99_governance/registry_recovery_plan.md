@@ -2,7 +2,7 @@
 
 ## Goal
 
-Return the project to the locked canonical business registry `M-001..M-055` without destructive refactors in the current step.
+Return the project to the locked canonical business registry `M-001..M-055` without destructive refactors.
 
 ## Progress Snapshot
 
@@ -11,120 +11,29 @@ Return the project to the locked canonical business registry `M-001..M-055` with
 - Recovery Sprint R2: completed for `M-031`, `M-032`, `M-033`, `M-034`
 - Recovery Sprint R3: completed for `M-035`, `M-036`, `M-037`, `M-038`
 - Recovery Sprint R4: completed for `M-039`, `M-040`, `M-041`, `M-042`, `M-043`, `M-044`
-- Remaining recovery focus: `M-045..M-055` canonical reconciliation
+- Recovery Sprint R5: completed for `M-045`, `M-046`, `M-047`, `M-048`
+- Remaining deferred canonical slots: `M-049`, `M-050`
+- Remaining platform mismatches: `M-052..M-055`
 
-## Phase 1. Governance Lock And Documentation
+## Recovery Outcome
 
-1. Lock the canonical module registry in repo docs.
-2. Publish canonical-vs-implemented mapping.
-3. Publish explicit non-canonical extension register.
-4. Rewrite README so drift is no longer presented as official canon.
-5. Mark older registry/dependency docs as historical implementation snapshots where needed.
+1. Canonical business-company coverage is exact for `M-001..M-048` and `M-051`.
+2. `M-049` and `M-050` are confirmed parts of the original locked registry. They are not missing numbers.
+3. `M-049` and `M-050` remain intentionally reserved because Recovery Sprint R5 explicitly forbids AI/LLM/prompt/agent integration.
+4. The next unresolved canonical area is later platform/governance reconciliation `M-052..M-055`.
 
-## Phase 2. Naming Cleanup
+## Suggested Next Step
 
-1. Stop using drift modules as if they were canonical in new docs and future tickets.
-2. Introduce wording discipline:
-   - `canonical module`
-   - `internal helper`
-   - `platform service`
-   - `adapter`
-   - `support contour`
-3. Keep current package names temporarily if runtime stability depends on them.
+After Recovery Sprint R5, the repository is ready for a Launch Sprint `L1` review gate:
 
-## Phase 3. Alias Layer
+- confirm that business recovery is accepted
+- confirm that reserved AI/runtime slots `M-049`, `M-050` may open
+- decide whether `M-052..M-055` are implemented as canonical business modules or formally downgraded to platform support space
 
-1. Define canonical ownership for drift capabilities.
-2. Add mapping notes from current package names to canonical destinations.
-3. Optionally add doc-level aliases or internal naming comments in code where confusion is highest.
-4. Do not rewrite migrations or historical business IDs.
-
-## Phase 4. Controlled Refactor Later
-
-1. Early missing and partial canonical modules are already recovered through Recovery Sprint R1.
-2. Submission and execution-entry recovery is already completed through Recovery Sprints R2 and R3.
-3. Delivery, acceptance, payment, and claims recovery is now completed through Recovery Sprint R4.
-4. Remaining highest-risk mismatches are:
-   - `M-045..M-050`
-   - `M-052..M-055`
-5. Only after canonical coverage is stabilized should deeper package/schema refactoring be considered.
-
-## Suggested Recovery Order
-
-### Step 1
-
-Docs cleanup and governance lock.
-
-### Step 2
-
-Recover canonical intake semantics:
-
-- `M-007`
-- `M-008`
-- `M-010`
-- `M-012`
-
-Status: completed in Recovery Sprint R1.
-
-### Step 3
-
-Recover canonical submission semantics:
-
-- `M-031`
-- `M-032`
-- `M-033`
-- `M-034`
-- `M-035`
-- `M-036`
-- `M-037`
-
-Status: completed in Recovery Sprints R2 and R3.
-
-### Step 4
-
-Recover canonical execution / closure semantics:
-
-- `M-038`
-- `M-039..M-048`
-
-Status: completed in Recovery Sprints R3 and R4 through `M-044`.
-
-### Step 4A
-
-Recover canonical delivery / acceptance / payment semantics:
-
-- `M-039`
-- `M-040`
-- `M-041`
-- `M-042`
-- `M-043`
-- `M-044`
-
-Status: completed in Recovery Sprint R4.
-
-### Step 5
-
-Recover canonical post-deal governance / platform semantics:
-
-- `M-045`
-- `M-046`
-- `M-047`
-- `M-048`
-- `M-049`
-- `M-050`
-- `M-052`
-- `M-053`
-- `M-054`
-- `M-055`
-
-## Non-Goals For This Step
+## Non-Goals Still Preserved
 
 - no mass package renames
 - no destructive schema rewrite
 - no migration history edits
 - no endpoint removals
-- no runtime behavior changes unless a future reconciliation step explicitly requires them
-
-## Exit Condition
-
-The repository is ready for future work only when every new implementation request is framed against the locked canonical registry first, and any non-canonical capability is deliberately placed into helper/platform/adapter space instead of silently becoming new canon.
+- no hidden AI/LLM introduction during recovery

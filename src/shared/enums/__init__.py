@@ -201,6 +201,15 @@ from .recovery_r4 import (
     PaymentTrackingEventType,
     PaymentTrackingStatus,
 )
+from .recovery_r5 import (
+    DealClosureReportStatus,
+    KnowledgeAssetStatus,
+    KnowledgeAssetType,
+    PostmortemActionStatus,
+    PostmortemStatus,
+    SupplierRatingBand,
+    SupplierRatingStatus,
+)
 
 __all__ = [
     "ArtifactType",
@@ -366,4 +375,11 @@ __all__ = [
     "LogisticsStatus",
     "PaymentTrackingEventType",
     "PaymentTrackingStatus",
+    "DealClosureReportStatus",
+    "KnowledgeAssetStatus",
+    "KnowledgeAssetType",
+    "PostmortemActionStatus",
+    "PostmortemStatus",
+    "SupplierRatingBand",
+    "SupplierRatingStatus",
 ]

@@ -24,6 +24,11 @@ from src.modules.claim_triggers.models import (
     ClaimTriggerRecord,
     ClaimTriggerSet,
 )
+from src.modules.deal_closure_reports.models import (
+    DealClosureReportLink,
+    DealClosureReportRecord,
+    DealClosureReportSet,
+)
 from src.modules.execution_ledger.models import ExecutionLedgerRecord, ExecutionLedgerSet, ExecutionResultRecord
 from src.modules.external_execution.models import (
     ExternalExecutionRecord,
@@ -88,6 +93,7 @@ from src.modules.integrated_risk_memo.models import (
     IntegratedRiskMemoSet,
 )
 from src.modules.kpi_learning.models import KPILearningRecord, KPILearningSet, LearningNoteRecord
+from src.modules.knowledge_assets.models import KnowledgeAssetLink, KnowledgeAssetRecord, KnowledgeAssetSet
 from src.modules.learning_automation.models import (
     LearningAutomationRecord,
     LearningAutomationSet,
@@ -106,6 +112,12 @@ from src.modules.incident_register.models import (
     IncidentRegisterSet,
 )
 from src.modules.priority_scoring.models import PriorityScoreRecord
+from src.modules.postmortems.models import (
+    PostmortemActionItem,
+    PostmortemFinding,
+    PostmortemRecord,
+    PostmortemSet,
+)
 from src.modules.post_submission.models import (
     PostSubmissionEvent,
     PostSubmissionTrackerRecord,
@@ -166,6 +178,11 @@ from src.modules.supplier_fulfillment.models import (
     SupplierFulfillmentEvent,
     SupplierFulfillmentRecord,
     SupplierFulfillmentSet,
+)
+from src.modules.supplier_ratings.models import (
+    SupplierRatingFactor,
+    SupplierRatingUpdateRecord,
+    SupplierRatingUpdateSet,
 )
 from src.modules.supplier_contracts.models import (
     SupplierContractComment,
@@ -293,6 +310,9 @@ __all__ = [
     "CustomerExternalRef",
     "CustomerProfile",
     "DealArchiveSnapshot",
+    "DealClosureReportLink",
+    "DealClosureReportRecord",
+    "DealClosureReportSet",
     "DealClosureRecord",
     "DealClosureSet",
     "Deal",
@@ -351,6 +371,9 @@ __all__ = [
     "IntegratedRiskMemoSet",
     "KPILearningRecord",
     "KPILearningSet",
+    "KnowledgeAssetLink",
+    "KnowledgeAssetRecord",
+    "KnowledgeAssetSet",
     "LearningAutomationRecord",
     "LearningAutomationSet",
     "LearningRecommendationRecord",
@@ -382,6 +405,10 @@ __all__ = [
     "PostSubmissionEvent",
     "PostSubmissionTrackerRecord",
     "PostSubmissionTrackerSet",
+    "PostmortemActionItem",
+    "PostmortemFinding",
+    "PostmortemRecord",
+    "PostmortemSet",
     "ProcedureMonitorAlert",
     "ProcedureMonitorEvent",
     "ProcedureMonitorRecord",
@@ -418,6 +445,9 @@ __all__ = [
     "SupplierFulfillmentEvent",
     "SupplierFulfillmentRecord",
     "SupplierFulfillmentSet",
+    "SupplierRatingFactor",
+    "SupplierRatingUpdateRecord",
+    "SupplierRatingUpdateSet",
     "SupplierMessageRecord",
     "SupplierProfile",
     "SupplierProgressAlert",

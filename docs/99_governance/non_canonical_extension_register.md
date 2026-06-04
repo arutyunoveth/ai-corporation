@@ -6,49 +6,49 @@ This register lists useful implemented layers that should not be treated as cano
 
 Two classes exist:
 
-1. `Canonical-slot drift`
-   Current code occupies a canonical `M-0xx` slot with a different concept than the locked registry expects.
+1. `Historical helper drift`
+   The codebase contains helper contours that historically used canonical slot numbers in earlier sprints.
 2. `Extra non-canonical IDs`
    Implemented modules beyond the locked business range `M-001..M-055`.
 
-## A. Canonical-Slot Drift
+## A. Historical Helper Drift
 
-| Current implemented module | Current slot | Why it is useful | Recommended canonical destination |
+| Helper contour | Historical slot | Why it remains useful | Canonical destination |
 |---|---|---|---|
-| Legacy Tender Summary Builder package | legacy `tender_summary` contour | Useful persisted intake artifact kept for backward compatibility | Internal helper / submodule under canonical M-008, M-011, M-012 |
-| Submission Readiness Gate | legacy `submission_readiness` contour | Useful pre-submit gating logic | Helper under canonical M-031 completeness and readiness reporting |
-| Submission Control | legacy `submission_control` contour | Useful controlled submission execution | Internal submission helper under canonical M-032/M-033 recovery |
-| Submission Receipt Registry | legacy `submission_receipts` contour | Useful persisted evidence layer | Helper under canonical M-032 Submission Archive |
-| Post-Submission Tracker | legacy `post_submission` contour | Useful ongoing status timeline | Helper under canonical M-033 Tender Procedure Monitor |
-| Outcome Intake | legacy `outcome_intake` contour | Useful formal outcome capture | Helper under canonical M-033 and M-034 |
-| Delivery Launch Control | current `M-039` | Useful award-to-execution launch control | Helper around canonical M-036 Execution Plan Builder |
-| Execution Command Center | current `M-040` | Useful execution cockpit | Helper around canonical M-036 and M-038 |
-| Delivery Milestone Tracker | current `M-041` | Useful milestone trace | Helper around canonical M-036 and M-039 |
-| Supplier Fulfillment Tracker | current `M-042` | Useful vendor-side execution tracking | Helper around canonical M-038 and M-039 |
-| Shipping & Acceptance Tracker | current `M-043` | Useful logistics and acceptance trace | Split between canonical M-039 and M-041 |
-| Payment Collection Tracker | current `M-044` | Useful receivables tracking and invoice-state context | Helper under canonical M-043 Payment Tracker and M-044 Claims Trigger Engine |
-| Incident & Escalation Desk | current `M-045` | Useful operational incident handling | Helper under canonical M-040 Incident Register |
-| Deal Closure & Archive | current `M-046` | Useful closure state and archive snapshot | Split between canonical M-045 and archive helper |
-| KPI & Learning Loop | current `M-047` | Useful KPI and retrospective signals | Split between canonical M-046, M-047, M-048 |
-| Operational Dashboard Backbone | current `M-048` | Useful persisted dashboard snapshot layer | Helper under canonical M-054 Master Dashboard |
-| Archive Export & Handover | current `M-049` | Useful export artifact layer | Helper under canonical M-048 Knowledge Asset Builder or closure/postmortem export |
-| Learning Automation Engine | current `M-050` | Useful recommendation layer | Helper under canonical M-048 / M-055 |
-| Optimization Recommendation Engine | current `M-052` | Useful operational recommendation engine | Helper under canonical M-046 / M-048 / M-055 |
-| Operator Copilot Feed | current `M-053` | Useful operator UX feed | Internal UI-support contour |
-| Connector Registry & Sync Backbone | current `M-054` | Useful integration inventory and sync layer | Platform helper under canonical M-055 Integration Bus |
-| Operator Workspace Feed API | current `M-055` | Useful operator-facing workspace projection | Internal platform/UI layer |
+| Legacy Tender Summary Builder package | legacy `tender_summary` contour | Backward-compatible persisted intake artifact | Internal helper under canonical `M-008`, `M-011`, `M-012` |
+| Submission Readiness Gate | legacy `submission_readiness` contour | Useful pre-submit gating logic | Helper under canonical `M-031` |
+| Submission Control | historical `M-033` runtime contour | Useful controlled submission execution | Helper under canonical `M-032` / `M-033` |
+| Submission Receipt Registry | historical `M-035` runtime contour | Useful receipt/evidence persistence | Helper under canonical `M-032` |
+| Post-Submission Tracker | historical `M-036` runtime contour | Useful ongoing timeline | Helper under canonical `M-033` |
+| Outcome Intake | historical `M-037` runtime contour | Useful formal outcome capture | Helper under canonical `M-033` and `M-034` |
+| Delivery Launch Control | historical `M-039` runtime contour | Useful award-to-execution launch control | Helper around canonical `M-036` |
+| Execution Command Center | historical `M-040` runtime contour | Useful execution cockpit | Helper around canonical `M-036` and `M-038` |
+| Delivery Milestone Tracker | historical `M-041` runtime contour | Useful milestone trace | Helper around canonical `M-036` and `M-039` |
+| Supplier Fulfillment Tracker | historical `M-042` runtime contour | Useful supplier-side execution trace | Helper around canonical `M-038` and `M-039` |
+| Shipping & Acceptance Tracker | historical `M-043` runtime contour | Useful logistics and acceptance trace | Split between canonical `M-039` and `M-041` |
+| Payment Collection Tracker | historical `M-044` runtime contour | Useful receivables state context | Helper under canonical `M-043` and `M-044` |
+| Incident & Escalation Desk | historical `M-045` runtime contour | Useful operational incident handling | Helper under canonical `M-040` |
+| Deal Closure & Archive | historical `M-046` runtime contour | Useful closure state and archive snapshot | Helper under canonical `M-045` and closure/archive support |
+| KPI & Learning Loop | historical `M-047` runtime contour | Useful KPI and retrospective signals | Helper under canonical `M-046`, `M-047`, `M-048` |
+| Operational Dashboard Backbone | historical `M-048` runtime contour | Useful persisted dashboard snapshot layer | Helper under canonical `M-048` today, later `M-054` |
+| Archive Export & Handover | historical `M-049` runtime contour | Useful export artifact layer | Helper under canonical `M-048`; does not satisfy canonical `M-049` |
+| Learning Automation Engine | historical `M-050` runtime contour | Useful recommendation layer | Helper under canonical `M-048` / later platform work; does not satisfy canonical `M-050` |
+| Optimization Recommendation Engine | historical `M-052` runtime contour | Useful operational recommendation engine | Helper under later platform/governance phase |
+| Operator Copilot Feed | historical `M-053` runtime contour | Useful operator UX feed | Internal UI-support contour |
+| Connector Registry & Sync Backbone | historical `M-054` runtime contour | Useful integration inventory and sync layer | Platform helper under later `M-055` reconciliation |
+| Operator Workspace Feed API | historical `M-055` runtime contour | Useful operator-facing workspace projection | Internal platform/UI layer |
 
 ## B. Extra Non-Canonical IDs Outside the Lock
 
-| Current implemented module | Current slot | Why it is useful | Recommended destination |
+| Current implemented module | Current slot | Why it remains useful | Recommended destination |
 |---|---|---|---|
-| Controlled Action Queue | `M-056` | Human approval and action gating | Internal platform/control layer under canonical M-055 |
-| Integration Task Adapter Layer | `M-057` | Formalized connector-ready tasks | Internal adapter layer under canonical M-055 |
+| Controlled Action Queue | `M-056` | Human approval and action gating | Internal platform/control layer |
+| Integration Task Adapter Layer | `M-057` | Formalized connector-ready tasks | Internal adapter layer |
 | Operator Session Workspace | `M-058` | Persisted operator work sessions | Internal operator support layer |
 | Gated Action Execution Ledger | `M-059` | Controlled internal execution trace | Internal execution-control layer |
-| Vendor Connector Profiles | `M-060` | Vendor-facing projection over connectors | Internal connector layer under canonical M-055 |
+| Vendor Connector Profiles | `M-060` | Vendor-facing projection over connectors | Internal connector layer |
 | Operator Action Console Backbone | `M-061` | Action-oriented operator snapshot | Internal operator UX layer |
-| External Execution Gateway Ledger | `M-062` | Formal external execution bridge | Internal external-execution layer under canonical M-055 |
+| External Execution Gateway Ledger | `M-062` | Formal external execution bridge | Internal external-execution layer |
 
 ## Governance Rule
 
@@ -61,4 +61,4 @@ Until a later refactor happens:
 - keep endpoints and schema stable
 - keep migrations untouched
 - keep runtime working
-- document them as internal/support extensions, not as new business canon
+- document them as helper/platform/compatibility contours, not as canonical business modules
