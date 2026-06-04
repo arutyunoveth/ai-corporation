@@ -476,3 +476,39 @@ def next_external_execution_set_id(session: Session, column: ColumnElement[str])
 
 def next_external_execution_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="XE", column=column)
+
+
+def next_customer_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="CUS", column=column)
+
+
+def next_tender_import_run_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="TIR", column=column)
+
+
+def next_tender_import_event_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="TIE", column=column)
+
+
+def next_tender_normalization_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="TNS", column=column)
+
+
+def next_tender_normalization_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="TN", column=column)
+
+
+def next_intake_priority_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IPS", column=column)
+
+
+def next_intake_priority_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IP", column=column)
+
+
+def next_requirement_extraction_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="RES", column=column)
+
+
+def next_requirement_extraction_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="REQ", column=column)

@@ -4,6 +4,12 @@
 
 Return the project to the locked canonical business registry `M-001..M-055` without destructive refactors in the current step.
 
+## Progress Snapshot
+
+- Governance lock: completed
+- Recovery Sprint R1: completed for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`
+- Remaining recovery focus: `M-031`, `M-032`, `M-033`, `M-034`, `M-035..M-055` canonical reconciliation
+
 ## Phase 1. Governance Lock And Documentation
 
 1. Lock the canonical module registry in repo docs.
@@ -63,6 +69,8 @@ Recover canonical intake semantics:
 - `M-008`
 - `M-010`
 - `M-012`
+
+Status: completed in Recovery Sprint R1.
 
 ### Step 3
 

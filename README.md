@@ -8,7 +8,7 @@ This repository currently contains:
 - canonical slots that are only partial or mismatched
 - useful internal/platform extensions that drifted beyond the locked canonical range
 
-This step introduces an explicit reconciliation layer so the repo no longer treats drift as if it were new official canon.
+The repository now includes the reconciliation layer plus Recovery Sprint R1, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, and `M-012` without destructive refactor.
 
 ## Reconciliation Docs
 
@@ -16,28 +16,31 @@ This step introduces an explicit reconciliation layer so the repo no longer trea
 - [canonical_vs_implemented_mapping.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_vs_implemented_mapping.md)
 - [non_canonical_extension_register.md](/Users/master/Documents/AI-Corporation/docs/99_governance/non_canonical_extension_register.md)
 - [registry_recovery_plan.md](/Users/master/Documents/AI-Corporation/docs/99_governance/registry_recovery_plan.md)
+- [implementation_summary_recovery_sprint_r1.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r1.md)
+- [Recovery_Sprint_R1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R1_Technical_Spec.md)
+- [Entity_Catalog_Recovery_Sprint_R1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Recovery_Sprint_R1.md)
 
 ## Governance Status
 
 ### Canonical Modules Implemented Exactly
 
 - `M-001`, `M-002`, `M-003`, `M-004`
+- `M-005`
 - `M-006`
+- `M-007`, `M-008`
 - `M-009`
+- `M-010`
 - `M-011`
+- `M-012`
 - `M-013` through `M-030`
 - `M-051`
 
 ### Canonical Modules Implemented Partially
 
-- `M-007`
-- `M-008`
-- `M-010`
 - `M-031`
 
 ### Canonical Modules With Registry Mismatch
 
-- `M-012`
 - `M-032`, `M-033`
 - `M-035`, `M-036`, `M-037`
 - `M-039` through `M-050`
@@ -45,7 +48,6 @@ This step introduces an explicit reconciliation layer so the repo no longer trea
 
 ### Canonical Modules Missing
 
-- `M-005`
 - `M-034`
 - `M-038`
 
@@ -65,6 +67,11 @@ These extensions remain useful, but they are not part of the locked canonical bu
 
 - governance reconciliation layer for canonical-vs-implemented mapping
 - canonical deal records with `deal_id`
+- canonical customer registry with `customer_id`
+- canonical tender import runs/events/payloads
+- canonical tender normalization sets/records/links
+- canonical intake priority artifacts
+- canonical requirement extraction artifacts
 - formal status transitions and append-only history
 - artifact storage metadata with versioning and links
 - append-only event and decision journals
@@ -96,10 +103,19 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Business IDs are generated in application code with DB uniqueness guarantees and retry-friendly formatting.
 - The list below is an implementation inventory and includes both canonical-business refs and internal-extension refs currently present in code:
   - `DL-YYYY-NNNNNN`
+  - `CUS-YYYY-NNNNNN`
   - `ART-YYYY-NNNNNN`
   - `EVT-YYYY-NNNNNN`
   - `DEC-YYYY-NNNNNN`
   - `INT-YYYY-NNNNNN`
+  - `TIR-YYYY-NNNNNN`
+  - `TIE-YYYY-NNNNNN`
+  - `TNS-YYYY-NNNNNN`
+  - `TN-YYYY-NNNNNN`
+  - `IPS-YYYY-NNNNNN`
+  - `IP-YYYY-NNNNNN`
+  - `RES-YYYY-NNNNNN`
+  - `REQ-YYYY-NNNNNN`
   - `DS-YYYY-NNNNNN`
   - `DIR-YYYY-NNNNNN`
   - `TS-YYYY-NNNNNN`

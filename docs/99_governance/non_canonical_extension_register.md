@@ -15,7 +15,7 @@ Two classes exist:
 
 | Current implemented module | Current slot | Why it is useful | Recommended canonical destination |
 |---|---|---|---|
-| Tender Summary Builder | current `M-012` | Useful persisted intake artifact | Internal helper / submodule under M-008, M-011, future canonical M-012 |
+| Legacy Tender Summary Builder package | legacy `tender_summary` contour | Useful persisted intake artifact kept for backward compatibility | Internal helper / submodule under canonical M-008, M-011, M-012 |
 | Submission Readiness Gate | current `M-032` | Useful pre-submit gating logic | Helper under M-031 / future canonical submission archive flow |
 | Submission Control | current `M-033` | Useful controlled submission execution | Internal submission helper under canonical M-032/M-033 recovery |
 | Submission Receipt Registry | current `M-035` | Useful persisted evidence layer | Helper under canonical M-032 Submission Archive |

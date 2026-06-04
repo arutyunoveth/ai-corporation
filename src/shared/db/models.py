@@ -111,6 +111,13 @@ from src.modules.supplier_fulfillment.models import (
     SupplierFulfillmentRecord,
     SupplierFulfillmentSet,
 )
+from src.modules.customer_registry.models import CustomerContour, CustomerExternalRef, CustomerProfile
+from src.modules.intake_priority.models import IntakePriorityFactor, IntakePriorityRecord, IntakePrioritySet
+from src.modules.requirement_extraction.models import (
+    RequirementExtractionRecord,
+    RequirementExtractionSet,
+    RequirementSourceLink,
+)
 from src.modules.supplier_registry.models import SupplierContact, SupplierExternalRef, SupplierProfile, SupplierTag
 from src.modules.supplier_search.models import SupplierShortlist, SupplierShortlistRow
 from src.modules.supplier_verification.models import (
@@ -135,7 +142,13 @@ from src.modules.submission_receipts.models import (
     SubmissionReceiptSet,
 )
 from src.modules.tender_screening.models import TenderScreeningRecord
+from src.modules.tender_import.models import TenderImportEvent, TenderImportPayload, TenderImportRun
 from src.modules.tender_intake.models import TenderIntakeRecord, TenderSourcePayload
+from src.modules.tender_normalization.models import (
+    TenderNormalizationLink,
+    TenderNormalizationRecord,
+    TenderNormalizationSet,
+)
 from src.modules.tender_summary.models import TenderSummary, TenderSummarySourceLink
 from src.modules.vendor_connectors.models import (
     VendorConnectorCapability,
@@ -186,6 +199,9 @@ __all__ = [
     "CashGapRecord",
     "CashGapScenario",
     "CashGapSet",
+    "CustomerContour",
+    "CustomerExternalRef",
+    "CustomerProfile",
     "DealArchiveSnapshot",
     "DealClosureRecord",
     "DealClosureSet",
@@ -225,6 +241,9 @@ __all__ = [
     "FinancingStrategyOption",
     "FinancingStrategyRecord",
     "FinancingStrategySet",
+    "IntakePriorityFactor",
+    "IntakePriorityRecord",
+    "IntakePrioritySet",
     "InitialTechRiskFlag",
     "InitialTechRiskFlagSet",
     "IncidentRecord",
@@ -267,6 +286,9 @@ __all__ = [
     "RFQArtifactBinding",
     "RFQBatch",
     "RFQRecord",
+    "RequirementExtractionRecord",
+    "RequirementExtractionSet",
+    "RequirementSourceLink",
     "ShippingAcceptanceEvent",
     "ShippingAcceptanceRecord",
     "ShippingAcceptanceSet",
@@ -296,7 +318,13 @@ __all__ = [
     "SubmissionReceiptRecord",
     "SubmissionReceiptSet",
     "TenderScreeningRecord",
+    "TenderImportEvent",
+    "TenderImportPayload",
+    "TenderImportRun",
     "TenderIntakeRecord",
+    "TenderNormalizationLink",
+    "TenderNormalizationRecord",
+    "TenderNormalizationSet",
     "TenderSourcePayload",
     "TenderSummary",
     "TenderSummarySourceLink",

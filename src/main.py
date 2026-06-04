@@ -13,6 +13,7 @@ from src.modules.ceo_approval.router import router as ceo_approval_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
 from src.modules.contract_risks.router import router as contract_risks_router
 from src.modules.cost_model.router import router as cost_model_router
+from src.modules.customer_registry.router import router as customer_registry_router
 from src.modules.dashboard_snapshots.router import router as dashboard_snapshots_router
 from src.modules.deal_registry.router import router as deals_router
 from src.modules.deal_closure.router import router as deal_closure_router
@@ -29,6 +30,7 @@ from src.modules.finance_memo.router import router as finance_memo_router
 from src.modules.financing_strategy.router import router as financing_strategy_router
 from src.modules.initial_tech_risks.router import router as initial_tech_risks_router
 from src.modules.incidents.router import router as incidents_router
+from src.modules.intake_priority.router import router as intake_priority_router
 from src.modules.integration_tasks.router import router as integration_tasks_router
 from src.modules.integrated_risk_memo.router import router as integrated_risk_memo_router
 from src.modules.kpi_learning.router import router as kpi_learning_router
@@ -41,6 +43,7 @@ from src.modules.operator_sessions.router import router as operator_sessions_rou
 from src.modules.payment_collection.router import router as payment_collection_router
 from src.modules.quote_comparison.router import router as quote_comparison_router
 from src.modules.quote_repository.router import router as quote_repository_router
+from src.modules.requirement_extraction.router import router as requirement_extraction_router
 from src.modules.rfq_generator.router import router as rfq_generator_router
 from src.modules.shipping_acceptance.router import router as shipping_acceptance_router
 from src.modules.status_engine.router import router as status_router
@@ -53,7 +56,9 @@ from src.modules.supplier_registry.router import router as supplier_registry_rou
 from src.modules.supplier_search.router import router as supplier_search_router
 from src.modules.supplier_verification.router import router as supplier_verification_router
 from src.modules.tender_screening.router import router as tender_screening_router
+from src.modules.tender_import.router import router as tender_import_router
 from src.modules.tender_intake.router import router as tender_intake_router
+from src.modules.tender_normalization.router import router as tender_normalization_router
 from src.modules.tender_summary.router import router as tender_summary_router
 from src.modules.vendor_connectors.router import router as vendor_connectors_router
 from src.modules.workflow_runs.router import router as workflow_runs_router
@@ -76,7 +81,9 @@ app.include_router(connector_registry_router)
 app.include_router(workspace_feed_router)
 app.include_router(action_queue_router)
 app.include_router(action_console_router)
+app.include_router(customer_registry_router)
 app.include_router(integration_tasks_router)
+app.include_router(intake_priority_router)
 app.include_router(operator_sessions_router)
 app.include_router(execution_ledger_router)
 app.include_router(external_execution_router)
@@ -87,8 +94,11 @@ app.include_router(status_router)
 app.include_router(artifacts_router)
 app.include_router(event_log_router)
 app.include_router(execution_command_router)
+app.include_router(tender_import_router)
 app.include_router(tender_intake_router)
+app.include_router(tender_normalization_router)
 app.include_router(document_ingestion_router)
+app.include_router(requirement_extraction_router)
 app.include_router(tender_summary_router)
 app.include_router(vendor_connectors_router)
 app.include_router(tender_screening_router)

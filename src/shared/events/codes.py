@@ -179,6 +179,18 @@ EVENT_CODES = {
     "external_execution_started",
     "external_execution_succeeded",
     "external_execution_failed",
+    "customer_profile_created",
+    "customer_profile_updated",
+    "tender_import_run_started",
+    "tender_import_event_recorded",
+    "tender_import_run_succeeded",
+    "tender_import_run_failed",
+    "tender_normalization_built",
+    "tender_normalization_failed",
+    "intake_priority_built",
+    "intake_priority_failed",
+    "requirement_extraction_built",
+    "requirement_extraction_failed",
 }
 
 DECISION_CODES = {

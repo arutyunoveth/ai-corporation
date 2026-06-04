@@ -16,14 +16,14 @@
 | M-002 | Deal Status Model | Implemented as formal status engine | EXACT | Keep |
 | M-003 | Document Store | Implemented | EXACT | Keep |
 | M-004 | Event Log & Decision Journal | Implemented | EXACT | Keep |
-| M-005 | Counterparty / Customer Registry | No dedicated business module found | MISSING | Add as canonical module later |
+| M-005 | Counterparty / Customer Registry | Implemented as customer registry with profiles, refs, and contours | EXACT | Keep |
 | M-006 | Supplier Registry | Implemented as supplier registry | EXACT | Keep |
-| M-007 | Source / Tender Import Layer | Partially covered by intake/source ingestion logic | PARTIAL | Separate canonical import responsibilities from current intake flow |
-| M-008 | Tender Normalization Layer | Partially covered by tender intake pipeline and summary helpers | PARTIAL | Split intake from normalization explicitly |
+| M-007 | Source / Tender Import Layer | Implemented as raw tender import run/event/payload layer | EXACT | Keep |
+| M-008 | Tender Normalization Layer | Implemented as explicit normalization set/record/link contour | EXACT | Keep |
 | M-009 | Tender Screening Engine | Implemented | EXACT | Keep |
-| M-010 | Intake Summary / Prioritization | Partially covered by priority scoring and intake summary logic | PARTIAL | Reconcile into one canonical prioritization artifact |
+| M-010 | Intake Summary / Prioritization | Implemented as canonical intake priority artifact with factors | EXACT | Keep |
 | M-011 | Document Ingestion Layer | Implemented | EXACT | Keep |
-| M-012 | Requirement Extraction from Tender Docs | Canonical intent not implemented as top-level module; current `M-012` is tender summary builder | MISMATCH | Restore canonical M-012; move current tender summary under internal/helper contour |
+| M-012 | Requirement Extraction from Tender Docs | Implemented as explicit requirement extraction module; legacy tender summary remains helper contour | EXACT | Keep |
 | M-013 | Compliance Matrix Builder | Implemented | EXACT | Keep |
 | M-014 | Document Requirement Extractor | Implemented | EXACT | Keep |
 | M-015 | Initial Tech Risk Flags | Implemented | EXACT | Keep |
@@ -72,13 +72,13 @@
 
 | Status | Count | Canonical IDs |
 |---|---:|---|
-| EXACT | 26 | M-001, M-002, M-003, M-004, M-006, M-009, M-011, M-013..M-030, M-051 |
-| PARTIAL | 4 | M-007, M-008, M-010, M-031 |
-| MISMATCH | 22 | M-012, M-032, M-033, M-035..M-037, M-039..M-050, M-052..M-055 |
-| MISSING | 3 | M-005, M-034, M-038 |
+| EXACT | 31 | M-001..M-030, M-051 |
+| PARTIAL | 1 | M-031 |
+| MISMATCH | 21 | M-032, M-033, M-035..M-037, M-039..M-050, M-052..M-055 |
+| MISSING | 2 | M-034, M-038 |
 
 ## Key Findings
 
-1. Early and middle business flow coverage is strong through supplier, finance, and most bid-prep contours.
-2. Registry drift becomes material from the later submission / execution / governance / platform area.
-3. The main governance problem is not lack of useful implementation, but reuse of canonical IDs for non-canonical concepts.
+1. Early intake and analysis recovery is now canonical through `M-012`.
+2. Registry drift is now concentrated mostly in later submission / execution / governance / platform contours.
+3. The main remaining governance problem is still reuse of canonical IDs for non-canonical concepts, not lack of useful implementation.
