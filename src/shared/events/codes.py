@@ -160,6 +160,16 @@ EVENT_CODES = {
     "action_queue_approved",
     "action_queue_rejected",
     "action_queue_failed",
+    "integration_task_built",
+    "integration_task_failed",
+    "operator_session_built",
+    "operator_session_item_recorded",
+    "operator_session_item_acknowledged",
+    "operator_session_failed",
+    "execution_ledger_built",
+    "execution_ledger_started",
+    "execution_ledger_succeeded",
+    "execution_ledger_failed",
 }
 
 DECISION_CODES = {

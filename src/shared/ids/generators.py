@@ -428,3 +428,27 @@ def next_action_queue_set_id(session: Session, column: ColumnElement[str]) -> st
 
 def next_action_queue_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="AQ", column=column)
+
+
+def next_integration_task_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ITS", column=column)
+
+
+def next_integration_task_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="IT", column=column)
+
+
+def next_operator_session_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="OSS", column=column)
+
+
+def next_operator_session_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="OS", column=column)
+
+
+def next_execution_ledger_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ELS", column=column)
+
+
+def next_execution_ledger_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="EL", column=column)

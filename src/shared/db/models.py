@@ -10,6 +10,7 @@ from src.modules.bid_documents.models import (
     BidDocumentCollectionSet,
 )
 from src.modules.archive_export.models import ArchiveExportItem, ArchiveExportRecord, ArchiveExportSet
+from src.modules.execution_ledger.models import ExecutionLedgerRecord, ExecutionLedgerSet, ExecutionResultRecord
 from src.modules.connector_registry.models import ConnectorRegistryRecord, ConnectorRegistrySet, ConnectorSyncRun
 from src.modules.copilot_feed.models import CopilotFeedItem, CopilotFeedRecord, CopilotFeedSet
 from src.modules.bid_packages.models import BidPackageItem, BidPackageRecord, BidPackageSet
@@ -48,6 +49,7 @@ from src.modules.financing_strategy.models import (
 )
 from src.modules.initial_tech_risks.models import InitialTechRiskFlag, InitialTechRiskFlagSet
 from src.modules.incidents.models import EscalationRecord, IncidentRecord, IncidentSet
+from src.modules.integration_tasks.models import IntegrationTaskBinding, IntegrationTaskRecord, IntegrationTaskSet
 from src.modules.integrated_risk_memo.models import (
     IntegratedRiskItem,
     IntegratedRiskMemoRecord,
@@ -80,6 +82,7 @@ from src.modules.optimization.models import (
     OptimizationRecommendationSet,
     OptimizationSignalRecord,
 )
+from src.modules.operator_sessions.models import OperatorSessionItem, OperatorSessionRecord, OperatorSessionSet
 from src.modules.quote_repository.models import QuoteArtifactBinding, QuoteRecord, QuoteSet
 from src.modules.quote_comparison.models import (
     QuoteComparisonRecommendation,
@@ -196,6 +199,9 @@ __all__ = [
     "ExecutionCommandBinding",
     "ExecutionCommandRecord",
     "ExecutionCommandSet",
+    "ExecutionLedgerRecord",
+    "ExecutionLedgerSet",
+    "ExecutionResultRecord",
     "FinanceMemoFlag",
     "FinanceMemoRecord",
     "FinanceMemoSet",
@@ -206,6 +212,9 @@ __all__ = [
     "InitialTechRiskFlagSet",
     "IncidentRecord",
     "IncidentSet",
+    "IntegrationTaskBinding",
+    "IntegrationTaskRecord",
+    "IntegrationTaskSet",
     "EscalationRecord",
     "IntegratedRiskItem",
     "IntegratedRiskMemoRecord",
@@ -222,6 +231,9 @@ __all__ = [
     "OptimizationRecommendationRecord",
     "OptimizationRecommendationSet",
     "OptimizationSignalRecord",
+    "OperatorSessionItem",
+    "OperatorSessionRecord",
+    "OperatorSessionSet",
     "PaymentCollectionEvent",
     "PaymentCollectionRecord",
     "PaymentCollectionSet",

@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, Sprint 6B closure / incident / KPI foundation, Sprint 7A operational intelligence foundation, Sprint 7B orchestration / optimization foundation, and Sprint 8A connectors / workspace / controlled-action foundation for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, Sprint 6B closure / incident / KPI foundation, Sprint 7A operational intelligence foundation, Sprint 7B orchestration / optimization foundation, Sprint 8A connectors / workspace / controlled-action foundation, and Sprint 8B richer integrations / operator session / gated execution foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -54,6 +54,9 @@ Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation,
 - `M-054` Connector Registry & Sync Backbone
 - `M-055` Operator Workspace Feed API
 - `M-056` Controlled Action Queue
+- `M-057` Integration Task Adapter Layer
+- `M-058` Operator Session Workspace
+- `M-059` Gated Action Execution Ledger
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -78,6 +81,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - persisted dashboard snapshots, archive export manifests, and automated learning recommendations
 - persisted workflow runs, optimization recommendations, and operator copilot feeds
 - persisted connector registries, connector sync runs, workspace feeds, and controlled action queues
+- persisted integration tasks, operator sessions, and gated execution ledger runs/results
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -188,6 +192,12 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `WF-YYYY-NNNNNN`
   - `AQS-YYYY-NNNNNN`
   - `AQ-YYYY-NNNNNN`
+  - `ITS-YYYY-NNNNNN`
+  - `IT-YYYY-NNNNNN`
+  - `OSS-YYYY-NNNNNN`
+  - `OS-YYYY-NNNNNN`
+  - `ELS-YYYY-NNNNNN`
+  - `EL-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -463,6 +473,20 @@ pytest
 - `GET /action-queue/{action_queue_set_id}`
 - `GET /action-queue`
 - `GET /action-queue/records/{action_queue_id}`
+- `POST /integration-tasks/build`
+- `GET /integration-tasks/{integration_task_set_id}`
+- `GET /integration-tasks`
+- `GET /integration-tasks/records/{integration_task_id}`
+- `POST /operator-sessions/build`
+- `POST /operator-sessions/items/ack`
+- `GET /operator-sessions/{operator_session_set_id}`
+- `GET /operator-sessions`
+- `GET /operator-sessions/records/{operator_session_id}`
+- `POST /execution-ledger/build`
+- `POST /execution-ledger/start`
+- `GET /execution-ledger/{execution_ledger_set_id}`
+- `GET /execution-ledger`
+- `GET /execution-ledger/records/{execution_ledger_id}`
 
 ## Source Of Truth
 
@@ -483,6 +507,7 @@ pytest
 - [docs/01_sprints/Sprint_7A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_7A_Technical_Spec.md)
 - [docs/01_sprints/Sprint_7B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_7B_Technical_Spec.md)
 - [docs/01_sprints/Sprint_8A_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_8A_Technical_Spec.md)
+- [docs/01_sprints/Sprint_8B_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Sprint_8B_Technical_Spec.md)
 - [docs/03_entities/Entity_Catalog_Sprint_1.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_1.md)
 - [docs/03_entities/Entity_Catalog_Sprint_2.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_2.md)
 - [docs/03_entities/Entity_Catalog_Sprint_3A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_3A.md)
@@ -496,6 +521,7 @@ pytest
 - [docs/03_entities/Entity_Catalog_Sprint_7A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_7A.md)
 - [docs/03_entities/Entity_Catalog_Sprint_8A.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_8A.md)
 - [docs/03_entities/Entity_Catalog_Sprint_7B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_7B.md)
+- [docs/03_entities/Entity_Catalog_Sprint_8B.md](/Users/master/Documents/AI-Corporation/docs/03_entities/Entity_Catalog_Sprint_8B.md)
 - [docs/00_architecture/implementation_summary_sprint_2a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2a.md)
 - [docs/00_architecture/implementation_summary_sprint_2b.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_2b.md)
 - [docs/00_architecture/implementation_summary_sprint_3a.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_sprint_3a.md)

@@ -143,6 +143,16 @@ from .sprint8a import (
     WorkspaceScopeType,
     WorkspaceStatus,
 )
+from .sprint8b import (
+    ExecutionLedgerStatus,
+    ExecutionStatus,
+    IntegrationTaskBindingType,
+    IntegrationTaskStatus,
+    IntegrationTaskType,
+    OperatorSessionItemStatus,
+    OperatorSessionItemType,
+    OperatorSessionStatus,
+)
 
 __all__ = [
     "ArtifactType",
@@ -262,4 +272,12 @@ __all__ = [
     "ActionType",
     "ActionExecutionStatus",
     "QueueApprovalStatus",
+    "IntegrationTaskStatus",
+    "IntegrationTaskType",
+    "IntegrationTaskBindingType",
+    "OperatorSessionStatus",
+    "OperatorSessionItemType",
+    "OperatorSessionItemStatus",
+    "ExecutionLedgerStatus",
+    "ExecutionStatus",
 ]

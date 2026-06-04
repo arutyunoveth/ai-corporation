@@ -1,11 +1,14 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.modules.action_queue.models import ActionQueueApproval, ActionQueueRecord, ActionQueueSet
 from src.modules.copilot_feed.models import CopilotFeedItem, CopilotFeedRecord, CopilotFeedSet
+from src.modules.connector_registry.models import ConnectorRegistryRecord, ConnectorRegistrySet
 from src.modules.deal_registry.models import Deal
 from src.modules.execution_command.models import ExecutionCommandSet
 from src.modules.optimization.models import OptimizationRecommendationRecord, OptimizationRecommendationSet
 from src.modules.workflow_runs.models import WorkflowRunRecord, WorkflowRunSet, WorkflowStepRecord
+from src.modules.workspace_feed.models import WorkspaceFeedItem, WorkspaceFeedRecord, WorkspaceFeedSet
 from src.shared.enums import OptimizationScopeType, WorkflowScopeType
 from src.shared.errors import NotFoundError
 
@@ -147,3 +150,90 @@ def latest_copilot_context(
         )
     )
     return feed_set, feed_record, items
+
+
+def latest_workspace_feed_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[WorkspaceFeedSet | None, WorkspaceFeedRecord | None, list[WorkspaceFeedItem]]:
+    feed_set = session.scalar(
+        select(WorkspaceFeedSet)
+        .where(WorkspaceFeedSet.scope_type == scope_type, WorkspaceFeedSet.scope_ref == scope_ref)
+        .order_by(WorkspaceFeedSet.created_at.desc(), WorkspaceFeedSet.id.desc())
+        .limit(1)
+    )
+    if not feed_set:
+        return None, None, []
+    feed_record = session.scalar(
+        select(WorkspaceFeedRecord)
+        .where(WorkspaceFeedRecord.workspace_feed_set_id == feed_set.workspace_feed_set_id)
+        .order_by(WorkspaceFeedRecord.created_at.desc(), WorkspaceFeedRecord.id.desc())
+        .limit(1)
+    )
+    if not feed_record:
+        return feed_set, None, []
+    items = list(
+        session.scalars(
+            select(WorkspaceFeedItem)
+            .where(WorkspaceFeedItem.workspace_feed_id == feed_record.workspace_feed_id)
+            .order_by(WorkspaceFeedItem.created_at.asc(), WorkspaceFeedItem.id.asc())
+        )
+    )
+    return feed_set, feed_record, items
+
+
+def latest_connector_registry_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[ConnectorRegistrySet | None, list[ConnectorRegistryRecord]]:
+    registry_set = session.scalar(
+        select(ConnectorRegistrySet)
+        .where(ConnectorRegistrySet.scope_type == scope_type, ConnectorRegistrySet.scope_ref == scope_ref)
+        .order_by(ConnectorRegistrySet.created_at.desc(), ConnectorRegistrySet.id.desc())
+        .limit(1)
+    )
+    if not registry_set:
+        return None, []
+    records = list(
+        session.scalars(
+            select(ConnectorRegistryRecord)
+            .where(ConnectorRegistryRecord.connector_registry_set_id == registry_set.connector_registry_set_id)
+            .order_by(ConnectorRegistryRecord.created_at.asc(), ConnectorRegistryRecord.id.asc())
+        )
+    )
+    return registry_set, records
+
+
+def latest_action_queue_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[ActionQueueSet | None, list[tuple[ActionQueueRecord, list[ActionQueueApproval]]]]:
+    queue_set = session.scalar(
+        select(ActionQueueSet)
+        .where(ActionQueueSet.scope_type == scope_type, ActionQueueSet.scope_ref == scope_ref)
+        .order_by(ActionQueueSet.created_at.desc(), ActionQueueSet.id.desc())
+        .limit(1)
+    )
+    if not queue_set:
+        return None, []
+    records = list(
+        session.scalars(
+            select(ActionQueueRecord)
+            .where(ActionQueueRecord.action_queue_set_id == queue_set.action_queue_set_id)
+            .order_by(ActionQueueRecord.created_at.asc(), ActionQueueRecord.id.asc())
+        )
+    )
+    result: list[tuple[ActionQueueRecord, list[ActionQueueApproval]]] = []
+    for record in records:
+        approvals = list(
+            session.scalars(
+                select(ActionQueueApproval)
+                .where(ActionQueueApproval.action_queue_id == record.action_queue_id)
+                .order_by(ActionQueueApproval.created_at.asc(), ActionQueueApproval.id.asc())
+            )
+        )
+        result.append((record, approvals))
+    return queue_set, result

@@ -22,10 +22,12 @@ from src.modules.document_ingestion.router import router as document_ingestion_r
 from src.modules.document_requirements.router import router as document_requirements_router
 from src.modules.event_log.router import router as event_log_router
 from src.modules.execution_command.router import router as execution_command_router
+from src.modules.execution_ledger.router import router as execution_ledger_router
 from src.modules.finance_memo.router import router as finance_memo_router
 from src.modules.financing_strategy.router import router as financing_strategy_router
 from src.modules.initial_tech_risks.router import router as initial_tech_risks_router
 from src.modules.incidents.router import router as incidents_router
+from src.modules.integration_tasks.router import router as integration_tasks_router
 from src.modules.integrated_risk_memo.router import router as integrated_risk_memo_router
 from src.modules.kpi_learning.router import router as kpi_learning_router
 from src.modules.learning_automation.router import router as learning_automation_router
@@ -33,6 +35,7 @@ from src.modules.priority_scoring.router import router as priority_scoring_route
 from src.modules.post_submission.router import router as post_submission_router
 from src.modules.outcome_intake.router import router as outcome_intake_router
 from src.modules.optimization.router import router as optimization_router
+from src.modules.operator_sessions.router import router as operator_sessions_router
 from src.modules.payment_collection.router import router as payment_collection_router
 from src.modules.quote_comparison.router import router as quote_comparison_router
 from src.modules.quote_repository.router import router as quote_repository_router
@@ -69,6 +72,9 @@ app.include_router(copilot_feed_router)
 app.include_router(connector_registry_router)
 app.include_router(workspace_feed_router)
 app.include_router(action_queue_router)
+app.include_router(integration_tasks_router)
+app.include_router(operator_sessions_router)
+app.include_router(execution_ledger_router)
 app.include_router(deal_closure_router)
 app.include_router(delivery_launch_router)
 app.include_router(delivery_milestones_router)
