@@ -99,6 +99,7 @@ from src.modules.learning_automation.models import (
     LearningAutomationSet,
     LearningRecommendationRecord,
 )
+from src.modules.launch_visibility.models import LaunchVisibilityItem, LaunchVisibilityRecord, LaunchVisibilitySet
 from src.modules.logistics_tracking.models import (
     LogisticsTrackingEvent,
     LogisticsTrackingLink,
@@ -378,6 +379,9 @@ __all__ = [
     "LearningAutomationSet",
     "LearningRecommendationRecord",
     "LearningNoteRecord",
+    "LaunchVisibilityItem",
+    "LaunchVisibilityRecord",
+    "LaunchVisibilitySet",
     "LogisticsTrackingEvent",
     "LogisticsTrackingLink",
     "LogisticsTrackingRecord",

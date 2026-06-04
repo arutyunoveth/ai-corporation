@@ -24,6 +24,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [implementation_summary_recovery_sprint_r3.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r3.md)
 - [implementation_summary_recovery_sprint_r4.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r4.md)
 - [implementation_summary_recovery_sprint_r5.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r5.md)
+- [implementation_summary_pre_l1_ops_visibility.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_pre_l1_ops_visibility.md)
 - [Recovery_Sprint_R1_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R1_Technical_Spec.md)
 - [Recovery_Sprint_R2_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R2_Technical_Spec.md)
 - [Recovery_Sprint_R3_Technical_Spec.md](/Users/master/Documents/AI-Corporation/docs/01_sprints/Recovery_Sprint_R3_Technical_Spec.md)
@@ -44,6 +45,9 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [Launch_L1_Execution_Checklist.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Execution_Checklist.md)
 - [Launch_L1_Pilot_Playbook.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Pilot_Playbook.md)
 - [Launch_L1_Control_Gates.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Control_Gates.md)
+- [Pre_L1_Ops_Visibility_Package.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Pre_L1_Ops_Visibility_Package.md)
+- [Pre_L1_Attention_and_Red_Flags.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Pre_L1_Attention_and_Red_Flags.md)
+- [Pre_L1_Owner_Overview.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Pre_L1_Owner_Overview.md)
 
 ## Governance Status
 
@@ -113,6 +117,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Before Launch Sprint `L1`, the remaining governance gate is to keep reserved `M-049/M-050` closed until a dedicated post-launch AI/runtime phase is approved.
 - Launch readiness is audited separately from recovery completion; the current decision is `GO with restrictions` for a controlled operator-assisted pilot, not for unattended or autonomous launch.
 - Launch Sprint `L1` is therefore allowed only as a controlled pilot with a runbook, checklist, pilot playbook, and mandatory human control gates.
+- A pre-L1 ops visibility mini-gap closure now adds an internal `launch_visibility` helper for pilot attention aggregation and owner/operator overview without reopening `M-049/M-050` or reclassifying `M-052..M-055`.
 
 ## Current Scope
 
@@ -161,6 +166,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - persisted connector registries, connector sync runs, workspace feeds, and controlled action queues
 - persisted integration tasks, operator sessions, and gated execution ledger runs/results
 - persisted vendor connector profiles, operator action console snapshots, and external execution gateway calls/results as non-canonical internal extensions
+- persisted pre-L1 launch visibility sets, records, and items as an internal pilot-support helper
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -286,6 +292,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
   - `SRT-YYYY-NNNNNN`
   - `KAS-YYYY-NNNNNN`
   - `KA-YYYY-NNNNNN`
+  - `LVS-YYYY-NNNNNN`
+  - `LV-YYYY-NNNNNN`
   - `SAS-YYYY-NNNNNN`
   - `SHA-YYYY-NNNNNN`
   - `SAE-YYYY-NNNNNN`

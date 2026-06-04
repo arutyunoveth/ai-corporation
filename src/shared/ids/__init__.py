@@ -160,6 +160,8 @@ from .generators import (
     next_purchase_order_set_id,
     next_knowledge_asset_id,
     next_knowledge_asset_set_id,
+    next_launch_visibility_id,
+    next_launch_visibility_set_id,
     next_supplier_rating_update_id,
     next_supplier_rating_update_set_id,
 )
@@ -326,6 +328,8 @@ __all__ = [
     "next_purchase_order_set_id",
     "next_knowledge_asset_id",
     "next_knowledge_asset_set_id",
+    "next_launch_visibility_id",
+    "next_launch_visibility_set_id",
     "next_supplier_rating_update_id",
     "next_supplier_rating_update_set_id",
 ]

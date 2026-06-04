@@ -676,3 +676,11 @@ def next_knowledge_asset_set_id(session: Session, column: ColumnElement[str]) ->
 
 def next_knowledge_asset_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="KA", column=column)
+
+
+def next_launch_visibility_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LVS", column=column)
+
+
+def next_launch_visibility_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="LV", column=column)

@@ -40,6 +40,7 @@ For each active launch deal:
 For each active launch deal:
 
 - build and review dashboard snapshot
+- build and review launch visibility
 - build and review workspace feed
 - build and review action queue where approvals are needed
 
@@ -87,3 +88,5 @@ L1 is acceptable only under the following restrictions:
 If all controls above are in place, the current repository is sufficient for Launch Sprint `L1` as a controlled internal pilot.
 
 If any of these controls are rejected, launch should pause for a mini-gap closure step.
+
+The current mini-gap closure step adds a launch-support helper for visibility and attention aggregation without reopening deferred canonical runtime slots.

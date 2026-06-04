@@ -183,6 +183,7 @@ Operator duties:
 The following helper contours may be used for pilot operations:
 
 - event log query: `GET /events?deal_id=...`
+- launch visibility: `POST /launch-visibility/build`
 - dashboard snapshots: `POST /dashboards/build`
 - workspace feed: `POST /workspace-feed/build`
 - action queue: `POST /action-queue/build`, `POST /action-queue/approve`

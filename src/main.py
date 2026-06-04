@@ -43,6 +43,7 @@ from src.modules.integrated_risk_memo.router import router as integrated_risk_me
 from src.modules.kpi_learning.router import router as kpi_learning_router
 from src.modules.knowledge_assets.router import router as knowledge_assets_router
 from src.modules.learning_automation.router import router as learning_automation_router
+from src.modules.launch_visibility.router import router as launch_visibility_router
 from src.modules.logistics_tracking.router import router as logistics_tracking_router
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.postmortems.router import router as postmortems_router
@@ -141,6 +142,7 @@ app.include_router(deal_closure_reports_router)
 app.include_router(postmortems_router)
 app.include_router(supplier_ratings_router)
 app.include_router(knowledge_assets_router)
+app.include_router(launch_visibility_router)
 app.include_router(financing_strategy_router)
 app.include_router(finance_memo_router)
 app.include_router(contract_risks_router)

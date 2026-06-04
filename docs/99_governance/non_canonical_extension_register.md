@@ -49,6 +49,7 @@ Two classes exist:
 | Vendor Connector Profiles | `M-060` | Vendor-facing projection over connectors | Internal connector layer |
 | Operator Action Console Backbone | `M-061` | Action-oriented operator snapshot | Internal operator UX layer |
 | External Execution Gateway Ledger | `M-062` | Formal external execution bridge | Internal external-execution layer |
+| Pre-L1 Launch Visibility Support Layer | no canonical slot | Minimal pilot-support aggregation for visibility, attention, and owner overview | Internal launch-support helper; does not satisfy canonical `M-052..M-055` |
 
 ## Governance Rule
 

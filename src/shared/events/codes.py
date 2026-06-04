@@ -247,6 +247,9 @@ EVENT_CODES = {
     "knowledge_asset_exception_detected",
     "knowledge_asset_handoff_created",
     "knowledge_asset_failed",
+    "launch_visibility_built",
+    "launch_visibility_item_recorded",
+    "launch_visibility_failed",
 }
 
 DECISION_CODES = {
