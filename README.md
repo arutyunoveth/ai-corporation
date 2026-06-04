@@ -16,6 +16,7 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - [canonical_vs_implemented_mapping.md](/Users/master/Documents/AI-Corporation/docs/99_governance/canonical_vs_implemented_mapping.md)
 - [non_canonical_extension_register.md](/Users/master/Documents/AI-Corporation/docs/99_governance/non_canonical_extension_register.md)
 - [registry_recovery_plan.md](/Users/master/Documents/AI-Corporation/docs/99_governance/registry_recovery_plan.md)
+- [Registry_Reconciliation_R6.md](/Users/master/Documents/AI-Corporation/docs/99_governance/Registry_Reconciliation_R6.md)
 - [implementation_summary_recovery_sprint_r1.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r1.md)
 - [implementation_summary_recovery_sprint_r2.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r2.md)
 - [implementation_summary_recovery_sprint_r3.md](/Users/master/Documents/AI-Corporation/docs/00_architecture/implementation_summary_recovery_sprint_r3.md)
@@ -54,11 +55,16 @@ The repository now includes the reconciliation layer plus Recovery Sprints R1, R
 - `M-049`
 - `M-050`
 
-These canonical slots exist in the locked registry and in the original recovery plan, but Recovery Sprint R5 leaves them intentionally deferred because this phase explicitly forbids AI/LLM integration.
+These canonical slots exist in the locked registry and in the original recovery plan, but remain intentionally deferred because this phase explicitly forbids AI/LLM integration.
 
-### Canonical Modules With Registry Mismatch
+### Reconciled Non-Runtime Canonical Slots
 
-- `M-052`, `M-053`, `M-054`, `M-055`
+- `M-052` Notification Layer -> `PLATFORM_ONLY`
+- `M-053` Red Flag Registry -> `GOVERNANCE_ONLY`
+- `M-054` Master Dashboard -> `PLATFORM_ONLY`
+- `M-055` SaaS Productization Tracker -> `GOVERNANCE_ONLY`
+
+These locked-registry slots are now reconciled explicitly. They do not require standalone runtime endpoints/models before Launch Sprint `L1`.
 
 ### Non-Canonical / Internal Extensions
 
@@ -72,7 +78,7 @@ These canonical slots exist in the locked registry and in the original recovery 
 
 These extensions remain useful, but they are not part of the locked canonical business registry.
 
-### Recovery R5 Notes
+### Recovery R6 Notes
 
 - Helper/internal compatibility contours still present:
   - `incidents`
@@ -91,8 +97,9 @@ These extensions remain useful, but they are not part of the locked canonical bu
   - `SAS` -> canonical `submission_archive_set_id`, helper `shipping_acceptance_set_id`
   - `SCS` -> helper `supplier_communication_set_id`, canonical `supplier_contract_set_id`
   - `ACS` -> canonical `acceptance_control_set_id`, non-canonical `action_console_set_id`
-- Recovery Sprint `R5` intentionally defers AI/LLM, prompt, agent, and external platform execution work.
-- Before Launch Sprint `L1`, the repo still needs an explicit decision on reserved `M-049/M-050` and later platform reconciliation for `M-052..M-055`.
+- Registry reconciliation is now complete for `M-052..M-055`; no unresolved locked-registry mismatches remain.
+- AI/LLM, prompt, agent, and external platform execution work remain intentionally deferred.
+- Before Launch Sprint `L1`, the remaining governance gate is to keep reserved `M-049/M-050` closed until a dedicated post-launch AI/runtime phase is approved.
 
 ## Current Scope
 

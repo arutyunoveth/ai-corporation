@@ -30,13 +30,13 @@ Two classes exist:
 | Incident & Escalation Desk | historical `M-045` runtime contour | Useful operational incident handling | Helper under canonical `M-040` |
 | Deal Closure & Archive | historical `M-046` runtime contour | Useful closure state and archive snapshot | Helper under canonical `M-045` and closure/archive support |
 | KPI & Learning Loop | historical `M-047` runtime contour | Useful KPI and retrospective signals | Helper under canonical `M-046`, `M-047`, `M-048` |
-| Operational Dashboard Backbone | historical `M-048` runtime contour | Useful persisted dashboard snapshot layer | Helper under canonical `M-048` today, later `M-054` |
+| Operational Dashboard Backbone | historical `M-048` runtime contour | Useful persisted dashboard snapshot layer | Helper under canonical `M-048`; supporting contour for platform-only `M-054` |
 | Archive Export & Handover | historical `M-049` runtime contour | Useful export artifact layer | Helper under canonical `M-048`; does not satisfy canonical `M-049` |
 | Learning Automation Engine | historical `M-050` runtime contour | Useful recommendation layer | Helper under canonical `M-048` / later platform work; does not satisfy canonical `M-050` |
-| Optimization Recommendation Engine | historical `M-052` runtime contour | Useful operational recommendation engine | Helper under later platform/governance phase |
-| Operator Copilot Feed | historical `M-053` runtime contour | Useful operator UX feed | Internal UI-support contour |
-| Connector Registry & Sync Backbone | historical `M-054` runtime contour | Useful integration inventory and sync layer | Platform helper under later `M-055` reconciliation |
-| Operator Workspace Feed API | historical `M-055` runtime contour | Useful operator-facing workspace projection | Internal platform/UI layer |
+| Optimization Recommendation Engine | historical `M-052` runtime contour | Useful operational recommendation engine | Internal helper; does not satisfy platform-only canonical `M-052` |
+| Operator Copilot Feed | historical `M-053` runtime contour | Useful operator UX feed | Internal UI-support contour; does not satisfy governance-only canonical `M-053` |
+| Connector Registry & Sync Backbone | historical `M-054` runtime contour | Useful integration inventory and sync layer | Internal platform helper; does not satisfy canonical `M-054` or governance-only `M-055` |
+| Operator Workspace Feed API | historical `M-055` runtime contour | Useful operator-facing workspace projection | Internal platform/UI layer; does not satisfy governance-only canonical `M-055` |
 
 ## B. Extra Non-Canonical IDs Outside the Lock
 

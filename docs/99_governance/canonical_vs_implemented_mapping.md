@@ -4,7 +4,8 @@
 
 - `EXACT` — implemented close to canonical meaning and slot.
 - `RESERVED` — canonical slot exists in the locked plan, but implementation is intentionally deferred.
-- `MISMATCH` — the canonical ID is currently occupied by a different implemented concept.
+- `PLATFORM_ONLY` — canonical slot is real, but its pre-launch role is platform/support and does not require a standalone runtime module now.
+- `GOVERNANCE_ONLY` — canonical slot is real, but its pre-launch role is governance/program control and does not require a standalone runtime module now.
 
 ## Canonical Coverage Table
 
@@ -61,10 +62,10 @@
 | M-049 | Agent Registry | Canonical slot exists, but current repo only has helper `archive_export` historically occupying the slot | RESERVED | Keep reserved until post-recovery AI/runtime phase |
 | M-050 | Prompt / Schema Library | Canonical slot exists, but current repo only has helper `learning_automation` historically occupying the slot | RESERVED | Keep reserved until post-recovery AI/runtime phase |
 | M-051 | Workflow Orchestrator | Implemented as workflow orchestration backbone | EXACT | Keep |
-| M-052 | Notification Layer | Current `M-052` is optimization recommendation engine | MISMATCH | Recover canonical notification layer in later platform phase |
-| M-053 | Red Flag Registry | Current `M-053` is operator copilot feed | MISMATCH | Recover canonical red flag registry in later platform phase |
-| M-054 | Master Dashboard | Current `M-054` is connector registry and sync backbone | MISMATCH | Recover canonical master dashboard in later platform phase |
-| M-055 | SaaS Productization Tracker | Current `M-055` is operator workspace feed API | MISMATCH | Recover canonical SaaS productization tracker in later platform phase |
+| M-052 | Notification Layer | No standalone canonical runtime module; historical `optimization` remains helper drift and signal delivery stays under event/workflow/operator support contours | PLATFORM_ONLY | Keep as explicit post-launch platform slot; do not add fake pre-launch runtime module |
+| M-053 | Red Flag Registry | No standalone canonical runtime module; red-flag semantics already persist across screening/risk/incident/payment/claim artifacts and historical `copilot_feed` remains helper drift | GOVERNANCE_ONLY | Keep as governance layer over existing canonical flags; avoid duplicate registry tables |
+| M-054 | Master Dashboard | No standalone canonical runtime module; helper `dashboard_snapshots` and workspace projections remain support contours and historical `connector_registry` does not own this slot | PLATFORM_ONLY | Keep as owner/platform surface; revisit only as a later platform view layer |
+| M-055 | SaaS Productization Tracker | No standalone canonical runtime module; productization/connectors/operator-support helpers remain non-canonical and historical `workspace_feed` does not own this slot | GOVERNANCE_ONLY | Keep as launch/program governance slot; revisit only after Launch `L1` |
 
 ## Coverage Summary
 
@@ -72,11 +73,12 @@
 |---|---:|---|
 | EXACT | 49 | M-001..M-048, M-051 |
 | RESERVED | 2 | M-049, M-050 |
-| MISMATCH | 4 | M-052..M-055 |
+| PLATFORM_ONLY | 2 | M-052, M-054 |
+| GOVERNANCE_ONLY | 2 | M-053, M-055 |
 
 ## Key Findings
 
-1. The canonical business-company skeleton is now recovered exactly through `M-048`, plus canonical `M-051`.
-2. `M-049` and `M-050` do exist in the original locked registry. Numbering does not skip; these slots are explicitly reserved for post-recovery AI/runtime work.
-3. Remaining unreconciled drift is now concentrated in later platform/governance slots `M-052..M-055`.
-4. Recovery Sprint `R5` intentionally does not introduce AI, LLM, prompt, agent, autonomous-decision, or external-platform execution logic.
+1. The canonical business-company skeleton is recovered exactly through `M-048`, plus canonical `M-051`.
+2. `M-049` and `M-050` do exist in the original locked registry. Numbering does not skip; these slots remain explicitly reserved for post-recovery AI/runtime work.
+3. `M-052..M-055` are no longer unresolved mismatches; they are now explicitly classified as non-runtime platform/governance slots.
+4. Recovery Sprint `R6` intentionally does not introduce AI, LLM, prompt, agent, autonomous-decision, or external-platform execution logic.
