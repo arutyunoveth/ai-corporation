@@ -131,8 +131,9 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Controlled Pilot L1 is now formally staged under a locked master plan and S1 setup package.
 - Controlled Pilot L1 Deal #1 has now been executed with explicit review output.
 - Controlled Pilot L1 Deal #2 has now been executed as a confirmation wave.
-- Current phase gate: `Controlled Pilot L1 confirmation wave completed`.
-- Current recommendation inside the pilot wave: `Proceed to L1-S4 final review`.
+- Controlled Pilot L1 block completed.
+- Final phase decision: `GO with restrictions`.
+- Recommended next step: `broader internal usage under the same controlled restrictions`.
 
 ## Current Scope
 

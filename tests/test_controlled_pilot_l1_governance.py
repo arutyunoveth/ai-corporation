@@ -43,7 +43,7 @@ def test_readme_reflects_current_controlled_pilot_phase_gate():
     assert "Controlled Pilot L1" in readme_text
     assert "operator-assisted" in charter_text
     assert "manual-control" in sprint_text
-    assert "Controlled Pilot L1 confirmation wave completed" in readme_text
+    assert "Controlled Pilot L1 block completed" in readme_text
 
 
 def test_s2_pilot_deal_one_deliverables_exist():
@@ -66,6 +66,16 @@ def test_s3_confirmation_wave_deliverables_exist():
         assert path.exists(), f"Missing S3 deliverable: {path.name}"
 
 
+def test_s4_exit_deliverables_exist():
+    required_docs = [
+        LAUNCH_DIR / "Controlled_Pilot_L1_Final_Review.md",
+        LAUNCH_DIR / "Controlled_Pilot_L1_Exit_Decision.md",
+        LAUNCH_DIR / "Controlled_Pilot_L1_Post_Pilot_Recommendations.md",
+    ]
+    for path in required_docs:
+        assert path.exists(), f"Missing S4 deliverable: {path.name}"
+
+
 def test_reserved_and_deferred_slots_remain_honest_in_controlled_pilot_s1():
     readme_text = _read(REPO_ROOT / "README.md")
     master_plan_text = _read(LAUNCH_DIR / "Controlled_Pilot_L1_Master_Plan.md")
@@ -83,7 +93,7 @@ def test_reserved_and_deferred_slots_remain_honest_in_controlled_pilot_s1():
 
     assert "opening `M-049` / `M-050`" in master_plan_text
     assert "declaring `M-052..M-055` as fully implemented runtime modules" in master_plan_text
-    assert "Controlled Pilot L1 confirmation wave completed" in readme_text
+    assert "Controlled Pilot L1 block completed" in readme_text
 
 
 def test_controlled_pilot_s1_docs_do_not_claim_autonomous_or_broad_launch():
@@ -92,10 +102,12 @@ def test_controlled_pilot_s1_docs_do_not_claim_autonomous_or_broad_launch():
     selection_text = _read(LAUNCH_DIR / "Controlled_Pilot_L1_Deal_Selection_Criteria.md").lower()
     review_text = _read(LAUNCH_DIR / "Controlled_Pilot_L1_Deal_1_Review_Result.md").lower()
     confirmation_text = _read(LAUNCH_DIR / "Controlled_Pilot_L1_Confirmation_Wave_Analysis.md").lower()
+    exit_text = _read(LAUNCH_DIR / "Controlled_Pilot_L1_Exit_Decision.md").lower()
 
     assert "autonomous" in charter_text
     assert "broad launch" in selection_text
-    assert "controlled pilot l1 confirmation wave completed" in readme_text
+    assert "controlled pilot l1 block completed" in readme_text
     assert "go to deal #2" in review_text
     assert "go with restrictions" in confirmation_text
+    assert "go with restrictions" in exit_text
     assert "pilot launched" not in readme_text
