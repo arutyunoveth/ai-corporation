@@ -5,6 +5,7 @@
 - [ ] Recovery and reconciliation docs are accepted as current source of truth.
 - [ ] Repository sync / integrity report is reviewed.
 - [ ] Dry Run 0 entry criteria are reviewed.
+- [ ] Dry Run 0 scenario package is reviewed.
 - [ ] [Launch_Readiness_Gap_Audit.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_Readiness_Gap_Audit.md) is reviewed.
 - [ ] [Launch_L1_Restrictions.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Restrictions.md) is reviewed.
 - [ ] Operator owners are assigned for each pilot deal.
@@ -41,6 +42,9 @@ For each pilot deal:
 - [ ] control gates document exists and is shared
 - [ ] pilot playbook exists and is shared
 - [ ] deferred module risk assessment exists and is shared
+- [ ] dry-run execution log template exists and is shared
+- [ ] dry-run review template exists and is shared
+- [ ] dry-run success criteria exist and are shared
 
 ## During-Run Checks
 
@@ -62,3 +66,5 @@ For each pilot deal:
 ## Current Integrity Note
 
 Before any real pilot run, the repository must first pass `Dry Run 0` under the existing `L1` restrictions.
+
+Dry Run 0 must be treated as a controlled rehearsal, not as pilot launch execution itself.

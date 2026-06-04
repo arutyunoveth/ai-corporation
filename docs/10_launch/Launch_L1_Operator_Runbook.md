@@ -4,6 +4,8 @@
 
 This runbook explains how to operate a deal through the `L1` pilot in a controlled human-assisted mode.
 
+`Dry Run 0` uses the same flow and the same control gates, but remains a rehearsal rather than a real pilot launch.
+
 Use this runbook together with:
 
 - [Launch_L1_Restrictions.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Restrictions.md)

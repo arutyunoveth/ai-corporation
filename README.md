@@ -50,6 +50,10 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [Pre_L1_Owner_Overview.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Pre_L1_Owner_Overview.md)
 - [Repository_Sync_Integrity_Report.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Repository_Sync_Integrity_Report.md)
 - [Dry_Run_0_Entry_Criteria.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Entry_Criteria.md)
+- [Dry_Run_0_Scenario.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Scenario.md)
+- [Dry_Run_0_Execution_Log_Template.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Execution_Log_Template.md)
+- [Dry_Run_0_Review_Template.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Review_Template.md)
+- [Dry_Run_0_Success_Criteria.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Success_Criteria.md)
 - [Repository_Public_State_Checklist.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Repository_Public_State_Checklist.md)
 
 ## Governance Status
@@ -182,6 +186,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Business IDs are generated in application code with DB uniqueness guarantees and retry-friendly formatting.
 - AI/LLM, prompt, agent, and external platform execution work are intentionally deferred until after recovery review and Launch Sprint `L1`.
 - Public repository state is now synchronized for `Dry Run 0` entry under existing `L1` restrictions.
+- The repository now also includes a full Dry Run 0 package: scenario, execution log template, review template, and success criteria.
 - The list below is an implementation inventory and includes both canonical-business refs and internal-extension refs currently present in code:
   - `DL-YYYY-NNNNNN`
   - `CUS-YYYY-NNNNNN`

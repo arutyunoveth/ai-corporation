@@ -6,6 +6,8 @@ In the current repository phase, this checklist supports `Dry Run 0` entry first
 
 ## Go / No-Go Checks
 
+- [ ] Dry Run 0 has been executed and reviewed.
+- [ ] Dry Run 0 review recommends `GO to Controlled Pilot L1` or only small accepted follow-up debt.
 - [ ] Full recovery and registry reconciliation remain accepted in governance docs.
 - [ ] `M-049` and `M-050` are still explicitly out of scope for L1.
 - [ ] `M-052..M-055` are still documented as deferred non-runtime slots, not misrepresented as complete runtime modules.
@@ -29,5 +31,6 @@ In the current repository phase, this checklist supports `Dry Run 0` entry first
 
 ## Final Decision Rule
 
+- If Dry Run 0 is incomplete -> `NO-GO`
 - If all Go checks pass and no No-Go condition is true -> `GO with restrictions`
 - If any No-Go condition is true -> `NO-GO`

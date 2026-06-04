@@ -30,6 +30,7 @@ It is not yet the real pilot.
 - full `pytest` suite succeeds
 - required launch docs exist
 - required pre-L1 visibility docs exist
+- required dry-run package docs exist
 
 ### Operational Controls
 
@@ -59,3 +60,4 @@ It is not yet the real pilot.
 2. visibility helpers are sufficient for manual control
 3. no public-state or governance contradiction is discovered
 4. no hidden dependency on reserved/deferred runtime is discovered
+5. the dry-run review explicitly recommends either direct `L1` transition or a scoped blocker-fix step

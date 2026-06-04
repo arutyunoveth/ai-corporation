@@ -6,6 +6,8 @@ This table defines mandatory human-control gates for the `L1` pilot.
 
 No gate may be bypassed by helper contours, workflow traces, or recommendation outputs.
 
+The same gates must be exercised during `Dry Run 0`.
+
 ## Control Gates
 
 | Gate | When it occurs | Operator must review | Primary runtime artifacts | Stop condition |
