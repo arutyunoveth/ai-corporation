@@ -39,6 +39,11 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [Launch_L1_Minimum_Baseline.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Minimum_Baseline.md)
 - [Deferred_Modules_Risk_Assessment.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Deferred_Modules_Risk_Assessment.md)
 - [Launch_L1_Go_NoGo_Checklist.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Go_NoGo_Checklist.md)
+- [Launch_L1_Restrictions.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Restrictions.md)
+- [Launch_L1_Operator_Runbook.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Operator_Runbook.md)
+- [Launch_L1_Execution_Checklist.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Execution_Checklist.md)
+- [Launch_L1_Pilot_Playbook.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Pilot_Playbook.md)
+- [Launch_L1_Control_Gates.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Launch_L1_Control_Gates.md)
 
 ## Governance Status
 
@@ -107,6 +112,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - AI/LLM, prompt, agent, and external platform execution work remain intentionally deferred.
 - Before Launch Sprint `L1`, the remaining governance gate is to keep reserved `M-049/M-050` closed until a dedicated post-launch AI/runtime phase is approved.
 - Launch readiness is audited separately from recovery completion; the current decision is `GO with restrictions` for a controlled operator-assisted pilot, not for unattended or autonomous launch.
+- Launch Sprint `L1` is therefore allowed only as a controlled pilot with a runbook, checklist, pilot playbook, and mandatory human control gates.
 
 ## Current Scope
 
