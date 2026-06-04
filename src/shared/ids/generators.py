@@ -452,3 +452,27 @@ def next_execution_ledger_set_id(session: Session, column: ColumnElement[str]) -
 
 def next_execution_ledger_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="EL", column=column)
+
+
+def next_vendor_connector_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="VCS", column=column)
+
+
+def next_vendor_connector_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="VC", column=column)
+
+
+def next_action_console_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ACS", column=column)
+
+
+def next_action_console_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="AC", column=column)
+
+
+def next_external_execution_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="XES", column=column)
+
+
+def next_external_execution_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="XE", column=column)

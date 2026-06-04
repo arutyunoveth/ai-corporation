@@ -170,6 +170,15 @@ EVENT_CODES = {
     "execution_ledger_started",
     "execution_ledger_succeeded",
     "execution_ledger_failed",
+    "vendor_connector_profile_built",
+    "vendor_connector_profile_failed",
+    "action_console_built",
+    "action_console_item_recorded",
+    "action_console_failed",
+    "external_execution_built",
+    "external_execution_started",
+    "external_execution_succeeded",
+    "external_execution_failed",
 }
 
 DECISION_CODES = {

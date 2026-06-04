@@ -6,7 +6,9 @@ from src.modules.copilot_feed.models import CopilotFeedItem, CopilotFeedRecord, 
 from src.modules.connector_registry.models import ConnectorRegistryRecord, ConnectorRegistrySet
 from src.modules.deal_registry.models import Deal
 from src.modules.execution_command.models import ExecutionCommandSet
+from src.modules.execution_ledger.models import ExecutionLedgerRecord, ExecutionLedgerSet, ExecutionResultRecord
 from src.modules.optimization.models import OptimizationRecommendationRecord, OptimizationRecommendationSet
+from src.modules.operator_sessions.models import OperatorSessionItem, OperatorSessionRecord, OperatorSessionSet
 from src.modules.workflow_runs.models import WorkflowRunRecord, WorkflowRunSet, WorkflowStepRecord
 from src.modules.workspace_feed.models import WorkspaceFeedItem, WorkspaceFeedRecord, WorkspaceFeedSet
 from src.shared.enums import OptimizationScopeType, WorkflowScopeType
@@ -237,3 +239,67 @@ def latest_action_queue_context(
         )
         result.append((record, approvals))
     return queue_set, result
+
+
+def latest_operator_session_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[OperatorSessionSet | None, OperatorSessionRecord | None, list[OperatorSessionItem]]:
+    session_set = session.scalar(
+        select(OperatorSessionSet)
+        .where(OperatorSessionSet.scope_type == scope_type, OperatorSessionSet.scope_ref == scope_ref)
+        .order_by(OperatorSessionSet.created_at.desc(), OperatorSessionSet.id.desc())
+        .limit(1)
+    )
+    if not session_set:
+        return None, None, []
+    session_record = session.scalar(
+        select(OperatorSessionRecord)
+        .where(OperatorSessionRecord.operator_session_set_id == session_set.operator_session_set_id)
+        .order_by(OperatorSessionRecord.created_at.desc(), OperatorSessionRecord.id.desc())
+        .limit(1)
+    )
+    if not session_record:
+        return session_set, None, []
+    items = list(
+        session.scalars(
+            select(OperatorSessionItem)
+            .where(OperatorSessionItem.operator_session_id == session_record.operator_session_id)
+            .order_by(OperatorSessionItem.created_at.asc(), OperatorSessionItem.id.asc())
+        )
+    )
+    return session_set, session_record, items
+
+
+def latest_execution_ledger_context(
+    session: Session,
+    scope_type: str,
+    scope_ref: str,
+) -> tuple[ExecutionLedgerSet | None, list[tuple[ExecutionLedgerRecord, list[ExecutionResultRecord]]]]:
+    ledger_set = session.scalar(
+        select(ExecutionLedgerSet)
+        .where(ExecutionLedgerSet.scope_type == scope_type, ExecutionLedgerSet.scope_ref == scope_ref)
+        .order_by(ExecutionLedgerSet.created_at.desc(), ExecutionLedgerSet.id.desc())
+        .limit(1)
+    )
+    if not ledger_set:
+        return None, []
+    records = list(
+        session.scalars(
+            select(ExecutionLedgerRecord)
+            .where(ExecutionLedgerRecord.execution_ledger_set_id == ledger_set.execution_ledger_set_id)
+            .order_by(ExecutionLedgerRecord.created_at.asc(), ExecutionLedgerRecord.id.asc())
+        )
+    )
+    result: list[tuple[ExecutionLedgerRecord, list[ExecutionResultRecord]]] = []
+    for record in records:
+        results = list(
+            session.scalars(
+                select(ExecutionResultRecord)
+                .where(ExecutionResultRecord.execution_ledger_id == record.execution_ledger_id)
+                .order_by(ExecutionResultRecord.created_at.asc(), ExecutionResultRecord.id.asc())
+            )
+        )
+        result.append((record, results))
+    return ledger_set, result

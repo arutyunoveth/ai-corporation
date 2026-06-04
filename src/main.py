@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from src.modules.action_queue.router import router as action_queue_router
+from src.modules.action_console.router import router as action_console_router
 from src.modules.archive_export.router import router as archive_export_router
 from src.modules.connector_registry.router import router as connector_registry_router
 from src.modules.copilot_feed.router import router as copilot_feed_router
@@ -23,6 +24,7 @@ from src.modules.document_requirements.router import router as document_requirem
 from src.modules.event_log.router import router as event_log_router
 from src.modules.execution_command.router import router as execution_command_router
 from src.modules.execution_ledger.router import router as execution_ledger_router
+from src.modules.external_execution.router import router as external_execution_router
 from src.modules.finance_memo.router import router as finance_memo_router
 from src.modules.financing_strategy.router import router as financing_strategy_router
 from src.modules.initial_tech_risks.router import router as initial_tech_risks_router
@@ -53,6 +55,7 @@ from src.modules.supplier_verification.router import router as supplier_verifica
 from src.modules.tender_screening.router import router as tender_screening_router
 from src.modules.tender_intake.router import router as tender_intake_router
 from src.modules.tender_summary.router import router as tender_summary_router
+from src.modules.vendor_connectors.router import router as vendor_connectors_router
 from src.modules.workflow_runs.router import router as workflow_runs_router
 from src.modules.workspace_feed.router import router as workspace_feed_router
 from src.shared.api.errors import register_exception_handlers
@@ -72,9 +75,11 @@ app.include_router(copilot_feed_router)
 app.include_router(connector_registry_router)
 app.include_router(workspace_feed_router)
 app.include_router(action_queue_router)
+app.include_router(action_console_router)
 app.include_router(integration_tasks_router)
 app.include_router(operator_sessions_router)
 app.include_router(execution_ledger_router)
+app.include_router(external_execution_router)
 app.include_router(deal_closure_router)
 app.include_router(delivery_launch_router)
 app.include_router(delivery_milestones_router)
@@ -85,6 +90,7 @@ app.include_router(execution_command_router)
 app.include_router(tender_intake_router)
 app.include_router(document_ingestion_router)
 app.include_router(tender_summary_router)
+app.include_router(vendor_connectors_router)
 app.include_router(tender_screening_router)
 app.include_router(priority_scoring_router)
 app.include_router(compliance_matrix_router)

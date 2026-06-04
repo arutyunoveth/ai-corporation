@@ -153,6 +153,17 @@ from .sprint8b import (
     OperatorSessionItemType,
     OperatorSessionStatus,
 )
+from .sprint9a import (
+    ActionConsoleItemType,
+    ActionConsolePriority,
+    ActionConsoleStatus,
+    CapabilityStatus,
+    ExternalExecutionStatus,
+    ExternalGatewayStatus,
+    GatewayActionType,
+    VendorProfileStatus,
+    VendorStatus,
+)
 
 __all__ = [
     "ArtifactType",
@@ -280,4 +291,13 @@ __all__ = [
     "OperatorSessionItemStatus",
     "ExecutionLedgerStatus",
     "ExecutionStatus",
+    "VendorProfileStatus",
+    "VendorStatus",
+    "CapabilityStatus",
+    "ActionConsoleStatus",
+    "ActionConsoleItemType",
+    "ActionConsolePriority",
+    "ExternalGatewayStatus",
+    "GatewayActionType",
+    "ExternalExecutionStatus",
 ]

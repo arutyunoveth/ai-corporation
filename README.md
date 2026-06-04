@@ -1,6 +1,6 @@
 # ai-corporation
 
-Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, Sprint 6B closure / incident / KPI foundation, Sprint 7A operational intelligence foundation, Sprint 7B orchestration / optimization foundation, Sprint 8A connectors / workspace / controlled-action foundation, and Sprint 8B richer integrations / operator session / gated execution foundation for the AI Corporation tender business platform. The current repository implements:
+Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation, Sprint 3A supplier-side foundation, Sprint 3B supplier quality foundation, Sprint 4A economics foundation, Sprint 4B risk + approval foundation, Sprint 5A bid-prep foundation, Sprint 5B submission foundation, Sprint 6A execution and delivery foundation, Sprint 6B closure / incident / KPI foundation, Sprint 7A operational intelligence foundation, Sprint 7B orchestration / optimization foundation, Sprint 8A connectors / workspace / controlled-action foundation, Sprint 8B richer integrations / operator session / gated execution foundation, and Sprint 9A vendor execution gateway foundation for the AI Corporation tender business platform. The current repository implements:
 
 - `M-001` Deal Registry
 - `M-002` Status Model Engine
@@ -57,6 +57,9 @@ Sprint 1 foundation, Sprint 2A intake foundation, Sprint 2B analysis foundation,
 - `M-057` Integration Task Adapter Layer
 - `M-058` Operator Session Workspace
 - `M-059` Gated Action Execution Ledger
+- `M-060` Vendor Connector Profiles
+- `M-061` Operator Action Console Backbone
+- `M-062` External Execution Gateway Ledger
 
 The implementation follows the source-of-truth documents committed under `docs/`.
 
@@ -82,6 +85,7 @@ The implementation follows the source-of-truth documents committed under `docs/`
 - persisted workflow runs, optimization recommendations, and operator copilot feeds
 - persisted connector registries, connector sync runs, workspace feeds, and controlled action queues
 - persisted integration tasks, operator sessions, and gated execution ledger runs/results
+- persisted vendor connector profiles, operator action console snapshots, and external execution gateway calls/results
 - FastAPI endpoints, Alembic migrations, seed data, and integration tests
 
 ## Implementation Summary
@@ -198,6 +202,12 @@ The implementation follows the source-of-truth documents committed under `docs/`
   - `OS-YYYY-NNNNNN`
   - `ELS-YYYY-NNNNNN`
   - `EL-YYYY-NNNNNN`
+  - `VCS-YYYY-NNNNNN`
+  - `VC-YYYY-NNNNNN`
+  - `ACS-YYYY-NNNNNN`
+  - `AC-YYYY-NNNNNN`
+  - `XES-YYYY-NNNNNN`
+  - `XE-YYYY-NNNNNN`
 
 ## Repository Layout
 
@@ -487,6 +497,19 @@ pytest
 - `GET /execution-ledger/{execution_ledger_set_id}`
 - `GET /execution-ledger`
 - `GET /execution-ledger/records/{execution_ledger_id}`
+- `POST /vendor-connectors/build`
+- `GET /vendor-connectors/{vendor_connector_set_id}`
+- `GET /vendor-connectors`
+- `GET /vendor-connectors/records/{vendor_connector_id}`
+- `POST /action-console/build`
+- `GET /action-console/{action_console_set_id}`
+- `GET /action-console`
+- `GET /action-console/records/{action_console_id}`
+- `POST /external-execution/build`
+- `POST /external-execution/start`
+- `GET /external-execution/{external_execution_set_id}`
+- `GET /external-execution`
+- `GET /external-execution/records/{external_execution_id}`
 
 ## Source Of Truth
 
