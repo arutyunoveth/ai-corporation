@@ -129,7 +129,9 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - The immediate next repository gate is no longer Dry Run 0.
 - The current recommendation is `GO with minor fixes before L1`, not direct uncontrolled pilot execution.
 - Controlled Pilot L1 is now formally staged under a locked master plan and S1 setup package.
-- Current phase gate: `repository ready for Controlled Pilot L1 Deal #1 setup`.
+- Controlled Pilot L1 Deal #1 has now been executed with explicit review output.
+- Current phase gate: `Controlled Pilot L1 Deal #1 completed with explicit review decision`.
+- Current recommendation inside the pilot wave: `GO to deal #2`.
 
 ## Current Scope
 
