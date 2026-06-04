@@ -2,7 +2,7 @@
 
 ## Pilot Scope
 
-This playbook becomes operational only after `Dry Run 0` is completed and reviewed without unresolved blockers.
+This playbook becomes operational only after `Dry Run 0` is completed, reviewed, and the agreed minor pre-`L1` follow-ups are closed or explicitly accepted.
 
 Launch Sprint `L1` is limited to:
 

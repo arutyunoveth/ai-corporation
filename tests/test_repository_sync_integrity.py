@@ -31,14 +31,14 @@ def test_repository_sync_integrity_docs_exist():
         assert path.exists(), f"Missing integrity/launch doc: {path.name}"
 
 
-def test_readme_and_integrity_docs_state_dry_run_zero_truth():
+def test_repository_sync_docs_remain_consistent_with_post_dry_run_state():
     readme_text = _read(REPO_ROOT / "README.md")
     report_text = _read(LAUNCH_DIR / "Repository_Sync_Integrity_Report.md")
     criteria_text = _read(LAUNCH_DIR / "Dry_Run_0_Entry_Criteria.md")
 
-    assert "The immediate next repository gate is `Dry Run 0`" in readme_text
     assert "`repository ready for Dry Run 0`" in report_text
     assert "`Dry Run 0` is the next step" in criteria_text
+    assert "Dry Run 0 has now been executed and reviewed." in readme_text
 
 
 def test_reserved_and_deferred_slots_remain_honestly_classified():

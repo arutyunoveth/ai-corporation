@@ -22,16 +22,17 @@ def test_dry_run_zero_docs_exist():
         assert path.exists(), f"Missing Dry Run 0 doc: {path.name}"
 
 
-def test_readme_and_launch_docs_state_next_gate_is_dry_run_zero():
+def test_dry_run_zero_package_remains_honest_after_execution():
     readme_text = _read(REPO_ROOT / "README.md")
     criteria_text = _read(LAUNCH_DIR / "Dry_Run_0_Entry_Criteria.md")
     scenario_text = _read(LAUNCH_DIR / "Dry_Run_0_Scenario.md")
     restrictions_text = _read(LAUNCH_DIR / "Launch_L1_Restrictions.md")
 
-    assert "The immediate next repository gate is `Dry Run 0`" in readme_text
     assert "`Dry Run 0` is the next step" in criteria_text
     assert "It is not a real pilot launch." in scenario_text
-    assert "The immediate next execution gate before any real pilot remains `Dry Run 0`." in restrictions_text
+    assert "Dry Run 0 has been completed" in restrictions_text
+    assert "The immediate next operational gate is the explicit Controlled Pilot `L1` go/no-go decision" in restrictions_text
+    assert "Dry Run 0 has now been executed and reviewed." in readme_text
 
 
 def test_dry_run_zero_docs_do_not_claim_autonomous_behavior_or_pilot_already_launched():

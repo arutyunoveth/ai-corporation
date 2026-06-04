@@ -2,12 +2,13 @@
 
 Use this checklist before approving Launch Sprint `L1`.
 
-In the current repository phase, this checklist supports `Dry Run 0` entry first, then real pilot approval only after successful dry-run review.
+In the current repository phase, Dry Run 0 has been executed and reviewed, so this checklist now supports the post-dry-run `L1` approval decision.
 
 ## Go / No-Go Checks
 
 - [ ] Dry Run 0 has been executed and reviewed.
 - [ ] Dry Run 0 review recommends `GO to Controlled Pilot L1` or only small accepted follow-up debt.
+- [ ] Any minor dry-run follow-ups are either closed or explicitly accepted by the pilot owner.
 - [ ] Full recovery and registry reconciliation remain accepted in governance docs.
 - [ ] `M-049` and `M-050` are still explicitly out of scope for L1.
 - [ ] `M-052..M-055` are still documented as deferred non-runtime slots, not misrepresented as complete runtime modules.
@@ -32,5 +33,6 @@ In the current repository phase, this checklist supports `Dry Run 0` entry first
 ## Final Decision Rule
 
 - If Dry Run 0 is incomplete -> `NO-GO`
-- If all Go checks pass and no No-Go condition is true -> `GO with restrictions`
+- If Dry Run 0 review still has unresolved blockers -> `NO-GO`
+- If all Go checks pass, no No-Go condition is true, and the minor follow-up list is accepted -> `GO with restrictions`
 - If any No-Go condition is true -> `NO-GO`

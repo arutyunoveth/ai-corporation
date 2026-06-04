@@ -65,6 +65,6 @@ For each pilot deal:
 
 ## Current Integrity Note
 
-Before any real pilot run, the repository must first pass `Dry Run 0` under the existing `L1` restrictions.
+Dry Run 0 has already been executed as a controlled rehearsal under the existing `L1` restrictions.
 
-Dry Run 0 must be treated as a controlled rehearsal, not as pilot launch execution itself.
+Before any real pilot run, the repository must satisfy the Dry Run 0 review outcome and close or consciously accept the minor follow-up list.
