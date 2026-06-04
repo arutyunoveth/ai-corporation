@@ -107,13 +107,6 @@ Persist orchestrated workflow runs and actionable next steps across the system.
 - workflow_step_recorded
 - workflow_run_failed
 
-## Acceptance criteria
-1. Workflow run set built for deal or portfolio scope.
-2. Workflow record persisted.
-3. Actionable step records persisted.
-4. Queryable by scope.
-5. Events written to event log.
-
 # 7. M-052 — Optimization Recommendation Engine
 
 ## Назначение
@@ -164,13 +157,6 @@ Generate reusable optimization recommendations from operational history and live
 - optimization_signal_recorded
 - optimization_recommendations_failed
 
-## Acceptance criteria
-1. Optimization recommendation set built for deal/portfolio/process scope.
-2. Recommendation records persisted.
-3. Supporting signals persisted.
-4. Queryable by scope.
-5. Events written to event log.
-
 # 8. M-053 — Operator Copilot Feed
 
 ## Назначение
@@ -220,82 +206,17 @@ Build operator-facing feed of actionable cards from workflow and optimization co
 - copilot_feed_item_recorded
 - copilot_feed_failed
 
-## Acceptance criteria
-1. Copilot feed built from workflow and optimization context.
-2. Feed record persisted.
-3. Feed items persisted.
-4. Queryable by scope.
-5. Events written to event log.
-
 # 9. Общие enums Sprint 7B
-
-## WorkflowScopeType
-- DEAL
-- PIPELINE
-- EXECUTION
-- PORTFOLIO
-
-## WorkflowStatus
-- BUILT
-- ACTIVE
-- COMPLETED
-- FAILED
-- STALE
-
-## WorkflowStepType
-- CHECK
-- BUILD
-- REVIEW
-- FOLLOW_UP
-- ESCALATE
-- CLOSE
-- OTHER
-
-## WorkflowStepStatus
-- PENDING
-- READY
-- IN_PROGRESS
-- DONE
-- BLOCKED
-- SKIPPED
-
-## OptimizationScopeType
-- DEAL
-- PORTFOLIO
-- SUPPLIER
-- PROCESS
-
-## OptimizationStatus
-- BUILT
-- FAILED
-- STALE
-
-## OptimizationRecommendationType
-- CYCLE_TIME
-- MARGIN
-- RISK_REDUCTION
-- SUPPLIER_STRATEGY
-- PROCESS_DISCIPLINE
-- OTHER
-
-## CopilotFeedStatus
-- BUILT
-- FAILED
-- STALE
-
-## CopilotFeedItemType
-- ACTION
-- ALERT
-- RECOMMENDATION
-- REMINDER
-- FOLLOW_UP
-- OTHER
-
-## CopilotPriority
-- LOW
-- MEDIUM
-- HIGH
-- CRITICAL
+- WorkflowScopeType = DEAL, PIPELINE, EXECUTION, PORTFOLIO
+- WorkflowStatus = BUILT, ACTIVE, COMPLETED, FAILED, STALE
+- WorkflowStepType = CHECK, BUILD, REVIEW, FOLLOW_UP, ESCALATE, CLOSE, OTHER
+- WorkflowStepStatus = PENDING, READY, IN_PROGRESS, DONE, BLOCKED, SKIPPED
+- OptimizationScopeType = DEAL, PORTFOLIO, SUPPLIER, PROCESS
+- OptimizationStatus = BUILT, FAILED, STALE
+- OptimizationRecommendationType = CYCLE_TIME, MARGIN, RISK_REDUCTION, SUPPLIER_STRATEGY, PROCESS_DISCIPLINE, OTHER
+- CopilotFeedStatus = BUILT, FAILED, STALE
+- CopilotFeedItemType = ACTION, ALERT, RECOMMENDATION, REMINDER, FOLLOW_UP, OTHER
+- CopilotPriority = LOW, MEDIUM, HIGH, CRITICAL
 
 # 10. Поток Sprint 7B
 active and closed deal context

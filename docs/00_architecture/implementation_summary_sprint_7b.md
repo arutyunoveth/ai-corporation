@@ -87,3 +87,7 @@
 
 ## Next Step
 - Sprint 8 connectors / UX / semi-autonomous control layer using workflow, optimization, and copilot outputs as the operator-facing control surface.
+
+## Source Doc Sync
+- `Sprint_7B_Technical_Spec_v2.md` and `Entity_Catalog_Sprint_7B_v5.md` are semantically equivalent to the implemented Sprint 7B runtime.
+- The latest follow-up iteration only synchronized repo-local source-of-truth formatting and wording; no runtime, migration, endpoint, or test contract changes were required.

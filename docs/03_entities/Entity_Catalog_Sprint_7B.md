@@ -195,7 +195,6 @@ CopilotPriority:
 - CRITICAL
 
 # 9. DTO contracts
-
 BuildWorkflowRunRequest:
 {
   "scope_type": "DEAL",
