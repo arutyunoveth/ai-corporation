@@ -154,7 +154,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Recommended next step: `continue optimized internal usage under the same controlled restrictions while keeping separate runtime planning as an explicit later decision`.
 - Deferred Runtime Planning is now formally staged under a locked master plan and S1 scope/constraints package.
 - M-049/M-050 readiness architecture is now formally documented.
-- Current phase gate: `M-049/M-050 readiness architecture documented`.
+- M-052..M-055 activation boundaries are now formally documented.
+- Current phase gate: `M-052..M-055 activation boundaries documented`.
 
 ## Current Scope
 

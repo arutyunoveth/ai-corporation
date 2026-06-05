@@ -28,7 +28,7 @@ def test_readme_and_docs_state_m049_m050_are_documented_but_not_opened():
     mapping_text = _read(GOVERNANCE_DIR / "canonical_vs_implemented_mapping.md")
 
     assert "M-049/M-050 readiness architecture is now formally documented." in readme_text
-    assert "Current phase gate: `M-049/M-050 readiness architecture documented`." in readme_text
+    assert "M-052..M-055 activation boundaries are now formally documented." in readme_text
     assert "does **not** authorize runtime implementation" in architecture_text
     assert "immediate runtime implementation of `M-049/M-050`" in phasing_text
     assert "| M-049 | Agent Registry |" in mapping_text
