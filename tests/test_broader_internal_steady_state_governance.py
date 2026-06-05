@@ -35,14 +35,14 @@ def test_steady_state_s1_deliverables_exist():
         assert path.exists(), f"Missing S1 steady-state deliverable: {path.name}"
 
 
-def test_readme_reflects_steady_state_cycle_two_gate():
+def test_readme_reflects_steady_state_final_gate():
     readme_text = _read(REPO_ROOT / "README.md")
     charter_text = _read(LAUNCH_DIR / "Steady_State_Usage_Charter.md")
     sprint_text = _read(LAUNCH_DIR / "Broader_Internal_Steady_State_Usage_S1_Steady_State_Setup.md")
 
     assert "Broader Internal Steady-State Usage" in readme_text
-    assert "Steady-State Operational Cycle #2 has now been executed as a load and cadence check." in readme_text
-    assert "Current phase gate: `Proceed to Steady-State S4 final review`." in readme_text
+    assert "Broader Internal Steady-State Usage block completed." in readme_text
+    assert "Final phase decision: `Continue internal steady-state usage`." in readme_text
     assert "operator-assisted" in charter_text
     assert "manual-control" in sprint_text
 
@@ -64,7 +64,7 @@ def test_reserved_and_deferred_slots_remain_honest_in_steady_state_s1():
 
     assert "opening `M-049 / M-050`" in master_plan_text
     assert "declaring `M-052..M-055` as fully implemented runtime modules" in master_plan_text
-    assert "Current phase gate: `Proceed to Steady-State S4 final review`." in readme_text
+    assert "Recommended next step: `continue internal steady-state usage under the same controlled restrictions while keeping future runtime planning explicitly separate`." in readme_text
 
 
 def test_steady_state_s1_docs_do_not_claim_autonomous_or_external_launch():
@@ -74,5 +74,5 @@ def test_steady_state_s1_docs_do_not_claim_autonomous_or_external_launch():
 
     assert "autonomous" in charter_text
     assert "external commercialization" in scope_text
-    assert "proceed to steady-state s4 final review" in readme_text
+    assert "continue internal steady-state usage" in readme_text
     assert "pilot launched" not in readme_text

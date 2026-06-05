@@ -143,7 +143,9 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Broader Internal Steady-State Usage is now formally staged under a locked master plan and S1 setup package.
 - Steady-State Operational Cycle #1 has now been executed with explicit review output.
 - Steady-State Operational Cycle #2 has now been executed as a load and cadence check.
-- Current phase gate: `Proceed to Steady-State S4 final review`.
+- Broader Internal Steady-State Usage block completed.
+- Final phase decision: `Continue internal steady-state usage`.
+- Recommended next step: `continue internal steady-state usage under the same controlled restrictions while keeping future runtime planning explicitly separate`.
 
 ## Current Scope
 

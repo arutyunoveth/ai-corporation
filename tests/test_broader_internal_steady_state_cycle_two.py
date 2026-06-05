@@ -35,6 +35,6 @@ def test_steady_state_cycle_two_docs_exist_and_point_to_s4():
     analysis_text = _read(LAUNCH_DIR / "Steady_State_Load_and_Cadence_Check_Analysis.md")
 
     assert "Steady-State Operational Cycle #2 has now been executed as a load and cadence check." in readme_text
-    assert "Current phase gate: `Proceed to Steady-State S4 final review`." in readme_text
+    assert "Broader Internal Steady-State Usage block completed." in readme_text
     assert "`Proceed to Steady-State S4 final review`" in review_text
     assert "`Steady-State load and cadence check completed`" in analysis_text
