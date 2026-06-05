@@ -35,6 +35,6 @@ def test_broader_internal_usage_stability_docs_exist_and_point_to_s4():
     analysis_text = _read(LAUNCH_DIR / "Broader_Internal_Usage_Stability_Check_Analysis.md")
 
     assert "Broader Internal Usage Wave #2 has now been executed as a stability check." in readme_text
-    assert "Current phase gate: `Proceed to B1-S4 final review`." in readme_text
+    assert "Broader Internal Usage block completed." in readme_text
     assert "`Proceed to B1-S4 final review`" in review_text
     assert "`Broader Internal Usage stability check completed`" in analysis_text
