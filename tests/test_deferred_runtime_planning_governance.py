@@ -34,14 +34,14 @@ def test_deferred_runtime_planning_s1_deliverables_exist():
         assert path.exists(), f"Missing P1-S1 deliverable: {path.name}"
 
 
-def test_readme_reflects_m052_m055_boundaries_gate():
+def test_readme_reflects_deferred_runtime_planning_final_gate():
     readme_text = _read(REPO_ROOT / "README.md")
     charter_text = _read(LAUNCH_DIR / "Deferred_Runtime_Planning_Charter.md")
     sprint_text = _read(LAUNCH_DIR / "Deferred_Runtime_Planning_S1_Scope_Constraints.md")
 
     assert "Deferred Runtime Planning" in readme_text
-    assert "M-052..M-055 activation boundaries are now formally documented." in readme_text
-    assert "Current phase gate: `M-052..M-055 activation boundaries documented`." in readme_text
+    assert "Deferred Runtime Planning block completed." in readme_text
+    assert "Final phase decision: `Open limited runtime design phase`." in readme_text
     assert "no runtime opening" in charter_text
     assert "без opening `M-049/M-050`" in sprint_text
 
@@ -63,7 +63,7 @@ def test_reserved_and_deferred_slots_remain_honest_in_deferred_runtime_planning_
 
     assert "opening `M-049 / M-050` in runtime" in master_plan_text
     assert "declaring `M-052..M-055` fully implemented runtime modules" in master_plan_text
-    assert "Current phase gate: `M-052..M-055 activation boundaries documented`." in readme_text
+    assert "Recommended next step: `open a separate limited runtime design phase with explicit boundaries, without opening runtime implementation yet`." in readme_text
 
 
 def test_deferred_runtime_planning_s1_docs_do_not_claim_runtime_completion():
@@ -73,5 +73,5 @@ def test_deferred_runtime_planning_s1_docs_do_not_claim_runtime_completion():
 
     assert "runtime implementation" in charter_text
     assert "implementing `m-049 agent registry`" in non_goals_text
-    assert "m-052..m-055 activation boundaries are now formally documented" in readme_text
+    assert "open limited runtime design phase" in readme_text
     assert "runtime readiness achieved" not in readme_text

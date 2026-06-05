@@ -28,7 +28,7 @@ def test_readme_and_docs_state_m052_m055_boundaries_but_not_activation():
     mapping_text = _read(GOVERNANCE_DIR / "canonical_vs_implemented_mapping.md")
 
     assert "M-052..M-055 activation boundaries are now formally documented." in readme_text
-    assert "Current phase gate: `M-052..M-055 activation boundaries documented`." in readme_text
+    assert "Deferred Runtime Planning block completed." in readme_text
     assert "remain deferred" in boundaries_text
     assert "not activation" in triggers_text.lower()
     assert "| M-052 | Notification Layer |" in mapping_text
