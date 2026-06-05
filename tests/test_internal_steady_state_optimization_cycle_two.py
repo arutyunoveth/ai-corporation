@@ -35,6 +35,6 @@ def test_optimization_cycle_two_docs_exist_and_point_to_s4():
     analysis_text = _read(LAUNCH_DIR / "Internal_Steady_State_Optimization_Repeatability_Analysis.md")
 
     assert "Optimization Cycle #2 has now been executed as a repeatability check." in readme_text
-    assert "Current phase gate: `Proceed to Optimization S4 final review`." in readme_text
+    assert "Internal Steady-State Optimization block completed." in readme_text
     assert "`Proceed to Optimization S4 final review`" in review_text
     assert "`Optimization repeatability check completed`" in analysis_text

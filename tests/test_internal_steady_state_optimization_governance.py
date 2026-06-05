@@ -34,14 +34,14 @@ def test_optimization_s1_deliverables_exist():
         assert path.exists(), f"Missing O1-S1 deliverable: {path.name}"
 
 
-def test_readme_reflects_optimization_cycle_two_gate():
+def test_readme_reflects_optimization_final_gate():
     readme_text = _read(REPO_ROOT / "README.md")
     charter_text = _read(LAUNCH_DIR / "Internal_Steady_State_Optimization_Charter.md")
     sprint_text = _read(LAUNCH_DIR / "Internal_Steady_State_Optimization_S1_Baseline_Setup.md")
 
     assert "Internal Steady-State Optimization" in readme_text
-    assert "Optimization Cycle #2 has now been executed as a repeatability check." in readme_text
-    assert "Current phase gate: `Proceed to Optimization S4 final review`." in readme_text
+    assert "Internal Steady-State Optimization block completed." in readme_text
+    assert "Final phase decision: `Continue optimized internal usage`." in readme_text
     assert "operator-assisted" in charter_text
     assert "manual-control" in sprint_text
 
@@ -63,7 +63,7 @@ def test_reserved_and_deferred_slots_remain_honest_in_optimization_s1():
 
     assert "opening `M-049 / M-050`" in master_plan_text
     assert "declaring `M-052..M-055` as fully implemented runtime modules" in master_plan_text
-    assert "Current phase gate: `Proceed to Optimization S4 final review`." in readme_text
+    assert "Recommended next step: `continue optimized internal usage under the same controlled restrictions while keeping separate runtime planning as an explicit later decision`." in readme_text
 
 
 def test_optimization_s1_docs_do_not_claim_runtime_opening_or_external_launch():
@@ -73,5 +73,5 @@ def test_optimization_s1_docs_do_not_claim_runtime_opening_or_external_launch():
 
     assert "runtime reopening" in charter_text
     assert "externalization" in scope_text
-    assert "proceed to optimization s4 final review" in readme_text
+    assert "continue optimized internal usage" in readme_text
     assert "pilot launched" not in readme_text

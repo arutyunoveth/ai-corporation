@@ -149,7 +149,9 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Internal Steady-State Optimization is now formally staged under a locked master plan and S1 baseline setup package.
 - Optimization Cycle #1 has now been executed with explicit review output.
 - Optimization Cycle #2 has now been executed as a repeatability check.
-- Current phase gate: `Proceed to Optimization S4 final review`.
+- Internal Steady-State Optimization block completed.
+- Final phase decision: `Continue optimized internal usage`.
+- Recommended next step: `continue optimized internal usage under the same controlled restrictions while keeping separate runtime planning as an explicit later decision`.
 
 ## Current Scope
 
