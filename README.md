@@ -158,6 +158,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Deferred Runtime Planning block completed.
 - Final phase decision: `Open limited runtime design phase`.
 - Recommended next step: `open a separate limited runtime design phase with explicit boundaries, without opening runtime implementation yet`.
+- Limited Runtime Design is now formally staged under a locked master plan and S1 scope/safety package.
+- Current phase status: `repository ready for limited runtime design work`.
 
 ## Current Scope
 
