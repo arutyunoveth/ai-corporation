@@ -146,6 +146,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Broader Internal Steady-State Usage block completed.
 - Final phase decision: `Continue internal steady-state usage`.
 - Recommended next step: `continue internal steady-state usage under the same controlled restrictions while keeping future runtime planning explicitly separate`.
+- Internal Steady-State Optimization is now formally staged under a locked master plan and S1 baseline setup package.
+- Current phase gate: `repository ready for Optimization Cycle #1`.
 
 ## Current Scope
 
