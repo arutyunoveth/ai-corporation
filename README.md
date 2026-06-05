@@ -136,7 +136,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Recommended next step: `broader internal usage under the same controlled restrictions`.
 - Broader Internal Usage is now formally staged under a locked master plan and S1 setup package.
 - Broader Internal Usage Wave #1 has now been executed with explicit review output.
-- Current phase gate: `GO to wave #2`.
+- Broader Internal Usage Wave #2 has now been executed as a stability check.
+- Current phase gate: `Proceed to B1-S4 final review`.
 
 ## Current Scope
 
