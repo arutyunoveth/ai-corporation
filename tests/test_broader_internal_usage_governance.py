@@ -36,13 +36,14 @@ def test_b1_s1_deliverables_exist():
         assert path.exists(), f"Missing B1-S1 deliverable: {path.name}"
 
 
-def test_readme_reflects_broader_internal_usage_wave_one_gate():
+def test_readme_reflects_broader_internal_usage_wave_one_review_gate():
     readme_text = _read(REPO_ROOT / "README.md")
     charter_text = _read(LAUNCH_DIR / "Broader_Internal_Usage_Wave_Charter.md")
     sprint_text = _read(LAUNCH_DIR / "Broader_Internal_Usage_S1_Internal_Usage_Wave_Setup.md")
 
     assert "Broader Internal Usage" in readme_text
-    assert "repository ready for Broader Internal Usage Wave #1" in readme_text
+    assert "Broader Internal Usage Wave #1 has now been executed with explicit review output." in readme_text
+    assert "Current phase gate: `GO to wave #2`." in readme_text
     assert "operator-assisted" in charter_text
     assert "manual-control" in sprint_text
 
@@ -64,7 +65,7 @@ def test_reserved_and_deferred_slots_remain_honest_in_broader_internal_usage_s1(
 
     assert "opening `M-049 / M-050`" in master_plan_text
     assert "declaring `M-052..M-055` as fully implemented runtime modules" in master_plan_text
-    assert "repository ready for Broader Internal Usage Wave #1" in readme_text
+    assert "Current phase gate: `GO to wave #2`." in readme_text
 
 
 def test_broader_internal_usage_s1_docs_do_not_claim_autonomous_or_external_launch():
@@ -75,5 +76,5 @@ def test_broader_internal_usage_s1_docs_do_not_claim_autonomous_or_external_laun
     assert "autonomous" in charter_text
     assert "broad public launch" in charter_text
     assert "external commercialization" in scope_text
-    assert "repository ready for broader internal usage wave #1" in readme_text
+    assert "go to wave #2" in readme_text
     assert "pilot launched" not in readme_text
