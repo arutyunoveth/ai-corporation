@@ -162,6 +162,9 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Current phase status: `repository ready for limited runtime design work`.
 - M-049/M-050 limited runtime design is now formally documented.
 - M-052..M-055 supporting runtime design is now formally documented.
+- Limited Runtime Design block completed.
+- Final phase decision: `Open limited runtime implementation phase`.
+- Recommended next step: `open a separately approved limited runtime implementation phase with explicit boundaries, without broad runtime claims or autonomous positioning`.
 
 ## Current Scope
 
