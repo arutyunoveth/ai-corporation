@@ -37,10 +37,16 @@ class IntakeSourceType(StrEnum):
 
 class RedactionStatus(StrEnum):
     not_required = "not_required"
+    raw_received = "raw_received"
+    redaction_required = "redaction_required"
     pending_redaction = "pending_redaction"
+    redaction_in_progress = "redaction_in_progress"
     redacted = "redacted"
+    redacted_for_internal_use = "redacted_for_internal_use"
+    redacted_for_partner_report = "redacted_for_partner_report"
     blocked_sensitive = "blocked_sensitive"
     needs_review = "needs_review"
+    approved_for_pilot_use = "approved_for_pilot_use"
 
 
 class PartnerWorkspace(APIModel):

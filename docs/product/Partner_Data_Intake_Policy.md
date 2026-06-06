@@ -57,9 +57,26 @@ Every source document or material provided by a partner is represented by an int
 4. Use `synthetic` or `redacted_real` intake modes for any material used in automated runs.
 5. Record data handling notes in the workspace for audit traceability.
 
+## Redaction Workflow
+
+See `Real_Tender_Data_Handling_Policy.md` and `Redaction_Checklist.md` for the full redaction workflow and checklist.
+
+Key redaction helpers:
+- `require_redaction()` — mark a record as needing redaction
+- `start_redaction()` — mark redaction in progress
+- `mark_redacted_for_internal()` — redacted for internal use only
+- `mark_redacted_for_partner()` — redacted and partner-safe
+- `block_sensitive()` — too sensitive, blocked permanently
+- `approve_for_pilot_use()` — cleared for pilot runs
+- `can_use_in_pilot_run()` — checks if a record is safe to use in automated runs
+- `can_appear_in_partner_report()` — checks if a record can be exported
+- `generate_redaction_checklist()` — produces a full audit for all records
+
 ## Enforced Via
 
 - `classify_default_visibility()` — automatic visibility assignment on intake
 - `check_export_readiness()` — gate for partner-facing use
 - `list_partner_visible_artifacts()` — safe listing restricted by actor category
 - `block_restricted_from_export()` — identifies records blocked from export
+- `can_use_in_pilot_run()` — gates pilot run participation
+- `can_appear_in_partner_report()` — gates partner report inclusion

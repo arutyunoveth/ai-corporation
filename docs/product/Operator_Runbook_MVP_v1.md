@@ -38,6 +38,19 @@
    - `POST /commercial-workspace/{deal_id}/actions`
    - allowed terminal state in-repo: `ready_for_human_submission`
 
+## Redaction Workflow
+
+See `Real_Tender_Data_Handling_Policy.md` and `Redaction_Checklist.md` for full rules.
+
+1. Raw materials arrive as `raw_received`.
+2. Mark records needing redaction: `require_redaction()`.
+3. Redact manually, then `mark_redacted_for_internal()` or `mark_redacted_for_partner()`.
+4. If too sensitive: `block_sensitive()`.
+5. Before any pilot run: run `generate_redaction_checklist()`.
+6. Check `can_use_in_pilot_run()` and `can_appear_in_partner_report()` before using records.
+
+Never commit real customer/partner data. Use synthetic or redacted fixtures.
+
 ## Partner Workspace
 
 Every design partner engagement uses a workspace. See `Partner_Data_Intake_Policy.md` for full rules.

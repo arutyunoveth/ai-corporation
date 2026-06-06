@@ -24,5 +24,6 @@
 - [x] confirm that accepted local C1-C6 and CP0 state is published/synced to `origin/main` before external repository review (DP0)
 - [x] add a minimal pilot-facing auth/access boundary before broader customer circulation (DP1)
 - [x] create bounded partner workspace and safe data intake layer (DP2)
+- [x] create safe redaction workflow for real tender materials (DP3)
 - collect first design-partner evidence with real operator/customer feedback before claiming paid-pilot readiness
 - improve customer/export packaging for partner-facing report delivery without opening external execution
