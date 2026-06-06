@@ -19,6 +19,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - The next approved roadmap block is `Commercial MVP v1`.
 - Current product recommendation: build controlled commercial pre-bid analysis and operator tooling with explicit human review.
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
+- Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - No broad autonomy is open.
 - No external execution is open.
 - No procurement platform submission, EDS/signature work, or supplier email automation is implemented.

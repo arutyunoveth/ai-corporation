@@ -7,6 +7,8 @@ from src.shared.types.common import APIModel
 
 class RunCommercialPreBidDemoRequest(APIModel):
     fixture_name: str = Field(default="commercial_mvp_demo", min_length=1)
+    provider: str = Field(default="deterministic", min_length=1)
+    simulate_invalid_output: bool = False
 
 
 class CommercialPreBidDemoResponse(APIModel):

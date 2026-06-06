@@ -13,13 +13,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the deterministic commercial pre-bid demo.")
     parser.add_argument("--fixture", default="commercial_mvp_demo")
     parser.add_argument("--output-dir", default="tmp/commercial_prebid_demo")
+    parser.add_argument("--provider", default="deterministic", choices=["deterministic", "stub", "llm"])
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with SessionLocal() as session:
-        result = run_commercial_prebid_demo(session, RunCommercialPreBidDemoRequest(fixture_name=args.fixture))
+        result = run_commercial_prebid_demo(
+            session,
+            RunCommercialPreBidDemoRequest(
+                fixture_name=args.fixture,
+                provider=args.provider,
+            ),
+        )
 
     markdown_path = output_dir / f"{result.deal_id}_prebid_report.md"
     json_path = output_dir / f"{result.deal_id}_prebid_report.json"

@@ -16,6 +16,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Commercial_MVP_v1_Roadmap.md](Commercial_MVP_v1_Roadmap.md)
 - [Commercial_PreBid_Demo_Runbook.md](Commercial_PreBid_Demo_Runbook.md)
 - [Commercial_PreBid_Report_Spec.md](Commercial_PreBid_Report_Spec.md)
+- [Controlled_LLM_PreBid_Analysis.md](Controlled_LLM_PreBid_Analysis.md)
 - [MVP_v1_Scope.md](MVP_v1_Scope.md)
 - [MVP_v1_Non_Goals.md](MVP_v1_Non_Goals.md)
 - [Human_Control_Policy_v2.md](Human_Control_Policy_v2.md)

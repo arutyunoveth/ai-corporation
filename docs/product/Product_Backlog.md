@@ -17,3 +17,4 @@
 - add richer report export formats if customer demos require them
 - define paid-pilot packaging and onboarding constraints after `C6`
 - enrich the demo flow with bounded LLM-assisted analysis in `C3`, keeping deterministic fallback available
+- evaluate richer schema families and provider abstraction hardening after `C3`, without broad runtime opening

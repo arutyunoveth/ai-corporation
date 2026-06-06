@@ -20,7 +20,8 @@ Request body:
 
 ```json
 {
-  "fixture_name": "commercial_mvp_demo"
+  "fixture_name": "commercial_mvp_demo",
+  "provider": "deterministic"
 }
 ```
 
@@ -28,6 +29,8 @@ Request body:
 
 ```bash
 python scripts/run_commercial_prebid_demo.py --fixture commercial_mvp_demo
+python scripts/run_commercial_prebid_demo.py --fixture commercial_mvp_demo --provider stub
+python scripts/run_commercial_prebid_demo.py --fixture commercial_mvp_demo --provider llm
 ```
 
 The script writes:
@@ -44,8 +47,8 @@ The script writes:
 
 ## Safety Boundaries
 
-- deterministic only
-- no LLM provider calls
+- deterministic mode remains available
+- controlled LLM mode remains bounded, schema-validated, traced, and human-reviewed
 - no supplier emails
 - no procurement platform actions
 - no bid submission

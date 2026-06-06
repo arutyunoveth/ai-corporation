@@ -10,6 +10,7 @@ from src.modules.commercial_prebid_demo.schemas import (
 )
 from src.modules.compliance_matrix.schemas import BuildComplianceMatrixRequest
 from src.modules.compliance_matrix.service import build_compliance_matrix
+from src.modules.controlled_llm_prebid.service import run_controlled_llm_prebid_analysis
 from src.modules.contract_risks.schemas import BuildContractRiskRequest
 from src.modules.contract_risks.service import build_contract_risks, get_contract_risk_set
 from src.modules.document_ingestion.schemas import (
@@ -90,6 +91,7 @@ def _derive_recommendation(requirement_rows, tech_risk_flags, contract_risk_reco
 def _build_report(
     fixture: dict,
     *,
+    analysis_mode: str,
     deal_id: str,
     intake,
     document_set,
@@ -98,6 +100,7 @@ def _build_report(
     document_requirement_rows,
     tech_risk_flags,
     contract_risk_records,
+    llm_analysis=None,
 ) -> tuple[str, dict]:
     recommendation, next_actions = _derive_recommendation(
         document_requirement_rows,
@@ -106,7 +109,7 @@ def _build_report(
     )
     report_json = {
         "fixture_name": fixture["fixture_name"],
-        "analysis_mode": "deterministic",
+        "analysis_mode": analysis_mode,
         "deal_id": deal_id,
         "intake_id": intake.intake_id,
         "document_set_id": document_set.document_set_id,
@@ -134,6 +137,12 @@ def _build_report(
         "preliminary_recommendation": recommendation,
         "next_actions": next_actions,
     }
+    if llm_analysis is not None:
+        report_json["llm_analysis"] = {
+            "overall_review_status": llm_analysis.overall_review_status,
+            "sections": llm_analysis.sections,
+            "trace_ids": llm_analysis.trace_ids,
+        }
 
     technical_lines = "\n".join(
         f"- {item}" for item in report_json["technical_requirements"][:6]
@@ -171,6 +180,19 @@ def _build_report(
         "## Next Actions\n"
         f"{actions_lines}\n"
     )
+    if llm_analysis is not None:
+        llm_lines = []
+        for section_name, section in llm_analysis.sections.items():
+            llm_lines.append(
+                f"- {section_name}: validation={section['validation_status']}, review={section['review_status']}, trace={section['trace_id']}"
+            )
+        markdown += (
+            "\n## Controlled LLM Review\n"
+            f"- Overall review status: {llm_analysis.overall_review_status}\n"
+            f"- Analysis mode: {llm_analysis.analysis_mode}\n"
+            + "\n".join(llm_lines)
+            + "\n"
+        )
     return markdown, report_json
 
 
@@ -336,9 +358,28 @@ def run_commercial_prebid_demo(
         )
         _risk_set, tech_risk_flags = get_initial_tech_risk_set(session, risk_flag_set.risk_flag_set_id)
         _contract_set, contract_risk_records = get_contract_risk_set(session, contract_risk_set.contract_risk_set_id)
+        llm_analysis = None
+        analysis_mode = "deterministic"
+        if payload.provider != "deterministic":
+            llm_context = {
+                "deal_id": intake.deal_id,
+                "title": summary.structured_summary_json.get("title"),
+                "customer_name": summary.structured_summary_json.get("customer_name"),
+                "participant_requirements": fixture["participant_requirements"],
+                "required_documents": fixture["required_documents"],
+                "contract_risks": [record.summary for record, _flags in contract_risk_records],
+            }
+            llm_analysis = run_controlled_llm_prebid_analysis(
+                session,
+                provider_mode=payload.provider,
+                context=llm_context,
+                simulate_invalid_output=payload.simulate_invalid_output,
+            )
+            analysis_mode = llm_analysis.analysis_mode
 
         report_markdown, report_json = _build_report(
             fixture,
+            analysis_mode=analysis_mode,
             deal_id=intake.deal_id,
             intake=intake,
             document_set=document_set,
@@ -347,6 +388,7 @@ def run_commercial_prebid_demo(
             document_requirement_rows=document_requirement_rows,
             tech_risk_flags=tech_risk_flags,
             contract_risk_records=contract_risk_records,
+            llm_analysis=llm_analysis,
         )
         append_event_record(
             session,
@@ -363,7 +405,7 @@ def run_commercial_prebid_demo(
         session.commit()
         return CommercialPreBidDemoResponse(
             fixture_name=fixture["fixture_name"],
-            analysis_mode="deterministic",
+            analysis_mode=analysis_mode,
             generated_at=datetime.now(UTC),
             deal_id=intake.deal_id,
             intake_id=intake.intake_id,
