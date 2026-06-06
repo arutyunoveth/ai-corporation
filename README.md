@@ -16,13 +16,14 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 ## Current Product Status
 
 - Runtime Metadata Phase `I1` is complete for the bounded internal metadata-control slice around `M-049`, `M-050`, the runtime control trace ledger, and metadata slice integration.
-- The next approved roadmap block is `Commercial MVP v1`.
-- Current product recommendation: build controlled commercial pre-bid analysis and operator tooling with explicit human review.
+- Commercial MVP v1 is complete at the repository package level.
+- Controlled Commercial Pilot Stage is complete at the repository package level.
+- Current product recommendation: `GO to unpaid/discounted design-partner pilot`.
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
 - A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.
-- Commercial MVP v1 pilot packaging is complete at the repository level with a final decision of `GO with restrictions`.
+- Controlled pilot scenario pack, operator workflow hardening, evidence ledger, sales materials, and dry-run harness are all present.
 - No broad autonomy is open.
 - No external execution is open.
 - No procurement platform submission, EDS/signature work, or supplier email automation is implemented.
@@ -35,6 +36,9 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/TKP_Economics_Bid_Readiness.md](docs/product/TKP_Economics_Bid_Readiness.md)
 - [docs/product/MVP_v1_Final_Audit.md](docs/product/MVP_v1_Final_Audit.md)
 - [docs/product/Pilot_Playbook_MVP_v1.md](docs/product/Pilot_Playbook_MVP_v1.md)
+- [docs/product/Controlled_Pilot_Final_Audit.md](docs/product/Controlled_Pilot_Final_Audit.md)
+- [docs/product/Controlled_Pilot_GO_NO_GO_Decision.md](docs/product/Controlled_Pilot_GO_NO_GO_Decision.md)
+- [docs/product/Post_Pilot_Roadmap_Revision.md](docs/product/Post_Pilot_Roadmap_Revision.md)
 - [docs/product/MVP_v1_Scope.md](docs/product/MVP_v1_Scope.md)
 - [docs/product/MVP_v1_Non_Goals.md](docs/product/MVP_v1_Non_Goals.md)
 - [docs/product/Human_Control_Policy_v2.md](docs/product/Human_Control_Policy_v2.md)
@@ -213,7 +217,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Recommended next step: `prepare the next separately approved bounded runtime step without broad deferred-runtime opening`.
 - Current governance truth: `M-049` and `M-050` are `BOUNDED_IMPLEMENTED` for internal metadata/control only; `M-052..M-055` remain non-broad-runtime late slots.
 - Updated roadmap Phase I1 is now complete as a bounded metadata-control slice with `M-049`, `M-050`, runtime trace ledger, and integrated metadata slice linkage.
-- Updated roadmap next step: `controlled LLM pre-bid analysis under explicit human review`.
+- Updated roadmap next step: `design-partner pilot stabilization before broader paid-pilot motion`.
 
 ## Current Scope
 

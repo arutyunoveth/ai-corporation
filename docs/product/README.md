@@ -16,6 +16,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - Controlled pilot evidence and metrics ledger artifacts are now defined for scenario-by-scenario pilot proof.
 - Customer-facing controlled pilot sales materials are now documented with explicit manual-control disclosures.
 - A controlled pilot dry-run script and result template are now available for pre-pilot rehearsal.
+- Controlled Commercial Pilot Stage review is complete with a current decision of `GO to unpaid/discounted design-partner pilot`.
 
 ## Product References
 
@@ -37,6 +38,9 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Pilot_Offer_Description.md](Pilot_Offer_Description.md)
 - [Pilot_Limitations_Disclosure.md](Pilot_Limitations_Disclosure.md)
 - [Pricing_Test_Menu.md](Pricing_Test_Menu.md)
+- [Controlled_Pilot_Final_Audit.md](Controlled_Pilot_Final_Audit.md)
+- [Controlled_Pilot_GO_NO_GO_Decision.md](Controlled_Pilot_GO_NO_GO_Decision.md)
+- [Post_Pilot_Roadmap_Revision.md](Post_Pilot_Roadmap_Revision.md)
 - [Controlled_Pilot_Dry_Run_Result_Template.md](Controlled_Pilot_Dry_Run_Result_Template.md)
 - [Customer_Onboarding_MVP_v1.md](Customer_Onboarding_MVP_v1.md)
 - [Operator_Runbook_MVP_v1.md](Operator_Runbook_MVP_v1.md)
