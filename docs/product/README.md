@@ -12,6 +12,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - The internal commercial workspace now covers manual TKP registration, economics, and bid-readiness assembly without opening external execution.
 - Commercial MVP v1 pilot packaging is now complete at the repository level; the next gate is a controlled paid pilot under restrictions.
 - A controlled pilot scenario pack is now available for synthetic pilot rehearsal and evidence collection.
+- Controlled pilot operator workflow hardening is documented for repeatable manual-control execution.
 
 ## Product References
 
@@ -25,6 +26,8 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Pilot_Playbook_MVP_v1.md](Pilot_Playbook_MVP_v1.md)
 - [Controlled_Pilot_Scenario_Pack.md](Controlled_Pilot_Scenario_Pack.md)
 - [Pilot_Dataset_Readme.md](Pilot_Dataset_Readme.md)
+- [Pilot_Operator_Checklist.md](Pilot_Operator_Checklist.md)
+- [Pilot_Operator_Error_Handling.md](Pilot_Operator_Error_Handling.md)
 - [Customer_Onboarding_MVP_v1.md](Customer_Onboarding_MVP_v1.md)
 - [Operator_Runbook_MVP_v1.md](Operator_Runbook_MVP_v1.md)
 - [Pricing_Hypotheses.md](Pricing_Hypotheses.md)

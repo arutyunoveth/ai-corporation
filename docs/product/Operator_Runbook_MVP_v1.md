@@ -9,24 +9,34 @@
 ## Manual Operator Flow
 
 1. Run the commercial pre-bid demo or ingest an equivalent test tender.
+   - state: `imported`
 2. Review:
    - pre-bid report
    - requirements
    - risks
    - runtime trace metadata
-3. Generate supplier request draft:
+   - state after successful analysis: `analyzed`
+3. If the analysis is incomplete, record `needs_more_review` in the operator console.
+   - state: `needs_review`
+4. If supplier input is required, record `collect_tkp` in the operator console.
+   - state: `collect_tkp`
+5. Generate supplier request draft:
    - `POST /commercial-workspace/{deal_id}/supplier-request-draft`
-4. Register manual TKP batch:
+6. Register manual TKP batch:
    - `POST /commercial-workspace/{deal_id}/tkp/register-manual-batch`
-5. Build readiness:
+7. Record `tkp_received` in the commercial workspace after manual quote inputs are complete.
+8. Build readiness:
    - `POST /commercial-workspace/{deal_id}/readiness/build`
-6. Review:
+   - state: `economics_review` then `bid_readiness_review`
+9. Review:
    - quote comparison
    - finance memo
    - bid completeness
    - submission readiness
-7. Record final internal action:
+10. Record `economics_reviewed` if the internal package is explainable and complete.
+11. Record final internal action:
    - `POST /commercial-workspace/{deal_id}/actions`
+   - allowed terminal state in-repo: `ready_for_human_submission`
 
 ## Mandatory Control Rules
 
@@ -41,3 +51,4 @@
 - pre-bid report markdown/json
 - workspace report markdown/json
 - finance and readiness identifiers for audit traceability
+- operator decisions and events for every internal control gate

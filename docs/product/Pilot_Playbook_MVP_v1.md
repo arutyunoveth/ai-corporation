@@ -38,6 +38,7 @@ The repository is ready for a first controlled commercial pilot as long as all h
 3. Use one controlled customer-like scenario at a time.
 4. Require explicit operator sign-off before any `ready_for_human_submission` state.
 5. Keep final submission and all outside communication manual.
+6. Use `Pilot_Operator_Checklist.md` and `Pilot_Operator_Error_Handling.md` as the active control documents during the pilot stage.
 
 ## Exit Criteria For The First Paid Pilot
 
