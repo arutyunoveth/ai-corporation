@@ -13,6 +13,7 @@ from src.modules.agent_registry.service import (
     list_agent_registry_sets,
 )
 from src.shared.api.dependencies import DBSession
+from src.shared.enums import HumanReviewStatus
 
 router = APIRouter(tags=["agent-registry"])
 
@@ -25,11 +26,20 @@ def _to_record_response(result: tuple) -> AgentRegistryRecordResponse:
     record, links = result
     return AgentRegistryRecordResponse(
         agent_registry_id=record.agent_registry_id,
+        agent_profile_id=record.agent_registry_id,
         agent_key=record.agent_key,
         agent_label=record.agent_label,
+        agent_role_name=record.agent_label,
+        description=record.notes,
+        capability_tags=record.allowed_capabilities_json,
+        allowed_action_classes=record.allowed_capabilities_json,
+        forbidden_action_classes=record.blocked_capabilities_json,
         owner_role=record.owner_role,
+        owner_operator=record.owner_role,
         reviewer_role=record.reviewer_role,
         activation_state=record.activation_state,
+        lifecycle_status=record.activation_state,
+        review_status=HumanReviewStatus.APPROVED_FOR_INTERNAL_USE,
         approval_reference=record.approval_reference,
         allowed_capabilities_json=record.allowed_capabilities_json,
         blocked_capabilities_json=record.blocked_capabilities_json,

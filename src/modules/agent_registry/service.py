@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -6,10 +8,58 @@ from src.modules.agent_registry.schemas import BuildAgentRegistryRequest
 from src.modules.event_log.service import append_event_record
 from src.modules.prompt_schema_library.models import AgentPromptLink
 from src.shared.db.base import utcnow
-from src.shared.enums import AgentRegistryStatus, EventSeverity
+from src.shared.enums import AgentActivationState, AgentLifecycleStatus, AgentRegistryStatus, EventSeverity
 from src.shared.errors import NotFoundError, ValidationError
 from src.shared.ids import next_agent_registry_id, next_agent_registry_set_id
 from src.shared.validation import require_non_empty
+
+
+def _slugify_agent_key(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    return normalized or "agent-profile"
+
+
+def _resolve_agent_label(entry) -> str:
+    return require_non_empty(entry.agent_role_name or entry.agent_label, "agent_role_name")
+
+
+def _resolve_agent_key(entry, agent_label: str) -> str:
+    candidate = entry.agent_key or _slugify_agent_key(agent_label)
+    return require_non_empty(candidate, "agent_key")
+
+
+def _resolve_owner_role(entry) -> str:
+    return require_non_empty(entry.owner_operator or entry.owner_role, "owner_operator")
+
+
+def _resolve_reviewer_role(entry, owner_role: str) -> str:
+    return require_non_empty(entry.reviewer_role or entry.owner_operator or owner_role, "reviewer_role")
+
+
+def _resolve_activation_state(entry) -> AgentActivationState:
+    if entry.activation_state is not None:
+        return entry.activation_state
+    if entry.lifecycle_status is not None:
+        return AgentActivationState(entry.lifecycle_status)
+    return AgentActivationState.REVIEWED
+
+
+def _resolve_allowed_capabilities(entry) -> list[str]:
+    if entry.allowed_action_classes:
+        return entry.allowed_action_classes
+    if entry.allowed_capabilities_json:
+        return entry.allowed_capabilities_json
+    return entry.capability_tags
+
+
+def _resolve_blocked_capabilities(entry) -> list[str]:
+    if entry.forbidden_action_classes:
+        return entry.forbidden_action_classes
+    return entry.blocked_capabilities_json
+
+
+def _resolve_notes(entry) -> str | None:
+    return entry.description or entry.notes
 
 
 def _get_set(session: Session, agent_registry_set_id: str) -> AgentRegistrySet:
@@ -72,23 +122,30 @@ def build_agent_registry(session: Session, payload: BuildAgentRegistryRequest) -
 
         seen_keys: set[str] = set()
         for entry in payload.entries:
-            agent_key = require_non_empty(entry.agent_key, "agent_key")
+            agent_label = _resolve_agent_label(entry)
+            agent_key = _resolve_agent_key(entry, agent_label)
             if agent_key in seen_keys:
                 raise ValidationError(f"Duplicate agent_key '{agent_key}' in request")
             seen_keys.add(agent_key)
+            owner_role = _resolve_owner_role(entry)
+            reviewer_role = _resolve_reviewer_role(entry, owner_role)
+            activation_state = _resolve_activation_state(entry)
+            allowed_capabilities = _resolve_allowed_capabilities(entry)
+            blocked_capabilities = _resolve_blocked_capabilities(entry)
+            notes = _resolve_notes(entry)
 
             record = AgentRegistryRecord(
                 agent_registry_id=next_agent_registry_id(session, AgentRegistryRecord.agent_registry_id),
                 agent_registry_set_id=registry_set.agent_registry_set_id,
                 agent_key=agent_key,
-                agent_label=require_non_empty(entry.agent_label, "agent_label"),
-                owner_role=require_non_empty(entry.owner_role, "owner_role"),
-                reviewer_role=require_non_empty(entry.reviewer_role, "reviewer_role"),
-                activation_state=entry.activation_state,
+                agent_label=agent_label,
+                owner_role=owner_role,
+                reviewer_role=reviewer_role,
+                activation_state=activation_state,
                 approval_reference=entry.approval_reference.strip() if entry.approval_reference else None,
-                allowed_capabilities_json=entry.allowed_capabilities_json,
-                blocked_capabilities_json=entry.blocked_capabilities_json,
-                notes=entry.notes.strip() if entry.notes else None,
+                allowed_capabilities_json=allowed_capabilities,
+                blocked_capabilities_json=blocked_capabilities,
+                notes=notes.strip() if notes else None,
             )
             session.add(record)
             session.flush()
@@ -102,6 +159,8 @@ def build_agent_registry(session: Session, payload: BuildAgentRegistryRequest) -
                     "agent_registry_set_id": registry_set.agent_registry_set_id,
                     "agent_registry_id": record.agent_registry_id,
                     "agent_key": record.agent_key,
+                    "agent_role_name": record.agent_label,
+                    "lifecycle_status": str(record.activation_state),
                 },
             )
 

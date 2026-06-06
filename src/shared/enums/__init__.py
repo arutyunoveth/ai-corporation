@@ -217,8 +217,10 @@ from .pre_l1 import (
 )
 from .mvp_phase1 import (
     AgentActivationState,
+    AgentLifecycleStatus,
     AgentPromptLinkStatus,
     AgentRegistryStatus,
+    HumanReviewStatus,
     PromptSchemaAssetStatus,
     PromptSchemaAssetType,
     PromptSchemaLibraryStatus,
@@ -399,8 +401,10 @@ __all__ = [
     "LaunchVisibilityScopeType",
     "LaunchVisibilityStatus",
     "AgentActivationState",
+    "AgentLifecycleStatus",
     "AgentPromptLinkStatus",
     "AgentRegistryStatus",
+    "HumanReviewStatus",
     "PromptSchemaAssetStatus",
     "PromptSchemaAssetType",
     "PromptSchemaLibraryStatus",
