@@ -38,6 +38,17 @@
    - `POST /commercial-workspace/{deal_id}/actions`
    - allowed terminal state in-repo: `ready_for_human_submission`
 
+## Partner Report Export
+
+See `Partner_Report_Export_Policy.md` and `Manual_Delivery_Checklist.md` for full rules.
+
+1. Generate package: `generate_export_package(partner_workspace_id=..., scenario_or_tender_id=..., report_sections=...)`.
+2. Review the package — check included, redacted, and blocked sections.
+3. If acceptable: `approve_for_delivery()`.
+4. Deliver manually outside the repository.
+5. Record delivery: `mark_delivered_manually()`.
+6. Never send automated email. Never upload automatically.
+
 ## Redaction Workflow
 
 See `Real_Tender_Data_Handling_Policy.md` and `Redaction_Checklist.md` for full rules.
