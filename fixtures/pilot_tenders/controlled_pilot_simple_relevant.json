@@ -1,0 +1,52 @@
+{
+  "fixture_name": "controlled_pilot_simple_relevant",
+  "scenario_id": "CP-SC-001",
+  "scenario_type": "simple_relevant_tender",
+  "tender": {
+    "source_title": "Compact switchboard supply for district heating substation retrofit",
+    "source_customer_name": "North District Utilities Office",
+    "source_procurement_number": "NDUO-2026-0701",
+    "portal_url": "https://example.com/tenders/NDUO-2026-0701",
+    "notice_date": "2026-06-06",
+    "domain_type": "ELECTRICAL_EQUIPMENT",
+    "direction_type": "SUPPLY"
+  },
+  "notice_text": "Open request for supply of compact low-voltage switchboards for a district heating substation retrofit with staged delivery and standard acceptance documentation.",
+  "technical_specification_text": "Supply compact low-voltage switchboards, factory test documents, labeling set, warranty package, and staged delivery to one municipal site with commissioning support.",
+  "contract_draft_text": "Draft contract includes staged payment, delivery timeline obligations, standard penalty clauses for delay, and acceptance by customer commission after document handover.",
+  "why_relevant": "This is a realistic relevant pilot case for a straightforward electrical-equipment tender with moderate contractual review load and clear operator value.",
+  "participant_requirements": [
+    "Confirm conformity of switchboard configuration to customer scope.",
+    "Provide warranty commitment and technical passport package.",
+    "Confirm staged delivery capability."
+  ],
+  "required_documents": [
+    "Tender notice",
+    "Technical specification",
+    "Draft contract",
+    "Supplier qualification package",
+    "Commercial quote"
+  ],
+  "sample_supplier_questions": [
+    "Is staged delivery to one site acceptable in two truckloads?",
+    "Which exact FAT protocol must accompany shipment?",
+    "Are equivalent enclosure dimensions allowed if electrical parameters match?"
+  ],
+  "sample_supplier_quotes": [
+    {
+      "supplier_name": "Pilot Grid Supply",
+      "quoted_amount": 3120000,
+      "currency_code": "RUB",
+      "notes": "Illustrative controlled pilot quote."
+    }
+  ],
+  "expected_decision_notes": {
+    "operator_guidance": "Likely acceptable for pilot demonstration after standard contract and document review.",
+    "acceptable_preliminary_recommendations": ["GO_WITH_CONDITIONS", "NEEDS_REVIEW"]
+  },
+  "expected_risk_categories": [
+    "delivery_alignment",
+    "acceptance_documents",
+    "payment_terms_review"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "fixture_name": "controlled_pilot_no_go_review",
+  "scenario_id": "CP-SC-003",
+  "scenario_type": "no_go_tender",
+  "tender": {
+    "source_title": "Complex multi-site package with compressed schedule and unclear support perimeter",
+    "source_customer_name": "Federal Utility Coordination Center",
+    "source_procurement_number": "FUCC-2026-0720",
+    "portal_url": "https://example.com/tenders/FUCC-2026-0720",
+    "notice_date": "2026-06-06",
+    "domain_type": "ELECTRICAL_EQUIPMENT",
+    "direction_type": "SUPPLY"
+  },
+  "notice_text": "Multi-site procurement for electrical distribution hardware across three facilities under compressed mobilization and acceptance deadlines.",
+  "technical_specification_text": "Supply three heterogeneous switchgear families, installation support references, spare kit stock, cross-site labeling, night unloading, and acceptance package under a unified deadline.",
+  "contract_draft_text": "Draft contract contains aggressive milestone bundling, high penalty exposure, holdback payment mechanics, and broad warranty/support language requiring legal clarification.",
+  "why_relevant": "This is a controlled pilot no-go style case where the product should help explain why a human may choose to decline or defer.",
+  "participant_requirements": [
+    "Confirm support perimeter across all three sites.",
+    "Provide consolidated acceptance-document package.",
+    "Clarify warranty and support obligations under unified milestone closure."
+  ],
+  "required_documents": [
+    "Tender notice",
+    "Technical specification",
+    "Draft contract",
+    "Detailed delivery and support perimeter",
+    "Commercial quote"
+  ],
+  "sample_supplier_questions": [
+    "Can milestone bundling be split by site?",
+    "What support is mandatory during night unloading and staged acceptance?",
+    "Are site-specific deviations allowed for labeling and spare-kit scope?"
+  ],
+  "sample_supplier_quotes": [
+    {
+      "supplier_name": "Complex Scope Energy",
+      "quoted_amount": 8740000,
+      "currency_code": "RUB",
+      "notes": "Illustrative no-go review pilot quote."
+    }
+  ],
+  "expected_decision_notes": {
+    "operator_guidance": "This scenario should remain a likely human no-go or defer case even if the bounded pipeline stops at NEEDS_REVIEW.",
+    "acceptable_preliminary_recommendations": ["NEEDS_REVIEW", "GO_WITH_CONDITIONS"]
+  },
+  "expected_risk_categories": [
+    "scope_uncertainty",
+    "contract_penalty_review",
+    "acceptance_complexity"
+  ]
+}

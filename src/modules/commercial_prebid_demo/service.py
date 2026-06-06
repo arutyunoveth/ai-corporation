@@ -45,13 +45,19 @@ from src.shared.errors import NotFoundError
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+PILOT_FIXTURES_DIR = Path(__file__).resolve().parents[3] / "fixtures" / "pilot_tenders"
+
+
+def available_fixture_dirs() -> list[Path]:
+    return [FIXTURES_DIR, PILOT_FIXTURES_DIR]
 
 
 def _load_fixture(fixture_name: str) -> dict:
-    fixture_path = FIXTURES_DIR / f"{fixture_name}.json"
-    if not fixture_path.exists():
-        raise NotFoundError(f"Commercial pre-bid demo fixture '{fixture_name}' was not found")
-    return json.loads(fixture_path.read_text(encoding="utf-8"))
+    for directory in available_fixture_dirs():
+        fixture_path = directory / f"{fixture_name}.json"
+        if fixture_path.exists():
+            return json.loads(fixture_path.read_text(encoding="utf-8"))
+    raise NotFoundError(f"Commercial pre-bid demo fixture '{fixture_name}' was not found")
 
 
 def _build_artifact_uri(deal_id: str, file_name: str) -> str:

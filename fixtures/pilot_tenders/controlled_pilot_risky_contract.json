@@ -1,0 +1,52 @@
+{
+  "fixture_name": "controlled_pilot_risky_contract",
+  "scenario_id": "CP-SC-002",
+  "scenario_type": "risky_tender",
+  "tender": {
+    "source_title": "Substation modernization bundle with aggressive penalty schedule",
+    "source_customer_name": "Regional Power Reconstruction Agency",
+    "source_procurement_number": "RPRA-2026-0712",
+    "portal_url": "https://example.com/tenders/RPRA-2026-0712",
+    "notice_date": "2026-06-06",
+    "domain_type": "ELECTRICAL_EQUIPMENT",
+    "direction_type": "SUPPLY"
+  },
+  "notice_text": "Competitive tender for supply and staged mobilization of substation modernization equipment with strict delivery sequence and acceptance controls.",
+  "technical_specification_text": "Supply switchgear assemblies, commissioning kit, site labeling, spare parts reserve, FAT support, and weekend delivery windows with strict milestone obligations.",
+  "contract_draft_text": "Draft contract includes elevated penalty exposure for delivery delay, strict acceptance sequence, conditional payment holdbacks, and warranty obligations tied to milestone compliance.",
+  "why_relevant": "This scenario stresses contract and readiness review, making it useful for controlled pilot evidence about risk communication and operator decision support.",
+  "participant_requirements": [
+    "Demonstrate ability to meet strict milestone schedule.",
+    "Confirm support for acceptance commission and punch-list closure.",
+    "Provide warranty/service commitment under conditional payment terms."
+  ],
+  "required_documents": [
+    "Tender notice",
+    "Technical specification",
+    "Draft contract",
+    "Milestone delivery plan",
+    "Commercial quote"
+  ],
+  "sample_supplier_questions": [
+    "Can penalty caps be clarified for partial staged delivery?",
+    "What exact evidence closes acceptance remarks for milestone payment release?",
+    "Is weekend unloading mandatory for every batch?"
+  ],
+  "sample_supplier_quotes": [
+    {
+      "supplier_name": "Risk Review Electric",
+      "quoted_amount": 5980000,
+      "currency_code": "RUB",
+      "notes": "Illustrative risky-contract pilot quote."
+    }
+  ],
+  "expected_decision_notes": {
+    "operator_guidance": "Contract risk should likely dominate the pilot narrative and require explicit manual review before any bid-readiness path.",
+    "acceptable_preliminary_recommendations": ["GO_WITH_CONDITIONS", "NEEDS_REVIEW"]
+  },
+  "expected_risk_categories": [
+    "penalty_exposure",
+    "acceptance_flow_review",
+    "conditional_payment"
+  ]
+}

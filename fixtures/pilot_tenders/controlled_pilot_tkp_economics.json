@@ -1,0 +1,52 @@
+{
+  "fixture_name": "controlled_pilot_tkp_economics",
+  "scenario_id": "CP-SC-004",
+  "scenario_type": "tkp_economics_tender",
+  "tender": {
+    "source_title": "Medium-size municipal switchgear package with cost-sensitive margin envelope",
+    "source_customer_name": "Municipal Energy Capital Repair Unit",
+    "source_procurement_number": "MECRU-2026-0733",
+    "portal_url": "https://example.com/tenders/MECRU-2026-0733",
+    "notice_date": "2026-06-06",
+    "domain_type": "ELECTRICAL_EQUIPMENT",
+    "direction_type": "SUPPLY"
+  },
+  "notice_text": "Tender for supply of municipal switchgear package where commercial comparison, margin pressure, and cash-gap visibility are central to the internal decision.",
+  "technical_specification_text": "Supply switchgear package, FAT protocol, acceptance kit, labeled spares, delivery to one depot, and commissioning-readiness package with a firm completion date.",
+  "contract_draft_text": "Draft contract includes staged payment with partial holdback until final acceptance, standard penalties, and warranty obligations.",
+  "why_relevant": "This scenario is optimized for TKP collection, economics clarity, and bid-readiness evidence during the controlled pilot.",
+  "participant_requirements": [
+    "Confirm delivery schedule and acceptance package.",
+    "Provide full commercial quote and payment assumptions.",
+    "Confirm warranty and commissioning-readiness documentation."
+  ],
+  "required_documents": [
+    "Tender notice",
+    "Technical specification",
+    "Draft contract",
+    "Commercial quote",
+    "Supplier qualification package"
+  ],
+  "sample_supplier_questions": [
+    "Can payment holdback be tied to staged acceptance instead of final batch only?",
+    "What spare-kit minimum is required for readiness?",
+    "Is commissioning-readiness evidence needed at shipment or at acceptance?"
+  ],
+  "sample_supplier_quotes": [
+    {
+      "supplier_name": "Economics Pilot Electric",
+      "quoted_amount": 4210000,
+      "currency_code": "RUB",
+      "notes": "Illustrative economics-focused pilot quote."
+    }
+  ],
+  "expected_decision_notes": {
+    "operator_guidance": "This scenario should showcase the value of TKP/economics/readiness workflow and produce meaningful internal cost and cash-gap artifacts.",
+    "acceptable_preliminary_recommendations": ["GO_WITH_CONDITIONS", "NEEDS_REVIEW"]
+  },
+  "expected_risk_categories": [
+    "cash_gap_pressure",
+    "margin_visibility",
+    "readiness_documents"
+  ]
+}
