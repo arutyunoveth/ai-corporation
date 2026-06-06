@@ -6,6 +6,30 @@
 .venv/bin/python scripts/run_commercial_mvp_v1_demo.py --provider stub --output-dir tmp/commercial_mvp_v1_demo
 ```
 
+## Partner Tender Folder Runner (PP1)
+
+For real partner pilot operations, use the folder runner:
+
+```bash
+.venv/bin/python scripts/run_partner_tender_folder.py \
+  --partner-id partner_001 \
+  --tender-dir local_pilot_runs/partner_001/tender_001 \
+  --provider stub \
+  --output-dir local_pilot_runs/partner_001/tender_001/04_system_output
+```
+
+See `Run_Partner_Tender_Folder.md` for the full runbook and `templates/local_pilot_folder_template.md` for the required folder structure.
+
+The runner:
+- Validates the local folder structure (requires `02_extracted_text/notice.txt`, `technical_spec.txt`, `contract_draft.txt`)
+- Creates a partner workspace and intake records using the existing DP2 service
+- Applies redaction and visibility classification using DP1/DP3 rules
+- Generates internal analysis and a partner-facing export package
+- The export guard (DP4) enforces access boundary rules — internal/restricted sections are redacted or blocked
+- Writes outputs to `04_system_output/` and `05_partner_export/`
+- Supports `--provider stub` (always works) and `--provider llm` (requires DB + API key)
+- No real partner data is committed — raw docs stay in gitignored folders
+
 ## Manual Operator Flow
 
 1. Run the commercial pre-bid demo or ingest an equivalent test tender.

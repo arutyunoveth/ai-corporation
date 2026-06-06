@@ -30,5 +30,6 @@
 - [x] run end-to-end design-partner pilot dry run (DP6)
 - [x] complete paid pilot readiness review (DP7)
 - [x] restricted paid pilot operations setup (PP0) — runbook, data policy, templates, checklist, gitignore
+- [x] real partner tender folder runner (PP1) — local folder-based pilot command with folder validation, intake, redaction, analysis, export guard, and output generation
 - collect first real design-partner evidence with real operator/customer feedback
 - improve customer/export packaging for partner-facing report delivery without opening external execution

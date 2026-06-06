@@ -16,6 +16,6 @@ alembic.log
 ai_corporation.db
 
 # Local pilot data — never commit real partner data
-local_pilot_runs/
-pilot_runs/
+/local_pilot_runs/
+/pilot_runs/
 tmp/partner_exports/

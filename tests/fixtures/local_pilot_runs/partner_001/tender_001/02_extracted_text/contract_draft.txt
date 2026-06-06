@@ -1,0 +1,13 @@
+DRAFT CONTRACT
+
+Between: Test Corporation (Buyer)
+And: [Supplier Name] (Supplier)
+
+1. Term: 12 months from signing date.
+2. Payment: 30% upon signing, 40% upon delivery, 30% upon acceptance.
+3. Warranty: 2 years from acceptance date.
+4. Liability: Limited to contract value. No consequential damages.
+5. Termination: 30 days written notice by either party.
+6. Governing Law: Laws of the contracting jurisdiction.
+7. Dispute Resolution: Arbitration in accordance with ICC Rules.
+8. Confidentiality: 5 years from contract date.

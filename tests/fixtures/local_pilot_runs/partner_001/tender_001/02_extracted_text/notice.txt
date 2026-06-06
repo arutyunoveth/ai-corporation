@@ -1,0 +1,18 @@
+NOTICE OF TENDER
+
+Procurement Number: PP1-TEST-2026-001
+Title: Supply and Delivery of Test Equipment
+Issuing Authority: Test Corporation
+Submission Deadline: 2026-07-15
+
+This is a synthetic test notice for PP1 testing purposes only.
+
+Scope:
+- Supply of 10 units of testing equipment
+- Installation and commissioning
+- 2-year warranty period
+
+Eligibility:
+- Valid business registration required
+- ISO 9001 certification preferred
+- Prior experience in similar projects
