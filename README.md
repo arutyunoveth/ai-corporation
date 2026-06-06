@@ -165,6 +165,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Limited Runtime Design block completed.
 - Final phase decision: `Open limited runtime implementation phase`.
 - Recommended next step: `open a separately approved limited runtime implementation phase with explicit boundaries, without broad runtime claims or autonomous positioning`.
+- Limited Runtime Implementation Gate is now formally staged under a locked master plan and S1 scope/safety lock package.
+- Current phase status: `repository ready for MVP runtime slice definition`.
 
 ## Current Scope
 
