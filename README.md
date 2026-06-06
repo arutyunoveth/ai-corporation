@@ -175,6 +175,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - MVP Runtime Implementation — Phase 1 is now formally staged for the bounded internal metadata-control slice for `M-049/M-050`.
 - Current phase status: `repository ready for bounded MVP runtime module implementation`.
 - M-049 bounded runtime slice implemented.
+- M-050 bounded runtime slice implemented.
 
 ## Current Scope
 

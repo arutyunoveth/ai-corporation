@@ -49,6 +49,7 @@ from src.modules.logistics_tracking.router import router as logistics_tracking_r
 from src.modules.priority_scoring.router import router as priority_scoring_router
 from src.modules.postmortems.router import router as postmortems_router
 from src.modules.post_submission.router import router as post_submission_router
+from src.modules.prompt_schema_library.router import router as prompt_schema_library_router
 from src.modules.procedure_monitor.router import router as procedure_monitor_router
 from src.modules.purchase_orders.router import router as purchase_orders_router
 from src.modules.outcome_intake.router import router as outcome_intake_router
@@ -162,6 +163,7 @@ app.include_router(submission_archive_router)
 app.include_router(submission_control_router)
 app.include_router(submission_receipts_router)
 app.include_router(post_submission_router)
+app.include_router(prompt_schema_library_router)
 app.include_router(procedure_monitor_router)
 app.include_router(supplier_contracts_router)
 app.include_router(purchase_orders_router)
