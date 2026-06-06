@@ -20,3 +20,6 @@
 - pilot customer understands value proposition after one demo cycle
 - pilot customer accepts manual-control positioning
 - operator can explain recommended next steps without engineering help
+- feedback scores are captured after each interaction (usefulness, clarity, trust)
+- would-pay signal is recorded
+- outcome decision is documented per pilot cycle
