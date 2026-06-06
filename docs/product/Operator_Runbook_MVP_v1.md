@@ -38,6 +38,18 @@
    - `POST /commercial-workspace/{deal_id}/actions`
    - allowed terminal state in-repo: `ready_for_human_submission`
 
+## Partner Workspace
+
+Every design partner engagement uses a workspace. See `Partner_Data_Intake_Policy.md` for full rules.
+
+1. Create workspace: `create_workspace(partner_label=..., created_by=...)`
+2. Add intake records: `add_intake_record(partner_workspace_id=..., source_type=..., source_label=...)`
+3. Classify visibility: automatic via `classify_default_visibility()`
+4. Check readiness: `check_export_readiness()` before partner-facing use
+5. List partner-visible artifacts: `list_partner_visible_artifacts()` excludes internal/restricted records
+
+Important: never commit real customer/partner data. Use `synthetic` or `redacted_real` intake modes.
+
 ## Access Boundary
 
 All pilot artifacts are classified under a visibility level. See `Pilot_Access_Boundary_Policy.md` for full rules. Key defaults:
