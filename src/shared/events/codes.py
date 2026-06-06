@@ -265,6 +265,9 @@ EVENT_CODES = {
     "runtime_metadata_slice_created",
     "runtime_metadata_slice_review_status_changed",
     "runtime_metadata_slice_failed",
+    "commercial_prebid_demo_started",
+    "commercial_prebid_demo_report_built",
+    "commercial_prebid_demo_failed",
 }
 
 DECISION_CODES = {

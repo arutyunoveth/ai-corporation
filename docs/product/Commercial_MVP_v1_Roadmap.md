@@ -3,6 +3,7 @@
 ## Current Phase
 
 - Completed: bounded runtime metadata Phase `I1`
+- Completed: deterministic commercial pre-bid demo report
 - Active next block: commercial MVP v1
 
 ## Planned Sprints

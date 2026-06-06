@@ -18,6 +18,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Runtime Metadata Phase `I1` is complete for the bounded internal metadata-control slice around `M-049`, `M-050`, the runtime control trace ledger, and metadata slice integration.
 - The next approved roadmap block is `Commercial MVP v1`.
 - Current product recommendation: build controlled commercial pre-bid analysis and operator tooling with explicit human review.
+- Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - No broad autonomy is open.
 - No external execution is open.
 - No procurement platform submission, EDS/signature work, or supplier email automation is implemented.

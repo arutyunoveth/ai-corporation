@@ -1,0 +1,41 @@
+{
+  "fixture_name": "commercial_mvp_demo",
+  "tender": {
+    "source_title": "Low-voltage switchgear supply for municipal energy modernization",
+    "source_customer_name": "City Grid Modernization Authority",
+    "source_procurement_number": "CGMA-2026-0615",
+    "portal_url": "https://example.com/tenders/CGMA-2026-0615",
+    "notice_date": "2026-06-05",
+    "domain_type": "ELECTRICAL_EQUIPMENT",
+    "direction_type": "SUPPLY"
+  },
+  "notice_text": "Open tender for supply of low-voltage switchgear, delivery to two city substations, and operator onboarding package.",
+  "technical_specification_text": "Supply low-voltage switchgear cabinets, commissioning-ready labeling, FAT protocol support, delivery in two batches, warranty support for 24 months, and a complete technical passport package.",
+  "contract_draft_text": "Draft contract includes staged payment, penalties for delay, acceptance by authorized commission, and warranty obligations tied to documented handover.",
+  "why_relevant": "The tender fits the company's electrical-equipment profile and can be explained to a customer as a realistic pre-bid screening scenario with clear technical, contract, and readiness tradeoffs.",
+  "participant_requirements": [
+    "Prove supplier qualification and equipment conformity.",
+    "Provide a warranty commitment aligned with the draft contract.",
+    "Confirm delivery capability for two staged batches."
+  ],
+  "required_documents": [
+    "Tender notice",
+    "Technical specification",
+    "Draft contract",
+    "Supplier qualification package",
+    "Commercial quote"
+  ],
+  "sample_supplier_questions": [
+    "Can delivery be split into two accepted batches without penalty escalation?",
+    "Is an equivalent switchgear series acceptable if all technical parameters match?",
+    "What exact acceptance-document package is mandatory at shipment and handover?"
+  ],
+  "sample_supplier_quotes": [
+    {
+      "supplier_name": "North Grid Supply",
+      "quoted_amount": 4650000,
+      "currency_code": "RUB",
+      "notes": "Illustrative quote for customer demo only."
+    }
+  ]
+}
