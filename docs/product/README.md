@@ -9,6 +9,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - Runtime metadata Phase `I1` is complete for bounded internal metadata/control only.
 - The next active roadmap block is `Commercial MVP v1`.
 - Human review remains mandatory for all commercial recommendations and future LLM-assisted analysis.
+- The internal commercial workspace now covers manual TKP registration, economics, and bid-readiness assembly without opening external execution.
 
 ## Product References
 
@@ -18,6 +19,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Commercial_PreBid_Report_Spec.md](Commercial_PreBid_Report_Spec.md)
 - [Controlled_LLM_PreBid_Analysis.md](Controlled_LLM_PreBid_Analysis.md)
 - [Operator_Console_Commercial_Skeleton.md](Operator_Console_Commercial_Skeleton.md)
+- [TKP_Economics_Bid_Readiness.md](TKP_Economics_Bid_Readiness.md)
 - [MVP_v1_Scope.md](MVP_v1_Scope.md)
 - [MVP_v1_Non_Goals.md](MVP_v1_Non_Goals.md)
 - [Human_Control_Policy_v2.md](Human_Control_Policy_v2.md)

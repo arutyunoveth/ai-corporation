@@ -21,6 +21,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
+- A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.
 - No broad autonomy is open.
 - No external execution is open.
 - No procurement platform submission, EDS/signature work, or supplier email automation is implemented.
@@ -30,6 +31,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/README.md](docs/product/README.md)
 - [docs/product/Product_Master_Plan_v2.md](docs/product/Product_Master_Plan_v2.md)
 - [docs/product/Commercial_MVP_v1_Roadmap.md](docs/product/Commercial_MVP_v1_Roadmap.md)
+- [docs/product/TKP_Economics_Bid_Readiness.md](docs/product/TKP_Economics_Bid_Readiness.md)
 - [docs/product/MVP_v1_Scope.md](docs/product/MVP_v1_Scope.md)
 - [docs/product/MVP_v1_Non_Goals.md](docs/product/MVP_v1_Non_Goals.md)
 - [docs/product/Human_Control_Policy_v2.md](docs/product/Human_Control_Policy_v2.md)

@@ -6,6 +6,7 @@
 - Completed: deterministic commercial pre-bid demo report
 - Completed: controlled LLM pre-bid analysis under human review
 - Completed: operator console commercial skeleton
+- Completed: TKP / economics / bid-readiness workspace
 - Active next block: commercial MVP v1
 
 ## Planned Sprints

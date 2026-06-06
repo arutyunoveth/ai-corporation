@@ -269,6 +269,11 @@ EVENT_CODES = {
     "commercial_prebid_demo_report_built",
     "commercial_prebid_demo_failed",
     "commercial_operator_action_recorded",
+    "commercial_supplier_request_drafted",
+    "commercial_tkp_manual_registered",
+    "commercial_economics_built",
+    "commercial_bid_readiness_built",
+    "commercial_workspace_action_recorded",
 }
 
 DECISION_CODES = {
@@ -281,4 +286,8 @@ DECISION_CODES = {
     "OPERATOR_MARKED_NEEDS_MORE_REVIEW",
     "OPERATOR_MARKED_COLLECT_TKP",
     "OPERATOR_MARKED_PREPARE_BID_DRAFT",
+    "COMMERCIAL_WORKSPACE_TKP_NEEDED",
+    "COMMERCIAL_WORKSPACE_TKP_RECEIVED",
+    "COMMERCIAL_WORKSPACE_ECONOMICS_REVIEWED",
+    "COMMERCIAL_WORKSPACE_READY_FOR_HUMAN_SUBMISSION",
 }

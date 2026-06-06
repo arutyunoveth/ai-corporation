@@ -18,3 +18,6 @@
 - define paid-pilot packaging and onboarding constraints after `C6`
 - enrich the demo flow with bounded LLM-assisted analysis in `C3`, keeping deterministic fallback available
 - evaluate richer schema families and provider abstraction hardening after `C3`, without broad runtime opening
+- persist versioned supplier-request draft templates if commercial operators need reusable outbound packs
+- add richer quote attachment parsing and validation while keeping manual registration as the safe default
+- evaluate status-engine synchronization for commercial workspace actions without forcing unsafe automatic transitions
