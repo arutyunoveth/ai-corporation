@@ -162,6 +162,10 @@ from .generators import (
     next_knowledge_asset_set_id,
     next_launch_visibility_id,
     next_launch_visibility_set_id,
+    next_agent_registry_id,
+    next_agent_registry_set_id,
+    next_prompt_schema_id,
+    next_prompt_schema_library_set_id,
     next_supplier_rating_update_id,
     next_supplier_rating_update_set_id,
 )
@@ -330,6 +334,10 @@ __all__ = [
     "next_knowledge_asset_set_id",
     "next_launch_visibility_id",
     "next_launch_visibility_set_id",
+    "next_agent_registry_id",
+    "next_agent_registry_set_id",
+    "next_prompt_schema_id",
+    "next_prompt_schema_library_set_id",
     "next_supplier_rating_update_id",
     "next_supplier_rating_update_set_id",
 ]

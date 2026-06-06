@@ -250,6 +250,15 @@ EVENT_CODES = {
     "launch_visibility_built",
     "launch_visibility_item_recorded",
     "launch_visibility_failed",
+    "agent_registry_set_created",
+    "agent_registry_record_created",
+    "agent_registry_status_changed",
+    "agent_registry_failed",
+    "prompt_schema_library_set_created",
+    "prompt_schema_record_created",
+    "prompt_schema_status_changed",
+    "prompt_schema_failed",
+    "agent_prompt_link_created",
 }
 
 DECISION_CODES = {

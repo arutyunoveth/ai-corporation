@@ -172,6 +172,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Limited Runtime Implementation Gate block completed.
 - Final phase decision: `GO to MVP runtime implementation`.
 - Recommended next step: `open MVP Runtime Implementation — Phase 1 for the bounded internal metadata-control slice for M-049/M-050 only`.
+- MVP Runtime Implementation — Phase 1 is now formally staged for the bounded internal metadata-control slice for `M-049/M-050`.
+- Current phase status: `repository ready for bounded MVP runtime module implementation`.
 
 ## Current Scope
 

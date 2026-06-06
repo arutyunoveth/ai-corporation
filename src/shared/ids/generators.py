@@ -682,5 +682,21 @@ def next_launch_visibility_set_id(session: Session, column: ColumnElement[str]) 
     return _next_business_id(session, prefix="LVS", column=column)
 
 
+def next_agent_registry_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="ARS", column=column)
+
+
+def next_agent_registry_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="AR", column=column)
+
+
+def next_prompt_schema_library_set_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PSLS", column=column)
+
+
+def next_prompt_schema_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="PS", column=column)
+
+
 def next_launch_visibility_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="LV", column=column)

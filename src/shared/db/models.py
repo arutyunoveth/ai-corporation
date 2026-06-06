@@ -1,4 +1,5 @@
 from src.modules.action_queue.models import ActionQueueApproval, ActionQueueRecord, ActionQueueSet
+from src.modules.agent_registry.models import AgentRegistryRecord, AgentRegistrySet
 from src.modules.action_console.models import ActionConsoleItem, ActionConsoleRecord, ActionConsoleSet
 from src.modules.acceptance_control.models import (
     AcceptanceControlRecord,
@@ -124,6 +125,7 @@ from src.modules.post_submission.models import (
     PostSubmissionTrackerRecord,
     PostSubmissionTrackerSet,
 )
+from src.modules.prompt_schema_library.models import AgentPromptLink, PromptSchemaLibrarySet, PromptSchemaRecord
 from src.modules.procedure_monitor.models import (
     ProcedureMonitorAlert,
     ProcedureMonitorEvent,
@@ -253,6 +255,9 @@ __all__ = [
     "ActionQueueApproval",
     "ActionQueueRecord",
     "ActionQueueSet",
+    "AgentPromptLink",
+    "AgentRegistryRecord",
+    "AgentRegistrySet",
     "ActionConsoleItem",
     "ActionConsoleRecord",
     "ActionConsoleSet",
@@ -418,6 +423,8 @@ __all__ = [
     "ProcedureMonitorRecord",
     "ProcedureMonitorSet",
     "PriorityScoreRecord",
+    "PromptSchemaLibrarySet",
+    "PromptSchemaRecord",
     "PurchaseOrderItem",
     "PurchaseOrderLink",
     "PurchaseOrderRecord",

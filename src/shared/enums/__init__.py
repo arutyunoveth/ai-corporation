@@ -215,6 +215,14 @@ from .pre_l1 import (
     LaunchVisibilityScopeType,
     LaunchVisibilityStatus,
 )
+from .mvp_phase1 import (
+    AgentActivationState,
+    AgentPromptLinkStatus,
+    AgentRegistryStatus,
+    PromptSchemaAssetStatus,
+    PromptSchemaAssetType,
+    PromptSchemaLibraryStatus,
+)
 
 __all__ = [
     "ArtifactType",
@@ -390,4 +398,10 @@ __all__ = [
     "LaunchVisibilityItemType",
     "LaunchVisibilityScopeType",
     "LaunchVisibilityStatus",
+    "AgentActivationState",
+    "AgentPromptLinkStatus",
+    "AgentRegistryStatus",
+    "PromptSchemaAssetStatus",
+    "PromptSchemaAssetType",
+    "PromptSchemaLibraryStatus",
 ]
