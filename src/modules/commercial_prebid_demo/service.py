@@ -52,7 +52,7 @@ def available_fixture_dirs() -> list[Path]:
     return [FIXTURES_DIR, PILOT_FIXTURES_DIR]
 
 
-def _load_fixture(fixture_name: str) -> dict:
+def load_commercial_prebid_fixture(fixture_name: str) -> dict:
     for directory in available_fixture_dirs():
         fixture_path = directory / f"{fixture_name}.json"
         if fixture_path.exists():
@@ -207,7 +207,7 @@ def run_commercial_prebid_demo(
     session: Session,
     payload: RunCommercialPreBidDemoRequest,
 ) -> CommercialPreBidDemoResponse:
-    fixture = _load_fixture(payload.fixture_name)
+    fixture = load_commercial_prebid_fixture(payload.fixture_name)
     intake = None
     try:
         intake, _source_payload = create_tender_intake(
