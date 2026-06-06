@@ -21,3 +21,4 @@
 - persist versioned supplier-request draft templates if commercial operators need reusable outbound packs
 - add richer quote attachment parsing and validation while keeping manual registration as the safe default
 - evaluate status-engine synchronization for commercial workspace actions without forcing unsafe automatic transitions
+- confirm that accepted local C1-C6 and CP0 state is published/synced to `origin/main` before external repository review
