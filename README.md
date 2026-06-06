@@ -19,9 +19,10 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Commercial MVP v1 is complete at the repository package level.
 - Controlled Commercial Pilot Stage is complete at the repository package level.
 - Design-Partner Pilot Stage is complete at the repository package level.
+- Restricted Paid Pilot Operations Setup (PP0) is complete: operations runbook, local data handling policy, templates, and first-pilot checklist are in place.
 - Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
 - A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
-- 432 tests pass (DP1-DP6 design-partner tests + all prior tests).
+- 441 tests pass (DP1-DP7 design-partner tests + all prior tests).
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
@@ -47,6 +48,10 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Human_Control_Policy_v2.md](docs/product/Human_Control_Policy_v2.md)
 - [docs/product/Product_Backlog.md](docs/product/Product_Backlog.md)
 - [docs/product/Repository_Public_Readiness_Check.md](docs/product/Repository_Public_Readiness_Check.md)
+- [docs/product/Restricted_Paid_Pilot_Operations_Runbook.md](docs/product/Restricted_Paid_Pilot_Operations_Runbook.md)
+- [docs/product/Local_Pilot_Data_Handling_Policy.md](docs/product/Local_Pilot_Data_Handling_Policy.md)
+- [docs/product/First_Restricted_Pilot_Checklist.md](docs/product/First_Restricted_Pilot_Checklist.md)
+- [docs/product/templates/](docs/product/templates/) — pilot templates directory
 
 ## Reconciliation Docs
 

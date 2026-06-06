@@ -19,6 +19,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - Controlled Commercial Pilot Stage review is complete with a current decision of `GO to unpaid/discounted design-partner pilot`.
 - Design-Partner Pilot Stage is complete. Final decision: `GO to restricted paid pilot with manual-control boundaries`.
 - Pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all implemented.
+- Restricted Paid Pilot Operations Setup (PP0) is complete: operations runbook, local data handling policy, templates, and first-pilot checklist are in place.
 
 ## Product References
 
@@ -74,3 +75,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [DP7_Paid_Pilot_Readiness_Review.md](DP7_Paid_Pilot_Readiness_Review.md)
 - [Paid_Pilot_GO_NO_GO_Decision.md](Paid_Pilot_GO_NO_GO_Decision.md)
 - [Post_Design_Partner_Roadmap_Revision.md](Post_Design_Partner_Roadmap_Revision.md)
+- [Restricted_Paid_Pilot_Operations_Runbook.md](Restricted_Paid_Pilot_Operations_Runbook.md)
+- [Local_Pilot_Data_Handling_Policy.md](Local_Pilot_Data_Handling_Policy.md)
+- [First_Restricted_Pilot_Checklist.md](First_Restricted_Pilot_Checklist.md)
+- [templates/](templates/) — pilot templates directory
