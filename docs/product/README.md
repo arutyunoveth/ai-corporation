@@ -14,6 +14,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - A controlled pilot scenario pack is now available for synthetic pilot rehearsal and evidence collection.
 - Controlled pilot operator workflow hardening is documented for repeatable manual-control execution.
 - Controlled pilot evidence and metrics ledger artifacts are now defined for scenario-by-scenario pilot proof.
+- Customer-facing controlled pilot sales materials are now documented with explicit manual-control disclosures.
 
 ## Product References
 
@@ -31,6 +32,10 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Pilot_Operator_Error_Handling.md](Pilot_Operator_Error_Handling.md)
 - [Pilot_Evidence_Ledger.md](Pilot_Evidence_Ledger.md)
 - [Pilot_Metrics_Definition.md](Pilot_Metrics_Definition.md)
+- [Sales_One_Pager_MVP_v1.md](Sales_One_Pager_MVP_v1.md)
+- [Pilot_Offer_Description.md](Pilot_Offer_Description.md)
+- [Pilot_Limitations_Disclosure.md](Pilot_Limitations_Disclosure.md)
+- [Pricing_Test_Menu.md](Pricing_Test_Menu.md)
 - [Customer_Onboarding_MVP_v1.md](Customer_Onboarding_MVP_v1.md)
 - [Operator_Runbook_MVP_v1.md](Operator_Runbook_MVP_v1.md)
 - [Pricing_Hypotheses.md](Pricing_Hypotheses.md)

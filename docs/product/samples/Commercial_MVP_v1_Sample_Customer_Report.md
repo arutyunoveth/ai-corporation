@@ -6,6 +6,7 @@
 - procurement: `COM-DEMO-001`
 - mode: controlled internal rehearsal with stub-LLM analysis
 - purpose: pre-bid support and human-reviewed bid-readiness packaging
+- pilot framing: controlled commercial pilot, operator-assisted only
 
 ## What Was Produced
 
@@ -37,3 +38,10 @@
 ## Human Control Statement
 
 This report supports operator judgment. It does not authorize autonomous submission, external messaging, EDS/signature actions, or final legal/commercial decisions without a human.
+
+## Pilot Disclosure
+
+- human submission only
+- no legal guarantee
+- no autonomous platform action
+- no supplier outreach without approval

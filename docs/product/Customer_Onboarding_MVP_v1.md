@@ -41,3 +41,4 @@ It does not:
 - explicit human control on all commercial decisions
 - no risky external execution in MVP v1
 - reproducible demo flow for pilot review
+- controlled pilot materials include a one-pager, limitations disclosure, pricing test menu, and sample customer report
