@@ -19,6 +19,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Commercial MVP v1 is complete at the repository package level.
 - Controlled Commercial Pilot Stage is complete at the repository package level.
 - Current product recommendation: `GO to unpaid/discounted design-partner pilot`.
+- Design-Partner Pilot Stage is now active at the repository publication level. `origin/main` has been synchronized with the accepted local state (`2bbd379`).
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
@@ -277,7 +278,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Default status on create: `NEW`
 - Business IDs are generated in application code with DB uniqueness guarantees and retry-friendly formatting.
 - AI/LLM, prompt, agent, and external platform execution work are intentionally deferred until after recovery review and Launch Sprint `L1`.
-- Public repository state is now synchronized with post-Dry-Run-0 truth under existing `L1` restrictions.
+- Public repository state is now synchronized at `2bbd379` with `origin/main` matching local `main`. Both branches are at parity.
 - The repository includes both the Dry Run 0 planning package and the filled result package: scenario, execution log, review result, blockers/non-blockers, and success criteria.
 - The list below is an implementation inventory and includes both canonical-business refs and internal-extension refs currently present in code:
   - `DL-YYYY-NNNNNN`
