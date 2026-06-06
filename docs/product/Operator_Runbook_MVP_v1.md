@@ -38,6 +38,18 @@
    - `POST /commercial-workspace/{deal_id}/actions`
    - allowed terminal state in-repo: `ready_for_human_submission`
 
+## Access Boundary
+
+All pilot artifacts are classified under a visibility level. See `Pilot_Access_Boundary_Policy.md` for full rules. Key defaults:
+
+- runtime traces are `internal_only` — not visible to partners
+- operator decisions/actions are `operator_visible` — not exportable
+- pilot evidence and metrics are `partner_visible` — may be shared
+- customer reports after human review are `exportable_to_partner`
+- sensitive notes are `restricted_sensitive` — admin only
+
+Always run the export guard before delivering artifacts to a design partner.
+
 ## Mandatory Control Rules
 
 - never treat `ready_for_human_submission` as actual submission

@@ -21,7 +21,7 @@
 - persist versioned supplier-request draft templates if commercial operators need reusable outbound packs
 - add richer quote attachment parsing and validation while keeping manual registration as the safe default
 - evaluate status-engine synchronization for commercial workspace actions without forcing unsafe automatic transitions
-- confirm that accepted local C1-C6 and CP0 state is published/synced to `origin/main` before external repository review
-- add a minimal pilot-facing auth/access boundary before broader customer circulation
+- [x] confirm that accepted local C1-C6 and CP0 state is published/synced to `origin/main` before external repository review (DP0)
+- [x] add a minimal pilot-facing auth/access boundary before broader customer circulation (DP1)
 - collect first design-partner evidence with real operator/customer feedback before claiming paid-pilot readiness
 - improve customer/export packaging for partner-facing report delivery without opening external execution
