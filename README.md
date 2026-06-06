@@ -21,6 +21,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Design-Partner Pilot Stage is complete at the repository package level.
 - Restricted Paid Pilot Operations Setup (PP0) is complete: operations runbook, local data handling policy, templates, and first-pilot checklist are in place.
 - Real Partner Tender Folder Runner (PP1) is complete: a local folder-based CLI command that validates folder structure, creates intake records, runs analysis, applies the export guard, and writes partner-facing outputs.
+- Tender Operator Pilot Runner Refinement (PP1R) is complete: RFQ-first workflow for tender/operator companies with calibrated contract risk, supplier questions, RFQ draft, TKP comparison/economics, and bid decision recommendation.
 - Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
 - A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
 - 441 tests pass (DP1-DP7 design-partner tests + all prior tests).
@@ -53,6 +54,9 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Local_Pilot_Data_Handling_Policy.md](docs/product/Local_Pilot_Data_Handling_Policy.md)
 - [docs/product/First_Restricted_Pilot_Checklist.md](docs/product/First_Restricted_Pilot_Checklist.md)
 - [docs/product/Run_Partner_Tender_Folder.md](docs/product/Run_Partner_Tender_Folder.md)
+- [docs/product/Tender_Operator_Pilot_Runbook.md](docs/product/Tender_Operator_Pilot_Runbook.md)
+- [docs/product/Calibrated_Contract_Risk_Method.md](docs/product/Calibrated_Contract_Risk_Method.md)
+- [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
 - [docs/product/templates/](docs/product/templates/) — pilot templates directory
 
 ## Reconciliation Docs

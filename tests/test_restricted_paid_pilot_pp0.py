@@ -7,7 +7,7 @@ class TestPP0Gitignore:
     def test_local_pilot_runs_ignored(self):
         gitignore = ROOT / ".gitignore"
         text = gitignore.read_text(encoding="utf-8")
-        assert "local_pilot_runs/" in text
+        assert "/local_pilot_runs/" in text
 
     def test_pilot_runs_ignored(self):
         gitignore = ROOT / ".gitignore"

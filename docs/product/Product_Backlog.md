@@ -31,5 +31,6 @@
 - [x] complete paid pilot readiness review (DP7)
 - [x] restricted paid pilot operations setup (PP0) — runbook, data policy, templates, checklist, gitignore
 - [x] real partner tender folder runner (PP1) — local folder-based pilot command with folder validation, intake, redaction, analysis, export guard, and output generation
-- collect first real design-partner evidence with real operator/customer feedback
+- [x] tender operator pilot runner refinement (PP1R) — RFQ-first workflow for tender/operator companies; calibrated contract risk; TKP comparison/economics; no product catalog assumptions
+- collect first real design-partner/tender-operator evidence with real operator/customer feedback
 - improve customer/export packaging for partner-facing report delivery without opening external execution

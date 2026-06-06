@@ -1,0 +1,12 @@
+TECHNICAL SPECIFICATION (SYNTHETIC TEST DATA)
+
+1. Equipment must comply with GOST 15150-69 and relevant industry standards.
+2. Measurement accuracy: +/- 0.5% for all specified ranges.
+3. Operating temperature range: -40°C to +60°C.
+4. Protection rating: IP65 minimum for outdoor installation.
+5. Power supply: 220V AC, 50 Hz.
+6. Communication interface: Modbus RTU RS-485.
+7. Control cabinet must include surge protection and emergency shutdown.
+8. All equipment must have certificates of conformity (EAC).
+9. Documentation: Russian-language technical passport and operation manual.
+10. Spare parts availability: minimum 10 years from delivery.

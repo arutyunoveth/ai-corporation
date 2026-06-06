@@ -1,0 +1,20 @@
+NOTICE OF TENDER
+
+Procurement Number: PP1R-TEST-2026-001
+Title: Supply and Delivery of Industrial Control Equipment
+Issuing Authority: Test Procurement Agency
+Submission Deadline: 2026-08-15
+
+This is a synthetic test notice for PP1R testing purposes only — tender operator workflow.
+
+Scope:
+- Supply of industrial control equipment per technical specification
+- Delivery to specified locations
+- 2-year warranty period
+- Installation and commissioning support
+
+Eligibility:
+- Valid SRO approval in relevant construction/installation category
+- ISO 9001 certification or equivalent
+- Prior experience in similar contracts (minimum 3 contracts)
+- No tax arrears

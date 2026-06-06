@@ -20,6 +20,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - Design-Partner Pilot Stage is complete. Final decision: `GO to restricted paid pilot with manual-control boundaries`.
 - Pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all implemented.
 - Restricted Paid Pilot Operations Setup (PP0) is complete: operations runbook, local data handling policy, templates, and first-pilot checklist are in place.
+- Tender Operator Pilot Runner Refinement (PP1R) is complete: RFQ-first workflow for tender/operator companies with calibrated contract risk, supplier questions, RFQ draft, TKP comparison/economics, and bid decision recommendation.
 
 ## Product References
 
@@ -78,4 +79,8 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Restricted_Paid_Pilot_Operations_Runbook.md](Restricted_Paid_Pilot_Operations_Runbook.md)
 - [Local_Pilot_Data_Handling_Policy.md](Local_Pilot_Data_Handling_Policy.md)
 - [First_Restricted_Pilot_Checklist.md](First_Restricted_Pilot_Checklist.md)
+- [PP1R_Tender_Operator_Pilot_Runner_Refinement.md](PP1R_Tender_Operator_Pilot_Runner_Refinement.md)
+- [Tender_Operator_Pilot_Runbook.md](Tender_Operator_Pilot_Runbook.md)
+- [Calibrated_Contract_Risk_Method.md](Calibrated_Contract_Risk_Method.md)
+- [Tender_Operator_RFQ_Workflow.md](Tender_Operator_RFQ_Workflow.md)
 - [templates/](templates/) — pilot templates directory

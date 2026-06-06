@@ -20,6 +20,31 @@ For real partner pilot operations, use the folder runner:
 
 See `Run_Partner_Tender_Folder.md` for the full runbook and `templates/local_pilot_folder_template.md` for the required folder structure.
 
+## Tender Operator Pilot Runner (PP1R)
+
+For tender/operator companies (the primary customer type), use the refined runner:
+
+```bash
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider stub \
+  --output-dir local_pilot_runs/tender_operator_001/tender_001/05_system_output
+```
+
+Tender operators do not have fixed product catalogs or known supplier prices. This runner uses an RFQ-first workflow:
+
+tender docs → extract requirements → supplier questions → RFQ draft → collect TKP (optional) → compare TKP → economics → bid decision
+
+Key differences from PP1:
+- Folder structure: `03_supplier_search/`, `04_tkp/`, `05_system_output/`, `06_partner_export/`, `07_feedback/`
+- Contract risk is calibrated (market_standard_harsh_term, commercially_material_risk, deal_breaker_candidate)
+- Outputs include requirements, supplier questions, RFQ draft, and calibrated contract risk memo
+- TKP comparison and economics generated when TKP files present
+- Old PP1 script kept for backward compatibility
+
+See `Tender_Operator_Pilot_Runbook.md` and `Calibrated_Contract_Risk_Method.md` for details.
+
 The runner:
 - Validates the local folder structure (requires `02_extracted_text/notice.txt`, `technical_spec.txt`, `contract_draft.txt`)
 - Creates a partner workspace and intake records using the existing DP2 service

@@ -1,0 +1,18 @@
+DRAFT CONTRACT
+
+Between: Test Procurement Agency (Customer)
+And: [Supplier/Contractor Name]
+
+1. Subject: Supply and delivery of industrial control equipment per specification.
+2. Contract Value: [to be determined based on winning bid].
+3. Payment: Customer pays within 30 business days after signing acceptance certificate.
+4. Delivery: Within 45 calendar days from contract signing.
+5. Warranty: 24 months from acceptance certificate date.
+6. Penalties: 1/300 of key rate per day of delay, capped at 30% of contract value.
+7. Contract Security: 30% of contract value, to be returned 60 days after warranty expiry.
+8. Termination: Customer may terminate unilaterally if supplier delays beyond 20 days.
+9. Acceptance: Formal acceptance committee with protocol.
+10. Dispute Resolution: Arbitration at Chamber of Commerce and Industry.
+11. Governing Law: Laws of the Russian Federation.
+12. Confidentiality: 5 years from contract signing.
+13. Force Majeure: Standard definition, documented per Russian Civil Code.
