@@ -19,7 +19,7 @@ def test_controlled_pilot_final_review_docs_exist_and_match_decision():
     assert "GO to unpaid/discounted design-partner pilot" in decision
     assert "design-partner pilot stabilization" in roadmap
     assert "Controlled Commercial Pilot Stage review is complete" in readme
-    assert "Current product recommendation: `GO to unpaid/discounted design-partner pilot`." in root_readme
+    assert "Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`." in root_readme
 
 
 def test_controlled_pilot_final_review_keeps_non_goals_closed():

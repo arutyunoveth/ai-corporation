@@ -31,7 +31,7 @@ def test_c1_readme_uses_public_repo_relative_links_and_current_status():
     assert "/Users/master/Documents/AI-Corporation" not in readme_text
     assert "Runtime Metadata Phase `I1` is complete" in readme_text
     assert "Controlled Commercial Pilot Stage is complete at the repository package level." in readme_text
-    assert "Current product recommendation: `GO to unpaid/discounted design-partner pilot`." in readme_text
+    assert "Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`." in readme_text
     assert "[docs/product/README.md](docs/product/README.md)" in readme_text
     assert "No broad autonomy is open." in readme_text
     assert "No external execution is open." in readme_text

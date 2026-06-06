@@ -28,5 +28,6 @@
 - [x] create safe partner-facing report export and delivery flow (DP4)
 - [x] create structured feedback and outcome loop for design-partner pilots (DP5)
 - [x] run end-to-end design-partner pilot dry run (DP6)
-- collect first real design-partner evidence with operator/customer feedback before claiming paid-pilot readiness
+- [x] complete paid pilot readiness review (DP7)
+- collect first real design-partner evidence with real operator/customer feedback
 - improve customer/export packaging for partner-facing report delivery without opening external execution

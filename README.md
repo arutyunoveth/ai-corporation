@@ -18,8 +18,10 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Runtime Metadata Phase `I1` is complete for the bounded internal metadata-control slice around `M-049`, `M-050`, the runtime control trace ledger, and metadata slice integration.
 - Commercial MVP v1 is complete at the repository package level.
 - Controlled Commercial Pilot Stage is complete at the repository package level.
-- Current product recommendation: `GO to unpaid/discounted design-partner pilot`.
-- Design-Partner Pilot Stage is now active at the repository publication level. `origin/main` has been synchronized with the accepted local state (`2bbd379`).
+- Design-Partner Pilot Stage is complete at the repository package level.
+- Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
+- A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
+- 432 tests pass (DP1-DP6 design-partner tests + all prior tests).
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.

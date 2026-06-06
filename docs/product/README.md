@@ -17,6 +17,8 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - Customer-facing controlled pilot sales materials are now documented with explicit manual-control disclosures.
 - A controlled pilot dry-run script and result template are now available for pre-pilot rehearsal.
 - Controlled Commercial Pilot Stage review is complete with a current decision of `GO to unpaid/discounted design-partner pilot`.
+- Design-Partner Pilot Stage is complete. Final decision: `GO to restricted paid pilot with manual-control boundaries`.
+- Pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all implemented.
 
 ## Product References
 
@@ -54,3 +56,21 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Human_Control_Policy_v2.md](Human_Control_Policy_v2.md)
 - [Product_Backlog.md](Product_Backlog.md)
 - [Repository_Public_Readiness_Check.md](Repository_Public_Readiness_Check.md)
+- [DP1_Minimal_Access_Boundary.md](DP1_Minimal_Access_Boundary.md)
+- [Pilot_Access_Boundary_Policy.md](Pilot_Access_Boundary_Policy.md)
+- [DP2_Partner_Workspace_and_Data_Intake.md](DP2_Partner_Workspace_and_Data_Intake.md)
+- [Partner_Data_Intake_Policy.md](Partner_Data_Intake_Policy.md)
+- [DP3_Real_Tender_Runbook_and_Redaction.md](DP3_Real_Tender_Runbook_and_Redaction.md)
+- [Real_Tender_Data_Handling_Policy.md](Real_Tender_Data_Handling_Policy.md)
+- [Redaction_Checklist.md](Redaction_Checklist.md)
+- [DP4_Report_Export_and_Partner_Delivery.md](DP4_Report_Export_and_Partner_Delivery.md)
+- [Partner_Report_Export_Policy.md](Partner_Report_Export_Policy.md)
+- [Manual_Delivery_Checklist.md](Manual_Delivery_Checklist.md)
+- [DP5_Feedback_and_Outcome_Loop.md](DP5_Feedback_and_Outcome_Loop.md)
+- [Design_Partner_Feedback_Form.md](Design_Partner_Feedback_Form.md)
+- [Pilot_Outcome_Decision_Rubric.md](Pilot_Outcome_Decision_Rubric.md)
+- [DP6_Design_Partner_Dry_Run.md](DP6_Design_Partner_Dry_Run.md)
+- [Design_Partner_Dry_Run_Result_Template.md](Design_Partner_Dry_Run_Result_Template.md)
+- [DP7_Paid_Pilot_Readiness_Review.md](DP7_Paid_Pilot_Readiness_Review.md)
+- [Paid_Pilot_GO_NO_GO_Decision.md](Paid_Pilot_GO_NO_GO_Decision.md)
+- [Post_Design_Partner_Roadmap_Revision.md](Post_Design_Partner_Roadmap_Revision.md)
