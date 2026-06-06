@@ -168,6 +168,7 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Limited Runtime Implementation Gate is now formally staged under a locked master plan and S1 scope/safety lock package.
 - Current phase status: `repository ready for MVP runtime slice definition`.
 - First MVP runtime slice is now formally defined.
+- MVP implementation package is now ready for execution planning.
 
 ## Current Scope
 
