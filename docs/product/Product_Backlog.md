@@ -27,5 +27,6 @@
 - [x] create safe redaction workflow for real tender materials (DP3)
 - [x] create safe partner-facing report export and delivery flow (DP4)
 - [x] create structured feedback and outcome loop for design-partner pilots (DP5)
-- collect first design-partner evidence with real operator/customer feedback before claiming paid-pilot readiness with real operator/customer feedback before claiming paid-pilot readiness
+- [x] run end-to-end design-partner pilot dry run (DP6)
+- collect first real design-partner evidence with operator/customer feedback before claiming paid-pilot readiness
 - improve customer/export packaging for partner-facing report delivery without opening external execution
