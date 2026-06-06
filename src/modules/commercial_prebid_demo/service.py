@@ -115,6 +115,7 @@ def _build_report(
     )
     report_json = {
         "fixture_name": fixture["fixture_name"],
+        "scenario_id": fixture.get("scenario_id", fixture["fixture_name"]),
         "analysis_mode": analysis_mode,
         "deal_id": deal_id,
         "intake_id": intake.intake_id,

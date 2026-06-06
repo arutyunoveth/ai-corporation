@@ -13,6 +13,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - Commercial MVP v1 pilot packaging is now complete at the repository level; the next gate is a controlled paid pilot under restrictions.
 - A controlled pilot scenario pack is now available for synthetic pilot rehearsal and evidence collection.
 - Controlled pilot operator workflow hardening is documented for repeatable manual-control execution.
+- Controlled pilot evidence and metrics ledger artifacts are now defined for scenario-by-scenario pilot proof.
 
 ## Product References
 
@@ -28,6 +29,8 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Pilot_Dataset_Readme.md](Pilot_Dataset_Readme.md)
 - [Pilot_Operator_Checklist.md](Pilot_Operator_Checklist.md)
 - [Pilot_Operator_Error_Handling.md](Pilot_Operator_Error_Handling.md)
+- [Pilot_Evidence_Ledger.md](Pilot_Evidence_Ledger.md)
+- [Pilot_Metrics_Definition.md](Pilot_Metrics_Definition.md)
 - [Customer_Onboarding_MVP_v1.md](Customer_Onboarding_MVP_v1.md)
 - [Operator_Runbook_MVP_v1.md](Operator_Runbook_MVP_v1.md)
 - [Pricing_Hypotheses.md](Pricing_Hypotheses.md)
