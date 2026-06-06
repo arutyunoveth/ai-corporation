@@ -79,6 +79,12 @@ class RuntimeTraceDisposition(StrEnum):
     ARCHIVED = "ARCHIVED"
 
 
+class RuntimeMetadataSliceStatus(StrEnum):
+    NEEDS_HUMAN_REVIEW = "needs_human_review"
+    APPROVED_FOR_INTERNAL_USE = "approved_for_internal_use"
+    REJECTED = "rejected"
+
+
 class PromptSchemaAssetType(StrEnum):
     PROMPT_TEMPLATE = "PROMPT_TEMPLATE"
     INPUT_SCHEMA = "INPUT_SCHEMA"

@@ -119,5 +119,5 @@ def test_runtime_control_trace_list_and_boundaries_are_explicit(client):
     ]:
         assert token in sprint_text
 
-    assert "I1-S4" in backlog_text
+    assert "Optional later" in backlog_text
     assert "/runtime-control-traces" in client.app.openapi()["paths"]

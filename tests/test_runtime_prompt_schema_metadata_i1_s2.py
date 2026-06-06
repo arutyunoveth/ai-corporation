@@ -121,4 +121,4 @@ def test_i1_s2_docs_and_boundaries_are_explicit():
     ]:
         assert token in sprint_text
 
-    assert "I1-S4" in backlog_text
+    assert "Optional later" in backlog_text

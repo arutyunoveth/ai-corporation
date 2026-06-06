@@ -6,10 +6,9 @@ This backlog records adjacent updated-roadmap work discovered during sprint `I1-
 
 ## Deferred Adjacent Items
 
-1. `I1-S4` bounded metadata-slice integration review under the updated roadmap package.
-2. Optional later separation of `capability_tags` from shared capability/action-class storage, if a later approved sprint requires distinct persistence semantics.
-3. Optional later separation of prompt metadata aliases into dedicated persistent columns, if a later approved sprint requires stricter relational querying beyond bounded JSON metadata storage.
-4. Optional later extraction of trace-ledger summary blobs into first-class artifact refs, if a later approved sprint requires richer artifact lineage.
+1. Optional later separation of `capability_tags` from shared capability/action-class storage, if a later approved sprint requires distinct persistence semantics.
+2. Optional later separation of prompt metadata aliases into dedicated persistent columns, if a later approved sprint requires stricter relational querying beyond bounded JSON metadata storage.
+3. Optional later extraction of trace-ledger summary blobs into first-class artifact refs, if a later approved sprint requires richer artifact lineage.
 
 ## Explicit Non-Backlog Items
 

@@ -184,6 +184,8 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Final phase decision: `Continue bounded MVP runtime implementation`.
 - Recommended next step: `prepare the next separately approved bounded runtime step without broad deferred-runtime opening`.
 - Current governance truth: `M-049` and `M-050` are `BOUNDED_IMPLEMENTED` for internal metadata/control only; `M-052..M-055` remain non-broad-runtime late slots.
+- Updated roadmap Phase I1 is now complete as a bounded metadata-control slice with `M-049`, `M-050`, runtime trace ledger, and integrated metadata slice linkage.
+- Updated roadmap next step: `controlled LLM pre-bid analysis under explicit human review`.
 
 ## Current Scope
 

@@ -229,6 +229,7 @@ from .mvp_phase1 import (
     RuntimeTraceActionType,
     RuntimeTraceActorType,
     RuntimeTraceDisposition,
+    RuntimeMetadataSliceStatus,
     RuntimeTraceValidationStatus,
 )
 
@@ -419,5 +420,6 @@ __all__ = [
     "RuntimeTraceActionType",
     "RuntimeTraceActorType",
     "RuntimeTraceDisposition",
+    "RuntimeMetadataSliceStatus",
     "RuntimeTraceValidationStatus",
 ]

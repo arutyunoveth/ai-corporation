@@ -702,5 +702,9 @@ def next_runtime_trace_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="RTC", column=column)
 
 
+def next_runtime_metadata_slice_id(session: Session, column: ColumnElement[str]) -> str:
+    return _next_business_id(session, prefix="RMS", column=column)
+
+
 def next_launch_visibility_id(session: Session, column: ColumnElement[str]) -> str:
     return _next_business_id(session, prefix="LV", column=column)

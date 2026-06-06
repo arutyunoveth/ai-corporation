@@ -262,6 +262,9 @@ EVENT_CODES = {
     "runtime_control_trace_created",
     "runtime_control_trace_review_status_changed",
     "runtime_control_trace_failed",
+    "runtime_metadata_slice_created",
+    "runtime_metadata_slice_review_status_changed",
+    "runtime_metadata_slice_failed",
 }
 
 DECISION_CODES = {

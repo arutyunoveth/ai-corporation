@@ -127,6 +127,7 @@ from src.modules.post_submission.models import (
 )
 from src.modules.prompt_schema_library.models import AgentPromptLink, PromptSchemaLibrarySet, PromptSchemaRecord
 from src.modules.runtime_control_traces.models import RuntimeControlTrace
+from src.modules.runtime_metadata_slices.models import RuntimeMetadataSlice
 from src.modules.procedure_monitor.models import (
     ProcedureMonitorAlert,
     ProcedureMonitorEvent,
