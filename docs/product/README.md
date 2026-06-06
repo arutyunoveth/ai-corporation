@@ -10,6 +10,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - The next active roadmap block is `Commercial MVP v1`.
 - Human review remains mandatory for all commercial recommendations and future LLM-assisted analysis.
 - The internal commercial workspace now covers manual TKP registration, economics, and bid-readiness assembly without opening external execution.
+- Commercial MVP v1 pilot packaging is now complete at the repository level; the next gate is a controlled paid pilot under restrictions.
 
 ## Product References
 
@@ -20,6 +21,14 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Controlled_LLM_PreBid_Analysis.md](Controlled_LLM_PreBid_Analysis.md)
 - [Operator_Console_Commercial_Skeleton.md](Operator_Console_Commercial_Skeleton.md)
 - [TKP_Economics_Bid_Readiness.md](TKP_Economics_Bid_Readiness.md)
+- [Pilot_Playbook_MVP_v1.md](Pilot_Playbook_MVP_v1.md)
+- [Customer_Onboarding_MVP_v1.md](Customer_Onboarding_MVP_v1.md)
+- [Operator_Runbook_MVP_v1.md](Operator_Runbook_MVP_v1.md)
+- [Pricing_Hypotheses.md](Pricing_Hypotheses.md)
+- [Pilot_Success_Metrics.md](Pilot_Success_Metrics.md)
+- [Known_Limitations_MVP_v1.md](Known_Limitations_MVP_v1.md)
+- [MVP_v1_Final_Audit.md](MVP_v1_Final_Audit.md)
+- [Post_MVP_v1_Roadmap_Revision_Proposal.md](Post_MVP_v1_Roadmap_Revision_Proposal.md)
 - [MVP_v1_Scope.md](MVP_v1_Scope.md)
 - [MVP_v1_Non_Goals.md](MVP_v1_Non_Goals.md)
 - [Human_Control_Policy_v2.md](Human_Control_Policy_v2.md)

@@ -7,7 +7,8 @@
 - Completed: controlled LLM pre-bid analysis under human review
 - Completed: operator console commercial skeleton
 - Completed: TKP / economics / bid-readiness workspace
-- Active next block: commercial MVP v1
+- Completed: commercial MVP v1 pilot package
+- Next gate: controlled paid pilot under restrictions
 
 ## Planned Sprints
 

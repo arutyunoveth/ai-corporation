@@ -22,6 +22,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
 - A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.
+- Commercial MVP v1 pilot packaging is complete at the repository level with a final decision of `GO with restrictions`.
 - No broad autonomy is open.
 - No external execution is open.
 - No procurement platform submission, EDS/signature work, or supplier email automation is implemented.
@@ -32,6 +33,8 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Product_Master_Plan_v2.md](docs/product/Product_Master_Plan_v2.md)
 - [docs/product/Commercial_MVP_v1_Roadmap.md](docs/product/Commercial_MVP_v1_Roadmap.md)
 - [docs/product/TKP_Economics_Bid_Readiness.md](docs/product/TKP_Economics_Bid_Readiness.md)
+- [docs/product/MVP_v1_Final_Audit.md](docs/product/MVP_v1_Final_Audit.md)
+- [docs/product/Pilot_Playbook_MVP_v1.md](docs/product/Pilot_Playbook_MVP_v1.md)
 - [docs/product/MVP_v1_Scope.md](docs/product/MVP_v1_Scope.md)
 - [docs/product/MVP_v1_Non_Goals.md](docs/product/MVP_v1_Non_Goals.md)
 - [docs/product/Human_Control_Policy_v2.md](docs/product/Human_Control_Policy_v2.md)
