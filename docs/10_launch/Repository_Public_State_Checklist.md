@@ -18,17 +18,17 @@ Use this checklist before communicating repository readiness externally or inter
 
 ## Governance Honesty
 
-- [ ] `M-049` remains `RESERVED`
-- [ ] `M-050` remains `RESERVED`
+- [ ] `M-049` remains `BOUNDED_IMPLEMENTED` only
+- [ ] `M-050` remains `BOUNDED_IMPLEMENTED` only
 - [ ] `M-052` remains `PLATFORM_ONLY`
 - [ ] `M-053` remains `GOVERNANCE_ONLY`
 - [ ] `M-054` remains `PLATFORM_ONLY`
 - [ ] `M-055` remains `GOVERNANCE_ONLY`
-- [ ] no false runtime claim exists for deferred/reconciled slots
+- [ ] no false broad-runtime claim exists for bounded/deferred/reconciled slots
 
 ## Launch Truth
 
 - [ ] current next step is clearly stated
-- [ ] repository is described as ready for `Dry Run 0`, not automatically for real pilot launch
+- [ ] repository is not described as broad deferred-runtime completion
 - [ ] operator-assisted restrictions remain visible
 - [ ] no autonomous or self-serve claim appears in public docs

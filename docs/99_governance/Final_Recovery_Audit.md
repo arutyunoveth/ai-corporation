@@ -5,7 +5,7 @@
 Registry Reconciliation Sprint `R6` closes the final unresolved locked-registry drift and leaves the repository with:
 
 - `EXACT`: `M-001..M-048`, `M-051`
-- `RESERVED`: `M-049`, `M-050`
+- `BOUNDED_IMPLEMENTED`: `M-049`, `M-050`
 - `PLATFORM_ONLY`: `M-052`, `M-054`
 - `GOVERNANCE_ONLY`: `M-053`, `M-055`
 
@@ -13,8 +13,8 @@ Registry Reconciliation Sprint `R6` closes the final unresolved locked-registry 
 
 | Canonical ID | Canonical module | Exists in original plan | Status | Reason |
 |---|---|---|---|---|
-| M-049 | Agent Registry | Yes | RESERVED | Recovery phase forbids AI/LLM/runtime implementation |
-| M-050 | Prompt / Schema Library | Yes | RESERVED | Recovery phase forbids prompt/schema runtime implementation |
+| M-049 | Agent Registry | Yes | BOUNDED_IMPLEMENTED | Bounded internal metadata/control slice implemented; broad agent execution remains deferred |
+| M-050 | Prompt / Schema Library | Yes | BOUNDED_IMPLEMENTED | Bounded internal metadata/control slice implemented; prompt execution remains deferred |
 
 Numbering does not jump. `M-049` and `M-050` are real canonical modules from the locked registry.
 
@@ -68,13 +68,12 @@ No unresolved locked-registry mismatches remain.
 
 Full exact runtime coverage is intentionally not the goal across the whole lock because:
 
-- `M-049` and `M-050` are intentionally reserved for the later AI/runtime phase
+- `M-049` and `M-050` are only partially opened as bounded metadata/control modules, not as broad runtime execution modules
 - `M-052..M-055` are reconciled as non-runtime platform/governance slots
 
-## What Remains Before Launch Sprint L1
+## What Still Remains Outside Current Scope
 
-1. Accept the recovered business skeleton through `M-048` plus `M-051`.
-2. Keep `M-049` and `M-050` closed until a dedicated post-launch AI/runtime phase is approved.
-3. Treat `M-052..M-055` as reconciled non-runtime slots and avoid creating fake platform modules before there is a real product need.
-4. Keep AI/LLM integration deferred until after Launch Sprint `L1`.
-5. Treat `Dry Run 0` as completed and use its review package as the gate for any Controlled Pilot `L1` approval.
+1. Keep `M-049` and `M-050` bounded to internal metadata/control behavior unless a later phase explicitly approves more.
+2. Treat `M-052..M-055` as reconciled non-runtime slots and avoid creating fake platform modules before there is a real product need.
+3. Keep autonomous, self-serve, and broad AI/runtime claims deferred until they are separately approved and implemented.
+4. Preserve the recovered business skeleton through `M-048` plus `M-051` while bounded runtime work continues separately.

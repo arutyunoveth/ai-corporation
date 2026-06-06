@@ -13,14 +13,15 @@ Return the project to the locked canonical business registry `M-001..M-055` with
 - Recovery Sprint R4: completed for `M-039`, `M-040`, `M-041`, `M-042`, `M-043`, `M-044`
 - Recovery Sprint R5: completed for `M-045`, `M-046`, `M-047`, `M-048`
 - Registry Reconciliation Sprint R6: completed for `M-052`, `M-053`, `M-054`, `M-055`
-- Remaining deferred canonical slots: `M-049`, `M-050`
+- MVP Runtime Implementation Phase 1: completed for bounded internal metadata/control coverage of `M-049`, `M-050`
+- Remaining deferred canonical slots: no unresolved late-slot status remains; broad execution behavior for `M-049`, `M-050` is still deferred
 - Remaining unresolved mismatches: none
 
 ## Recovery Outcome
 
 1. Canonical business-company coverage is exact for `M-001..M-048` and `M-051`.
 2. `M-049` and `M-050` are confirmed parts of the original locked registry. They are not missing numbers.
-3. `M-049` and `M-050` remain intentionally reserved because recovery still forbids AI/LLM/prompt/agent integration.
+3. `M-049` and `M-050` are now implemented as a bounded internal metadata/control slice; broad AI/LLM/prompt/agent execution remains deferred.
 4. `M-052` and `M-054` are explicitly reconciled as `PLATFORM_ONLY` canonical slots.
 5. `M-053` and `M-055` are explicitly reconciled as `GOVERNANCE_ONLY` canonical slots.
 6. No unresolved locked-registry mismatches remain.
@@ -29,8 +30,8 @@ Return the project to the locked canonical business registry `M-001..M-055` with
 
 | Canonical ID | Canonical module | Final status | Runtime implementation required now |
 |---|---|---|---|
-| M-049 | Agent Registry | RESERVED | No |
-| M-050 | Prompt / Schema Library | RESERVED | No |
+| M-049 | Agent Registry | BOUNDED_IMPLEMENTED | Yes, bounded internal metadata/control only |
+| M-050 | Prompt / Schema Library | BOUNDED_IMPLEMENTED | Yes, bounded internal metadata/control only |
 | M-052 | Notification Layer | PLATFORM_ONLY | No |
 | M-053 | Red Flag Registry | GOVERNANCE_ONLY | No |
 | M-054 | Master Dashboard | PLATFORM_ONLY | No |
@@ -38,13 +39,12 @@ Return the project to the locked canonical business registry `M-001..M-055` with
 
 ## Suggested Next Step
 
-After Registry Reconciliation Sprint `R6`, the repository is ready for a Launch Sprint `L1` review gate:
+After MVP Runtime Implementation Phase 1, the repository should continue only through a separately approved bounded runtime step:
 
-- confirm that business recovery is accepted
-- keep reserved AI/runtime slots `M-049`, `M-050` closed until a dedicated post-launch AI/runtime phase is approved
+- keep `M-049` and `M-050` bounded to metadata/control behavior only
 - accept `M-052..M-055` as reconciled non-runtime platform/governance slots
-- proceed without adding fake runtime modules for those late slots
-- use the completed `Dry Run 0` review package as the final pre-`L1` operational decision gate
+- proceed without broad deferred-runtime opening
+- require a new explicit approval package before adding execution semantics
 
 ## Non-Goals Still Preserved
 

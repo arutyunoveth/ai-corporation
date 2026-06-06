@@ -3,6 +3,7 @@
 ## Legend
 
 - `EXACT` — implemented close to canonical meaning and slot.
+- `BOUNDED_IMPLEMENTED` — implemented only for the explicitly approved internal metadata/control slice; broad runtime behavior remains deferred.
 - `RESERVED` — canonical slot exists in the locked plan, but implementation is intentionally deferred.
 - `PLATFORM_ONLY` — canonical slot is real, but its pre-launch role is platform/support and does not require a standalone runtime module now.
 - `GOVERNANCE_ONLY` — canonical slot is real, but its pre-launch role is governance/program control and does not require a standalone runtime module now.
@@ -59,8 +60,8 @@
 | M-046 | Postmortem Builder | Implemented as canonical postmortem set/record/finding/action contour | EXACT | Keep |
 | M-047 | Supplier Rating Updater | Implemented as canonical supplier rating update set/record/factor contour | EXACT | Keep |
 | M-048 | Knowledge Asset Builder | Implemented as canonical knowledge asset set/record/link contour over closure/postmortem and helper export/dashboard context | EXACT | Keep |
-| M-049 | Agent Registry | Canonical slot exists, but current repo only has helper `archive_export` historically occupying the slot | RESERVED | Keep reserved until post-recovery AI/runtime phase |
-| M-050 | Prompt / Schema Library | Canonical slot exists, but current repo only has helper `learning_automation` historically occupying the slot | RESERVED | Keep reserved until post-recovery AI/runtime phase |
+| M-049 | Agent Registry | Implemented as bounded internal registry set/record metadata with reviewed activation state and no execution runtime | BOUNDED_IMPLEMENTED | Keep bounded; expand only through a separately approved phase |
+| M-050 | Prompt / Schema Library | Implemented as bounded internal prompt/schema asset metadata with approved links and no prompt execution runtime | BOUNDED_IMPLEMENTED | Keep bounded; expand only through a separately approved phase |
 | M-051 | Workflow Orchestrator | Implemented as workflow orchestration backbone | EXACT | Keep |
 | M-052 | Notification Layer | No standalone canonical runtime module; historical `optimization` remains helper drift and signal delivery stays under event/workflow/operator support contours | PLATFORM_ONLY | Keep as explicit post-launch platform slot; do not add fake pre-launch runtime module |
 | M-053 | Red Flag Registry | No standalone canonical runtime module; red-flag semantics already persist across screening/risk/incident/payment/claim artifacts and historical `copilot_feed` remains helper drift | GOVERNANCE_ONLY | Keep as governance layer over existing canonical flags; avoid duplicate registry tables |
@@ -72,13 +73,13 @@
 | Status | Count | Canonical IDs |
 |---|---:|---|
 | EXACT | 49 | M-001..M-048, M-051 |
-| RESERVED | 2 | M-049, M-050 |
+| BOUNDED_IMPLEMENTED | 2 | M-049, M-050 |
 | PLATFORM_ONLY | 2 | M-052, M-054 |
 | GOVERNANCE_ONLY | 2 | M-053, M-055 |
 
 ## Key Findings
 
 1. The canonical business-company skeleton is recovered exactly through `M-048`, plus canonical `M-051`.
-2. `M-049` and `M-050` do exist in the original locked registry. Numbering does not skip; these slots remain explicitly reserved for post-recovery AI/runtime work.
-3. `M-052..M-055` are no longer unresolved mismatches; they are now explicitly classified as non-runtime platform/governance slots.
-4. Recovery Sprint `R6` intentionally does not introduce AI, LLM, prompt, agent, autonomous-decision, or external-platform execution logic.
+2. `M-049` and `M-050` do exist in the original locked registry. Numbering does not skip; these slots are now implemented only as a bounded internal metadata/control slice.
+3. `M-052..M-055` are no longer unresolved mismatches; they remain explicitly classified as non-runtime platform/governance slots.
+4. Broad AI, LLM, prompt execution, agent execution, autonomous-decision, and external-platform execution logic are still not opened by the current slice.

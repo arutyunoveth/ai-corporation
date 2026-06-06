@@ -48,8 +48,8 @@ def test_reserved_and_reconciled_late_slots_are_consistent_across_docs():
     recovery_plan_statuses = _status_map_from_recovery_plan()
 
     expected_late_statuses = {
-        "M-049": "RESERVED",
-        "M-050": "RESERVED",
+        "M-049": "BOUNDED_IMPLEMENTED",
+        "M-050": "BOUNDED_IMPLEMENTED",
         "M-052": "PLATFORM_ONLY",
         "M-053": "GOVERNANCE_ONLY",
         "M-054": "PLATFORM_ONLY",
@@ -87,13 +87,13 @@ def test_r6_docs_remove_unresolved_mismatch_state_for_m052_through_m055():
     assert "no unresolved locked-registry mismatches remain" in audit_text.lower()
 
 
-def test_m049_and_m050_remain_reserved_without_opening_ai_runtime_phase():
+def test_m049_and_m050_are_bounded_implemented_without_broad_runtime_opening():
     mapping_text = (GOVERNANCE_DIR / "canonical_vs_implemented_mapping.md").read_text(encoding="utf-8")
     readme_text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     recovery_plan_text = (GOVERNANCE_DIR / "registry_recovery_plan.md").read_text(encoding="utf-8")
 
     assert "| M-049 | Agent Registry |" in mapping_text
     assert "| M-050 | Prompt / Schema Library |" in mapping_text
-    assert "`M-049` and `M-050` remain intentionally reserved" in recovery_plan_text
-    assert "keep reserved AI/runtime slots `M-049`, `M-050` closed" in recovery_plan_text
-    assert "Reserved Canonical Modules" in readme_text
+    assert "bounded internal metadata/control slice" in recovery_plan_text
+    assert "Broad execution behavior for `M-049`, `M-050` is still deferred".lower() in recovery_plan_text.lower()
+    assert "Bounded Runtime Canonical Modules" in readme_text

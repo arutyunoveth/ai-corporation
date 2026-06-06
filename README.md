@@ -5,7 +5,8 @@ Canonical business registry is locked to `M-001..M-055`.
 This repository currently contains:
 
 - canonical modules that match the locked registry
-- reserved canonical slots intentionally deferred until post-recovery AI/runtime work
+- bounded-implemented late canonical slots for `M-049/M-050` limited to internal metadata/control
+- deferred platform/governance late slots for `M-052..M-055`
 - useful internal/platform extensions that drifted beyond the locked canonical range
 
 The repository now includes the reconciliation layer plus Recovery Sprints R1, R2, R3, R4, and R5, so canonical coverage has been restored for `M-005`, `M-007`, `M-008`, `M-010`, `M-012`, and the full recovery bands `M-031..M-048` without destructive refactor.
@@ -55,6 +56,9 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [Dry_Run_0_Review_Template.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Review_Template.md)
 - [Dry_Run_0_Success_Criteria.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Dry_Run_0_Success_Criteria.md)
 - [Repository_Public_State_Checklist.md](/Users/master/Documents/AI-Corporation/docs/10_launch/Repository_Public_State_Checklist.md)
+- [mvp_runtime_phase_1_final_review.md](/Users/master/Documents/AI-Corporation/docs/10_launch/mvp_runtime_phase_1_final_review.md)
+- [mvp_runtime_phase_1_exit_decision.md](/Users/master/Documents/AI-Corporation/docs/10_launch/mvp_runtime_phase_1_exit_decision.md)
+- [mvp_runtime_phase_1_post_phase_recommendations.md](/Users/master/Documents/AI-Corporation/docs/10_launch/mvp_runtime_phase_1_post_phase_recommendations.md)
 
 ## Governance Status
 
@@ -72,12 +76,12 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - `M-031` through `M-048`
 - `M-051`
 
-### Reserved Canonical Modules
+### Bounded Runtime Canonical Modules
 
 - `M-049`
 - `M-050`
 
-These canonical slots exist in the locked registry and in the original recovery plan, but remain intentionally deferred because this phase explicitly forbids AI/LLM integration.
+These canonical slots now have a bounded internal metadata/control implementation only. Broad agent execution, prompt execution, autonomous behavior, and runtime expansion beyond the approved slice remain intentionally deferred.
 
 ### Reconciled Non-Runtime Canonical Slots
 
@@ -176,6 +180,10 @@ These extensions remain useful, but they are not part of the locked canonical bu
 - Current phase status: `repository ready for bounded MVP runtime module implementation`.
 - M-049 bounded runtime slice implemented.
 - M-050 bounded runtime slice implemented.
+- MVP Runtime Implementation Phase 1 block completed.
+- Final phase decision: `Continue bounded MVP runtime implementation`.
+- Recommended next step: `prepare the next separately approved bounded runtime step without broad deferred-runtime opening`.
+- Current governance truth: `M-049` and `M-050` are `BOUNDED_IMPLEMENTED` for internal metadata/control only; `M-052..M-055` remain non-broad-runtime late slots.
 
 ## Current Scope
 

@@ -56,6 +56,6 @@ def test_reserved_and_deferred_slots_remain_honestly_classified():
     ]:
         assert token in mapping_text
 
-    assert "no false runtime claim" in checklist_text
+    assert "no false broad-runtime claim" in checklist_text
     assert "recovery-complete for the non-AI business skeleton" in report_text
     assert "not yet claiming" in report_text
