@@ -52,6 +52,33 @@ class PromptRiskClass(StrEnum):
     HIGH = "HIGH"
 
 
+class RuntimeTraceActorType(StrEnum):
+    AGENT_PROFILE = "AGENT_PROFILE"
+    OPERATOR = "OPERATOR"
+    SYSTEM = "SYSTEM"
+
+
+class RuntimeTraceActionType(StrEnum):
+    GENERATE_DRAFT = "GENERATE_DRAFT"
+    VALIDATE_OUTPUT = "VALIDATE_OUTPUT"
+    REVIEW_OUTPUT = "REVIEW_OUTPUT"
+    LINK_METADATA = "LINK_METADATA"
+
+
+class RuntimeTraceValidationStatus(StrEnum):
+    PENDING = "PENDING"
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+
+
+class RuntimeTraceDisposition(StrEnum):
+    DRAFT = "DRAFT"
+    NEEDS_HUMAN_REVIEW = "NEEDS_HUMAN_REVIEW"
+    APPROVED_FOR_INTERNAL_USE = "APPROVED_FOR_INTERNAL_USE"
+    REJECTED = "REJECTED"
+    ARCHIVED = "ARCHIVED"
+
+
 class PromptSchemaAssetType(StrEnum):
     PROMPT_TEMPLATE = "PROMPT_TEMPLATE"
     INPUT_SCHEMA = "INPUT_SCHEMA"

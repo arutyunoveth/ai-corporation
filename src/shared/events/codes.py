@@ -259,6 +259,9 @@ EVENT_CODES = {
     "prompt_schema_status_changed",
     "prompt_schema_failed",
     "agent_prompt_link_created",
+    "runtime_control_trace_created",
+    "runtime_control_trace_review_status_changed",
+    "runtime_control_trace_failed",
 }
 
 DECISION_CODES = {

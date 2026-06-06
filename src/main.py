@@ -61,6 +61,7 @@ from src.modules.quote_comparison.router import router as quote_comparison_route
 from src.modules.quote_repository.router import router as quote_repository_router
 from src.modules.requirement_extraction.router import router as requirement_extraction_router
 from src.modules.rfq_generator.router import router as rfq_generator_router
+from src.modules.runtime_control_traces.router import router as runtime_control_traces_router
 from src.modules.shipping_acceptance.router import router as shipping_acceptance_router
 from src.modules.status_engine.router import router as status_router
 from src.modules.submission_readiness.router import router as submission_readiness_router
@@ -164,6 +165,7 @@ app.include_router(submission_control_router)
 app.include_router(submission_receipts_router)
 app.include_router(post_submission_router)
 app.include_router(prompt_schema_library_router)
+app.include_router(runtime_control_traces_router)
 app.include_router(procedure_monitor_router)
 app.include_router(supplier_contracts_router)
 app.include_router(purchase_orders_router)
