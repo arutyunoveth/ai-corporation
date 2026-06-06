@@ -13,6 +13,7 @@ from src.modules.prompt_schema_library.service import (
     list_prompt_schema_library_sets,
 )
 from src.shared.api.dependencies import DBSession
+from src.shared.enums import HumanReviewStatus, PromptRiskClass, PromptValidationMode
 
 router = APIRouter(tags=["prompt-schema-library"])
 
@@ -27,18 +28,36 @@ def _to_link_response(item) -> PromptSchemaLinkResponse:
 
 def _to_record_response(result: tuple) -> PromptSchemaRecordResponse:
     record, links = result
+    runtime_metadata = record.asset_payload_json.get("runtime_metadata", {}) if record.asset_payload_json else {}
     return PromptSchemaRecordResponse(
         prompt_schema_id=record.prompt_schema_id,
         asset_key=record.asset_key,
+        prompt_name=runtime_metadata.get("prompt_name", record.asset_key),
         asset_type=record.asset_type,
         version_tag=record.version_tag,
+        prompt_version=runtime_metadata.get("prompt_version", record.version_tag),
         owner_role=record.owner_role,
+        owner_operator=runtime_metadata.get("owner_operator", record.owner_role),
         reviewer_role=record.reviewer_role,
         asset_status=record.asset_status,
+        review_status=HumanReviewStatus(
+            runtime_metadata.get("review_status", HumanReviewStatus.APPROVED_FOR_INTERNAL_USE)
+        ),
+        prompt_purpose=runtime_metadata.get("prompt_purpose", record.usage_constraints_text),
+        intended_use_case=runtime_metadata.get("intended_use_case", "bounded_internal_metadata_control"),
+        associated_runtime_slice=runtime_metadata.get("associated_runtime_slice", "MVP_RUNTIME_PHASE_1"),
         usage_constraints_text=record.usage_constraints_text,
         input_schema_ref=record.input_schema_ref,
         output_schema_ref=record.output_schema_ref,
+        validation_mode=PromptValidationMode(runtime_metadata.get("validation_mode", PromptValidationMode.SCHEMA_REQUIRED)),
+        compatible_output_schema=runtime_metadata.get("compatible_output_schema", record.output_schema_ref),
+        allowed_use_contexts=runtime_metadata.get("allowed_use_contexts", []),
+        forbidden_use_contexts=runtime_metadata.get("forbidden_use_contexts", []),
+        human_review_required=runtime_metadata.get("human_review_required", True),
+        risk_class=PromptRiskClass(runtime_metadata.get("risk_class", PromptRiskClass.MEDIUM)),
+        notes=runtime_metadata.get("notes", record.safety_notes),
         safety_notes=record.safety_notes,
+        rationale=runtime_metadata.get("rationale", record.safety_notes),
         asset_payload_json=record.asset_payload_json,
         created_at=record.created_at,
         updated_at=record.updated_at,

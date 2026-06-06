@@ -6,10 +6,10 @@ This backlog records adjacent updated-roadmap work discovered during sprint `I1-
 
 ## Deferred Adjacent Items
 
-1. `I1-S2` prompt/schema metadata library alignment for `M-050`.
-2. `I1-S3` bounded runtime control trace ledger alignment.
-3. `I1-S4` bounded metadata-slice integration review under the updated roadmap package.
-4. Optional later separation of `capability_tags` from shared capability/action-class storage, if a later approved sprint requires distinct persistence semantics.
+1. `I1-S3` bounded runtime control trace ledger alignment.
+2. `I1-S4` bounded metadata-slice integration review under the updated roadmap package.
+3. Optional later separation of `capability_tags` from shared capability/action-class storage, if a later approved sprint requires distinct persistence semantics.
+4. Optional later separation of prompt metadata aliases into dedicated persistent columns, if a later approved sprint requires stricter relational querying beyond bounded JSON metadata storage.
 
 ## Explicit Non-Backlog Items
 

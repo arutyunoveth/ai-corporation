@@ -221,9 +221,11 @@ from .mvp_phase1 import (
     AgentPromptLinkStatus,
     AgentRegistryStatus,
     HumanReviewStatus,
+    PromptRiskClass,
     PromptSchemaAssetStatus,
     PromptSchemaAssetType,
     PromptSchemaLibraryStatus,
+    PromptValidationMode,
 )
 
 __all__ = [
@@ -405,7 +407,9 @@ __all__ = [
     "AgentPromptLinkStatus",
     "AgentRegistryStatus",
     "HumanReviewStatus",
+    "PromptRiskClass",
     "PromptSchemaAssetStatus",
     "PromptSchemaAssetType",
     "PromptSchemaLibraryStatus",
+    "PromptValidationMode",
 ]

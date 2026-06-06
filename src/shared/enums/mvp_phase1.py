@@ -40,6 +40,18 @@ class PromptSchemaAssetStatus(StrEnum):
     DISABLED = "DISABLED"
 
 
+class PromptValidationMode(StrEnum):
+    NONE = "NONE"
+    SCHEMA_REQUIRED = "SCHEMA_REQUIRED"
+    STRICT = "STRICT"
+
+
+class PromptRiskClass(StrEnum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
 class PromptSchemaAssetType(StrEnum):
     PROMPT_TEMPLATE = "PROMPT_TEMPLATE"
     INPUT_SCHEMA = "INPUT_SCHEMA"

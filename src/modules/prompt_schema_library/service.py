@@ -6,10 +6,92 @@ from src.modules.event_log.service import append_event_record
 from src.modules.prompt_schema_library.models import AgentPromptLink, PromptSchemaLibrarySet, PromptSchemaRecord
 from src.modules.prompt_schema_library.schemas import BuildPromptSchemaLibraryRequest
 from src.shared.db.base import utcnow
-from src.shared.enums import AgentPromptLinkStatus, EventSeverity, PromptSchemaLibraryStatus
+from src.shared.enums import (
+    AgentPromptLinkStatus,
+    EventSeverity,
+    PromptSchemaAssetType,
+    PromptSchemaLibraryStatus,
+    PromptValidationMode,
+)
 from src.shared.errors import NotFoundError, ValidationError
 from src.shared.ids import next_prompt_schema_id, next_prompt_schema_library_set_id
 from src.shared.validation import require_non_empty
+
+
+def _resolve_prompt_name(asset) -> str:
+    return require_non_empty(asset.prompt_name or asset.asset_key, "prompt_name")
+
+
+def _resolve_version(asset) -> str:
+    return require_non_empty(asset.prompt_version or asset.version_tag, "prompt_version")
+
+
+def _resolve_owner_role(asset) -> str:
+    return require_non_empty(asset.owner_operator or asset.owner_role, "owner_operator")
+
+
+def _resolve_reviewer_role(asset, owner_role: str) -> str:
+    return require_non_empty(asset.reviewer_role or asset.owner_operator or owner_role, "reviewer_role")
+
+
+def _resolve_usage_constraints(asset) -> str:
+    if asset.usage_constraints_text:
+        return require_non_empty(asset.usage_constraints_text, "usage_constraints_text")
+    if asset.prompt_purpose:
+        return require_non_empty(asset.prompt_purpose, "prompt_purpose")
+    if asset.intended_use_case:
+        return require_non_empty(asset.intended_use_case, "intended_use_case")
+    return "Internal metadata-only use."
+
+
+def _normalize_contexts(values: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        value = require_non_empty(item, "use_context").upper()
+        if value not in seen:
+            normalized.append(value)
+            seen.add(value)
+    return normalized
+
+
+def _build_runtime_metadata(asset, prompt_name: str, prompt_version: str) -> dict:
+    allowed_use_contexts = _normalize_contexts(asset.allowed_use_contexts)
+    forbidden_use_contexts = _normalize_contexts(asset.forbidden_use_contexts)
+    overlap = set(allowed_use_contexts) & set(forbidden_use_contexts)
+    if overlap:
+        raise ValidationError(
+            "Prompt/schema metadata contains overlapping allowed and forbidden use contexts: "
+            + ", ".join(sorted(overlap))
+        )
+
+    validation_mode = asset.validation_mode
+    if validation_mode == PromptValidationMode.NONE and (asset.input_schema_ref or asset.output_schema_ref):
+        validation_mode = PromptValidationMode.SCHEMA_REQUIRED
+    if (
+        validation_mode != PromptValidationMode.NONE
+        and asset.asset_type == PromptSchemaAssetType.PROMPT_TEMPLATE
+        and not (asset.input_schema_ref or asset.output_schema_ref)
+    ):
+        raise ValidationError("Prompt template metadata with validation enabled requires input_schema_ref or output_schema_ref")
+
+    return {
+        "prompt_name": prompt_name,
+        "prompt_version": prompt_version,
+        "prompt_purpose": asset.prompt_purpose or asset.usage_constraints_text or "Internal metadata-only use.",
+        "associated_runtime_slice": asset.associated_runtime_slice or "MVP_RUNTIME_PHASE_1",
+        "validation_mode": str(validation_mode),
+        "review_status": str(asset.review_status),
+        "allowed_use_contexts": allowed_use_contexts,
+        "forbidden_use_contexts": forbidden_use_contexts,
+        "human_review_required": asset.human_review_required,
+        "risk_class": str(asset.risk_class),
+        "intended_use_case": asset.intended_use_case or "bounded_internal_metadata_control",
+        "compatible_output_schema": asset.compatible_output_schema or asset.output_schema_ref,
+        "owner_operator": asset.owner_operator or asset.owner_role,
+        "notes": asset.notes or asset.safety_notes,
+        "rationale": asset.rationale or asset.notes or asset.safety_notes,
+    }
 
 
 def _get_set(session: Session, prompt_schema_library_set_id: str) -> PromptSchemaLibrarySet:
@@ -77,12 +159,17 @@ def build_prompt_schema_library(session: Session, payload: BuildPromptSchemaLibr
 
         seen_assets: set[tuple[str, str]] = set()
         for asset in payload.assets:
-            asset_key = require_non_empty(asset.asset_key, "asset_key")
-            version_tag = require_non_empty(asset.version_tag, "version_tag")
+            prompt_name = _resolve_prompt_name(asset)
+            asset_key = require_non_empty(asset.asset_key or asset.prompt_name, "asset_key")
+            version_tag = _resolve_version(asset)
             asset_pair = (asset_key, version_tag)
             if asset_pair in seen_assets:
                 raise ValidationError(f"Duplicate asset_key/version_tag pair '{asset_key}:{version_tag}' in request")
             seen_assets.add(asset_pair)
+            owner_role = _resolve_owner_role(asset)
+            reviewer_role = _resolve_reviewer_role(asset, owner_role)
+            usage_constraints_text = _resolve_usage_constraints(asset)
+            runtime_metadata = _build_runtime_metadata(asset, prompt_name, version_tag)
 
             record = PromptSchemaRecord(
                 prompt_schema_id=next_prompt_schema_id(session, PromptSchemaRecord.prompt_schema_id),
@@ -90,14 +177,17 @@ def build_prompt_schema_library(session: Session, payload: BuildPromptSchemaLibr
                 asset_key=asset_key,
                 asset_type=asset.asset_type,
                 version_tag=version_tag,
-                owner_role=require_non_empty(asset.owner_role, "owner_role"),
-                reviewer_role=require_non_empty(asset.reviewer_role, "reviewer_role"),
+                owner_role=owner_role,
+                reviewer_role=reviewer_role,
                 asset_status=asset.asset_status,
-                usage_constraints_text=require_non_empty(asset.usage_constraints_text, "usage_constraints_text"),
+                usage_constraints_text=usage_constraints_text,
                 input_schema_ref=asset.input_schema_ref.strip() if asset.input_schema_ref else None,
                 output_schema_ref=asset.output_schema_ref.strip() if asset.output_schema_ref else None,
                 safety_notes=asset.safety_notes.strip() if asset.safety_notes else None,
-                asset_payload_json=asset.asset_payload_json,
+                asset_payload_json={
+                    **asset.asset_payload_json,
+                    "runtime_metadata": runtime_metadata,
+                },
             )
             session.add(record)
             session.flush()
@@ -111,6 +201,8 @@ def build_prompt_schema_library(session: Session, payload: BuildPromptSchemaLibr
                     "prompt_schema_library_set_id": library_set.prompt_schema_library_set_id,
                     "prompt_schema_id": record.prompt_schema_id,
                     "asset_key": record.asset_key,
+                    "prompt_name": prompt_name,
+                    "validation_mode": runtime_metadata["validation_mode"],
                 },
             )
 

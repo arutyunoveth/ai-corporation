@@ -64,7 +64,6 @@ def test_i1_s1_foundation_docs_and_boundaries_are_explicit(client):
     ]:
         assert token in sprint_text
 
-    assert "I1-S2" in backlog_text
     assert "I1-S3" in backlog_text
     assert "I1-S4" in backlog_text
 
