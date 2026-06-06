@@ -16,6 +16,7 @@ from src.modules.claim_triggers.router import router as claim_triggers_router
 from src.modules.deal_closure_reports.router import router as deal_closure_reports_router
 from src.modules.closing_docs.router import router as closing_docs_router
 from src.modules.commercial_prebid_demo.router import router as commercial_prebid_demo_router
+from src.modules.commercial_operator_console.router import router as commercial_operator_console_router
 from src.modules.compliance_matrix.router import router as compliance_matrix_router
 from src.modules.contract_risks.router import router as contract_risks_router
 from src.modules.contract_negotiation.router import router as contract_negotiation_router
@@ -146,6 +147,7 @@ app.include_router(closing_docs_router)
 app.include_router(claim_triggers_router)
 app.include_router(deal_closure_reports_router)
 app.include_router(commercial_prebid_demo_router)
+app.include_router(commercial_operator_console_router)
 app.include_router(postmortems_router)
 app.include_router(supplier_ratings_router)
 app.include_router(knowledge_assets_router)

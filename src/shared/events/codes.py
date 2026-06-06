@@ -268,6 +268,7 @@ EVENT_CODES = {
     "commercial_prebid_demo_started",
     "commercial_prebid_demo_report_built",
     "commercial_prebid_demo_failed",
+    "commercial_operator_action_recorded",
 }
 
 DECISION_CODES = {
@@ -276,4 +277,8 @@ DECISION_CODES = {
     "APPROVE_TO_BID",
     "DECLINE_TO_BID",
     "CEO_APPROVAL_DECISION",
+    "OPERATOR_REJECTED_PREBID",
+    "OPERATOR_MARKED_NEEDS_MORE_REVIEW",
+    "OPERATOR_MARKED_COLLECT_TKP",
+    "OPERATOR_MARKED_PREPARE_BID_DRAFT",
 }

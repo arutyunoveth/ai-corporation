@@ -5,6 +5,7 @@
 - Completed: bounded runtime metadata Phase `I1`
 - Completed: deterministic commercial pre-bid demo report
 - Completed: controlled LLM pre-bid analysis under human review
+- Completed: operator console commercial skeleton
 - Active next block: commercial MVP v1
 
 ## Planned Sprints

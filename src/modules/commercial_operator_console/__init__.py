@@ -1,0 +1,1 @@
+"""Commercial operator console skeleton."""
