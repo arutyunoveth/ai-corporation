@@ -19,3 +19,10 @@ ai_corporation.db
 /local_pilot_runs/
 /pilot_runs/
 tmp/partner_exports/
+
+# Company agent run outputs
+/company_agent_runs/*
+!/company_agent_runs/.gitkeep
+tmp/hermes_*.json
+tmp/*_context.md
+tmp/*_context.json

@@ -60,3 +60,13 @@ This phase does not implement:
 - cloud dispatch;
 - external Hermes server integration;
 - self-serve agent runtime.
+
+## Hermes manual integration status
+
+Company agents can now be exported as Hermes-compatible manual context bundles.
+
+This does not open:
+- prompt execution runtime;
+- autonomous agent execution;
+- cloud dispatch;
+- external side effects.

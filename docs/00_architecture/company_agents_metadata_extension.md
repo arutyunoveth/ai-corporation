@@ -23,6 +23,16 @@ This change does not introduce:
 - new canonical modules;
 - unattended decision-making.
 
+## Hermes manual integration status
+
+Company agents can now be exported as Hermes-compatible manual context bundles.
+
+This does not open:
+- prompt execution runtime;
+- autonomous agent execution;
+- cloud dispatch;
+- external side effects.
+
 ## Boundary
 
 All company agents are advisory/manual-context roles.

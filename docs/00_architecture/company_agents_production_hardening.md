@@ -52,3 +52,13 @@ This sprint does not introduce:
 Company agents are ready as bounded metadata/manual-context records.
 
 Hermes integration remains a future phase.
+
+## Hermes manual integration status
+
+Company agents can now be exported as Hermes-compatible manual context bundles.
+
+This does not open:
+- prompt execution runtime;
+- autonomous agent execution;
+- cloud dispatch;
+- external side effects.
