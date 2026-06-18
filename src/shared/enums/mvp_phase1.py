@@ -95,3 +95,45 @@ class PromptSchemaAssetType(StrEnum):
 class AgentPromptLinkStatus(StrEnum):
     APPROVED = "APPROVED"
     DISABLED = "DISABLED"
+
+
+class AgentScope(StrEnum):
+    PRODUCT = "product"
+    COMPANY_OPERATIONS = "company_operations"
+    PLATFORM = "platform"
+
+
+class AgentKind(StrEnum):
+    OPERATING_SYSTEM = "operating_system"
+    TENDER_OPERATIONS = "tender_operations"
+    RISK_FINANCE_LEGAL = "risk_finance_legal"
+    ENGINEERING = "engineering"
+    GROWTH = "growth"
+    DELIVERY = "delivery"
+    RESEARCH = "research"
+
+
+class CompanyAgentActivationState(StrEnum):
+    DRAFT = "draft"
+    ACTIVE_METADATA_ONLY = "active_metadata_only"
+    INACTIVE = "inactive"
+    DEPRECATED = "deprecated"
+
+
+class DataPolicy(StrEnum):
+    LOCAL_ONLY = "local_only"
+    LOCAL_FIRST = "local_first"
+    HYBRID_PUBLIC_ONLY = "hybrid_public_only"
+
+
+class RuntimeMode(StrEnum):
+    METADATA_ONLY = "metadata_only"
+    MANUAL_CONTEXT_ONLY = "manual_context_only"
+    DEFERRED_EXECUTION = "deferred_execution"
+
+
+class ModelTier(StrEnum):
+    REASONING = "reasoning"
+    STANDARD = "standard"
+    CODE_REASONING = "code_reasoning"
+    WRITING = "writing"

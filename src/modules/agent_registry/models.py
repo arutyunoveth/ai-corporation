@@ -36,6 +36,18 @@ class AgentRegistryRecord(UUIDPrimaryKeyMixin, Base):
     allowed_capabilities_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     blocked_capabilities_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_scope: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    agent_kind: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reports_to: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    data_policy: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    runtime_mode: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model_tier: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    responsibilities_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    inputs_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    outputs_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    escalation_rules_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    forbidden_actions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
@@ -43,5 +55,6 @@ class AgentRegistryRecord(UUIDPrimaryKeyMixin, Base):
         Index("ix_agent_registry_records_set_id", "agent_registry_set_id"),
         Index("ix_agent_registry_records_agent_key", "agent_key"),
         Index("ix_agent_registry_records_activation_state", "activation_state"),
+        Index("ix_agent_registry_records_agent_scope", "agent_scope"),
         UniqueConstraint("agent_registry_set_id", "agent_key", name="uq_agent_registry_records_set_key"),
     )

@@ -146,6 +146,18 @@ def build_agent_registry(session: Session, payload: BuildAgentRegistryRequest) -
                 allowed_capabilities_json=allowed_capabilities,
                 blocked_capabilities_json=blocked_capabilities,
                 notes=notes.strip() if notes else None,
+                agent_scope=entry.agent_scope,
+                agent_kind=entry.agent_kind,
+                reports_to=entry.reports_to,
+                data_policy=entry.data_policy,
+                runtime_mode=entry.runtime_mode,
+                model_tier=entry.model_tier,
+                description=entry.description.strip() if entry.description else None,
+                responsibilities_json=entry.responsibilities,
+                inputs_json=entry.inputs,
+                outputs_json=entry.outputs,
+                escalation_rules_json=entry.escalation_rules,
+                forbidden_actions_json=entry.forbidden_actions,
             )
             session.add(record)
             session.flush()
@@ -161,6 +173,7 @@ def build_agent_registry(session: Session, payload: BuildAgentRegistryRequest) -
                     "agent_key": record.agent_key,
                     "agent_role_name": record.agent_label,
                     "lifecycle_status": str(record.activation_state),
+                    "agent_scope": record.agent_scope,
                 },
             )
 
