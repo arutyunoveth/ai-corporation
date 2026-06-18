@@ -1,38 +1,81 @@
-# CEO Decision Memo
+# CEO Decision Memo Template
 
-## Tender: {tender_name}
+## Decision Topic
 
-### Status
+Assess whether Arvectum is ready for the first paid restricted tender-operations pilot.
 
-{status_summary}
+## Context
 
-### Key Numbers
+Brief description of the dry run scenario.
 
-- Tender value: {tender_value}
-- Estimated margin: {estimated_margin}
-- Cash gap: {cash_gap}
-- Payment terms: {payment_terms}
+## Evidence Reviewed
 
-### Risk Summary
+List of specialist reports reviewed.
 
-- Legal risk classification: {legal_risk_class}
-- Key legal risks: {legal_risks}
+## Agent Inputs
 
-### Recommendation
+### A00 Chief of Staff
 
-{recommendation}
+[Summary of A00 routing and synthesis]
 
-### Supporting Analysis
+### A10 Tender Operator
 
-- Finance memo: {finance_memo_ref}
-- Contract risk memo: {contract_risk_memo_ref}
-- Supplier comparison: {supplier_comparison_ref}
-- QA readiness: {qa_readiness_ref}
+[Summary of tender operations readiness]
 
-### Decision Required
+### A20 Finance & Unit Economics
 
-{decision_question}
+[Summary of financial readiness]
 
-### Deadline
+### A21 Legal & Contract Risk
 
-{deadline}
+[Summary of legal risk readiness]
+
+### A42 QA & Release
+
+[Summary of release readiness]
+
+## Options
+
+### Option 1 — GO_TO_FIRST_PAID_RESTRICTED_PILOT
+
+Proceed to pilot with current state.
+
+### Option 2 — GO_WITH_FIXES
+
+Proceed after addressing specific fixes.
+
+### Option 3 — NO_GO_BLOCKED
+
+Do not proceed. Significant blockers remain.
+
+## Recommendation
+
+[CEO recommendation based on evidence]
+
+## Required CEO Decision
+
+[What the CEO must decide]
+
+## Required Fixes Before Execution
+
+[List of mandatory fixes]
+
+## Risks
+
+[List of known risks]
+
+## Human-Control Boundaries
+
+- No autonomous execution.
+- No cloud dispatch for confidential data.
+- No external communication without CEO approval.
+- No automatic legal or financial commitments.
+
+## Final Status
+
+Allowed statuses:
+
+- CEO_DECISION_REQUIRED
+- BLOCKED_NEEDS_INPUT
+- ESCALATED_RISK
+- NO_DECISION_NEEDED

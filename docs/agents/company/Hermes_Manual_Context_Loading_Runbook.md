@@ -89,3 +89,18 @@ Never send to cloud models:
 | company_release_readiness | A42 | A40 | QA Readiness Memo |
 | company_marketing_asset_review | A51 | A52 | Marketing Asset Approval Memo |
 | company_sales_lead_qualification | A50 | A20, A21 | Lead Qualification Memo |
+| company_pilot_readiness_review | A00 | A10, A20, A21, A42 | CEO Decision Memo |
+
+## Dry Run 0
+
+The first recommended manual operating-loop validation is:
+
+```text
+company_pilot_readiness_review
+```
+
+This route validates whether Arvectum is ready for the first paid restricted tender-operations pilot.
+
+This dry run remains manual and sequential.
+
+See: `company_agent_runs/dry_run_0/README.md`

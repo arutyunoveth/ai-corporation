@@ -38,6 +38,26 @@ KNOWN_AGENTS = {
 ALL_AGENTS = {a.agent_key: a for a in COMPANY_AGENTS + INACTIVE_AGENTS}
 
 
+def load_agent_context(agent_id: str) -> dict:
+    """Load agent context files as a dict. Raises SystemExit on error."""
+    if agent_id not in KNOWN_AGENTS:
+        known = ", ".join(sorted(KNOWN_AGENTS.keys()))
+        raise SystemExit(f"Error: agent '{agent_id}' not found. Known agents: {known}")
+
+    agent_dir = AGENT_BASE_DIR / KNOWN_AGENTS[agent_id]
+    if not agent_dir.is_dir():
+        raise SystemExit(f"Error: agent directory not found: {agent_dir}")
+
+    context_files = {}
+    for filename in REQUIRED_FILES:
+        filepath = agent_dir / filename
+        if not filepath.is_file():
+            raise SystemExit(f"Error: missing required file '{filename}' for agent '{agent_id}' at {filepath}")
+        context_files[filename.replace(".md", "")] = filepath.read_text(encoding="utf-8")
+
+    return context_files
+
+
 def _read_agent_file(agent_id: str, filename: str) -> str:
     agent_dir = AGENT_BASE_DIR / KNOWN_AGENTS[agent_id]
     filepath = agent_dir / filename

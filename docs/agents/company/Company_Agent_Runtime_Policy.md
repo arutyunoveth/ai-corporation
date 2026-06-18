@@ -70,3 +70,17 @@ This does not open:
 - autonomous agent execution;
 - cloud dispatch;
 - external side effects.
+
+## Dry Run 0
+
+The first recommended manual operating-loop validation is:
+
+```text
+company_pilot_readiness_review
+```
+
+This route validates whether Arvectum is ready for the first paid restricted tender-operations pilot.
+
+This dry run remains manual and sequential.
+
+See: `company_agent_runs/dry_run_0/README.md`

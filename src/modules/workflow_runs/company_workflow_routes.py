@@ -58,6 +58,14 @@ COMPANY_WORKFLOW_ROUTES: dict[str, CompanyWorkflowRoute] = {
         execution_mode="sequential_metadata_only",
         runtime_execution_allowed=False,
     ),
+    "company_pilot_readiness_review": CompanyWorkflowRoute(
+        route_id="company_pilot_readiness_review",
+        owner="A00",
+        supporting_agents=["A10", "A20", "A21", "A42"],
+        final_artifact="CEO Decision Memo",
+        execution_mode="sequential_metadata_only",
+        runtime_execution_allowed=False,
+    ),
 }
 
 

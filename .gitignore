@@ -23,6 +23,17 @@ tmp/partner_exports/
 # Company agent run outputs
 /company_agent_runs/*
 !/company_agent_runs/.gitkeep
+!/company_agent_runs/README.md
+!/company_agent_runs/dry_run_0/
+/company_agent_runs/dry_run_0/exported_context/*
+/company_agent_runs/dry_run_0/artifacts/*
+/company_agent_runs/dry_run_0/final/*
+!company_agent_runs/dry_run_0/.gitkeep
+!company_agent_runs/dry_run_0/README.md
+!company_agent_runs/dry_run_0/input/ceo_instruction.md
+!company_agent_runs/dry_run_0/run_manifest.template.json
+
+# Hermes temp exports
 tmp/hermes_*.json
 tmp/*_context.md
 tmp/*_context.json
