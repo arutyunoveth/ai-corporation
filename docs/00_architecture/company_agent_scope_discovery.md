@@ -67,3 +67,8 @@ No prompt execution runtime is opened.
 No autonomous agent execution is opened.
 No cloud dispatch is introduced.
 No new canonical module is created.
+
+## Production readiness
+
+Alembic migration `087_add_company_agent_metadata_fields` has been added.
+See `docs/00_architecture/company_agents_production_hardening.md` for details.
