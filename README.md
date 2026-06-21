@@ -29,6 +29,8 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
 - A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.
+- A dedicated Tender Operator Agent demo page is available at `/demo/tender-agent` with both a synthetic walkthrough and a local Upload & Analyze demo flow.
+- Upload & Analyze now includes basic XLSX supplier-quote normalization, local quote comparison, and demo-mode economics estimation without external actions.
 - Controlled pilot scenario pack, operator workflow hardening, evidence ledger, sales materials, and dry-run harness are all present.
 - No broad autonomy is open.
 - No external execution is open.
@@ -57,6 +59,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Tender_Operator_Pilot_Runbook.md](docs/product/Tender_Operator_Pilot_Runbook.md)
 - [docs/product/Calibrated_Contract_Risk_Method.md](docs/product/Calibrated_Contract_Risk_Method.md)
 - [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
+- [docs/demo_tender_operator_agent.md](docs/demo_tender_operator_agent.md)
 - [docs/product/templates/](docs/product/templates/) — pilot templates directory
 
 ## Reconciliation Docs
@@ -506,6 +509,14 @@ alembic upgrade head
 ```bash
 uvicorn src.main:app --reload
 ```
+
+6. Open the Tender Operator Agent demo:
+
+```text
+http://localhost:8000/demo/tender-agent
+```
+
+7. For local document upload demos, use the `Upload & Analyze` tab on the same page. Uploaded runs are stored locally under `company_agent_runs/tender_operator_demo/` and do not trigger external actions.
 
 ## Tests
 

@@ -84,6 +84,7 @@ from src.modules.supplier_verification.router import router as supplier_verifica
 from src.modules.tender_screening.router import router as tender_screening_router
 from src.modules.tender_import.router import router as tender_import_router
 from src.modules.tender_intake.router import router as tender_intake_router
+from src.modules.tender_operator_agent_demo.router import router as tender_operator_agent_demo_router
 from src.modules.tender_normalization.router import router as tender_normalization_router
 from src.modules.tender_summary.router import router as tender_summary_router
 from src.modules.vendor_connectors.router import router as vendor_connectors_router
@@ -126,6 +127,7 @@ app.include_router(execution_command_router)
 app.include_router(execution_plans_router)
 app.include_router(tender_import_router)
 app.include_router(tender_intake_router)
+app.include_router(tender_operator_agent_demo_router)
 app.include_router(tender_normalization_router)
 app.include_router(document_ingestion_router)
 app.include_router(requirement_extraction_router)

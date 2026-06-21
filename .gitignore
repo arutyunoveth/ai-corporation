@@ -28,6 +28,7 @@ tmp/partner_exports/
 /company_agent_runs/dry_run_0/exported_context/*
 /company_agent_runs/dry_run_0/artifacts/*
 /company_agent_runs/dry_run_0/final/*
+/company_agent_runs/dry_run_0/operator_logs/*
 !company_agent_runs/dry_run_0/.gitkeep
 !company_agent_runs/dry_run_0/README.md
 !company_agent_runs/dry_run_0/input/ceo_instruction.md

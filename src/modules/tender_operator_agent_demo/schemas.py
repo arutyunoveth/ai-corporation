@@ -1,0 +1,317 @@
+from __future__ import annotations
+
+from datetime import datetime
+from enum import StrEnum
+from typing import Any
+
+from pydantic import Field
+
+from src.shared.types.common import APIModel
+
+
+class DemoStepStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    PARTIAL = "partial"
+    NEEDS_REVIEW = "needs_review"
+    WARNING = "warning"
+    BLOCKED = "blocked"
+
+
+class DemoRecommendationCode(StrEnum):
+    PARTICIPATE = "participate"
+    PARTICIPATE_CONDITIONALLY = "participate_conditionally"
+    DO_NOT_PARTICIPATE = "do_not_participate"
+    MANUAL_REVIEW_REQUIRED = "manual_review_required"
+
+
+class DemoDocument(APIModel):
+    name: str
+    role: str
+    pages: int = Field(ge=1)
+
+
+class DemoDetailSection(APIModel):
+    title: str
+    kind: str = Field(pattern="^(bullets|table)$")
+    columns: list[str] = Field(default_factory=list)
+    items: list[str] = Field(default_factory=list)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DemoTenderCard(APIModel):
+    run_id: str
+    prepared_at: datetime
+    title: str
+    procedure_type: str
+    customer: str
+    category: str
+    procurement_code: str
+    submission_deadline: datetime
+    analysis_status: str
+    document_count: int = Field(ge=0)
+    requirement_count: int = Field(ge=0)
+    question_count: int = Field(ge=0)
+    final_recommendation: DemoRecommendationCode
+    final_recommendation_label: str
+    documents: list[DemoDocument]
+
+
+class DemoStep(APIModel):
+    key: str
+    order: int = Field(ge=1)
+    title: str
+    short_title: str
+    status: DemoStepStatus
+    description: str
+    agent_action: str
+    result_summary: str
+    findings: list[str]
+    human_review: list[str]
+    trace: str
+    result_sections: list[DemoDetailSection] = Field(default_factory=list)
+
+
+class DemoFinalRecommendation(APIModel):
+    recommendation: DemoRecommendationCode
+    label: str
+    rationale: list[str]
+    key_requirements: list[str]
+    open_questions: list[str]
+    risks: list[str]
+    economics: list[str]
+    manual_checks: list[str]
+    trace: str
+
+
+class DemoReportAction(APIModel):
+    label: str
+    href: str
+    enabled: bool = True
+    note: str | None = None
+
+
+class DemoSafetyNotice(APIModel):
+    demo_mode: bool = True
+    human_in_the_loop: bool = True
+    synthetic_data: bool = True
+    restrictions: list[str]
+    message: str
+
+
+class TenderOperatorDemoRunResponse(APIModel):
+    demo_mode: bool = True
+    tenant_name: str = "Arvectum"
+    title: str = "Tender Operator Agent Demo"
+    title_ru: str = "Тендерный агент: демонстрация работы"
+    subtitle: str
+    tender: DemoTenderCard
+    steps: list[DemoStep]
+    final_recommendation: DemoFinalRecommendation
+    trace_summary: list[str]
+    safety: DemoSafetyNotice
+    report_actions: list[DemoReportAction]
+
+
+class TenderOperatorDemoStepsResponse(APIModel):
+    run_id: str
+    steps: list[DemoStep]
+
+
+class TenderOperatorDemoReportResponse(APIModel):
+    run_id: str
+    report_title: str
+    generated_at: datetime
+    recommendation: DemoRecommendationCode
+    recommendation_label: str
+    executive_summary: list[str]
+    manual_checks: list[str]
+    sections: list[DemoDetailSection]
+    report_markdown: str
+
+
+class TenderOperatorUploadedRunStatus(StrEnum):
+    UPLOADED = "uploaded"
+    READY_TO_ANALYZE = "ready_to_analyze"
+    ANALYZING = "analyzing"
+    COMPLETED = "completed"
+    COMPLETED_WITH_WARNINGS = "completed_with_warnings"
+    FAILED = "failed"
+    NEEDS_REVIEW = "needs_review"
+
+
+class TenderOperatorUploadedFile(APIModel):
+    file_id: str
+    original_name: str
+    display_name: str
+    stored_name: str
+    extension: str
+    size_bytes: int = Field(ge=0)
+    content_type: str
+    source: str = "upload"
+    extracted_text_available: bool = False
+    warnings: list[str] = Field(default_factory=list)
+
+
+class TenderOperatorUploadedRunSummary(APIModel):
+    run_id: str
+    created_at: datetime
+    mode: str
+    tender_title: str
+    tender_category: str
+    customer_name: str
+    status: TenderOperatorUploadedRunStatus
+    analysis_mode: str
+    file_count: int = Field(ge=0)
+    warning_count: int = Field(ge=0)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class TenderOperatorUploadedRunResponse(APIModel):
+    run_id: str
+    created_at: datetime
+    mode: str
+    tender_title: str
+    tender_category: str
+    customer_name: str
+    notes: str | None = None
+    status: TenderOperatorUploadedRunStatus
+    analysis_mode: str
+    files: list[TenderOperatorUploadedFile]
+    limitations: list[str]
+    warnings: list[str]
+    human_in_the_loop: bool = True
+    external_actions: bool = False
+    no_platform_submission: bool = True
+    no_email_sending: bool = True
+    no_digital_signature: bool = True
+    steps: list[DemoStep] = Field(default_factory=list)
+    final_recommendation: DemoFinalRecommendation | None = None
+    quote_comparison: QuoteComparison | None = None
+    economics_summary: EconomicsSummary | None = None
+    report_html_url: str | None = None
+    report_download_url: str | None = None
+    uploaded_files_note: str | None = None
+
+
+class TenderOperatorUploadedRunListResponse(APIModel):
+    runs: list[TenderOperatorUploadedRunSummary]
+
+
+class TenderOperatorUploadedRunCreateResponse(APIModel):
+    run_id: str
+    status: TenderOperatorUploadedRunStatus
+    created_at: datetime
+    file_count: int = Field(ge=0)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class TenderOperatorUploadedRunAnalyzeResponse(APIModel):
+    run_id: str
+    status: TenderOperatorUploadedRunStatus
+    analysis_mode: str
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    steps: list[DemoStep]
+    final_recommendation: DemoFinalRecommendation
+
+
+class TenderOperatorUploadedRunStepsResponse(APIModel):
+    run_id: str
+    status: TenderOperatorUploadedRunStatus
+    steps: list[DemoStep]
+
+
+class ExtractionWarning(APIModel):
+    code: str
+    message: str
+    level: str = "warning"
+
+
+class ManualCheck(APIModel):
+    code: str
+    message: str
+    severity: str = "needs_review"
+
+
+class QuoteOffer(APIModel):
+    supplier_name: str
+    offered_name: str
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
+    total_price: float | None = None
+    delivery: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class QuoteItem(APIModel):
+    item_number: str | None = None
+    row_number: int | None = None
+    normalized_name: str
+    requested_quantity: float | None = None
+    unit: str | None = None
+    manufacturer: str | None = None
+    currency: str | None = None
+    source_file: str
+    source_sheet: str
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    warnings: list[str] = Field(default_factory=list)
+    offers: list[QuoteOffer] = Field(default_factory=list)
+    best_price_supplier: str | None = None
+    price_spread_percent: float | None = None
+    needs_review: bool = False
+
+
+class SupplierQuote(APIModel):
+    supplier_id: str
+    supplier_name: str
+    source_file: str
+    source_sheet: str | None = None
+    document_type: str
+    total_amount: float | None = None
+    currency: str | None = None
+    items_count: int = Field(ge=0)
+    delivery_summary: str | None = None
+    completeness_score: float = Field(ge=0.0, le=1.0, default=0.0)
+    price_confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    warnings: list[str] = Field(default_factory=list)
+    items: list[QuoteItem] = Field(default_factory=list)
+
+
+class QuoteComparison(APIModel):
+    status: str
+    analysis_mode: str
+    supplier_quotes_found: int = Field(ge=0)
+    items_extracted: int = Field(ge=0)
+    suppliers: list[SupplierQuote] = Field(default_factory=list)
+    items: list[QuoteItem] = Field(default_factory=list)
+    comparison_summary: dict[str, Any] = Field(default_factory=dict)
+    manual_checks: list[ManualCheck] = Field(default_factory=list)
+    warnings: list[ExtractionWarning] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class EconomicsSummary(APIModel):
+    status: str
+    analysis_mode: str
+    currency: str | None = None
+    supplier_cost_min: float | None = None
+    supplier_cost_selected: float | None = None
+    expected_revenue: float | None = None
+    preliminary_bid_price: float | None = None
+    gross_margin_amount: float | None = None
+    gross_margin_percent: float | None = None
+    logistics_reserve: float | None = None
+    risk_reserve: float | None = None
+    payment_delay_days: int | None = None
+    cash_gap_estimate: float | None = None
+    economics_status: str
+    selected_supplier_name: str | None = None
+    assumptions: dict[str, Any] = Field(default_factory=dict)
+    manual_checks: list[ManualCheck] = Field(default_factory=list)
+    warnings: list[ExtractionWarning] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
