@@ -55,6 +55,18 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             gap: 24px;
             align-items: flex-start;
           }}
+          .brand-lockup {{
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 12px;
+          }}
+          .brand-lockup img {{
+            width: 168px;
+            height: auto;
+            display: block;
+            filter: drop-shadow(0 10px 24px rgba(0, 200, 160, 0.18));
+          }}
           .eyebrow {{
             color: var(--mint-light);
             font-size: 12px;
@@ -364,21 +376,24 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           <div class="shell">
             <header class="header">
               <div>
-                <div class="eyebrow">Tender Operator Agent Demo</div>
+                <div class="brand-lockup">
+                  <img src="/demo/tender-agent/assets/arvectum-logo-block.svg" alt="Arvectum" />
+                  <div class="eyebrow">Демонстрация тендерного агента</div>
+                </div>
                 <h1>Тендерный агент</h1>
                 <p class="subtitle">Как ИИ-агент разбирает закупку, готовит RFQ, показывает риски и оставляет критичные действия под контролем человека.</p>
               </div>
               <div class="badge-row">
-                <span class="badge">Demo mode / Human-in-the-loop</span>
-                <span class="badge">Demo / pilot mode</span>
-                <span class="badge">No external actions</span>
+                <span class="badge">Демо-режим / human-in-the-loop</span>
+                <span class="badge">Пилотный контур</span>
+                <span class="badge">Без внешних действий</span>
               </div>
             </header>
 
             <div class="content">
               <div class="tabs">
-                <button class="tab-button active" data-tab="dataset" type="button">Demo dataset</button>
-                <button class="tab-button" data-tab="upload" type="button">Upload &amp; Analyze</button>
+                <button class="tab-button active" data-tab="dataset" type="button">Демо-набор</button>
+                <button class="tab-button" data-tab="upload" type="button">Загрузка и анализ</button>
               </div>
 
               <section id="tab-dataset">
@@ -388,13 +403,13 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                       <div class="empty">Загрузка synthetic demo…</div>
                     </div>
                     <div class="card">
-                      <h2>Safety</h2>
+                      <h2>Ограничения демо</h2>
                       <div class="safety">
-                        <span>Demo dataset only</span>
-                        <span>No platform submission</span>
-                        <span>No email sending</span>
-                        <span>No digital signature</span>
-                        <span>Human approval required</span>
+                        <span>Только synthetic demo data</span>
+                        <span>Без подачи на площадку</span>
+                        <span>Без отправки писем</span>
+                        <span>Без ЭЦП</span>
+                        <span>Требуется подтверждение человека</span>
                       </div>
                     </div>
                   </aside>
@@ -421,8 +436,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="layout">
                   <aside class="stack">
                     <div class="card">
-                      <h2>Upload &amp; Analyze</h2>
-                      <p>Локальная загрузка документов закупки, безопасное сохранение в рабочую директорию и controlled analysis pipeline без внешних интеграций.</p>
+                      <h2>Загрузка и анализ</h2>
+                      <p>Локальная загрузка документов закупки, безопасное сохранение в рабочую директорию и контролируемый pipeline анализа без внешних интеграций.</p>
                       <div id="upload-flash" class="hidden"></div>
                       <form id="upload-form">
                         <label>
@@ -444,7 +459,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                         </label>
                         <label>
                           Комментарий оператора
-                          <textarea name="notes" placeholder="Например: demo run для встречи с заказчиком, без ТКП"></textarea>
+                          <textarea name="notes" placeholder="Например: демонстрационный прогон для встречи с заказчиком, без ТКП"></textarea>
                         </label>
                         <div class="split">
                           <label>
@@ -470,30 +485,30 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           Файлы закупки
                           <input name="files" type="file" multiple required />
                         </label>
-                        <div class="note">Поддержаны: PDF, DOCX, XLSX, XLS, TXT, CSV, ZIP. В demo mode действуют безопасные лимиты на размер и количество файлов.</div>
+                        <div class="note">Поддержаны: PDF, DOCX, XLSX, XLS, TXT, CSV, ZIP. В демо-режиме действуют безопасные лимиты на размер и количество файлов.</div>
                         <div class="form-actions">
-                          <button class="button primary" type="submit">Создать demo run</button>
+                          <button class="button primary" type="submit">Создать демонстрационный прогон</button>
                         </div>
                       </form>
                     </div>
 
                     <div class="card">
-                      <h2>Последние runs</h2>
+                      <h2>Последние прогоны</h2>
                       <div id="runs-list" class="list">
-                        <div class="empty">Пока нет uploaded runs.</div>
+                        <div class="empty">Пока нет загруженных прогонов.</div>
                       </div>
                     </div>
                   </aside>
 
                   <main class="stack">
                     <div class="card" id="selected-run-card">
-                      <div class="empty">Создайте demo run или выберите существующий справа, чтобы увидеть детали анализа.</div>
+                      <div class="empty">Создайте демонстрационный прогон или выберите существующий справа, чтобы увидеть детали анализа.</div>
                     </div>
                     <div class="card" id="selected-run-steps">
-                      <div class="empty">Pipeline uploaded run появится после запуска анализа.</div>
+                      <div class="empty">Pipeline загруженного прогона появится после запуска анализа.</div>
                     </div>
                     <div class="card" id="selected-run-summary">
-                      <div class="empty">Финальная рекомендация для uploaded run появится здесь.</div>
+                      <div class="empty">Финальная рекомендация для загруженного прогона появится здесь.</div>
                     </div>
                   </main>
                 </div>
@@ -511,7 +526,62 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             selectedRunId: {initial_run_id},
           }};
 
+          const STEP_STATUS_LABELS = {{
+            pending: 'ожидает',
+            running: 'в работе',
+            done: 'выполнено',
+            partial: 'частично',
+            needs_review: 'нужна проверка',
+            warning: 'риск',
+            blocked: 'заблокировано',
+          }};
+
+          const RUN_STATUS_LABELS = {{
+            uploaded: 'загружено',
+            ready_to_analyze: 'готово к анализу',
+            analyzing: 'анализируется',
+            completed: 'завершено',
+            completed_with_warnings: 'завершено с ограничениями',
+            failed: 'ошибка',
+            needs_review: 'нужна проверка',
+          }};
+
+          const ANALYSIS_MODE_LABELS = {{
+            not_started: 'не запущен',
+            analyzing: 'анализ выполняется',
+            controlled_runner_adapter: 'контролируемый адаптер раннера',
+            fallback_deterministic_adapter: 'детерминированный fallback-адаптер',
+          }};
+
           const statusClass = (status) => `status-${{status || 'pending'}}`;
+
+          function statusLabel(status) {{
+            return STEP_STATUS_LABELS[status] || RUN_STATUS_LABELS[status] || status || 'ожидает';
+          }}
+
+          function analysisModeLabel(mode) {{
+            return ANALYSIS_MODE_LABELS[mode] || mode || 'не определено';
+          }}
+
+          function booleanLabel(value) {{
+            return value ? 'да' : 'нет';
+          }}
+
+          function displayValue(value, fallback = 'не определено') {{
+            if (value === null || value === undefined || value === '') {{
+              return fallback;
+            }}
+            if (value === true) {{
+              return 'да';
+            }}
+            if (value === false) {{
+              return 'нет';
+            }}
+            if (value === 'unknown') {{
+              return fallback;
+            }}
+            return String(value);
+          }}
 
           function escapeHtml(value) {{
             return String(value ?? '')
@@ -524,7 +594,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           function formatMoney(value, currency = '') {{
             if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {{
-              return 'unknown';
+              return 'не определено';
             }}
             const number = Number(value);
             const suffix = currency ? ` ${{currency}}` : '';
@@ -534,7 +604,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           function renderQuoteSection(run) {{
             const comparison = run.quote_comparison;
             if (!comparison) {{
-              return `<div class="empty">Нормализованные ТКП появятся после анализа run.</div>`;
+              return `<div class="empty">Нормализованные ТКП появятся после завершения анализа.</div>`;
             }}
             const suppliers = comparison.suppliers || [];
             const items = comparison.items || [];
@@ -551,10 +621,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                       <div class="metric">
                         <span class="metric-label">${{escapeHtml(supplier.supplier_name)}}</span>
                         <span class="metric-value">${{formatMoney(supplier.total_amount, supplier.currency || '')}}</span>
-                        <div class="run-meta">${{escapeHtml(supplier.source_file)}} · позиций=${{supplier.items_count}} · confidence=${{supplier.price_confidence}}</div>
+                        <div class="run-meta">${{escapeHtml(supplier.source_file)}} · позиций=${{supplier.items_count}} · уверенность=${{supplier.price_confidence}}</div>
                       </div>
                     `).join('')}}</div>`
-                    : `<div class="empty">ТКП не распознаны как structured quote tables.</div>`
+                    : `<div class="empty">ТКП не распознаны как структурированные таблицы.</div>`
                 }}
               </div>
               <div class="card" style="padding:16px">
@@ -566,9 +636,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                         <tbody>${{items.slice(0, 18).map((item) => `
                           <tr>
                             <td>${{escapeHtml(item.normalized_name)}}</td>
-                            <td>${{escapeHtml(item.best_price_supplier || 'unknown')}}</td>
-                            <td>${{escapeHtml(item.price_spread_percent ?? 'unknown')}}</td>
-                            <td>${{item.needs_review ? 'needs_review' : 'ok'}}</td>
+                            <td>${{escapeHtml(displayValue(item.best_price_supplier))}}</td>
+                            <td>${{escapeHtml(displayValue(item.price_spread_percent))}}</td>
+                            <td>${{item.needs_review ? 'нужна проверка' : 'ok'}}</td>
                           </tr>
                         `).join('')}}</tbody>
                       </table></div>`
@@ -585,7 +655,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           function renderEconomicsSection(run) {{
             const economics = run.economics_summary;
             if (!economics) {{
-              return `<div class="empty">Экономика появится после анализа run.</div>`;
+              return `<div class="empty">Экономика появится после завершения анализа.</div>`;
             }}
             const manualChecks = [
               ...(economics.manual_checks || []).map((item) => item.message),
@@ -599,10 +669,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <div class="metric"><span class="metric-label">Выбранная закупочная стоимость</span><span class="metric-value">${{formatMoney(economics.supplier_cost_selected, economics.currency || '')}}</span></div>
                   <div class="metric"><span class="metric-label">Резерв логистики</span><span class="metric-value">${{formatMoney(economics.logistics_reserve, economics.currency || '')}}</span></div>
                   <div class="metric"><span class="metric-label">Резерв риска</span><span class="metric-value">${{formatMoney(economics.risk_reserve, economics.currency || '')}}</span></div>
-                  <div class="metric"><span class="metric-label">Целевая маржа</span><span class="metric-value">${{economics.gross_margin_percent === null || economics.gross_margin_percent === undefined ? 'unknown' : `${{escapeHtml(economics.gross_margin_percent)}}%`}}</span></div>
+                  <div class="metric"><span class="metric-label">Целевая маржа</span><span class="metric-value">${{economics.gross_margin_percent === null || economics.gross_margin_percent === undefined ? 'не определено' : `${{escapeHtml(economics.gross_margin_percent)}}%`}}</span></div>
                   <div class="metric"><span class="metric-label">Предварительная цена подачи</span><span class="metric-value">${{formatMoney(economics.preliminary_bid_price, economics.currency || '')}}</span></div>
                 </div>
-                <div class="trace" style="margin-top:12px">Economics status: ${{escapeHtml(economics.economics_status)}}. Selected supplier: ${{escapeHtml(economics.selected_supplier_name || 'not selected')}}.</div>
+                <div class="trace" style="margin-top:12px">Статус экономики: ${{escapeHtml(displayValue(economics.economics_status))}}. Выбранный поставщик: ${{escapeHtml(displayValue(economics.selected_supplier_name))}}.</div>
               </div>
               <div class="card" style="padding:16px">
                 <div class="section-title">Что проверить вручную</div>
@@ -683,7 +753,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                       <strong>#${{step.order}} · ${{escapeHtml(step.title)}}</strong>
                       <div class="run-meta">${{escapeHtml(step.result_summary)}}</div>
                     </div>
-                    <span class="status-chip ${{statusClass(status)}}">${{escapeHtml(status)}}</span>
+                    <span class="status-chip ${{statusClass(status)}}">${{escapeHtml(statusLabel(status))}}</span>
                   </div>
                   <p>${{escapeHtml(step.agent_action)}}</p>
                   <div class="split" style="margin-top:12px">
@@ -710,7 +780,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <h2>Финальная рекомендация</h2>
                   <p>Рекомендация: ${{escapeHtml(finalRecommendation.label)}}.</p>
                 </div>
-                <a class="link-button" href="/demo/tender-agent/report" target="_blank" rel="noreferrer">Открыть synthetic report</a>
+                <a class="link-button" href="/demo/tender-agent/report" target="_blank" rel="noreferrer">Открыть синтетический отчёт</a>
               </div>
               <div class="split">
                 <div class="card" style="padding:16px">
@@ -755,13 +825,13 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           function renderRunsList() {{
             const node = document.getElementById('runs-list');
             if (!state.uploadedRuns.length) {{
-              node.innerHTML = `<div class="empty">Пока нет uploaded runs.</div>`;
+              node.innerHTML = `<div class="empty">Пока нет загруженных прогонов.</div>`;
               return;
             }}
             node.innerHTML = state.uploadedRuns.map((run) => `
               <div class="run-item${{run.run_id === state.selectedRunId ? ' active' : ''}}" data-run-id="${{escapeHtml(run.run_id)}}">
                 <strong>${{escapeHtml(run.tender_title)}}</strong>
-                <div class="run-meta">${{escapeHtml(run.run_id)}} · ${{escapeHtml(run.status)}} · files=${{run.file_count}}</div>
+                <div class="run-meta">${{escapeHtml(run.run_id)}} · ${{escapeHtml(statusLabel(run.status))}} · файлов=${{run.file_count}}</div>
               </div>
             `).join('');
             for (const item of node.querySelectorAll('.run-item')) {{
@@ -771,14 +841,14 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           function renderSelectedRun(run) {{
             const reportLinks = run.report_html_url
-              ? `<a class="link-button" href="${{run.report_html_url}}" target="_blank" rel="noreferrer">Открыть HTML report</a>
-                 <a class="link-button" href="${{run.report_download_url}}">Скачать report artifact</a>`
-              : `<span class="note">HTML report будет доступен после анализа.</span>`;
+              ? `<a class="link-button" href="${{run.report_html_url}}" target="_blank" rel="noreferrer">Открыть HTML-отчёт</a>
+                 <a class="link-button" href="${{run.report_download_url}}">Скачать артефакт отчёта</a>`
+              : `<span class="note">HTML-отчёт будет доступен после анализа.</span>`;
             document.getElementById('selected-run-card').innerHTML = `
               <div class="step-top">
                 <div>
                   <h2>${{escapeHtml(run.tender_title)}}</h2>
-                  <p>${{escapeHtml(run.run_id)}} · ${{escapeHtml(run.status)}} · ${{escapeHtml(run.analysis_mode)}}</p>
+                  <p>${{escapeHtml(run.run_id)}} · ${{escapeHtml(statusLabel(run.status))}} · ${{escapeHtml(analysisModeLabel(run.analysis_mode))}}</p>
                 </div>
                 <div class="form-actions">
                   <button class="button primary" id="analyze-run-button" type="button"${{run.status === 'analyzing' ? ' disabled' : ''}}>Анализировать</button>
@@ -788,25 +858,25 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="metric"><span class="metric-label">Категория</span><span class="metric-value">${{escapeHtml(run.tender_category)}}</span></div>
                 <div class="metric"><span class="metric-label">Заказчик</span><span class="metric-value">${{escapeHtml(run.customer_name)}}</span></div>
                 <div class="metric"><span class="metric-label">Файлов</span><span class="metric-value">${{run.files.length}}</span></div>
-                <div class="metric"><span class="metric-label">Human-in-the-loop</span><span class="metric-value">${{run.human_in_the_loop ? 'true' : 'false'}}</span></div>
+                <div class="metric"><span class="metric-label">Контроль человека</span><span class="metric-value">${{booleanLabel(run.human_in_the_loop)}}</span></div>
               </div>
               <div style="height:14px"></div>
               <div class="safety">
-                <span>Uploaded local data only</span>
-                <span>No external actions</span>
-                <span>No platform submission</span>
-                <span>No email sending</span>
-                <span>No digital signature</span>
-                <span>Human approval required</span>
+                <span>Только локально загруженные данные</span>
+                <span>Без внешних действий</span>
+                <span>Без подачи на площадку</span>
+                <span>Без отправки писем</span>
+                <span>Без ЭЦП</span>
+                <span>Требуется подтверждение человека</span>
               </div>
               <div style="height:14px"></div>
               <div class="split">
                 <div>
-                  <div class="section-title">Uploaded files</div>
-                  <ul>${{run.files.map((item) => `<li>${{escapeHtml(item.display_name)}} · ${{escapeHtml(item.extension)}} · extracted=${{item.extracted_text_available}}</li>`).join('')}}</ul>
+                  <div class="section-title">Загруженные файлы</div>
+                  <ul>${{run.files.map((item) => `<li>${{escapeHtml(item.display_name)}} · ${{escapeHtml(item.extension)}} · текст извлечён: ${{booleanLabel(item.extracted_text_available)}}</li>`).join('')}}</ul>
                 </div>
                 <div>
-                  <div class="section-title">Warnings / limitations</div>
+                  <div class="section-title">Предупреждения и ограничения</div>
                   <ul>${{[...run.warnings, ...run.limitations].map((item) => `<li>${{escapeHtml(item)}}</li>`).join('')}}</ul>
                 </div>
               </div>
@@ -827,15 +897,15 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           function renderSelectedRunSteps(run) {{
             if (!run.steps.length) {{
               document.getElementById('selected-run-steps').innerHTML = `
-                <h2>Pipeline uploaded run</h2>
-                <div class="empty">Pipeline появится после запуска анализа.</div>
+                <h2>Pipeline загруженного прогона</h2>
+                <div class="empty">Пошаговый pipeline появится после запуска анализа.</div>
               `;
               return;
             }}
             document.getElementById('selected-run-steps').innerHTML = `
               <div class="step-top">
                 <div>
-                  <h2>Pipeline uploaded run</h2>
+                  <h2>Pipeline загруженного прогона</h2>
                   <p>Документы → Требования → Вопросы → RFQ → ТКП → Экономика → Риски → Решение</p>
                 </div>
               </div>
@@ -846,7 +916,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           function renderSelectedRunSummary(run) {{
             if (!run.final_recommendation) {{
-              document.getElementById('selected-run-summary').innerHTML = `<div class="empty">Финальная рекомендация появится после анализа.</div>`;
+              document.getElementById('selected-run-summary').innerHTML = `<div class="empty">Финальная рекомендация появится после завершения анализа.</div>`;
               return;
             }}
             const summary = run.final_recommendation;
@@ -856,7 +926,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <h2>Финальная рекомендация</h2>
                   <p>Рекомендация: ${{escapeHtml(summary.label)}}.</p>
                 </div>
-                <span class="status-chip ${{statusClass(run.status)}}">${{escapeHtml(run.status)}}</span>
+                <span class="status-chip ${{statusClass(run.status)}}">${{escapeHtml(statusLabel(run.status))}}</span>
               </div>
               <div class="split">
                 <div class="card" style="padding:16px">
@@ -864,7 +934,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <ul>${{summary.rationale.map((item) => `<li>${{escapeHtml(item)}}</li>`).join('')}}</ul>
                 </div>
                 <div class="card" style="padding:16px">
-                  <div class="section-title">Manual checks</div>
+                  <div class="section-title">Ручные проверки</div>
                   <ul>${{summary.manual_checks.map((item) => `<li>${{escapeHtml(item)}}</li>`).join('')}}</ul>
                 </div>
                 <div class="card" style="padding:16px">
@@ -912,7 +982,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const payload = await fetchJson(`/api/demo/tender-agent/runs/${{encodeURIComponent(runId)}}/analyze`, {{
               method: 'POST',
             }});
-            setFlash(`Анализ завершён: статус ${{payload.status}}, mode ${{payload.analysis_mode}}.`);
+            setFlash(`Анализ завершён: статус «${{statusLabel(payload.status)}}», режим «${{analysisModeLabel(payload.analysis_mode)}}».`);
             await loadRuns();
             await selectRun(runId, false);
           }}
@@ -937,12 +1007,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 throw new Error(detail);
               }}
               const payload = await response.json();
-              setFlash(`Создан demo run: ${{payload.run_id}}. Теперь можно запускать анализ.`);
+              setFlash(`Создан демонстрационный прогон: ${{payload.run_id}}. Теперь можно запускать анализ.`);
               form.reset();
               await loadRuns();
               await selectRun(payload.run_id, true);
             }} catch (error) {{
-              setFlash(`Не удалось создать run: ${{error.message}}`, true);
+              setFlash(`Не удалось создать прогон: ${{error.message}}`, true);
             }}
           }}
 
@@ -955,7 +1025,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           }}
 
           bootstrap().catch((error) => {{
-            document.getElementById('dataset-tender-card').innerHTML = `<div class="empty">Не удалось загрузить demo UI: ${{escapeHtml(error.message)}}</div>`;
+            document.getElementById('dataset-tender-card').innerHTML = `<div class="empty">Не удалось загрузить демонстрационный интерфейс: ${{escapeHtml(error.message)}}</div>`;
           }});
         </script>
       </body>

@@ -22,8 +22,10 @@ from src.modules.tender_operator_agent_demo.schemas import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_DATA_DIR = REPO_ROOT / "demo_data" / "tender_operator_agent"
 ARVECTUM_ASSETS_DIR = REPO_ROOT / "arvectum-landing" / "public" / "assets"
+LOCAL_ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 ASSET_MAP = {
     "logo-horizontal.svg": (ARVECTUM_ASSETS_DIR / "brand" / "logo-horizontal.svg", "image/svg+xml"),
+    "arvectum-logo-block.svg": (LOCAL_ASSETS_DIR / "arvectum-logo-block.svg", "image/svg+xml"),
     "pt-sans-regular.ttf": (ARVECTUM_ASSETS_DIR / "fonts" / "PTSans-Regular.ttf", "font/ttf"),
     "pt-sans-bold.ttf": (ARVECTUM_ASSETS_DIR / "fonts" / "PTSans-Bold.ttf", "font/ttf"),
     "jetbrains-mono-regular.ttf": (ARVECTUM_ASSETS_DIR / "fonts" / "JetBrainsMono-Regular.ttf", "font/ttf"),
@@ -347,21 +349,21 @@ def _build_report_sections(run: TenderOperatorDemoRunResponse) -> list[DemoDetai
 def get_tender_operator_demo_report() -> TenderOperatorDemoReportResponse:
     run = get_tender_operator_demo_run()
     report_markdown = (
-        "# Tender Operator Agent Demo Report\n\n"
+        "# Отчёт демо тендерного агента\n\n"
         f"- Run ID: {run.tender.run_id}\n"
-        f"- Procurement: {run.tender.title}\n"
-        f"- Customer: {run.tender.customer}\n"
-        f"- Recommendation: {run.final_recommendation.recommendation.value}\n"
-        f"- Recommendation label: {run.final_recommendation.label}\n\n"
-        "## Executive Summary\n"
+        f"- Закупка: {run.tender.title}\n"
+        f"- Заказчик: {run.tender.customer}\n"
+        f"- Код рекомендации: {run.final_recommendation.recommendation.value}\n"
+        f"- Рекомендация: {run.final_recommendation.label}\n\n"
+        "## Краткий вывод\n"
         + "\n".join(f"- {item}" for item in run.final_recommendation.rationale)
-        + "\n\n## Manual Checks\n"
+        + "\n\n## Ручные проверки\n"
         + "\n".join(f"- {item}" for item in run.final_recommendation.manual_checks)
         + "\n"
     )
     return TenderOperatorDemoReportResponse(
         run_id=run.tender.run_id,
-        report_title="Tender Operator Agent Demo Report",
+        report_title="Отчёт демо тендерного агента",
         generated_at=run.tender.prepared_at,
         recommendation=run.final_recommendation.recommendation,
         recommendation_label=run.final_recommendation.label,
@@ -1247,8 +1249,8 @@ def render_tender_operator_demo_report_html() -> str:
                 <div class="brand">
                   <img src="/demo/tender-agent/assets/logo-horizontal.svg" alt="Arvectum" />
                 </div>
-                <div class="eyebrow">Demo report</div>
-                <h1 style="max-width:none">Tender Operator Agent Report</h1>
+                <div class="eyebrow">Демо-отчёт</div>
+                <h1 style="max-width:none">Отчёт тендерного агента</h1>
                 <p class="subtitle">Синтетический отчёт для локальной демонстрации controlled tender workflow.</p>
               </div>
               <div class="header-actions">
@@ -1268,13 +1270,13 @@ def render_tender_operator_demo_report_html() -> str:
                 </div>
                 <div class="columns-2">
                   <div class="section-card">
-                    <h3 class="section-title">Executive summary</h3>
+                    <h3 class="section-title">Краткий вывод</h3>
                     <ul class="bullet-list">
                       {"".join(f"<li class='bullet-item'>{item}</li>" for item in report.executive_summary)}
                     </ul>
                   </div>
                   <div class="section-card">
-                    <h3 class="section-title">Manual checks</h3>
+                    <h3 class="section-title">Ручные проверки</h3>
                     <ul class="bullet-list">
                       {"".join(f"<li class='bullet-item'>{item}</li>" for item in report.manual_checks)}
                     </ul>

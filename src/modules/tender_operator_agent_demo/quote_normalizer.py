@@ -202,8 +202,8 @@ def parse_spreadsheet_source(source: SpreadsheetSource) -> ParsedSpreadsheet:
             document_type="unknown_table",
             supplier_name=None,
             items=[],
-            warnings=["Legacy .xls parsing is limited in this demo sprint."],
-            limitations=["Use .xlsx when possible for deterministic quote extraction."],
+            warnings=["Поддержка legacy .xls ограничена в этом демо-спринте."],
+            limitations=["Для детерминированного извлечения ТКП по возможности используйте .xlsx."],
             currency=None,
             delivery_summary=None,
         )
@@ -223,7 +223,7 @@ def parse_spreadsheet_source(source: SpreadsheetSource) -> ParsedSpreadsheet:
         collected_rows.extend(rows[:8])
         header_row_idx, mapping = _find_header_row(rows)
         if header_row_idx is None or "name" not in mapping:
-            warnings.append(f"Sheet '{sheet.title}' did not produce a reliable header row.")
+            warnings.append(f"На листе '{sheet.title}' не удалось уверенно определить строку заголовков.")
             continue
 
         blank_streak = 0
@@ -267,11 +267,11 @@ def parse_spreadsheet_source(source: SpreadsheetSource) -> ParsedSpreadsheet:
 
             row_warnings: list[str] = []
             if quantity is None:
-                row_warnings.append("Quantity was not confidently extracted.")
+                row_warnings.append("Количество извлечено с низкой уверенностью.")
             if unit_price is None and total_price is None:
-                row_warnings.append("Price was not confidently extracted.")
+                row_warnings.append("Цена извлечена с низкой уверенностью.")
             if unit is None:
-                row_warnings.append("Unit of measure was not found.")
+                row_warnings.append("Не найдена единица измерения.")
 
             confidence = 0.3
             if normalized_name:
@@ -325,8 +325,8 @@ def parse_spreadsheet_source(source: SpreadsheetSource) -> ParsedSpreadsheet:
     currency = currency_values[0] if currency_values else None
     delivery_summary = ", ".join(sorted(set(delivery_values))[:3]) if delivery_values else None
     if not all_items:
-        warnings.append(f"No structured quote rows were extracted from '{source.display_name}'.")
-        limitations.append("Spreadsheet layout is unsupported or too irregular for this deterministic parser.")
+        warnings.append(f"Из файла '{source.display_name}' не удалось извлечь структурированные строки ТКП.")
+        limitations.append("Разметка таблицы не поддерживается или слишком нестандартна для детерминированного парсера.")
 
     return ParsedSpreadsheet(
         source=source,
@@ -380,7 +380,7 @@ def build_quote_comparison(spreadsheet_sources: list[SpreadsheetSource], analysi
             comparison_summary={},
             manual_checks=[ManualCheck(code="quotes_missing", message="ТКП не загружены. Сравнение поставщиков недоступно.")],
             warnings=[],
-            limitations=["Supplier quote files were not provided."],
+            limitations=["Файлы с ТКП не были предоставлены."],
         )
 
     parsed_results: list[ParsedSpreadsheet] = []
@@ -391,7 +391,7 @@ def build_quote_comparison(spreadsheet_sources: list[SpreadsheetSource], analysi
             parsed = parse_spreadsheet_source(source)
         except Exception as exc:
             top_warnings.append(ExtractionWarning(code="spreadsheet_parse_failed", message=f"{source.display_name}: {exc}"))
-            limitations.append(f"Spreadsheet '{source.display_name}' could not be parsed deterministically.")
+            limitations.append(f"Таблицу '{source.display_name}' не удалось детерминированно разобрать.")
             continue
         parsed_results.append(parsed)
         top_warnings.extend(
@@ -421,9 +421,9 @@ def build_quote_comparison(spreadsheet_sources: list[SpreadsheetSource], analysi
             suppliers=[],
             items=[],
             comparison_summary={},
-            manual_checks=[ManualCheck(code="quotes_not_recognized", message="Excel files were loaded, but supplier quote tables were not confidently recognized.")],
+            manual_checks=[ManualCheck(code="quotes_not_recognized", message="Excel-файлы загружены, но таблицы ТКП не распознаны с достаточной уверенностью.")],
             warnings=top_warnings,
-            limitations=list(dict.fromkeys(limitations + ["Supplier quote classification confidence was insufficient."])),
+            limitations=list(dict.fromkeys(limitations + ["Недостаточная уверенность классификации ТКП."])),
         )
 
     requested_quantities = {item.normalized_name: item.requested_quantity for item in spec_items if item.normalized_name}
@@ -452,7 +452,7 @@ def build_quote_comparison(spreadsheet_sources: list[SpreadsheetSource], analysi
             existing.offers.extend(item.offers)
             if item.unit and existing.unit and item.unit != existing.unit:
                 existing.needs_review = True
-                existing.warnings.append("Units differ across offers.")
+                existing.warnings.append("Единицы измерения отличаются между предложениями.")
 
     for item in grouped.values():
         prices = [(offer.supplier_name, offer.total_price or offer.unit_price) for offer in item.offers if (offer.total_price or offer.unit_price) is not None]
@@ -592,7 +592,7 @@ def build_economics_summary(
     if quote_comparison.status != "completed":
         manual_checks.append(ManualCheck(code="quote_partial", message="Часть ТКП извлечена с ограничениями. Перед решением нужна ручная проверка."))
     if len({supplier.currency for supplier in priced_suppliers if supplier.currency}) > 1:
-        warnings.append(ExtractionWarning(code="mixed_currency", message="Detected multiple currencies across supplier quotes."))
+        warnings.append(ExtractionWarning(code="mixed_currency", message="В ТКП обнаружено несколько валют."))
         manual_checks.append(ManualCheck(code="currency_normalization", message="Нормализовать валюты до финального расчёта экономики."))
 
     economics_status = "conditionally_viable" if preliminary_bid_price is not None else "insufficient_data"
@@ -620,7 +620,7 @@ def build_economics_summary(
         manual_checks=manual_checks,
         warnings=warnings,
         limitations=[
-            "Economics are demo-mode estimates built from uploaded quote totals and operator defaults.",
-            "Expected revenue remains unavailable unless customer target price is provided separately.",
+            "Экономика в демо-режиме оценивается по суммам из загруженных ТКП и операторским параметрам.",
+            "Ожидаемая выручка недоступна, пока отдельно не задана цена заказчика или целевая цена подачи.",
         ],
     )

@@ -58,8 +58,8 @@ def test_tender_operator_demo_page_shows_both_modes(client):
     response = client.get("/demo/tender-agent")
 
     assert response.status_code == 200
-    assert "Demo dataset" in response.text
-    assert "Upload &amp; Analyze" in response.text
+    assert "Демо-набор" in response.text
+    assert "Загрузка и анализ" in response.text
 
 
 def test_create_uploaded_run_with_txt_files(client, monkeypatch, tmp_path):
@@ -163,7 +163,7 @@ def test_analyze_uploaded_run_returns_completed_and_report_endpoints_work(client
     assert download_response.headers["content-type"].startswith("text/html")
     assert "attachment; filename=" in download_response.headers["content-disposition"]
     assert report_page.status_code == 200
-    assert "Tender Operator Uploaded Demo Report" in report_page.text
+    assert "Отчёт по загруженному прогону тендерного агента" in report_page.text
 
     assert (runs_root / run_id / "output" / "report.html").exists()
 
@@ -239,9 +239,9 @@ def test_xlsx_quotes_are_normalized_and_report_includes_quote_sections(client, m
 
     report_page = client.get(f"/demo/tender-agent/runs/{run_id}/report")
     assert report_page.status_code == 200
-    assert "Supplier quote extraction" in report_page.text
-    assert "Quote comparison" in report_page.text
-    assert "Economics" in report_page.text
+    assert "Извлечённые ТКП" in report_page.text
+    assert "Сравнение ТКП" in report_page.text
+    assert "Экономика" in report_page.text
 
 
 def test_zip_with_safe_xlsx_is_processed(client, monkeypatch, tmp_path):

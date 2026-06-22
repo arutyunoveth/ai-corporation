@@ -20,15 +20,15 @@ REQUIRED_STEP_FIELDS = {
 def test_tender_operator_demo_page_and_report_render(client):
     page = client.get("/demo/tender-agent")
     report_page = client.get("/demo/tender-agent/report")
-    asset = client.get("/demo/tender-agent/assets/logo-horizontal.svg")
+    asset = client.get("/demo/tender-agent/assets/arvectum-logo-block.svg")
 
     assert page.status_code == 200
     assert "Тендерный агент" in page.text
-    assert "Demo mode / Human-in-the-loop" in page.text
-    assert "Upload &amp; Analyze" in page.text
+    assert "Демо-режим / human-in-the-loop" in page.text
+    assert "Загрузка и анализ" in page.text
 
     assert report_page.status_code == 200
-    assert "Tender Operator Agent Report" in report_page.text
+    assert "Отчёт тендерного агента" in report_page.text
 
     assert asset.status_code == 200
     assert "svg" in asset.headers["content-type"]
@@ -74,7 +74,7 @@ def test_tender_operator_demo_api_returns_expected_structure(client):
     assert report_response.status_code == 200
     report_payload = report_response.json()
     assert report_payload["recommendation"] == "participate_conditionally"
-    assert "## Executive Summary" in report_payload["report_markdown"]
+    assert "## Краткий вывод" in report_payload["report_markdown"]
 
 
 def test_tender_operator_demo_report_download_works(client):

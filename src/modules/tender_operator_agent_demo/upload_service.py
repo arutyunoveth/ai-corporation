@@ -51,6 +51,52 @@ DEFAULT_LOGISTICS_RESERVE_PERCENT = 3.0
 DEFAULT_RISK_RESERVE_PERCENT = 5.0
 DEFAULT_PAYMENT_DELAY_DAYS = 45
 
+TEXT_TRANSLATIONS = {
+    "Compliance with specified technical standards required": "Требуется соответствие указанным техническим стандартам.",
+    "Equipment/goods must match stated specifications": "Оборудование и товары должны соответствовать заявленной спецификации.",
+    "Acceptance testing per contract terms": "Нужно пройти приёмочные испытания по условиям договора.",
+    "Warranty and post-delivery support required": "Требуются гарантия и поддержка после поставки.",
+    "Company registration certificate": "Свидетельство о регистрации компании.",
+    "Tax clearance certificate": "Справка об отсутствии налоговой задолженности.",
+    "Technical proposal with specifications": "Техническое предложение со спецификацией.",
+    "Financial guarantee or contract security": "Финансовое обеспечение или обеспечение исполнения договора.",
+    "Declaration of conformity": "Декларация о соответствии.",
+    "Can you supply the exact item matching the specification? If not, what analog do you propose?": "Можете ли вы поставить точную позицию по спецификации? Если нет, какой аналог предлагаете?",
+    "What is your price per unit with VAT and without VAT?": "Укажите цену за единицу с НДС и без НДС.",
+    "What is the delivery cost to the specified location?": "Укажите стоимость доставки до указанного объекта.",
+    "What is the delivery time from order confirmation?": "Какой срок поставки после подтверждения заказа?",
+    "Is the item in stock or made to order? If made to order, what is the manufacturing lead time?": "Позиция в наличии или производится под заказ? Если под заказ, какой срок изготовления?",
+    "Do you have the required certificates and declarations of conformity?": "Есть ли необходимые сертификаты и декларации соответствия?",
+    "What warranty do you provide?": "Какой гарантийный срок вы предоставляете?",
+    "Do you offer an analog that meets the specification? If so, provide details.": "Предлагаете ли аналог, соответствующий спецификации? Если да, укажите детали.",
+    "What are your payment terms? Do you require prepayment?": "Какие условия оплаты? Требуется ли предоплата?",
+    "How long is your offer valid?": "Какой срок действия вашего предложения?",
+    "Is installation/assembly included? If not, what are the additional costs?": "Входит ли монтаж или сборка? Если нет, какие дополнительные затраты?",
+    "Is packaging, delivery, and unloading included? If not, what are the additional costs?": "Включены ли упаковка, доставка и разгрузка? Если нет, какие дополнительные затраты?",
+    "Penalties for delay": "Штрафы за просрочку.",
+    "Post-payment after acceptance": "Оплата после приёмки.",
+    "Unilateral termination right": "Право одностороннего расторжения.",
+    "Contract security requirement": "Требование обеспечения исполнения договора.",
+    "Short delivery timeline": "Сжатый срок поставки.",
+    "Required license/SRO/experience": "Обязательная лицензия, СРО или подтверждённый опыт.",
+    "Manageable. Include in project planning.": "Риск управляемый. Нужно заложить его в план исполнения.",
+    "Standard for public procurement. Requires working capital.": "Типично для закупок. Требует оборотного капитала.",
+    "Standard clause. Manageable with proper project management.": "Стандартное условие. Управляется при дисциплине исполнения.",
+    "Binds significant working capital. Reduces available margin.": "Замораживает заметный объём оборотных средств и снижает доступную маржу.",
+    "Requires supplier with stock or short manufacturing lead time.": "Нужен поставщик со складским остатком или коротким циклом производства.",
+    "If operator/supplier cannot meet these, participation is impossible.": "Если оператор или поставщик не соответствуют этому требованию, участвовать нельзя.",
+    "Ensure realistic delivery timeline. Include buffer.": "Подтвердить реалистичный срок поставки и заложить буфер.",
+    "Factor into cash flow planning. Consider contract security reduction.": "Учесть это в cash-flow и отдельно оценить возможность снижения обеспечения.",
+    "Track milestones diligently. Communicate proactively.": "Жёстко контролировать вехи исполнения и заранее эскалировать отклонения.",
+    "Include cost of security (bank guarantee fee) in pricing. Negotiate reduction if possible.": "Включить стоимость обеспечения в цену и, если возможно, согласовать снижение.",
+    "Verify supplier availability before bidding. Consider partial delivery.": "До участия подтвердить наличие у поставщика и рассмотреть частичную поставку.",
+    "Verify requirements early. Check if equivalents are accepted.": "Сразу проверить требования и отдельно уточнить, принимаются ли эквиваленты.",
+}
+
+
+def _translate_user_text(value: str) -> str:
+    return TEXT_TRANSLATIONS.get(value, value)
+
 
 @dataclass
 class AnalyzedDocument:
@@ -256,8 +302,8 @@ def create_uploaded_demo_run(
         "files": files,
         "warnings": warnings,
         "limitations": [
-            "Demo / pilot mode only.",
-            "No external actions, no email sending, no platform submission, no digital signature.",
+            "Только демо- и пилотный режим.",
+            "Без внешних действий, без отправки писем, без подачи на площадку, без ЭЦП.",
         ],
         "human_in_the_loop": True,
         "external_actions": False,
@@ -623,17 +669,17 @@ def _extract_requirement_rows(requirements: dict[str, Any], core_complete: bool)
     for title in requirements.get("technical_requirements", []):
         rows.append(
             {
-                "title": title,
-                "detail": "Извлечено controlled adapter-ом из доступных документов.",
-                "source": "runner_adapter" if core_complete else "fallback_adapter",
+                "title": _translate_user_text(title),
+                "detail": "Извлечено детерминированным адаптером из доступных документов.",
+                "source": "адаптер раннера" if core_complete else "fallback-адаптер",
             }
         )
     for title in requirements.get("document_requirements", []):
         rows.append(
             {
-                "title": title,
+                "title": _translate_user_text(title),
                 "detail": "Требование к комплекту документов или подтверждению квалификации.",
-                "source": "runner_adapter" if core_complete else "fallback_adapter",
+                "source": "адаптер раннера" if core_complete else "fallback-адаптер",
             }
         )
     return rows[:10]
@@ -677,7 +723,7 @@ def _build_output_payloads(
         "document_signals": [
             f"Загружено файлов: {len(metadata.get('files', []))}.",
             f"Файлов с извлечённым текстом: {len([doc for doc in documents if doc.text])}.",
-            f"Analysis mode: {analysis_mode}.",
+            f"Режим анализа: {analysis_mode}.",
         ],
     }
 
@@ -694,7 +740,7 @@ def _build_output_payloads(
             "Часть требований получена из ограниченного demo-parsing.",
             "Параметры оплаты и допустимость аналогов требуют ручной валидации.",
         ],
-        "questions": [item["question"] for item in supplier_questions[:8]],
+        "questions": [_translate_user_text(item["question"]) for item in supplier_questions[:8]],
         "manual_checks": [
             "Согласовать финальный вопросник с оператором.",
             "Не отправлять вопросы поставщикам автоматически из этого интерфейса.",
@@ -734,7 +780,7 @@ def _build_output_payloads(
             [
                 f"Найдено распознанных ТКП: {tkp_comparison.get('supplier_quotes_found', 0)}.",
                 f"Извлечено сопоставимых позиций: {tkp_comparison.get('items_extracted', 0)}.",
-                "Сравнение выполнено локально, в deterministic demo-mode без внешних действий.",
+                "Сравнение выполнено локально, в детерминированном демо-режиме без внешних действий.",
             ]
             if quote_files_present
             else [
@@ -791,8 +837,8 @@ def _build_output_payloads(
         "drivers": (
             [
                 f"Выбран поставщик: {economics.get('selected_supplier_name') or 'не определён'}.",
-                "Expected revenue не рассчитывается автоматически без цены заказчика.",
-                "Расчёт построен на локальных ТКП и operator defaults из demo form.",
+                "Ожидаемая выручка не рассчитывается автоматически без цены заказчика.",
+                "Расчёт построен на локальных ТКП и операторских параметрах из демо-формы.",
             ]
             if economics
             else ["Без структурированных цен экономика не может быть автоматически признана полной."]
@@ -805,13 +851,13 @@ def _build_output_payloads(
     }
 
     risks_payload = {
-        "summary": "Найдены ограничения и риски, требующие human review.",
+        "summary": "Найдены ограничения и риски, требующие ручной проверки.",
         "risks": [
             {
-                "risk": risk.get("clause", "Ограничение"),
+                "risk": _translate_user_text(risk.get("clause", "Ограничение")),
                 "severity": "needs_review" if risk.get("classification") == "deal_breaker_candidate" else "warning",
-                "impact": risk.get("impact", ""),
-                "mitigation": risk.get("mitigation", ""),
+                "impact": _translate_user_text(risk.get("impact", "")),
+                "mitigation": _translate_user_text(risk.get("mitigation", "")),
             }
             for risk in calibrated_risks
         ]
@@ -833,9 +879,9 @@ def _build_output_payloads(
         recommendation = DemoRecommendationCode.PARTICIPATE_CONDITIONALLY
         label = "участвовать условно"
         rationale = [
-            "Базовый controlled runner path выполнен на локально загруженных документах.",
+            "Базовый контролируемый путь раннера выполнен на локально загруженных документах.",
             "ТКП структурированы и сопоставлены в локальном deterministic parser слое.",
-            "Экономика выглядит условно приемлемой, но решение всё ещё требует operator review.",
+            "Экономика выглядит условно приемлемой, но решение всё ещё требует проверки оператором.",
             "Рекомендация остаётся предварительной и не заменяет решение человека.",
         ]
     else:
@@ -843,7 +889,7 @@ def _build_output_payloads(
         label = "нужна ручная проверка"
         rationale = [
             "Данных недостаточно для безусловной рекомендации.",
-            "Часть шагов выполнена в fallback mode или заблокирована отсутствием ТКП/извлечённого текста.",
+            "Часть шагов выполнена в fallback-режиме или заблокирована отсутствием ТКП или извлечённого текста.",
             "Следующее действие должен подтвердить оператор.",
         ]
 
@@ -859,7 +905,7 @@ def _build_output_payloads(
             "Проверить исходные документы и роли файлов.",
             "Подтвердить RFQ и вопросы перед внешними коммуникациями.",
             "Проверить нормализацию Excel-таблиц и сопоставление позиций перед финансовым решением.",
-            "Сделать финальное решение только после human review.",
+            "Сделать финальное решение только после ручной проверки.",
         ],
     }
 
@@ -872,27 +918,27 @@ def _build_output_payloads(
             "условия оплаты",
         ],
         "risk_signals": [
-            "Analysis mode ограничен локальным controlled adapter.",
+            "Режим анализа ограничен локальным контролируемым адаптером.",
             "Внешние действия отключены по design policy.",
             "Нормализация Excel-таблиц использует deterministic parser + heuristics без LLM.",
             "Часть выводов требует ручного подтверждения по исходным файлам.",
         ],
         "decision_factors": rationale,
         "overall_explanation": (
-            "Агент использовал только локально загруженные файлы, безопасное извлечение текста и controlled runner/fallback adapter. "
-            "Если комплект документов или ТКП неполный, интерфейс честно показывает blocked / needs_review вместо ложной полной автоматизации."
+            "Агент использовал только локально загруженные файлы, безопасное извлечение текста и контролируемый адаптер раннера или fallback-адаптер. "
+            "Если комплект документов или ТКП неполный, интерфейс честно показывает блокировки и необходимость ручной проверки вместо ложной полной автоматизации."
         ),
         "per_step": {
             "documents": "Файлы сохранены локально, имена нормализованы, опасные пути отброшены.",
             "requirements": "Требования извлечены из доступного текста или собраны fallback-адаптером при неполном пакете.",
             "questions": "Сформирован список вопросов для ручной коммуникации с поставщиками.",
             "rfq": "Подготовлен draft RFQ для ручной отправки вне системы.",
-            "quotes": "Сравнение ТКП использует детерминированный парсер таблиц и честно помечает partial / needs_review.",
-            "economics": "Экономика строится только на доступных локальных данных и operator defaults, без выдуманной выручки.",
+            "quotes": "Сравнение ТКП использует детерминированный парсер таблиц и честно помечает частичные результаты и зоны ручной проверки.",
+            "economics": "Экономика строится только на доступных локальных данных и операторских параметрах, без выдуманной выручки.",
             "risks": "Риски агрегированы из доступного контракта и ограничений demo-mode.",
-            "decision": "Итог всегда требует human approval и не приводит к внешним действиям.",
+            "decision": "Итог всегда требует подтверждения человеком и не приводит к внешним действиям.",
         },
-        "human_control_note": "Demo / pilot mode. Нет подачи заявок, писем, ЭЦП или действий на площадках без человека.",
+        "human_control_note": "Демо- и пилотный режим. Нет подачи заявок, писем, ЭЦП или действий на площадках без человека.",
         "limitations": metadata.get("limitations", []) + output_warnings,
     }
 
@@ -962,7 +1008,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             short_title="Требования",
             status=DemoStepStatus.PARTIAL if partial_requirements else DemoStepStatus.DONE,
             description="Извлечение ключевых требований и обязательных документов из доступного локального пакета.",
-            agent_action="Собран requirements snapshot с controlled parser/fallback adapter.",
+            agent_action="Собран снимок требований с помощью контролируемого парсера и fallback-адаптера.",
             result_summary=f"Выделено требований: {len(requirements['requirements'])}.",
             findings=[item["title"] for item in requirements["requirements"]],
             human_review=requirements["manual_review_points"],
@@ -990,7 +1036,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             short_title="Вопросы",
             status=DemoStepStatus.NEEDS_REVIEW,
             description="Формирование вопросника по неоднозначностям и отсутствующим данным.",
-            agent_action="Подготовлен набор вопросов для operator-controlled RFQ.",
+            agent_action="Подготовлен набор вопросов для RFQ под контролем оператора.",
             result_summary=f"Подготовлено вопросов: {len(questions['questions'])}.",
             findings=questions["ambiguities"],
             human_review=questions["manual_checks"],
@@ -1006,7 +1052,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             short_title="RFQ",
             status=DemoStepStatus.DONE if requirements["requirements"] else DemoStepStatus.PARTIAL,
             description="Подготовка draft RFQ для ручной отправки.",
-            agent_action="Сформирован RFQ draft на основе extracted requirements и supplier questions.",
+            agent_action="Сформирован черновик RFQ на основе извлечённых требований и вопросов поставщикам.",
             result_summary="RFQ готов как внутренний черновик.",
             findings=rfq["sections"],
             human_review=rfq["manual_checks"],
@@ -1020,7 +1066,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             short_title="ТКП",
             status=DemoStepStatus.BLOCKED if quote_blocked else (DemoStepStatus.PARTIAL if quote_partial else DemoStepStatus.DONE),
             description="Сопоставление коммерческих предложений, если они были загружены.",
-            agent_action="Проверено наличие ТКП и собран локальный comparison snapshot с нормализацией таблиц.",
+            agent_action="Проверено наличие ТКП и собран локальный снимок сравнения с нормализацией таблиц.",
             result_summary="ТКП не загружены." if quote_blocked else f"Найдено ТКП: {quotes.get('supplier_quotes_found', 0)}, позиций: {quotes.get('items_extracted', 0)}.",
             findings=quotes["highlights"],
             human_review=quotes["manual_checks"],
@@ -1053,7 +1099,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
                             "Позиция": item.get("normalized_name", "unknown"),
                             "Лучшая цена": item.get("best_price_supplier", "unknown"),
                             "Разброс %": item.get("price_spread_percent", "unknown"),
-                            "Нужна проверка": "yes" if item.get("needs_review") else "no",
+                            "Нужна проверка": "да" if item.get("needs_review") else "нет",
                         }
                         for item in quotes.get("items", [])[:20]
                     ],
@@ -1069,14 +1115,14 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             short_title="Экономика",
             status=DemoStepStatus.BLOCKED if economics_blocked else (DemoStepStatus.PARTIAL if economics_partial else DemoStepStatus.NEEDS_REVIEW),
             description="Расчёт экономики только по доступным локальным данным.",
-            agent_action="Собран economics snapshot без притворства полной автоматизации при нехватке данных.",
+            agent_action="Собран снимок экономики без притворства полной автоматизации при нехватке данных.",
             result_summary=economics["result"],
             findings=economics["drivers"],
             human_review=economics["manual_checks"],
             trace=trace["economics"],
             result_sections=[
                 DemoDetailSection(
-                    title="Economics snapshot",
+                    title="Снимок экономики",
                     kind="table",
                     columns=["Показатель", "Значение"],
                     rows=[
@@ -1122,7 +1168,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             short_title="Решение",
             status=DemoStepStatus.NEEDS_REVIEW,
             description="Предварительная рекомендация без внешних действий и без снятия human control.",
-            agent_action="Собран итоговый recommendation block с открытыми вопросами и ручными проверками.",
+            agent_action="Собран итоговый блок рекомендации с открытыми вопросами и ручными проверками.",
             result_summary=f"Рекомендация: {final_recommendation['label']}.",
             findings=final_recommendation["rationale"],
             human_review=final_recommendation["manual_checks"],
@@ -1154,28 +1200,28 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
     quotes = outputs["quotes_comparison"]
     economics = outputs["economics"]
     return (
-        "# Tender Operator Uploaded Demo Report\n\n"
+        "# Отчёт по загруженному прогону тендерного агента\n\n"
         f"- Run ID: {metadata['run_id']}\n"
-        f"- Tender: {metadata['tender_title']}\n"
-        f"- Category: {metadata['tender_category']}\n"
-        f"- Customer: {metadata['customer_name']}\n"
-        f"- Status: {metadata['status']}\n"
-        f"- Analysis mode: {metadata['analysis_mode']}\n"
-        f"- Recommendation: {final_recommendation['recommendation']}\n\n"
-        "## Executive Summary\n"
+        f"- Закупка: {metadata['tender_title']}\n"
+        f"- Категория: {metadata['tender_category']}\n"
+        f"- Заказчик: {metadata['customer_name']}\n"
+        f"- Статус: {metadata['status']}\n"
+        f"- Режим анализа: {metadata['analysis_mode']}\n"
+        f"- Код рекомендации: {final_recommendation['recommendation']}\n\n"
+        "## Краткий вывод\n"
         + "\n".join(f"- {item}" for item in final_recommendation["rationale"])
-        + "\n\n## Supplier Quote Extraction\n"
+        + "\n\n## Извлечённые ТКП\n"
         + (
             "\n".join(
-                f"- {item.get('supplier_name', 'Поставщик')}: total={item.get('total_amount', 'unknown')} {item.get('currency', '')}, items={item.get('items_count', 'unknown')}"
+                f"- {item.get('supplier_name', 'Поставщик')}: сумма={item.get('total_amount', 'unknown')} {item.get('currency', '')}, позиций={item.get('items_count', 'unknown')}"
                 for item in quotes.get("suppliers", [])
             )
             if quotes.get("suppliers")
             else "- ТКП не загружены или не распознаны."
         )
-        + "\n\n## Economics\n"
+        + "\n\n## Экономика\n"
         + "\n".join(f"- {item['label']}: {item['value']}" for item in economics["metrics"])
-        + "\n\n## Manual Checks\n"
+        + "\n\n## Ручные проверки\n"
         + "\n".join(f"- {item}" for item in final_recommendation["manual_checks"])
         + "\n"
     )
@@ -1211,7 +1257,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Tender Operator Uploaded Demo Report</title>
+        <title>Отчёт по загруженному прогону тендерного агента</title>
         <style>
           body {{
             margin: 0;
@@ -1251,31 +1297,31 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
       <body>
         <div class="page">
           <div class="card">
-            <div class="badge">Demo / pilot mode</div>
-            <div class="badge">No external actions</div>
-            <div class="badge">Human approval required</div>
+            <div class="badge">Демо / пилотный режим</div>
+            <div class="badge">Без внешних действий</div>
+            <div class="badge">Требуется подтверждение человека</div>
             <h1>{html.escape(metadata['tender_title'])}</h1>
-            <p class="muted">Run ID: {html.escape(metadata['run_id'])} | Status: {html.escape(metadata['status'])} | Mode: {html.escape(metadata['analysis_mode'])}</p>
+            <p class="muted">Run ID: {html.escape(metadata['run_id'])} | Статус: {html.escape(metadata['status'])} | Режим: {html.escape(metadata['analysis_mode'])}</p>
           </div>
 
           <div class="card">
-            <h2>Run metadata</h2>
+            <h2>Метаданные прогона</h2>
             <table>
-              <tr><th>Field</th><th>Value</th></tr>
-              <tr><td>Tender category</td><td>{html.escape(metadata['tender_category'])}</td></tr>
-              <tr><td>Customer</td><td>{html.escape(metadata['customer_name'])}</td></tr>
-              <tr><td>Created at</td><td>{html.escape(metadata['created_at'])}</td></tr>
-              <tr><td>Uploaded files</td><td>{len(files)}</td></tr>
+              <tr><th>Поле</th><th>Значение</th></tr>
+              <tr><td>Категория закупки</td><td>{html.escape(metadata['tender_category'])}</td></tr>
+              <tr><td>Заказчик</td><td>{html.escape(metadata['customer_name'])}</td></tr>
+              <tr><td>Создано</td><td>{html.escape(metadata['created_at'])}</td></tr>
+              <tr><td>Загружено файлов</td><td>{len(files)}</td></tr>
             </table>
           </div>
 
           <div class="card">
-            <h2>Uploaded files</h2>
+            <h2>Загруженные файлы</h2>
             <ul>{list_html([item['display_name'] for item in files])}</ul>
           </div>
 
           <div class="card">
-            <h2>Executive summary</h2>
+            <h2>Краткий вывод</h2>
             <ul>{list_html(final_recommendation['rationale'])}</ul>
           </div>
 
@@ -1285,7 +1331,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
-            <h2>Supplier questions</h2>
+            <h2>Вопросы поставщикам</h2>
             <ul>{list_html(questions['questions'])}</ul>
           </div>
 
@@ -1295,7 +1341,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
-            <h2>Supplier quote extraction</h2>
+            <h2>Извлечённые ТКП</h2>
             {render_table(
                 ["Поставщик", "Файл", "Сумма", "Валюта", "Позиций", "Уверенность"],
                 [
@@ -1314,7 +1360,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
-            <h2>Quote comparison</h2>
+            <h2>Сравнение ТКП</h2>
             <ul>{list_html(quotes['highlights'])}</ul>
             {render_table(
                 ["Позиция", "Лучшая цена", "Разброс %", "Нужна проверка"],
@@ -1323,7 +1369,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
                         "Позиция": item.get("normalized_name", "unknown"),
                         "Лучшая цена": item.get("best_price_supplier", "unknown"),
                         "Разброс %": item.get("price_spread_percent", "unknown"),
-                        "Нужна проверка": "yes" if item.get("needs_review") else "no",
+                        "Нужна проверка": "да" if item.get("needs_review") else "нет",
                     }
                     for item in quotes.get("items", [])[:24]
                 ],
@@ -1331,7 +1377,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
-            <h2>Economics</h2>
+            <h2>Экономика</h2>
             <ul>{list_html([f"{item['label']}: {item['value']}" for item in economics['metrics']])}</ul>
             <ul>{list_html(economics.get('manual_checks', []))}</ul>
             <p class="muted">{html.escape(" ".join(economics.get("limitations", [])))}</p>
@@ -1349,7 +1395,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
-            <h2>Trace / rationale</h2>
+            <h2>Трассировка и обоснование</h2>
             <p>{html.escape(trace['overall_explanation'])}</p>
             <ul>{list_html(trace.get('limitations', []))}</ul>
           </div>
@@ -1369,7 +1415,7 @@ def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, d
     (output_dir / "report.html").write_text(report_html, encoding="utf-8")
     report_json = {
         "run_id": run_id,
-        "report_title": "Tender Operator Uploaded Demo Report",
+        "report_title": "Отчёт по загруженному прогону тендерного агента",
         "generated_at": _safe_datetime(),
         "recommendation": outputs["final_recommendation"]["recommendation"],
         "recommendation_label": outputs["final_recommendation"]["label"],
