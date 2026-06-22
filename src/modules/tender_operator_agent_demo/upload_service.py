@@ -33,6 +33,7 @@ from src.modules.tender_operator_agent_demo.schemas import (
     TenderOperatorUploadedRunCreateResponse,
     TenderOperatorUploadedRunListResponse,
     TenderOperatorUploadedRunResponse,
+    TenderOperatorRunEvent,
     TenderOperatorUploadedRunStatus,
     TenderOperatorUploadedRunStepsResponse,
     TenderOperatorUploadedRunSummary,
@@ -46,6 +47,7 @@ MAX_TOTAL_UPLOAD_BYTES = 40 * 1024 * 1024
 MAX_ZIP_ENTRY_COUNT = 32
 MAX_ZIP_TOTAL_BYTES = 24 * 1024 * 1024
 METADATA_FILE = "metadata.json"
+EVENTS_FILE = "events.jsonl"
 DEFAULT_TARGET_MARGIN_PERCENT = 15.0
 DEFAULT_LOGISTICS_RESERVE_PERCENT = 3.0
 DEFAULT_RISK_RESERVE_PERCENT = 5.0
@@ -124,35 +126,55 @@ def _ensure_runs_root() -> Path:
     return root
 
 
-def _run_dir(run_id: str) -> Path:
+def get_demo_run_dir(run_id: str) -> Path:
     return _ensure_runs_root() / run_id
 
 
+def get_demo_run_procurement_dir(run_id: str) -> Path:
+    return get_demo_run_dir(run_id) / "procurement"
+
+
+def get_demo_run_input_dir(run_id: str) -> Path:
+    return get_demo_run_dir(run_id) / "input"
+
+
+def get_demo_run_normalized_dir(run_id: str) -> Path:
+    return get_demo_run_dir(run_id) / "normalized"
+
+
+def get_demo_run_output_dir(run_id: str) -> Path:
+    return get_demo_run_dir(run_id) / "output"
+
+
+def _events_path(run_id: str) -> Path:
+    return get_demo_run_dir(run_id) / EVENTS_FILE
+
+
 def _metadata_path(run_id: str) -> Path:
-    return _run_dir(run_id) / METADATA_FILE
+    return get_demo_run_dir(run_id) / METADATA_FILE
 
 
 def _input_dir(run_id: str) -> Path:
-    return _run_dir(run_id) / "input"
+    return get_demo_run_input_dir(run_id)
 
 
 def _normalized_dir(run_id: str) -> Path:
-    return _run_dir(run_id) / "normalized"
+    return get_demo_run_normalized_dir(run_id)
 
 
 def _output_dir(run_id: str) -> Path:
-    return _run_dir(run_id) / "output"
+    return get_demo_run_output_dir(run_id)
 
 
 def _safe_datetime() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _safe_run_id() -> str:
+def make_demo_run_id() -> str:
     return f"toa-run-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{token_hex(3)}"
 
 
-def _sanitize_filename(name: str, index: int) -> tuple[str, str]:
+def sanitize_demo_filename(name: str, index: int) -> tuple[str, str]:
     original = Path(name or f"file-{index}").name
     ext = Path(original).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -182,7 +204,7 @@ def _build_file_descriptor(
     stored_name: str,
     size_bytes: int,
     content_type: str,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
     return {
         "file_id": file_id,
         "original_name": original_name,
@@ -195,6 +217,81 @@ def _build_file_descriptor(
         "extracted_text_available": False,
         "warnings": [],
     }
+
+
+def build_demo_file_descriptor(
+    *,
+    file_id: str,
+    original_name: str,
+    stored_name: str,
+    size_bytes: int,
+    content_type: str,
+    source: str = "upload",
+) -> dict[str, Any]:
+    descriptor = _build_file_descriptor(
+        file_id=file_id,
+        original_name=original_name,
+        stored_name=stored_name,
+        size_bytes=size_bytes,
+        content_type=content_type,
+    )
+    descriptor["source"] = source
+    return descriptor
+
+
+def ensure_demo_run_structure(run_id: str, *, exist_ok: bool) -> dict[str, Path]:
+    run_dir = get_demo_run_dir(run_id)
+    input_dir = get_demo_run_input_dir(run_id)
+    normalized_dir = get_demo_run_normalized_dir(run_id)
+    output_dir = get_demo_run_output_dir(run_id)
+    procurement_dir = get_demo_run_procurement_dir(run_id)
+    input_dir.mkdir(parents=True, exist_ok=exist_ok)
+    normalized_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    procurement_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        "run_dir": run_dir,
+        "input_dir": input_dir,
+        "normalized_dir": normalized_dir,
+        "output_dir": output_dir,
+        "procurement_dir": procurement_dir,
+    }
+
+
+def load_demo_run_metadata(run_id: str) -> dict[str, Any]:
+    path = _metadata_path(run_id)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' was not found")
+    return _read_json(path)
+
+
+def save_demo_run_metadata(run_id: str, metadata: dict[str, Any]) -> None:
+    _write_json(_metadata_path(run_id), metadata)
+
+
+def append_demo_run_event(run_id: str, event_type: str, message: str, details: dict[str, Any] | None = None) -> None:
+    payload = {
+        "created_at": _safe_datetime(),
+        "event_type": event_type,
+        "message": message,
+        "details": details or {},
+    }
+    path = _events_path(run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def load_demo_run_events(run_id: str) -> list[TenderOperatorRunEvent]:
+    path = _events_path(run_id)
+    if not path.is_file():
+        return []
+    events: list[TenderOperatorRunEvent] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        events.append(TenderOperatorRunEvent.model_validate(json.loads(line)))
+    return events
 
 
 def _sanitize_percent(value: float | None, *, default: float, field_name: str) -> float:
@@ -251,14 +348,9 @@ def create_uploaded_demo_run(
     )
     payment_delay_days = _sanitize_delay_days(payment_delay_days, default=DEFAULT_PAYMENT_DELAY_DAYS)
 
-    run_id = _safe_run_id()
-    run_dir = _run_dir(run_id)
-    input_dir = _input_dir(run_id)
-    normalized_dir = _normalized_dir(run_id)
-    output_dir = _output_dir(run_id)
-    input_dir.mkdir(parents=True, exist_ok=False)
-    normalized_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    run_id = make_demo_run_id()
+    structure = ensure_demo_run_structure(run_id, exist_ok=False)
+    input_dir = structure["input_dir"]
 
     warnings: list[str] = []
     files: list[dict[str, Any]] = []
@@ -267,14 +359,14 @@ def create_uploaded_demo_run(
         if len(content) > MAX_FILE_SIZE_BYTES:
             raise HTTPException(status_code=400, detail=f"File exceeds the allowed size limit: {filename}")
 
-        original_name, stored_name = _sanitize_filename(filename, index)
+        original_name, stored_name = sanitize_demo_filename(filename, index)
         file_id = f"FILE-{index:02d}"
         target = input_dir / stored_name
         target.write_bytes(content)
         if Path(filename).name != filename or ".." in filename.replace("\\", "/"):
             warnings.append(f"Filename '{filename}' was normalized for safe local storage.")
         files.append(
-            _build_file_descriptor(
+            build_demo_file_descriptor(
                 file_id=file_id,
                 original_name=original_name,
                 stored_name=stored_name,
@@ -311,7 +403,13 @@ def create_uploaded_demo_run(
         "no_email_sending": True,
         "no_digital_signature": True,
     }
-    _write_json(_metadata_path(run_id), metadata)
+    save_demo_run_metadata(run_id, metadata)
+    append_demo_run_event(
+        run_id,
+        "run_created",
+        "Создан демонстрационный прогон с ручной загрузкой документов.",
+        {"mode": "uploaded_demo", "file_count": len(files)},
+    )
     return TenderOperatorUploadedRunCreateResponse(
         run_id=run_id,
         status=TenderOperatorUploadedRunStatus.READY_TO_ANALYZE,
@@ -319,6 +417,78 @@ def create_uploaded_demo_run(
         file_count=len(files),
         warnings=warnings,
         limitations=metadata["limitations"],
+    )
+
+
+def append_files_to_demo_run(
+    *,
+    run_id: str,
+    uploads: list[tuple[str, str, bytes]],
+) -> TenderOperatorUploadedRunCreateResponse:
+    metadata = _load_metadata(run_id)
+    if not uploads:
+        raise HTTPException(status_code=400, detail="At least one file must be uploaded")
+
+    existing_files = metadata.get("files", [])
+    if len(existing_files) + len(uploads) > MAX_FILE_COUNT:
+        raise HTTPException(status_code=400, detail=f"Too many files. Limit: {MAX_FILE_COUNT}")
+
+    existing_total = sum(int(item.get("size_bytes", 0)) for item in existing_files)
+    new_total = sum(len(content) for _filename, _ctype, content in uploads)
+    if existing_total + new_total > MAX_TOTAL_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Total upload size exceeds the allowed limit")
+
+    input_dir = _input_dir(run_id)
+    warnings = list(metadata.get("warnings", []))
+    start_index = len(existing_files) + 1
+    added_files = 0
+
+    for index, (filename, content_type, content) in enumerate(uploads, start=start_index):
+        if len(content) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail=f"File exceeds the allowed size limit: {filename}")
+        original_name, stored_name = sanitize_demo_filename(filename, index)
+        file_id = f"FILE-{index:02d}"
+        (input_dir / stored_name).write_bytes(content)
+        if Path(filename).name != filename or ".." in filename.replace("\\", "/"):
+            warnings.append(f"Filename '{filename}' was normalized for safe local storage.")
+        existing_files.append(
+            build_demo_file_descriptor(
+                file_id=file_id,
+                original_name=original_name,
+                stored_name=stored_name,
+                size_bytes=len(content),
+                content_type=content_type,
+                source="manual_upload",
+            )
+        )
+        append_demo_run_event(
+            run_id,
+            "attachment_saved",
+            f"Документ '{original_name}' добавлен в прогон вручную.",
+            {"stored_name": stored_name, "source": "manual_upload"},
+        )
+        added_files += 1
+
+    metadata["files"] = existing_files
+    metadata["warnings"] = sorted(set(warnings))
+    if metadata.get("status") == TenderOperatorUploadedRunStatus.DOCS_REQUIRED.value:
+        metadata["status"] = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE.value
+    if metadata.get("attachments_status") in {"manual_upload_required", "unavailable_in_demo", "source_requires_authorization"}:
+        metadata["attachments_status"] = "manual_upload_received"
+    save_demo_run_metadata(run_id, metadata)
+    append_demo_run_event(
+        run_id,
+        "manual_upload_received",
+        "Оператор добавил документы в существующий run.",
+        {"added_files": added_files},
+    )
+    return TenderOperatorUploadedRunCreateResponse(
+        run_id=run_id,
+        status=TenderOperatorUploadedRunStatus(metadata["status"]),
+        created_at=datetime.fromisoformat(metadata["created_at"]),
+        file_count=len(existing_files),
+        warnings=metadata.get("warnings", []),
+        limitations=metadata.get("limitations", []),
     )
 
 
@@ -343,6 +513,9 @@ def list_uploaded_demo_runs() -> TenderOperatorUploadedRunListResponse:
                 file_count=len(metadata.get("files", [])),
                 warning_count=len(metadata.get("warnings", [])),
                 limitations=metadata.get("limitations", []),
+                procurement_source=metadata.get("procurement_source"),
+                procurement_id=metadata.get("procurement_id"),
+                attachments_status=metadata.get("attachments_status"),
             )
         )
     runs.sort(key=lambda item: item.created_at, reverse=True)
@@ -350,14 +523,11 @@ def list_uploaded_demo_runs() -> TenderOperatorUploadedRunListResponse:
 
 
 def _load_metadata(run_id: str) -> dict[str, Any]:
-    path = _metadata_path(run_id)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail=f"Run '{run_id}' was not found")
-    return _read_json(path)
+    return load_demo_run_metadata(run_id)
 
 
 def _save_metadata(run_id: str, metadata: dict[str, Any]) -> None:
-    _write_json(_metadata_path(run_id), metadata)
+    save_demo_run_metadata(run_id, metadata)
 
 
 def _decode_text(content: bytes) -> str | None:
@@ -393,10 +563,10 @@ def _extract_document_text(file_name: str, content: bytes) -> tuple[str | None, 
         text = extract_text_from_attachment_bytes(url=file_name, content=content)
         if text:
             return text, warnings
-        warnings.append(f"Text extraction for {ext} is limited in demo mode.")
+        warnings.append(f"Извлечение текста для {ext} в демо-режиме ограничено.")
         return None, warnings
     if ext in {".xlsx", ".xls"}:
-        warnings.append(f"Text extraction for {ext} is limited in demo mode.")
+        warnings.append(f"Извлечение текста для {ext} в демо-режиме ограничено.")
         return None, warnings
     return None, warnings
 
@@ -706,12 +876,12 @@ def _build_output_payloads(
         "run_id": metadata["run_id"],
         "prepared_at": _safe_datetime(),
         "title": metadata["tender_title"],
-        "procedure_type": "Загруженный demo run",
+        "procedure_type": "Поиск закупки + intake" if metadata.get("mode") == "procurement_search_intake" else "Загруженный demo run",
         "customer": metadata["customer_name"],
         "category": metadata["tender_category"],
         "submission_deadline": _safe_datetime(),
         "analysis_status": metadata["status"],
-        "procurement_code": metadata["run_id"].upper(),
+        "procurement_code": metadata.get("procurement_id") or metadata["run_id"].upper(),
         "documents": [
             {
                 "name": doc.display_name,
@@ -721,6 +891,7 @@ def _build_output_payloads(
             for doc in documents
         ],
         "document_signals": [
+            f"Режим создания run: {metadata.get('mode', 'uploaded_demo')}.",
             f"Загружено файлов: {len(metadata.get('files', []))}.",
             f"Файлов с извлечённым текстом: {len([doc for doc in documents if doc.text])}.",
             f"Режим анализа: {analysis_mode}.",
@@ -911,6 +1082,12 @@ def _build_output_payloads(
 
     trace = {
         "documents_considered": [doc.display_name for doc in documents],
+        "procurement_context": {
+            "source": metadata.get("procurement_source"),
+            "procurement_id": metadata.get("procurement_id"),
+            "procurement_url": metadata.get("procurement_url"),
+            "attachments_status": metadata.get("attachments_status"),
+        },
         "fields_extracted": [
             "сроки поставки",
             "сертификаты",
@@ -971,19 +1148,70 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
     economics_partial = economics["status"] in {"partial", "needs_review"}
     core_limitations = outputs["trace"].get("limitations", [])
     partial_requirements = any("fallback" in item.lower() for item in core_limitations)
+    file_count = len(metadata.get("files", []))
+    docs_status = DemoStepStatus.DONE if file_count else DemoStepStatus.BLOCKED
 
-    return [
+    steps: list[DemoStep] = []
+    if metadata.get("procurement_source"):
+        procurement_title = metadata.get("tender_title", "Закупка")
+        procurement_findings = [
+            f"Источник: {metadata.get('procurement_source')}.",
+            f"Идентификатор закупки: {metadata.get('procurement_id') or 'не указан'}.",
+            f"Статус документации: {metadata.get('attachments_status') or 'не определён'}.",
+        ]
+        if metadata.get("procurement_url"):
+            procurement_findings.append(f"Карточка закупки: {metadata.get('procurement_url')}.")
+        steps.append(
+            DemoStep(
+                key="procurement_search",
+                order=0,
+                title="Поиск закупки",
+                short_title="Поиск закупки",
+                status=DemoStepStatus.DONE,
+                description="Read-only поиск закупки и выбор карточки оператором.",
+                agent_action=f"Найдена и выбрана закупка '{procurement_title}' из безопасного procurement discovery слоя.",
+                result_summary=f"Выбрана закупка {metadata.get('procurement_id') or metadata.get('run_id')}.",
+                findings=procurement_findings,
+                human_review=[
+                    "Проверить релевантность найденной закупки перед продолжением.",
+                    "Подтвердить, что источник не требует авторизации, если будет подключаться реальный коннектор.",
+                ],
+                trace="Поиск выполнялся в безопасном режиме только чтения без авторизации, обхода captcha и внешних действий.",
+                result_sections=[
+                    DemoDetailSection(
+                        title="Контекст поиска",
+                        kind="bullets",
+                        items=[
+                            f"Запрос: {metadata.get('procurement_query') or 'не указан'}",
+                            f"Источник: {metadata.get('procurement_source')}",
+                            f"Статус документации: {metadata.get('attachments_status') or 'не определён'}",
+                        ],
+                    )
+                ],
+            )
+        )
+
+    steps.extend([
         DemoStep(
             key="documents",
             order=1,
             title="Документы",
             short_title="Документы",
-            status=DemoStepStatus.DONE,
+            status=docs_status,
             description="Локальная загрузка и безопасная подготовка файлов к анализу.",
             agent_action="Файлы сохранены в локальную demo-run директорию, имена нормализованы, опасные пути удалены.",
-            result_summary=f"Загружено {len(metadata.get('files', []))} файлов.",
-            findings=[item["display_name"] for item in metadata.get("files", [])],
-            human_review=["Проверить, что каждому файлу назначена корректная роль."],
+            result_summary=(
+                f"Загружено {file_count} файлов."
+                if file_count
+                else "Документы ещё не загружены. Для продолжения нужен ручной upload."
+            ),
+            findings=[item["display_name"] for item in metadata.get("files", [])]
+            or ["Автоматически доступных документов нет, требуется ручная загрузка."],
+            human_review=[
+                "Проверить, что каждому файлу назначена корректная роль."
+            ]
+            if file_count
+            else ["Загрузить документацию вручную и только потом запускать анализ."],
             trace=trace["documents"],
             result_sections=[
                 DemoDetailSection(
@@ -1163,7 +1391,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="decision",
-            order=8,
+            order=8 if not metadata.get("procurement_source") else 8,
             title="Решение",
             short_title="Решение",
             status=DemoStepStatus.NEEDS_REVIEW,
@@ -1177,7 +1405,8 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
                 DemoDetailSection(title="Открытые вопросы", kind="bullets", items=final_recommendation["open_questions"])
             ],
         ),
-    ]
+    ])
+    return steps
 
 
 def _build_final_recommendation(outputs: dict[str, dict[str, Any]]) -> DemoFinalRecommendation:
@@ -1199,6 +1428,15 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
     final_recommendation = outputs["final_recommendation"]
     quotes = outputs["quotes_comparison"]
     economics = outputs["economics"]
+    procurement_block = ""
+    if metadata.get("procurement_source"):
+        procurement_block = (
+            "## Поиск закупки и intake\n"
+            f"- Источник: {metadata.get('procurement_source')}\n"
+            f"- ID закупки: {metadata.get('procurement_id')}\n"
+            f"- URL карточки: {metadata.get('procurement_url')}\n"
+            f"- Статус документации: {metadata.get('attachments_status')}\n\n"
+        )
     return (
         "# Отчёт по загруженному прогону тендерного агента\n\n"
         f"- Run ID: {metadata['run_id']}\n"
@@ -1208,7 +1446,8 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
         f"- Статус: {metadata['status']}\n"
         f"- Режим анализа: {metadata['analysis_mode']}\n"
         f"- Код рекомендации: {final_recommendation['recommendation']}\n\n"
-        "## Краткий вывод\n"
+        + procurement_block
+        + "## Краткий вывод\n"
         + "\n".join(f"- {item}" for item in final_recommendation["rationale"])
         + "\n\n## Извлечённые ТКП\n"
         + (
@@ -1251,6 +1490,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
     final_recommendation = outputs["final_recommendation"]
     trace = outputs["trace"]
     files = metadata.get("files", [])
+    procurement = metadata.get("procurement", {})
 
     return f"""
     <html lang="ru">
@@ -1315,6 +1555,24 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
             </table>
           </div>
 
+          {(
+              f'''
+          <div class="card">
+            <h2>Поиск закупки и intake</h2>
+            <table>
+              <tr><th>Поле</th><th>Значение</th></tr>
+              <tr><td>Источник</td><td>{html.escape(str(metadata.get("procurement_source") or ""))}</td></tr>
+              <tr><td>ID закупки</td><td>{html.escape(str(metadata.get("procurement_id") or ""))}</td></tr>
+              <tr><td>URL карточки</td><td>{html.escape(str(metadata.get("procurement_url") or ""))}</td></tr>
+              <tr><td>Статус документации</td><td>{html.escape(str(metadata.get("attachments_status") or ""))}</td></tr>
+              <tr><td>Краткое описание</td><td>{html.escape(str(procurement.get("summary") or "—"))}</td></tr>
+            </table>
+          </div>
+              '''
+              if metadata.get("procurement_source")
+              else ""
+          )}
+
           <div class="card">
             <h2>Загруженные файлы</h2>
             <ul>{list_html([item['display_name'] for item in files])}</ul>
@@ -1326,7 +1584,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
-            <h2>Extracted requirements</h2>
+            <h2>Извлечённые требования</h2>
             <ul>{list_html([item['title'] for item in requirements['requirements']])}</ul>
           </div>
 
@@ -1384,12 +1642,12 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
-            <h2>Contract risks</h2>
+            <h2>Контрактные риски</h2>
             <ul>{list_html([item['risk'] for item in risks['risks']])}</ul>
           </div>
 
           <div class="card">
-            <h2>Final recommendation</h2>
+            <h2>Финальная рекомендация</h2>
             <p><strong>{html.escape(final_recommendation['label'])}</strong></p>
             <ul>{list_html(final_recommendation['manual_checks'])}</ul>
           </div>
@@ -1433,9 +1691,24 @@ def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, d
 
 def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeResponse:
     metadata = _load_metadata(run_id)
+    if not metadata.get("files") and metadata.get("status") == TenderOperatorUploadedRunStatus.DOCS_REQUIRED.value:
+        append_demo_run_event(
+            run_id,
+            "analysis_blocked",
+            "Анализ остановлен: документация не получена автоматически, требуется ручная загрузка.",
+            {"status": metadata.get("status")},
+        )
+        raise HTTPException(status_code=409, detail="Документация ещё не загружена. Добавьте файлы вручную и повторите анализ.")
+
     metadata["status"] = TenderOperatorUploadedRunStatus.ANALYZING.value
     metadata["analysis_mode"] = "analyzing"
     _save_metadata(run_id, metadata)
+    append_demo_run_event(
+        run_id,
+        "analysis_started",
+        "Запущен контролируемый анализ локального demo-run.",
+        {"mode": metadata.get("mode"), "files": len(metadata.get("files", []))},
+    )
 
     try:
         documents = _collect_documents(run_id, metadata)
@@ -1517,6 +1790,12 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         metadata["status"] = status.value
         _save_metadata(run_id, metadata)
         _persist_outputs(run_id, metadata, outputs, steps)
+        append_demo_run_event(
+            run_id,
+            "analysis_completed",
+            "Анализ завершён в контролируемом demo-контуре.",
+            {"status": status.value, "analysis_mode": analysis_mode},
+        )
 
         return TenderOperatorUploadedRunAnalyzeResponse(
             run_id=run_id,
@@ -1535,6 +1814,12 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         metadata["warnings"] = list(dict.fromkeys(metadata.get("warnings", []) + [f"Analysis failed safely: {exc}"]))
         metadata["limitations"] = list(dict.fromkeys(metadata.get("limitations", []) + ["Fallback report generation failed. Manual operator review required."]))
         _save_metadata(run_id, metadata)
+        append_demo_run_event(
+            run_id,
+            "analysis_blocked",
+            "Анализ завершился безопасной остановкой из-за внутренней ошибки.",
+            {"error": str(exc)},
+        )
 
         failed_outputs = {
             "final_recommendation": {
@@ -1658,13 +1943,19 @@ def get_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunResponse:
         no_platform_submission=metadata.get("no_platform_submission", True),
         no_email_sending=metadata.get("no_email_sending", True),
         no_digital_signature=metadata.get("no_digital_signature", True),
+        procurement_source=metadata.get("procurement_source"),
+        procurement_id=metadata.get("procurement_id"),
+        procurement_url=metadata.get("procurement_url"),
+        procurement_query=metadata.get("procurement_query"),
+        attachments_status=metadata.get("attachments_status"),
         steps=steps,
         final_recommendation=final_recommendation,
         quote_comparison=quote_comparison,
         economics_summary=economics_summary,
         report_html_url=f"/demo/tender-agent/runs/{run_id}/report" if _report_html_path(run_id).is_file() else None,
         report_download_url=f"/api/demo/tender-agent/runs/{run_id}/report/download" if _report_html_path(run_id).is_file() else None,
-        uploaded_files_note="Uploaded local data only. Server absolute paths are intentionally hidden in the UI.",
+        uploaded_files_note="Используются только локальные данные. Абсолютные server-path намеренно скрыты из интерфейса.",
+        events=load_demo_run_events(run_id),
     )
 
 

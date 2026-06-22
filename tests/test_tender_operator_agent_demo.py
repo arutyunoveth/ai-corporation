@@ -24,7 +24,8 @@ def test_tender_operator_demo_page_and_report_render(client):
 
     assert page.status_code == 200
     assert "Тендерный агент" in page.text
-    assert "Демо-режим / human-in-the-loop" in page.text
+    assert "Демо-режим / подтверждение человеком" in page.text
+    assert "Найти закупку" in page.text
     assert "Загрузка и анализ" in page.text
 
     assert report_page.status_code == 200

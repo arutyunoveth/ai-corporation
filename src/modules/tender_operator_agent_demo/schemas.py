@@ -60,7 +60,7 @@ class DemoTenderCard(APIModel):
 
 class DemoStep(APIModel):
     key: str
-    order: int = Field(ge=1)
+    order: int = Field(ge=0)
     title: str
     short_title: str
     status: DemoStepStatus
@@ -133,12 +133,91 @@ class TenderOperatorDemoReportResponse(APIModel):
 
 class TenderOperatorUploadedRunStatus(StrEnum):
     UPLOADED = "uploaded"
+    DOCS_REQUIRED = "docs_required"
     READY_TO_ANALYZE = "ready_to_analyze"
     ANALYZING = "analyzing"
     COMPLETED = "completed"
     COMPLETED_WITH_WARNINGS = "completed_with_warnings"
     FAILED = "failed"
     NEEDS_REVIEW = "needs_review"
+
+
+class TenderOperatorRunEvent(APIModel):
+    created_at: datetime
+    event_type: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProcurementSourceDescriptor(APIModel):
+    code: str
+    label: str
+    enabled: bool = True
+    read_only: bool = True
+    note: str | None = None
+
+
+class ProcurementSearchResult(APIModel):
+    procurement_id: str
+    source: str
+    title: str
+    procurement_number: str | None = None
+    customer_name: str
+    category: str
+    publication_date: str | None = None
+    deadline: str | None = None
+    initial_price: float | None = None
+    currency: str | None = None
+    region: str | None = None
+    source_url: str
+    attachments_status: str
+    attachments_count: int = Field(ge=0, default=0)
+    available_attachments_count: int = Field(ge=0, default=0)
+    summary: str | None = None
+    attachment_names: list[str] = Field(default_factory=list)
+    source_note: str | None = None
+
+
+class ProcurementSearchResponse(APIModel):
+    query: str
+    source: str
+    results: list[ProcurementSearchResult]
+    sources: list[ProcurementSourceDescriptor]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ProcurementRunCreateRequest(APIModel):
+    procurement_id: str
+    source: str
+    query: str | None = None
+
+
+class ProcurementAttachmentManifestItem(APIModel):
+    name: str
+    stored_name: str | None = None
+    extension: str
+    status: str
+    note: str | None = None
+
+
+class ProcurementRunResponse(APIModel):
+    run_id: str
+    status: TenderOperatorUploadedRunStatus
+    created_at: datetime
+    file_count: int = Field(ge=0, default=0)
+    warnings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    attachments_status: str
+    procurement: ProcurementSearchResult
+    attachments: list[ProcurementAttachmentManifestItem] = Field(default_factory=list)
+
+
+class ProcurementRunDetailsResponse(APIModel):
+    run_id: str
+    procurement: ProcurementSearchResult
+    attachments_status: str
+    attachments: list[ProcurementAttachmentManifestItem] = Field(default_factory=list)
+    events: list[TenderOperatorRunEvent] = Field(default_factory=list)
 
 
 class TenderOperatorUploadedFile(APIModel):
@@ -166,6 +245,9 @@ class TenderOperatorUploadedRunSummary(APIModel):
     file_count: int = Field(ge=0)
     warning_count: int = Field(ge=0)
     limitations: list[str] = Field(default_factory=list)
+    procurement_source: str | None = None
+    procurement_id: str | None = None
+    attachments_status: str | None = None
 
 
 class TenderOperatorUploadedRunResponse(APIModel):
@@ -186,6 +268,11 @@ class TenderOperatorUploadedRunResponse(APIModel):
     no_platform_submission: bool = True
     no_email_sending: bool = True
     no_digital_signature: bool = True
+    procurement_source: str | None = None
+    procurement_id: str | None = None
+    procurement_url: str | None = None
+    procurement_query: str | None = None
+    attachments_status: str | None = None
     steps: list[DemoStep] = Field(default_factory=list)
     final_recommendation: DemoFinalRecommendation | None = None
     quote_comparison: QuoteComparison | None = None
@@ -193,6 +280,7 @@ class TenderOperatorUploadedRunResponse(APIModel):
     report_html_url: str | None = None
     report_download_url: str | None = None
     uploaded_files_note: str | None = None
+    events: list[TenderOperatorRunEvent] = Field(default_factory=list)
 
 
 class TenderOperatorUploadedRunListResponse(APIModel):

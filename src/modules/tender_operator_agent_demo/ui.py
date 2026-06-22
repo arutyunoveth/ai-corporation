@@ -384,7 +384,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <p class="subtitle">Как ИИ-агент разбирает закупку, готовит RFQ, показывает риски и оставляет критичные действия под контролем человека.</p>
               </div>
               <div class="badge-row">
-                <span class="badge">Демо-режим / human-in-the-loop</span>
+                <span class="badge">Демо-режим / подтверждение человеком</span>
                 <span class="badge">Пилотный контур</span>
                 <span class="badge">Без внешних действий</span>
               </div>
@@ -392,41 +392,96 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
             <div class="content">
               <div class="tabs">
-                <button class="tab-button active" data-tab="dataset" type="button">Демо-набор</button>
+                <button class="tab-button active" data-tab="search" type="button">Найти закупку</button>
                 <button class="tab-button" data-tab="upload" type="button">Загрузка и анализ</button>
+                <button class="tab-button" data-tab="dataset" type="button">Демо-набор</button>
               </div>
 
-              <section id="tab-dataset">
+              <section id="tab-search">
                 <div class="layout">
                   <aside class="stack">
-                    <div class="card" id="dataset-tender-card">
-                      <div class="empty">Загрузка synthetic demo…</div>
+                    <div class="card">
+                      <h2>Найти закупку</h2>
+                      <p>Первый шаг controlled demo-сценария: найти закупку, выбрать карточку, безопасно получить публичную документацию или честно перейти к ручной загрузке.</p>
+                      <div id="procurement-flash" class="hidden"></div>
+                      <form id="procurement-search-form">
+                        <label>
+                          Поисковый запрос
+                          <input name="query" value="электротехническое оборудование" />
+                        </label>
+                        <div class="split">
+                          <label>
+                            Источник
+                            <select name="source">
+                              <option value="demo_local">demo_local</option>
+                              <option value="mos_portal_public_api" disabled>mos_portal_public_api — experimental / disabled</option>
+                            </select>
+                          </label>
+                          <label>
+                            Макс. результатов
+                            <input name="max_results" type="number" min="1" max="20" value="10" />
+                          </label>
+                        </div>
+                        <div class="split">
+                          <label>
+                            Заказчик
+                            <input name="customer_name" placeholder="Необязательно" />
+                          </label>
+                          <label>
+                            Регион
+                            <input name="region" placeholder="Необязательно" />
+                          </label>
+                        </div>
+                        <div class="split">
+                          <label>
+                            Дата публикации с
+                            <input name="date_from" type="date" />
+                          </label>
+                          <label>
+                            Дата публикации по
+                            <input name="date_to" type="date" />
+                          </label>
+                        </div>
+                        <div class="split">
+                          <label>
+                            Цена от
+                            <input name="price_from" type="number" min="0" step="1000" placeholder="Необязательно" />
+                          </label>
+                          <label>
+                            Цена до
+                            <input name="price_to" type="number" min="0" step="1000" placeholder="Необязательно" />
+                          </label>
+                        </div>
+                        <div class="form-actions">
+                          <button class="button primary" type="submit">Найти закупки</button>
+                        </div>
+                      </form>
                     </div>
                     <div class="card">
-                      <h2>Ограничения демо</h2>
+                      <h2>Безопасный режим</h2>
                       <div class="safety">
-                        <span>Только synthetic demo data</span>
+                        <span>Read-only поиск</span>
+                        <span>Без логина и паролей</span>
+                        <span>Без обхода captcha</span>
                         <span>Без подачи на площадку</span>
-                        <span>Без отправки писем</span>
-                        <span>Без ЭЦП</span>
+                        <span>Без писем поставщикам</span>
                         <span>Требуется подтверждение человека</span>
                       </div>
+                      <p style="margin-top:14px">Поиск работает в безопасном режиме только чтения. Система не подаёт заявки, не входит на площадки под учётной записью, не обходит captcha, не использует ЭЦП и не отправляет письма поставщикам.</p>
                     </div>
                   </aside>
 
                   <main class="stack">
-                    <div class="card">
-                      <div class="step-top">
-                        <div>
-                          <h2>Pipeline агента</h2>
-                          <p>Документы → Требования → Вопросы → RFQ → ТКП → Экономика → Риски → Решение</p>
-                        </div>
-                        <button class="button primary" id="replay-dataset" type="button">Запустить демонстрационный прогон</button>
+                    <div class="card" id="procurement-results-card">
+                      <h2>Результаты поиска</h2>
+                      <div id="procurement-results" class="list">
+                        <div class="empty">Введите запрос и нажмите «Найти закупки», чтобы открыть первый шаг тендерного pipeline.</div>
                       </div>
-                      <div class="steps-list" id="dataset-steps"></div>
                     </div>
-                    <div class="card" id="dataset-summary">
-                      <div class="empty">Собираем финальную рекомендацию…</div>
+                    <div class="card">
+                      <h2>Как это работает</h2>
+                      <p>После выбора закупки система создаёт локальный run, сохраняет procurement metadata, копирует публично доступные документы в безопасную рабочую директорию и переводит вас в уже существующий operator console для анализа.</p>
+                      <div class="trace" style="margin-top:14px">Если автоматическое получение документации недоступно, интерфейс не притворяется автономным: создаётся run со статусом «нужна загрузка документов», а оператор вручную добавляет пакет и только потом запускает анализ.</div>
                     </div>
                   </main>
                 </div>
@@ -513,12 +568,49 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   </main>
                 </div>
               </section>
+
+              <section id="tab-dataset" class="hidden">
+                <div class="layout">
+                  <aside class="stack">
+                    <div class="card" id="dataset-tender-card">
+                      <div class="empty">Загрузка демонстрационного набора…</div>
+                    </div>
+                    <div class="card">
+                      <h2>Ограничения демо</h2>
+                      <div class="safety">
+                        <span>Только синтетические demo-data</span>
+                        <span>Без подачи на площадку</span>
+                        <span>Без отправки писем</span>
+                        <span>Без ЭЦП</span>
+                        <span>Требуется подтверждение человека</span>
+                      </div>
+                    </div>
+                  </aside>
+
+                  <main class="stack">
+                    <div class="card">
+                      <div class="step-top">
+                        <div>
+                          <h2>Pipeline агента</h2>
+                          <p>Документы → Требования → Вопросы → RFQ → ТКП → Экономика → Риски → Решение</p>
+                        </div>
+                        <button class="button primary" id="replay-dataset" type="button">Запустить демонстрационный прогон</button>
+                      </div>
+                      <div class="steps-list" id="dataset-steps"></div>
+                    </div>
+                    <div class="card" id="dataset-summary">
+                      <div class="empty">Собираем финальную рекомендацию…</div>
+                    </div>
+                  </main>
+                </div>
+              </section>
             </div>
           </div>
         </div>
 
         <script>
           const state = {{
+            procurementResults: [],
             datasetRun: null,
             datasetReplayActive: false,
             datasetDisplayStatuses: new Map(),
@@ -538,6 +630,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           const RUN_STATUS_LABELS = {{
             uploaded: 'загружено',
+            docs_required: 'нужна загрузка документов',
             ready_to_analyze: 'готово к анализу',
             analyzing: 'анализируется',
             completed: 'завершено',
@@ -553,6 +646,15 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             fallback_deterministic_adapter: 'детерминированный fallback-адаптер',
           }};
 
+          const ATTACHMENTS_STATUS_LABELS = {{
+            downloadable: 'можно скачать',
+            downloaded: 'документация получена',
+            manual_upload_required: 'нужна ручная загрузка',
+            manual_upload_received: 'документы загружены вручную',
+            unavailable_in_demo: 'недоступно в демо-режиме',
+            source_requires_authorization: 'источник требует авторизации или интерактивного доступа',
+          }};
+
           const statusClass = (status) => `status-${{status || 'pending'}}`;
 
           function statusLabel(status) {{
@@ -561,6 +663,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           function analysisModeLabel(mode) {{
             return ANALYSIS_MODE_LABELS[mode] || mode || 'не определено';
+          }}
+
+          function attachmentsStatusLabel(status) {{
+            return ATTACHMENTS_STATUS_LABELS[status] || status || 'не определено';
           }}
 
           function booleanLabel(value) {{
@@ -638,7 +744,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                             <td>${{escapeHtml(item.normalized_name)}}</td>
                             <td>${{escapeHtml(displayValue(item.best_price_supplier))}}</td>
                             <td>${{escapeHtml(displayValue(item.price_spread_percent))}}</td>
-                            <td>${{item.needs_review ? 'нужна проверка' : 'ok'}}</td>
+                            <td>${{item.needs_review ? 'нужна проверка' : 'без замечаний'}}</td>
                           </tr>
                         `).join('')}}</tbody>
                       </table></div>`
@@ -695,15 +801,15 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             return response.json();
           }}
 
-          function setFlash(message, isError = false) {{
-            const node = document.getElementById('upload-flash');
+          function setFlash(nodeId, message, isError = false) {{
+            const node = document.getElementById(nodeId);
             node.className = `flash${{isError ? ' error' : ''}}`;
             node.textContent = message;
             node.classList.remove('hidden');
           }}
 
-          function clearFlash() {{
-            const node = document.getElementById('upload-flash');
+          function clearFlash(nodeId) {{
+            const node = document.getElementById(nodeId);
             node.className = 'hidden';
             node.textContent = '';
           }}
@@ -715,9 +821,98 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   item.classList.toggle('active', item === button);
                 }}
                 const target = button.dataset.tab;
+                document.getElementById('tab-search').classList.toggle('hidden', target !== 'search');
                 document.getElementById('tab-dataset').classList.toggle('hidden', target !== 'dataset');
                 document.getElementById('tab-upload').classList.toggle('hidden', target !== 'upload');
               }});
+            }}
+          }}
+
+          function procurementActionLabel(result) {{
+            if (result.attachments_status === 'downloadable') {{
+              return 'Скачать документацию и анализировать';
+            }}
+            return 'Создать run и загрузить документы вручную';
+          }}
+
+          function renderProcurementResults() {{
+            const node = document.getElementById('procurement-results');
+            if (!state.procurementResults.length) {{
+              node.innerHTML = `<div class="empty">По текущему фильтру закупки не найдены. Уточните запрос или используйте demo_local без дополнительных фильтров.</div>`;
+              return;
+            }}
+            node.innerHTML = state.procurementResults.map((result) => `
+              <div class="run-item">
+                <div class="step-top" style="margin-bottom:8px">
+                  <div>
+                    <strong>${{escapeHtml(result.title)}}</strong>
+                    <div class="run-meta">${{escapeHtml(result.procurement_number || result.procurement_id)}} · ${{escapeHtml(result.customer_name)}} · ${{escapeHtml(result.source)}}</div>
+                  </div>
+                  <span class="status-chip ${{result.attachments_status === 'downloadable' ? 'status-done' : 'status-needs_review'}}">${{escapeHtml(attachmentsStatusLabel(result.attachments_status))}}</span>
+                </div>
+                <div class="grid-2">
+                  <div class="metric"><span class="metric-label">Дата публикации</span><span class="metric-value">${{escapeHtml(displayValue(result.publication_date))}}</span></div>
+                  <div class="metric"><span class="metric-label">Срок подачи</span><span class="metric-value">${{escapeHtml(displayValue(result.deadline))}}</span></div>
+                  <div class="metric"><span class="metric-label">Начальная цена</span><span class="metric-value">${{formatMoney(result.initial_price, result.currency || '')}}</span></div>
+                  <div class="metric"><span class="metric-label">Регион</span><span class="metric-value">${{escapeHtml(displayValue(result.region))}}</span></div>
+                </div>
+                <div style="height:12px"></div>
+                <p>${{escapeHtml(result.summary || '')}}</p>
+                <div class="note" style="margin-top:10px">${{escapeHtml(result.source_note || '')}}</div>
+                <div class="note" style="margin-top:8px">Вложений: ${{result.attachments_count}} · доступно: ${{result.available_attachments_count}}</div>
+                <div class="form-actions" style="margin-top:12px">
+                  <a class="link-button" href="${{result.source_url}}" target="_blank" rel="noreferrer">Открыть источник</a>
+                  <button class="button primary procurement-run-button" type="button" data-procurement-id="${{escapeHtml(result.procurement_id)}}" data-source="${{escapeHtml(result.source)}}" data-auto-analyze="${{result.attachments_status === 'downloadable' ? 'true' : 'false'}}">${{procurementActionLabel(result)}}</button>
+                </div>
+              </div>
+            `).join('');
+
+            for (const button of node.querySelectorAll('.procurement-run-button')) {{
+              button.addEventListener('click', () => {{
+                createProcurementRun(button.dataset.procurementId, button.dataset.source, button.dataset.autoAnalyze === 'true');
+              }});
+            }}
+          }}
+
+          async function handleProcurementSearch(event) {{
+            event.preventDefault();
+            clearFlash('procurement-flash');
+            const form = event.currentTarget;
+            const params = new URLSearchParams();
+            for (const [key, value] of new FormData(form).entries()) {{
+              if (String(value).trim() !== '') {{
+                params.set(key, String(value));
+              }}
+            }}
+            try {{
+              const payload = await fetchJson(`/api/demo/tender-agent/procurements/search?${{params.toString()}}`);
+              state.procurementResults = payload.results || [];
+              renderProcurementResults();
+              setFlash('procurement-flash', `Найдено закупок: ${{state.procurementResults.length}}.`);
+            }} catch (error) {{
+              state.procurementResults = [];
+              renderProcurementResults();
+              setFlash('procurement-flash', `Не удалось выполнить поиск: ${{error.message}}`, true);
+            }}
+          }}
+
+          async function createProcurementRun(procurementId, source, autoAnalyze = false) {{
+            const activeQuery = new FormData(document.getElementById('procurement-search-form')).get('query') || '';
+            setFlash('procurement-flash', `Создаём run для закупки ${{procurementId}}…`);
+            try {{
+              const payload = await fetchJson('/api/demo/tender-agent/runs/from-procurement', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ procurement_id: procurementId, source, query: String(activeQuery) }}),
+              }});
+              setFlash('procurement-flash', `Создан run: ${{payload.run_id}}. Статус документации: ${{attachmentsStatusLabel(payload.attachments_status)}}.`);
+              await loadRuns();
+              await selectRun(payload.run_id, true);
+              if (autoAnalyze && payload.status !== 'docs_required') {{
+                await analyzeRun(payload.run_id);
+              }}
+            }} catch (error) {{
+              setFlash('procurement-flash', `Не удалось создать run: ${{error.message}}`, true);
             }}
           }}
 
@@ -832,6 +1027,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div class="run-item${{run.run_id === state.selectedRunId ? ' active' : ''}}" data-run-id="${{escapeHtml(run.run_id)}}">
                 <strong>${{escapeHtml(run.tender_title)}}</strong>
                 <div class="run-meta">${{escapeHtml(run.run_id)}} · ${{escapeHtml(statusLabel(run.status))}} · файлов=${{run.file_count}}</div>
+                <div class="run-meta">${{escapeHtml(run.procurement_source || run.mode)}}${{run.attachments_status ? ` · ${{escapeHtml(attachmentsStatusLabel(run.attachments_status))}}` : ''}}</div>
               </div>
             `).join('');
             for (const item of node.querySelectorAll('.run-item')) {{
@@ -844,6 +1040,36 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               ? `<a class="link-button" href="${{run.report_html_url}}" target="_blank" rel="noreferrer">Открыть HTML-отчёт</a>
                  <a class="link-button" href="${{run.report_download_url}}">Скачать артефакт отчёта</a>`
               : `<span class="note">HTML-отчёт будет доступен после анализа.</span>`;
+            const needsDocs = run.status === 'docs_required';
+            const procurementBlock = run.procurement_source ? `
+              <div class="card" style="padding:16px">
+                <div class="section-title">Поиск закупки и intake</div>
+                <div class="grid-2">
+                  <div class="metric"><span class="metric-label">Источник</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_source))}}</span></div>
+                  <div class="metric"><span class="metric-label">ID закупки</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_id))}}</span></div>
+                  <div class="metric"><span class="metric-label">URL карточки</span><span class="metric-value"><a class="inline-link" href="${{escapeHtml(displayValue(run.procurement_url, '#'))}}" target="_blank" rel="noreferrer">Открыть источник</a></span></div>
+                  <div class="metric"><span class="metric-label">Статус документации</span><span class="metric-value">${{escapeHtml(attachmentsStatusLabel(run.attachments_status))}}</span></div>
+                </div>
+              </div>
+            ` : '';
+            const manualUploadBlock = needsDocs ? `
+              <div class="card" style="padding:16px">
+                <div class="section-title">Ручная загрузка документов</div>
+                <p>Автоматическое получение документации недоступно для этой закупки. Загрузите документы вручную, после чего run перейдёт в статус «готово к анализу».</p>
+                <form id="manual-upload-form">
+                  <label>
+                    Файлы закупки
+                    <input name="files" type="file" multiple required />
+                  </label>
+                  <div class="form-actions">
+                    <button class="button primary" type="submit">Добавить документы в run</button>
+                  </div>
+                </form>
+              </div>
+            ` : '';
+            const eventItems = (run.events || []).map((item) => `
+              <li>${{escapeHtml(item.created_at)}} · <strong>${{escapeHtml(item.event_type)}}</strong> · ${{escapeHtml(item.message)}}</li>
+            `).join('');
             document.getElementById('selected-run-card').innerHTML = `
               <div class="step-top">
                 <div>
@@ -851,7 +1077,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <p>${{escapeHtml(run.run_id)}} · ${{escapeHtml(statusLabel(run.status))}} · ${{escapeHtml(analysisModeLabel(run.analysis_mode))}}</p>
                 </div>
                 <div class="form-actions">
-                  <button class="button primary" id="analyze-run-button" type="button"${{run.status === 'analyzing' ? ' disabled' : ''}}>Анализировать</button>
+                  <button class="button primary" id="analyze-run-button" type="button"${{run.status === 'analyzing' || needsDocs ? ' disabled' : ''}}>Анализировать</button>
                 </div>
               </div>
               <div class="grid-2">
@@ -862,7 +1088,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               </div>
               <div style="height:14px"></div>
               <div class="safety">
-                <span>Только локально загруженные данные</span>
+                <span>${{run.procurement_source ? 'Локальные и безопасно полученные публичные данные' : 'Только локально загруженные данные'}}</span>
                 <span>Без внешних действий</span>
                 <span>Без подачи на площадку</span>
                 <span>Без отправки писем</span>
@@ -875,14 +1101,23 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <div class="section-title">Загруженные файлы</div>
                   <ul>${{run.files.map((item) => `<li>${{escapeHtml(item.display_name)}} · ${{escapeHtml(item.extension)}} · текст извлечён: ${{booleanLabel(item.extracted_text_available)}}</li>`).join('')}}</ul>
                 </div>
-                <div>
-                  <div class="section-title">Предупреждения и ограничения</div>
-                  <ul>${{[...run.warnings, ...run.limitations].map((item) => `<li>${{escapeHtml(item)}}</li>`).join('')}}</ul>
+                  <div>
+                    <div class="section-title">Предупреждения и ограничения</div>
+                    <ul>${{[...run.warnings, ...run.limitations].map((item) => `<li>${{escapeHtml(item)}}</li>`).join('')}}</ul>
+                  </div>
                 </div>
-              </div>
+              <div style="height:14px"></div>
+              ${{procurementBlock}}
+              <div style="height:14px"></div>
+              ${{manualUploadBlock}}
               <div style="height:14px"></div>
               <div class="form-actions">${{reportLinks}}</div>
               <div class="note" style="margin-top:12px">${{escapeHtml(run.uploaded_files_note || '')}}</div>
+              <div style="height:14px"></div>
+              <div class="card" style="padding:16px">
+                <div class="section-title">Лента событий</div>
+                <ul>${{eventItems || '<li>Событий пока нет.</li>'}}</ul>
+              </div>
               <div style="height:14px"></div>
               ${{renderQuoteSection(run)}}
               <div style="height:14px"></div>
@@ -891,6 +1126,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const analyzeButton = document.getElementById('analyze-run-button');
             if (analyzeButton) {{
               analyzeButton.addEventListener('click', () => analyzeRun(run.run_id));
+            }}
+            const manualUploadForm = document.getElementById('manual-upload-form');
+            if (manualUploadForm) {{
+              manualUploadForm.addEventListener('submit', (event) => handleManualRunUpload(event, run.run_id));
             }}
           }}
 
@@ -902,11 +1141,14 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               `;
               return;
             }}
+            const pipelineLabel = run.procurement_source
+              ? 'Поиск закупки → Документация → Требования → Вопросы → RFQ → ТКП → Экономика → Риски → Решение'
+              : 'Документы → Требования → Вопросы → RFQ → ТКП → Экономика → Риски → Решение';
             document.getElementById('selected-run-steps').innerHTML = `
               <div class="step-top">
                 <div>
                   <h2>Pipeline загруженного прогона</h2>
-                  <p>Документы → Требования → Вопросы → RFQ → ТКП → Экономика → Риски → Решение</p>
+                  <p>${{pipelineLabel}}</p>
                 </div>
               </div>
               <div class="steps-list" id="uploaded-steps-body"></div>
@@ -978,18 +1220,50 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           }}
 
           async function analyzeRun(runId) {{
-            setFlash(`Запускаем анализ для ${{runId}}…`);
-            const payload = await fetchJson(`/api/demo/tender-agent/runs/${{encodeURIComponent(runId)}}/analyze`, {{
-              method: 'POST',
-            }});
-            setFlash(`Анализ завершён: статус «${{statusLabel(payload.status)}}», режим «${{analysisModeLabel(payload.analysis_mode)}}».`);
-            await loadRuns();
-            await selectRun(runId, false);
+            setFlash('upload-flash', `Запускаем анализ для ${{runId}}…`);
+            try {{
+              const payload = await fetchJson(`/api/demo/tender-agent/runs/${{encodeURIComponent(runId)}}/analyze`, {{
+                method: 'POST',
+              }});
+              setFlash('upload-flash', `Анализ завершён: статус «${{statusLabel(payload.status)}}», режим «${{analysisModeLabel(payload.analysis_mode)}}».`);
+              await loadRuns();
+              await selectRun(runId, false);
+            }} catch (error) {{
+              setFlash('upload-flash', `Анализ не запущен: ${{error.message}}`, true);
+            }}
+          }}
+
+          async function handleManualRunUpload(event, runId) {{
+            event.preventDefault();
+            setFlash('upload-flash', `Добавляем документы в run ${{runId}}…`);
+            const form = event.currentTarget;
+            const data = new FormData(form);
+            try {{
+              const response = await fetch(`/api/demo/tender-agent/runs/${{encodeURIComponent(runId)}}/files`, {{
+                method: 'POST',
+                body: data,
+              }});
+              if (!response.ok) {{
+                let detail = `HTTP ${{response.status}}`;
+                try {{
+                  const payload = await response.json();
+                  detail = payload.detail || detail;
+                }} catch (_error) {{
+                }}
+                throw new Error(detail);
+              }}
+              const payload = await response.json();
+              setFlash('upload-flash', `Документы добавлены. Новый статус: ${{statusLabel(payload.status)}}.`);
+              await loadRuns();
+              await selectRun(runId, false);
+            }} catch (error) {{
+              setFlash('upload-flash', `Не удалось добавить документы: ${{error.message}}`, true);
+            }}
           }}
 
           async function handleUpload(event) {{
             event.preventDefault();
-            clearFlash();
+            clearFlash('upload-flash');
             const form = event.currentTarget;
             const data = new FormData(form);
             try {{
@@ -1007,21 +1281,29 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 throw new Error(detail);
               }}
               const payload = await response.json();
-              setFlash(`Создан демонстрационный прогон: ${{payload.run_id}}. Теперь можно запускать анализ.`);
+              setFlash('upload-flash', `Создан демонстрационный прогон: ${{payload.run_id}}. Теперь можно запускать анализ.`);
               form.reset();
               await loadRuns();
               await selectRun(payload.run_id, true);
             }} catch (error) {{
-              setFlash(`Не удалось создать прогон: ${{error.message}}`, true);
+              setFlash('upload-flash', `Не удалось создать прогон: ${{error.message}}`, true);
             }}
           }}
 
           async function bootstrap() {{
             wireTabs();
+            document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);
             document.getElementById('upload-form').addEventListener('submit', handleUpload);
             await loadDataset();
             await loadRuns();
+            if (state.selectedRunId) {{
+              document.querySelector('[data-tab="upload"]').click();
+            }}
+            await handleProcurementSearch({{
+              preventDefault() {{}},
+              currentTarget: document.getElementById('procurement-search-form'),
+            }});
           }}
 
           bootstrap().catch((error) => {{

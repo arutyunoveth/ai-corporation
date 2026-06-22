@@ -24,13 +24,13 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Tender Operator Pilot Runner Refinement (PP1R) is complete: RFQ-first workflow for tender/operator companies with calibrated contract risk, supplier questions, RFQ draft, TKP comparison/economics, and bid decision recommendation.
 - Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
 - A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
-- 441 tests pass (DP1-DP7 design-partner tests + all prior tests).
+- Full `pytest` currently passes: `852 passed, 1 warning`.
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
 - A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.
-- A dedicated Tender Operator Agent demo page is available at `/demo/tender-agent` with both a synthetic walkthrough and a local Upload & Analyze demo flow.
-- Upload & Analyze now includes basic XLSX supplier-quote normalization, local quote comparison, and demo-mode economics estimation without external actions.
+- A dedicated Tender Operator Agent demo page is available at `/demo/tender-agent` with three controlled modes: procurement search/intake, local Upload & Analyze, and a synthetic walkthrough.
+- Tender Operator Agent demo now includes offline-safe procurement discovery (`demo_local`), local document intake, XLSX supplier-quote normalization, quote comparison, event trace, and demo-mode economics estimation without external actions.
 - Controlled pilot scenario pack, operator workflow hardening, evidence ledger, sales materials, and dry-run harness are all present.
 - No broad autonomy is open.
 - No external execution is open.
@@ -60,6 +60,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Calibrated_Contract_Risk_Method.md](docs/product/Calibrated_Contract_Risk_Method.md)
 - [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
 - [docs/demo_tender_operator_agent.md](docs/demo_tender_operator_agent.md)
+- [docs/product/tender_app_reuse_audit.md](docs/product/tender_app_reuse_audit.md)
 - [docs/product/templates/](docs/product/templates/) — pilot templates directory
 
 ## Reconciliation Docs
@@ -516,7 +517,7 @@ uvicorn src.main:app --reload
 http://localhost:8000/demo/tender-agent
 ```
 
-7. For local document upload demos, use the `Upload & Analyze` tab on the same page. Uploaded runs are stored locally under `company_agent_runs/tender_operator_demo/` and do not trigger external actions.
+7. Use the first tab `Найти закупку` for offline-safe procurement discovery, the second tab `Загрузка и анализ` for local document uploads, and the third tab for the synthetic walkthrough. Demo runs are stored locally under `company_agent_runs/tender_operator_demo/` and do not trigger external actions.
 
 ## Tests
 

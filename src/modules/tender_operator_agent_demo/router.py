@@ -2,6 +2,10 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 from src.modules.tender_operator_agent_demo.schemas import (
+    ProcurementRunCreateRequest,
+    ProcurementRunDetailsResponse,
+    ProcurementRunResponse,
+    ProcurementSearchResponse,
     TenderOperatorDemoReportResponse,
     TenderOperatorDemoRunResponse,
     TenderOperatorDemoStepsResponse,
@@ -10,6 +14,11 @@ from src.modules.tender_operator_agent_demo.schemas import (
     TenderOperatorUploadedRunListResponse,
     TenderOperatorUploadedRunResponse,
     TenderOperatorUploadedRunStepsResponse,
+)
+from src.modules.tender_operator_agent_demo.procurement_discovery import search_procurements
+from src.modules.tender_operator_agent_demo.procurement_intake_service import (
+    create_run_from_procurement,
+    get_procurement_for_run,
 )
 from src.modules.tender_operator_agent_demo.service import (
     ASSET_MAP,
@@ -23,6 +32,7 @@ from src.modules.tender_operator_agent_demo.service import (
 from src.modules.tender_operator_agent_demo.ui import render_tender_operator_console_html
 from src.modules.tender_operator_agent_demo.upload_service import (
     analyze_uploaded_demo_run,
+    append_files_to_demo_run,
     create_uploaded_demo_run,
     get_uploaded_demo_report,
     get_uploaded_demo_report_download,
@@ -88,6 +98,39 @@ def tender_operator_demo_report_download() -> Response:
     )
 
 
+@router.get("/api/demo/tender-agent/procurements/search", response_model=ProcurementSearchResponse)
+def search_tender_operator_procurements(
+    query: str = "",
+    source: str = "demo_local",
+    max_results: int = 10,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    customer_name: str | None = None,
+    region: str | None = None,
+    price_from: float | None = None,
+    price_to: float | None = None,
+) -> ProcurementSearchResponse:
+    try:
+        return search_procurements(
+            query=query,
+            source=source,
+            max_results=max_results,
+            date_from=date_from,
+            date_to=date_to,
+            customer_name=customer_name,
+            region=region,
+            price_from=price_from,
+            price_to=price_to,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/demo/tender-agent/runs/from-procurement", response_model=ProcurementRunResponse)
+def create_tender_operator_run_from_procurement(payload: ProcurementRunCreateRequest) -> ProcurementRunResponse:
+    return create_run_from_procurement(payload)
+
+
 @router.post("/api/demo/tender-agent/runs", response_model=TenderOperatorUploadedRunCreateResponse)
 async def create_tender_operator_uploaded_run(
     tender_title: str = Form(...),
@@ -116,6 +159,17 @@ async def create_tender_operator_uploaded_run(
     )
 
 
+@router.post("/api/demo/tender-agent/runs/{run_id}/files", response_model=TenderOperatorUploadedRunCreateResponse)
+async def append_tender_operator_uploaded_files(
+    run_id: str,
+    files: list[UploadFile] = File(...),
+) -> TenderOperatorUploadedRunCreateResponse:
+    uploads: list[tuple[str, str, bytes]] = []
+    for item in files:
+        uploads.append((item.filename or "upload.bin", item.content_type or "application/octet-stream", await item.read()))
+    return append_files_to_demo_run(run_id=run_id, uploads=uploads)
+
+
 @router.get("/api/demo/tender-agent/runs", response_model=TenderOperatorUploadedRunListResponse)
 def list_tender_operator_uploaded_runs() -> TenderOperatorUploadedRunListResponse:
     return list_uploaded_demo_runs()
@@ -124,6 +178,11 @@ def list_tender_operator_uploaded_runs() -> TenderOperatorUploadedRunListRespons
 @router.get("/api/demo/tender-agent/runs/{run_id}", response_model=TenderOperatorUploadedRunResponse)
 def get_tender_operator_uploaded_run(run_id: str) -> TenderOperatorUploadedRunResponse:
     return get_uploaded_demo_run(run_id)
+
+
+@router.get("/api/demo/tender-agent/runs/{run_id}/procurement", response_model=ProcurementRunDetailsResponse)
+def get_tender_operator_procurement_for_run(run_id: str) -> ProcurementRunDetailsResponse:
+    return get_procurement_for_run(run_id)
 
 
 @router.post("/api/demo/tender-agent/runs/{run_id}/analyze", response_model=TenderOperatorUploadedRunAnalyzeResponse)

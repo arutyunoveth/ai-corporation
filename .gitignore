@@ -19,6 +19,10 @@ ai_corporation.db
 /local_pilot_runs/
 /pilot_runs/
 tmp/partner_exports/
+/tests/fixtures/local_pilot_runs/**/05_partner_export/*.md
+/tests/fixtures/local_pilot_runs/**/05_partner_export/*.json
+/tests/fixtures/local_pilot_runs/**/06_partner_export/*.md
+/tests/fixtures/local_pilot_runs/**/06_partner_export/*.json
 
 # Company agent run outputs
 /company_agent_runs/*
