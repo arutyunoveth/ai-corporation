@@ -458,8 +458,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                             Источник
                             <select name="source" id="procurement-source-select">
                               <option value="demo_local">demo_local</option>
-                              <option value="public_eis_html_44fz">public_eis_html_44fz</option>
-                              <option value="public_eis_html_223fz">public_eis_html_223fz</option>
+                              <option value="public_eis_html_44fz">Публичный поиск ЕИС 44-ФЗ</option>
+                              <option value="public_eis_html_223fz">Публичный поиск ЕИС 223-ФЗ (fallback)</option>
                             </select>
                           </label>
                           <label>
@@ -532,7 +532,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                         <span>Без писем поставщикам</span>
                         <span>Требуется подтверждение человека</span>
                       </div>
-                      <p style="margin-top:14px">Поиск работает в безопасном read-only режиме. Система не подаёт заявки, не входит на площадки под учётной записью, не обходит captcha, не использует ЭЦП и не отправляет письма поставщикам.</p>
+                      <p style="margin-top:14px">Поиск работает в безопасном read-only режиме. Система не входит в личный кабинет, не обходит captcha, не подаёт заявку. Система только получает публичную документацию и готовит анализ для человека.</p>
                     </div>
                   </aside>
 
@@ -545,7 +545,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                     </div>
                     <div class="card">
                       <h2>Как это работает</h2>
-                      <p>Поиск закупки и получение документации разделены. Сначала вы находите закупку через offline-safe `demo_local` или публичный HTML fallback, затем либо переходите к ручной загрузке, либо используете отдельный getDocsIP intake по реестровому номеру.</p>
+                      <p>Поиск закупки и получение документации объединены в один сценарий: найдите закупку по ключевому слову через публичный поиск ЕИС 44-ФЗ, выберите карточку, и система сама получит документацию через getDocsIP, распакует архив, создаст run и запустит анализ.</p>
+                      <p style="margin-top:8px">Если HTML поиска не парсится (captcha, JS-heavy или изменилась структура), интерфейс честно показывает кнопку «Откройте поиск в ЕИС» и позволяет вставить номер закупки вручную.</p>
                       <div class="trace" style="margin-top:14px">Если автоматическое получение документации недоступно, интерфейс не притворяется автономным: создаётся run со статусом «нужна загрузка документов», а оператор вручную добавляет пакет и только потом запускает анализ.</div>
                     </div>
                   </main>
@@ -750,6 +751,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           const state = {{
             procurementSources: [],
             procurementResults: [],
+            publicSearchCards: [],
             datasetRun: null,
             datasetReplayActive: false,
             datasetDisplayStatuses: new Map(),
@@ -1129,6 +1131,98 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
           }}
 
+          function renderPublicSearchCards(cards) {{
+            const node = document.getElementById('procurement-results');
+            if (!cards || !cards.length) {{
+              node.innerHTML = `<div class="empty">По вашему запросу закупки не найдены.</div>`;
+              return;
+            }}
+            node.innerHTML = cards.map((card, index) => `
+              <div class="run-item">
+                <div class="step-top" style="margin-bottom:8px">
+                  <div>
+                    <strong>${{escapeHtml(card.title || 'Закупка без названия')}}</strong>
+                    <div class="run-meta">${{card.notice_number || card.reestr_number || ''}} · ${{escapeHtml(card.customer_name || 'Заказчик не указан')}} · 44-ФЗ</div>
+                  </div>
+                  <span class="status-chip status-done">Публичный поиск ЕИС</span>
+                </div>
+                <div class="grid-2">
+                  <div class="metric"><span class="metric-label">Номер извещения</span><span class="metric-value">${{escapeHtml(card.notice_number || card.reestr_number || 'не указан')}}</span></div>
+                  <div class="metric"><span class="metric-label">Начальная цена</span><span class="metric-value">${{card.initial_price ? formatMoney(card.initial_price, 'RUB') : 'не указана'}}</span></div>
+                  <div class="metric"><span class="metric-label">Дата публикации</span><span class="metric-value">${{escapeHtml(card.publication_date || 'не указана')}}</span></div>
+                  <div class="metric"><span class="metric-label">Заказчик</span><span class="metric-value">${{escapeHtml(card.customer_name || 'не указан')}}</span></div>
+                </div>
+                ${{(card.warnings || []).length ? `<div class="note" style="margin-top:10px">${{escapeHtml(card.warnings.join('; '))}}</div>` : ''}}
+                <div class="form-actions" style="margin-top:12px">
+                  ${{card.reestr_number ? `<button class="button primary public-search-handoff-button" type="button" data-reestr="${{escapeHtml(card.reestr_number)}}" data-title="${{escapeHtml(card.title)}}" data-customer="${{escapeHtml(card.customer_name || '')}}" data-url="${{escapeHtml(card.source_url || '')}}">Получить документацию и анализировать</button>` : ''}}
+                  ${{card.source_url ? `<a class="link-button" href="${{escapeHtml(card.source_url)}}" target="_blank" rel="noreferrer">Открыть в ЕИС</a>` : ''}}
+                </div>
+                <div class="note" style="margin-top:8px">Поиск работает в read-only режиме. Система не входит в личный кабинет, не обходит captcha, не подаёт заявку.</div>
+              </div>
+            `).join('');
+            for (const button of node.querySelectorAll('.public-search-handoff-button')) {{
+              button.addEventListener('click', () => {{
+                handlePublicSearchHandoff(button.dataset.reestr, button.dataset.title, button.dataset.customer, button.dataset.url);
+              }});
+            }}
+          }}
+
+          function renderPublicSearchFallback(eisSearchUrl) {{
+            const node = document.getElementById('procurement-results');
+            node.innerHTML = `
+              <div class="run-item">
+                <strong>Откройте поиск в ЕИС</strong>
+                <p style="margin-top:10px">Публичный HTML поиска ЕИС не удалось обработать автоматически. Откройте поиск в ЕИС, найдите нужную закупку и вставьте номер извещения ниже.</p>
+                ${{eisSearchUrl ? `<div class="form-actions" style="margin-top:12px"><a class="link-button" href="${{escapeHtml(eisSearchUrl)}}" target="_blank" rel="noreferrer">Открыть поиск в ЕИС</a></div>` : ''}}
+                <div style="margin-top:14px">
+                  <label>
+                    Или вставьте номер закупки (реестровый номер)
+                    <div class="form-actions" style="margin-top:8px">
+                      <input id="manual-reestr-input" placeholder="Например: 0888200000224000038" style="flex:1" />
+                      <button class="button primary" type="button" id="manual-reestr-handoff-button">Получить документацию и анализировать</button>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            `;
+            document.getElementById('manual-reestr-handoff-button')?.addEventListener('click', () => {{
+              const reestr = document.getElementById('manual-reestr-input')?.value?.trim();
+              if (reestr) {{
+                handlePublicSearchHandoff(reestr, '', '', '');
+              }}
+            }});
+          }}
+
+          async function handlePublicSearchHandoff(reestrNumber, title, customerName, sourceUrl) {{
+            if (!reestrNumber) {{
+              setFlash('procurement-flash', 'Не указан номер закупки.', true);
+              return;
+            }}
+            setFlash('procurement-flash', `Запрашиваем документацию по номеру ${{reestrNumber}} через getDocsIP…`);
+            try {{
+              const payload = await fetchJson('/api/demo/tender-agent/runs/from-search-result', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                  source: 'public_44fz',
+                  reestr_number: reestrNumber,
+                  title: title || null,
+                  customer_name: customerName || null,
+                  source_url: sourceUrl || null,
+                  download_archive: true,
+                  analyze_after_download: true,
+                }}),
+              }});
+              setFlash('procurement-flash', `Создан run: ${{payload.run_id}}. Статус: ${{payload.status}}. Документов распаковано: ${{payload.documents_extracted_count}}.`);
+              await loadRuns();
+              if (payload.run_id) {{
+                await selectRun(payload.run_id, true);
+              }}
+            }} catch (error) {{
+              setFlash('procurement-flash', `Не удалось получить документацию: ${{error.message}}`, true);
+            }}
+          }}
+
           function renderEisDocsResult(result) {{
             const node = document.getElementById('eis-docs-result');
             if (!result) {{
@@ -1185,25 +1279,53 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             try {{
               if (String(payload.source || '').startsWith('public_eis_html_')) {{
                 const law = payload.source === 'public_eis_html_223fz' ? '223fz' : '44fz';
-                const searchUrlPayload = await fetchJson(`/api/demo/tender-agent/procurement/public-search-url?${{new URLSearchParams({{
-                  query: String(payload.query || ''),
-                  law,
-                  region: String(payload.region || ''),
-                  date_from: String(payload.date_from || ''),
-                  date_to: String(payload.date_to || ''),
-                }})}}`);
-                state.procurementResults = [];
-                document.getElementById('procurement-results').innerHTML = `
-                  <div class="run-item">
-                    <strong>Публичный HTML fallback</strong>
-                    <p style="margin-top:10px">${{escapeHtml(searchUrlPayload.note)}}</p>
-                    <div class="form-actions" style="margin-top:12px">
-                      <a class="link-button" href="${{searchUrlPayload.eis_search_url}}" target="_blank" rel="noreferrer">Открыть поиск ЕИС</a>
+                if (law === '223fz') {{
+                  const searchUrlPayload = await fetchJson(`/api/demo/tender-agent/procurement/public-search-url?${{new URLSearchParams({{
+                    query: String(payload.query || ''),
+                    law,
+                    region: String(payload.region || ''),
+                    date_from: String(payload.date_from || ''),
+                    date_to: String(payload.date_to || ''),
+                  }})}}`);
+                  state.procurementResults = [];
+                  document.getElementById('procurement-results').innerHTML = `
+                    <div class="run-item">
+                      <strong>Публичный HTML fallback</strong>
+                      <p style="margin-top:10px">${{escapeHtml(searchUrlPayload.note)}}</p>
+                      <div class="form-actions" style="margin-top:12px">
+                        <a class="link-button" href="${{searchUrlPayload.eis_search_url}}" target="_blank" rel="noreferrer">Открыть поиск ЕИС</a>
+                      </div>
                     </div>
-                  </div>
-                `;
-                renderProcurementSourceDiagnostics(payload.source);
-                setFlash('procurement-flash', 'Сформирована публичная ссылка поиска ЕИС. Выберите закупку вручную и затем используйте getDocsIP по номеру.');
+                  `;
+                  renderProcurementSourceDiagnostics(payload.source);
+                  setFlash('procurement-flash', 'Сформирована публичная ссылка поиска ЕИС. Выберите закупку вручную и затем используйте getDocsIP по номеру.');
+                  return;
+                }}
+                const searchParams = new URLSearchParams();
+                searchParams.set('query', String(payload.query || ''));
+                if (payload.region) searchParams.set('region', String(payload.region));
+                if (payload.date_from) searchParams.set('date_from', String(payload.date_from));
+                if (payload.date_to) searchParams.set('date_to', String(payload.date_to));
+                if (payload.price_from) searchParams.set('price_from', String(payload.price_from));
+                if (payload.price_to) searchParams.set('price_to', String(payload.price_to));
+                if (payload.max_results) searchParams.set('max_results', String(payload.max_results));
+                const searchResult = await fetchJson('/api/demo/tender-agent/procurement/public-44fz-search', {{
+                  method: 'POST',
+                  headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
+                  body: searchParams,
+                }});
+                if (searchResult.status === 'parsed' && searchResult.cards && searchResult.cards.length) {{
+                  state.publicSearchCards = searchResult.cards;
+                  renderPublicSearchCards(searchResult.cards);
+                  renderProcurementSourceDiagnostics(payload.source);
+                  setFlash('procurement-flash', `Найдено закупок: ${{searchResult.cards.length}}. Выберите карточку для получения документации.`);
+                }} else {{
+                  const fallbackUrl = searchResult.eis_search_url || '';
+                  renderPublicSearchFallback(fallbackUrl);
+                  renderProcurementSourceDiagnostics(payload.source);
+                  const note = searchResult.status === 'empty_results' ? 'По вашему запросу ничего не найдено.' : 'Публичный HTML-поиск не удалось обработать автоматически.';
+                  setFlash('procurement-flash', note, searchResult.status !== 'empty_results');
+                }}
                 return;
               }}
               const response = await fetchJson('/api/demo/tender-agent/procurement/search', {{
