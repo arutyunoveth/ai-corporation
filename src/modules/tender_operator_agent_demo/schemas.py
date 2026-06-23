@@ -190,6 +190,7 @@ class ProcurementRunCreateRequest(APIModel):
     procurement_id: str
     source: str
     query: str | None = None
+    download_attachments: bool = True
 
 
 class ProcurementAttachmentManifestItem(APIModel):
@@ -205,6 +206,10 @@ class ProcurementRunResponse(APIModel):
     status: TenderOperatorUploadedRunStatus
     created_at: datetime
     file_count: int = Field(ge=0, default=0)
+    run_url: str | None = None
+    report_url: str | None = None
+    downloaded_files_count: int = Field(ge=0, default=0)
+    manual_upload_required: bool = True
     warnings: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     attachments_status: str

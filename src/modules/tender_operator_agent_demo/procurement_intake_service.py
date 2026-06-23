@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
-from src.modules.tender_operator_agent_demo.procurement_discovery import get_demo_procurement, search_procurements
+from src.modules.tender_operator_agent_demo.attachment_downloader import download_procurement_attachments
+from src.modules.tender_operator_agent_demo.procurement_discovery import (
+    get_demo_procurement,
+    get_procurement_details,
+    search_procurements,
+)
 from src.modules.tender_operator_agent_demo.procurement_sources import get_procurement_source_descriptors
+from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementDetails
 from src.modules.tender_operator_agent_demo.schemas import (
     ProcurementAttachmentManifestItem,
     ProcurementRunCreateRequest,
@@ -28,6 +35,7 @@ from src.modules.tender_operator_agent_demo.upload_service import (
     sanitize_demo_filename,
     save_demo_run_metadata,
 )
+from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 
 
 def _now_iso() -> str:
@@ -41,6 +49,61 @@ def _find_descriptor(code: str):
     return None
 
 
+def _legacy_result_from_details(details: ProcurementDetails) -> ProcurementSearchResult:
+    procurement = details.procurement
+    downloadable_count = sum(1 for item in details.attachments if item.can_download)
+    source_note = "; ".join(details.warnings) if details.warnings else details.raw_source_summary
+    return ProcurementSearchResult(
+        procurement_id=procurement.procurement_id,
+        source=procurement.source,
+        title=procurement.title,
+        procurement_number=procurement.notice_number or procurement.registry_number,
+        customer_name=procurement.customer_name,
+        category=procurement.law or "Закупка",
+        publication_date=procurement.publication_date,
+        deadline=procurement.deadline,
+        initial_price=procurement.initial_price,
+        currency=procurement.currency,
+        region=None,
+        source_url=procurement.source_url,
+        attachments_status=procurement.attachments_status,
+        attachments_count=max(procurement.attachments_count, len(details.attachments)),
+        available_attachments_count=downloadable_count,
+        summary=procurement.status or details.raw_source_summary,
+        attachment_names=[item.name for item in details.attachments],
+        source_note=source_note,
+    )
+
+
+def _write_procurement_artifacts(
+    run_id: str,
+    *,
+    selected: ProcurementSearchResult,
+    manifest: list[ProcurementAttachmentManifestItem],
+) -> None:
+    procurement_dir = get_demo_run_procurement_dir(run_id)
+    (procurement_dir / "procurement_metadata.json").write_text(
+        selected.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+    (procurement_dir / "attachments_manifest.json").write_text(
+        json.dumps([item.model_dump(mode="json") for item in manifest], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (procurement_dir / "source_summary.txt").write_text(
+        "\n".join(
+            [
+                f"Источник: {selected.source}",
+                f"Номер закупки: {selected.procurement_number or 'не указан'}",
+                f"Карточка: {selected.source_url}",
+                f"Статус документации: {selected.attachments_status}",
+                f"Примечание: {selected.source_note or '—'}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def create_run_from_procurement(request: ProcurementRunCreateRequest) -> ProcurementRunResponse:
     descriptor = _find_descriptor(request.source)
     if descriptor is None:
@@ -48,33 +111,40 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
     if not descriptor.enabled:
         raise HTTPException(status_code=400, detail=descriptor.note or "Source is disabled in demo mode")
 
-    procurement = get_demo_procurement(request.source, request.procurement_id)
-    if procurement is None:
-        raise HTTPException(status_code=404, detail="Procurement was not found")
-
-    search_snapshot = search_procurements(query=request.query or "", source=request.source, max_results=10)
-    selected = next((item for item in search_snapshot.results if item.procurement_id == request.procurement_id), None)
-    if selected is None:
-        selected = ProcurementSearchResult(
-            procurement_id=procurement.procurement_id,
-            source=procurement.source,
-            title=procurement.title,
-            procurement_number=procurement.procurement_number,
-            customer_name=procurement.customer_name,
-            category=procurement.category,
-            publication_date=procurement.publication_date,
-            deadline=procurement.deadline,
-            initial_price=procurement.initial_price,
-            currency=procurement.currency,
-            region=procurement.region,
-            source_url=procurement.source_url,
-            attachments_status=procurement.attachments_status,
-            attachments_count=len(procurement.attachments),
-            available_attachments_count=len(procurement.attachments),
-            summary=procurement.summary,
-            attachment_names=[item.name for item in procurement.attachments],
-            source_note=procurement.source_note,
-        )
+    demo_procurement = get_demo_procurement(request.source, request.procurement_id)
+    details: ProcurementDetails | None = None
+    if demo_procurement is None:
+        try:
+            details = get_procurement_details(request.source, request.procurement_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        selected = _legacy_result_from_details(details)
+        search_results_count = 1
+    else:
+        search_snapshot = search_procurements(query=request.query or "", source=request.source, max_results=10)
+        selected = next((item for item in search_snapshot.results if item.procurement_id == request.procurement_id), None)
+        if selected is None:
+            selected = ProcurementSearchResult(
+                procurement_id=demo_procurement.procurement_id,
+                source=demo_procurement.source,
+                title=demo_procurement.title,
+                procurement_number=demo_procurement.procurement_number,
+                customer_name=demo_procurement.customer_name,
+                category=demo_procurement.category,
+                publication_date=demo_procurement.publication_date,
+                deadline=demo_procurement.deadline,
+                initial_price=demo_procurement.initial_price,
+                currency=demo_procurement.currency,
+                region=demo_procurement.region,
+                source_url=demo_procurement.source_url,
+                attachments_status=demo_procurement.attachments_status,
+                attachments_count=len(demo_procurement.attachments),
+                available_attachments_count=len(demo_procurement.attachments),
+                summary=demo_procurement.summary,
+                attachment_names=[item.name for item in demo_procurement.attachments],
+                source_note=demo_procurement.source_note,
+            )
+        search_results_count = len(search_snapshot.results)
 
     run_id = make_demo_run_id()
     ensure_demo_run_structure(run_id, exist_ok=False)
@@ -89,8 +159,8 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
     append_demo_run_event(
         run_id,
         "procurement_search_completed",
-        "Поиск закупки завершён, результаты получены из безопасного demo-local источника.",
-        {"results_found": len(search_snapshot.results), "source": request.source},
+        "Поиск закупки завершён, результаты получены из безопасного read-only источника.",
+        {"results_found": search_results_count, "source": request.source},
     )
     append_demo_run_event(
         run_id,
@@ -102,14 +172,14 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
     files: list[dict[str, Any]] = []
     manifest: list[ProcurementAttachmentManifestItem] = []
 
-    if procurement.attachments:
+    if demo_procurement and demo_procurement.attachments and request.download_attachments:
         append_demo_run_event(
             run_id,
             "attachments_download_started",
             "Начато безопасное получение публично доступной документации.",
-            {"attachments_expected": len(procurement.attachments)},
+            {"attachments_expected": len(demo_procurement.attachments)},
         )
-        for index, attachment in enumerate(procurement.attachments, start=1):
+        for index, attachment in enumerate(demo_procurement.attachments, start=1):
             original_name, stored_name = sanitize_demo_filename(attachment.name, index)
             target = get_demo_run_input_dir(run_id) / stored_name
             target.write_bytes(attachment.payload)
@@ -145,23 +215,86 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
             {"saved_files": len(files)},
         )
         status = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE
+    elif details and details.attachments and request.download_attachments:
+        append_demo_run_event(
+            run_id,
+            "attachments_download_started",
+            "Начато безопасное получение публично доступной документации.",
+            {"attachments_expected": len(details.attachments), "source": request.source},
+        )
+        settings = get_zakupki_soap_settings()
+        download_limit = settings.max_download_mb * 1024 * 1024
+        download_result = download_procurement_attachments(
+            details.attachments,
+            target_dir=get_demo_run_input_dir(run_id),
+            max_attachments=settings.max_attachments,
+            max_file_size_bytes=download_limit,
+            max_total_size_bytes=download_limit,
+        )
+        for index, item in enumerate(download_result.saved, start=1):
+            if not item.stored_name:
+                continue
+            files.append(
+                build_demo_file_descriptor(
+                    file_id=f"FILE-{index:02d}",
+                    original_name=item.name,
+                    stored_name=item.stored_name,
+                    size_bytes=item.size_bytes,
+                    content_type="application/octet-stream",
+                    source="procurement_download",
+                )
+            )
+        for item in download_result.manifest:
+            manifest_item = ProcurementAttachmentManifestItem(
+                name=item.name,
+                stored_name=item.stored_name,
+                extension=item.extension,
+                status=item.status,
+                note=item.note,
+            )
+            manifest.append(manifest_item)
+            append_demo_run_event(
+                run_id,
+                "attachment_saved" if item.status == "saved" else "attachment_skipped",
+                (
+                    f"Документация '{item.name}' сохранена локально."
+                    if item.status == "saved"
+                    else f"Документация '{item.name}' пропущена: {item.note or 'причина не указана'}"
+                ),
+                {"stored_name": item.stored_name, "status": item.status},
+            )
+        append_demo_run_event(
+            run_id,
+            "attachments_download_completed",
+            "Получение документации завершено.",
+            {"saved_files": len(files), "skipped_files": len(download_result.skipped)},
+        )
+        status = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE if files else TenderOperatorUploadedRunStatus.DOCS_REQUIRED
     else:
+        reason = (
+            "Оператор создал run без автоматического скачивания документации."
+            if not request.download_attachments
+            else "Автоматическое получение документации недоступно. Загрузите документы вручную."
+        )
         manifest.append(
             ProcurementAttachmentManifestItem(
                 name="documentation",
                 stored_name=None,
                 extension="",
                 status="manual_upload_required",
-                note="Автоматическое получение документации недоступно. Загрузите документы вручную.",
+                note=reason,
             )
         )
         append_demo_run_event(
             run_id,
             "manual_upload_required",
             "Автоматическое получение документации недоступно. Нужна ручная загрузка документов.",
-            {"attachments_status": procurement.attachments_status},
+            {"attachments_status": selected.attachments_status, "download_attachments": request.download_attachments},
         )
         status = TenderOperatorUploadedRunStatus.DOCS_REQUIRED
+
+    manual_upload_required = status == TenderOperatorUploadedRunStatus.DOCS_REQUIRED
+    attachments_status = "downloaded" if files else "manual_upload_required"
 
     metadata = {
         "run_id": run_id,
@@ -179,7 +312,12 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
         "procurement_query": request.query or "",
         "publication_date": selected.publication_date,
         "deadline": selected.deadline,
-        "attachments_status": procurement.attachments_status if status == TenderOperatorUploadedRunStatus.DOCS_REQUIRED else "downloaded",
+        "attachments_status": attachments_status,
+        "downloaded_files_count": len(files),
+        "manual_upload_required": manual_upload_required,
+        "source": selected.source,
+        "notice_number": selected.procurement_number,
+        "law": selected.category if selected.category in {"44-ФЗ", "223-ФЗ"} else None,
         "files": files,
         "warnings": [],
         "limitations": [
@@ -196,27 +334,7 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
     }
     save_demo_run_metadata(run_id, metadata)
 
-    procurement_dir = get_demo_run_procurement_dir(run_id)
-    (procurement_dir / "procurement_metadata.json").write_text(
-        selected.model_dump_json(indent=2),
-        encoding="utf-8",
-    )
-    (procurement_dir / "attachments_manifest.json").write_text(
-        "[" + ",\n".join(item.model_dump_json() for item in manifest) + "]",
-        encoding="utf-8",
-    )
-    (procurement_dir / "source_summary.txt").write_text(
-        "\n".join(
-            [
-                f"Источник: {selected.source}",
-                f"Номер закупки: {selected.procurement_number or 'не указан'}",
-                f"Карточка: {selected.source_url}",
-                f"Статус документации: {selected.attachments_status}",
-                f"Примечание: {selected.source_note or '—'}",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    _write_procurement_artifacts(run_id, selected=selected, manifest=manifest)
     append_demo_run_event(
         run_id,
         "run_created_from_procurement",
@@ -229,6 +347,10 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
         status=status,
         created_at=datetime.fromisoformat(created_at),
         file_count=len(files),
+        run_url=f"/demo/tender-agent?run_id={run_id}",
+        report_url=f"/demo/tender-agent/runs/{run_id}/report",
+        downloaded_files_count=len(files),
+        manual_upload_required=manual_upload_required,
         warnings=[],
         limitations=metadata["limitations"],
         attachments_status=metadata["attachments_status"],
@@ -246,8 +368,6 @@ def get_procurement_for_run(run_id: str) -> ProcurementRunDetailsResponse:
     manifest_path = get_demo_run_procurement_dir(run_id) / "attachments_manifest.json"
     manifest = []
     if manifest_path.is_file():
-        import json
-
         manifest = [ProcurementAttachmentManifestItem.model_validate(item) for item in json.loads(manifest_path.read_text(encoding="utf-8"))]
 
     return ProcurementRunDetailsResponse(
