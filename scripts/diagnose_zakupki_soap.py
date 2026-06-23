@@ -3,6 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
+import ssl
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -15,16 +18,17 @@ def diagnostics_dir() -> Path:
     return Path("company_agent_runs/zakupki_soap_diagnostics")
 
 
-def run_diagnostics(
-    *,
-    settings: ZakupkiSoapSettings,
-    reestr_number: str,
-    owner: str = "individual",
-    method: str = "getDocsByReestrNumber",
-    check_xsd: bool = False,
-    download_archive: bool = False,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
+def _target_host_allowed(settings: ZakupkiSoapSettings) -> bool:
+    hostname = (urlparse(settings.individual_base_url).hostname or "").lower()
+    for host in settings.allowed_hosts:
+        normalized = host.lstrip(".").lower()
+        if hostname == normalized or hostname.endswith(f".{normalized}"):
+            return True
+    return False
+
+
+def _base_payload(settings: ZakupkiSoapSettings, owner: str, method: str, reestr_number: str) -> dict[str, Any]:
+    return {
         "token_owner": owner,
         "token_present": settings.token_configured,
         "endpoint": settings.individual_base_url,
@@ -37,45 +41,162 @@ def run_diagnostics(
         "archive_url_present": False,
         "download_status": "not_requested",
         "sanitized_error": "",
-        "system_proxy_detected": bool(os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or os.getenv("ALL_PROXY") or os.getenv("all_proxy")),
-        "env_proxy_detected": bool(os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or os.getenv("ALL_PROXY") or os.getenv("all_proxy")),
+        "system_proxy_detected": bool(
+            os.getenv("HTTP_PROXY")
+            or os.getenv("http_proxy")
+            or os.getenv("HTTPS_PROXY")
+            or os.getenv("https_proxy")
+            or os.getenv("ALL_PROXY")
+            or os.getenv("all_proxy")
+        ),
+        "env_proxy_detected": bool(
+            os.getenv("HTTP_PROXY")
+            or os.getenv("http_proxy")
+            or os.getenv("HTTPS_PROXY")
+            or os.getenv("https_proxy")
+            or os.getenv("ALL_PROXY")
+            or os.getenv("all_proxy")
+        ),
         "client_trust_env": False if settings.disable_proxy_for_eis else settings.trust_env_proxy,
         "eis_proxy_disabled": settings.disable_proxy_for_eis,
         "target_host": urlparse(settings.individual_base_url).hostname or "",
-        "target_host_allowed": (urlparse(settings.individual_base_url).hostname or "").lower() in [host.lstrip(".") for host in settings.allowed_hosts] or any((urlparse(settings.individual_base_url).hostname or "").lower().endswith(host) for host in settings.allowed_hosts if host.startswith(".")),
+        "target_host_allowed": _target_host_allowed(settings),
         "no_proxy_contains_zakupki": "zakupki.gov.ru" in ((os.getenv("NO_PROXY") or os.getenv("no_proxy") or "").lower()),
         "route_mode": "direct_for_eis" if settings.disable_proxy_for_eis else ("env_proxy" if settings.trust_env_proxy else "unknown"),
     }
+
+
+def _run_method(client: ZakupkiSoapClient, method: str, reestr_number: str) -> dict[str, Any]:
+    if method == "getDocsByReestrNumber":
+        result = client.get_docs_by_reestr_number(reestr_number)
+    elif method == "getDocsByOrgRegion":
+        result = client.get_docs_by_org_region("72", "2024-12-24", "epNotificationEF2020")
+    elif method == "getNsi":
+        result = client.get_nsi()
+    else:
+        raise ValueError(f"Unsupported method: {method}")
+    payload = {
+        "soap_post_status": "ok",
+        "response_kind": result.status,
+        "archive_url_present": bool(result.archive_url),
+        "ref_id_present": bool(result.ref_id),
+        "warnings": result.warnings,
+        "safe_diagnostic": result.safe_diagnostic,
+    }
+    if result.warnings:
+        payload["sanitized_error"] = " ".join(result.warnings)
+    if result.archive_url:
+        parsed = urlparse(result.archive_url)
+        payload["archive_url_summary"] = {
+            "host": parsed.hostname or "",
+            "path": parsed.path or "/",
+        }
+    else:
+        payload["download_status"] = "no_archive_url"
+    return payload
+
+
+def _run_route_check(settings: ZakupkiSoapSettings) -> dict[str, Any]:
+    parsed = urlparse(settings.individual_base_url)
+    host = parsed.hostname or ""
+    port = parsed.port or 443
+    payload: dict[str, Any] = {
+        "dns_status": "not_checked",
+        "tcp_status": "not_checked",
+        "tls_status": "not_checked",
+        "http_get_status": "not_checked",
+    }
+    try:
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        payload["dns_status"] = "ok"
+        payload["dns_addresses"] = sorted({item[4][0] for item in addresses})[:4]
+    except Exception as exc:  # noqa: BLE001
+        payload["dns_status"] = "error"
+        payload["sanitized_error"] = str(exc)
+        return payload
+
+    try:
+        with socket.create_connection((host, port), timeout=settings.timeout_seconds):
+            pass
+        payload["tcp_status"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        payload["tcp_status"] = "error"
+        payload["sanitized_error"] = str(exc)
+        return payload
+
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((host, port), timeout=settings.timeout_seconds) as sock:
+            with context.wrap_socket(sock, server_hostname=host):
+                pass
+        payload["tls_status"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        payload["tls_status"] = "error"
+        payload["sanitized_error"] = str(exc)
+        return payload
+
+    try:
+        client = ZakupkiSoapClient(settings)
+        xsd_probe = client.probe_xsd()
+        payload["http_get_status"] = xsd_probe.get("status", "unknown")
+        if xsd_probe.get("status") == "error":
+            payload["sanitized_error"] = str(xsd_probe.get("error", ""))
+    except Exception as exc:  # noqa: BLE001
+        payload["http_get_status"] = "error"
+        payload["sanitized_error"] = str(exc)
+    return payload
+
+
+def run_diagnostics(
+    *,
+    settings: ZakupkiSoapSettings,
+    reestr_number: str,
+    owner: str = "individual",
+    method: str = "getDocsByReestrNumber",
+    check_xsd: bool = False,
+    download_archive: bool = False,
+    route_check: bool = False,
+) -> dict[str, Any]:
+    payload = _base_payload(settings, owner, method, reestr_number)
     if not settings.configured:
         payload["soap_post_status"] = "not_configured"
         return payload
 
     client = ZakupkiSoapClient(settings)
+    if route_check:
+        payload["route_check"] = _run_route_check(settings)
     if check_xsd:
         xsd_probe = client.probe_xsd()
         payload["xsd_status"] = xsd_probe.get("status", "unknown")
         if xsd_probe.get("status") == "error":
             payload["sanitized_error"] = str(xsd_probe.get("error", ""))
 
-    try:
-        result = client.get_docs_by_reestr_number(reestr_number)
-    except RuntimeError as exc:
-        payload["soap_post_status"] = "transport_error"
-        payload["response_kind"] = "transport_error"
-        payload["sanitized_error"] = str(exc)
-        return payload
+    methods = ["getNsi", "getDocsByReestrNumber", "getDocsByOrgRegion"] if method == "all" else [method]
+    payload["methods"] = {}
+    for item in methods:
+        try:
+            method_payload = _run_method(client, item, reestr_number)
+        except RuntimeError as exc:
+            method_payload = {
+                "soap_post_status": "transport_error",
+                "response_kind": "transport_error",
+                "sanitized_error": str(exc),
+                "archive_url_present": False,
+            }
+        payload["methods"][item] = method_payload
 
-    payload["soap_post_status"] = "ok"
-    payload["response_kind"] = result.status
-    payload["archive_url_present"] = bool(result.archive_url)
-    payload["ref_id_present"] = bool(result.ref_id)
-    if result.warnings and not payload["sanitized_error"]:
-        payload["sanitized_error"] = " ".join(result.warnings)
+    primary = payload["methods"].get("getDocsByReestrNumber") or next(iter(payload["methods"].values()))
+    payload["soap_post_status"] = primary.get("soap_post_status", "unknown")
+    payload["response_kind"] = primary.get("response_kind", "unknown")
+    payload["archive_url_present"] = primary.get("archive_url_present", False)
+    if primary.get("sanitized_error"):
+        payload["sanitized_error"] = primary["sanitized_error"]
 
-    if download_archive and result.archive_url:
+    if download_archive and primary.get("archive_url_present") and primary.get("archive_url_summary"):
+        archive_url = "https://" + primary["archive_url_summary"]["host"] + primary["archive_url_summary"]["path"]
         try:
             target_dir = diagnostics_dir() / "downloads"
-            downloaded = client.download_archive(result.archive_url, target_dir)
+            downloaded = client.download_archive(archive_url, target_dir)
             payload["download_status"] = "downloaded"
             payload["downloaded_size_bytes"] = downloaded.size_bytes
             payload["archive_url_summary"] = {
@@ -85,13 +206,9 @@ def run_diagnostics(
         except RuntimeError as exc:
             payload["download_status"] = "download_error"
             payload["sanitized_error"] = str(exc)
-    elif result.archive_url:
-        parsed = result.safe_diagnostic
-        payload["archive_url_summary"] = {
-            "host": result.archive_url.split("/")[2] if "://" in result.archive_url else "",
-            "path": "/" + "/".join(result.archive_url.split("/")[3:]) if "://" in result.archive_url else "",
-        }
-    else:
+    elif primary.get("archive_url_present"):
+        payload["archive_url_summary"] = primary.get("archive_url_summary", {})
+    elif payload["download_status"] == "not_requested":
         payload["download_status"] = "no_archive_url"
 
     return payload
@@ -108,26 +225,36 @@ def save_diagnostics(payload: dict[str, Any]) -> Path:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Read-only диагностика getDocsIP для токена физлица")
     parser.add_argument("--owner", default="individual")
-    parser.add_argument("--method", default="getDocsByReestrNumber")
+    parser.add_argument("--method", default="getDocsByReestrNumber", choices=["xsd", "getNsi", "getDocsByReestrNumber", "getDocsByOrgRegion", "all"])
     parser.add_argument("--reestr-number", required=True)
     parser.add_argument("--check-xsd", action="store_true")
     parser.add_argument("--download-archive", action="store_true")
     parser.add_argument("--no-download", action="store_true")
+    parser.add_argument("--route-check", action="store_true")
+    parser.add_argument("--disable-proxy", action="store_true")
+    parser.add_argument("--save-sanitized", action="store_true")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = ZakupkiSoapSettings.from_env()
+    if args.disable_proxy:
+        settings = replace(settings, disable_proxy_for_eis=True, trust_env_proxy=False)
+    method = args.method
     payload = run_diagnostics(
         settings=settings,
         reestr_number=args.reestr_number,
         owner=args.owner,
-        method=args.method,
-        check_xsd=args.check_xsd,
+        method=("getDocsByReestrNumber" if method == "xsd" else method),
+        check_xsd=args.check_xsd or method in {"xsd", "all"},
         download_archive=args.download_archive and not args.no_download,
+        route_check=args.route_check,
     )
-    save_diagnostics(payload)
+    if args.save_sanitized:
+        save_diagnostics(payload)
+    else:
+        save_diagnostics(payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 

@@ -90,6 +90,38 @@ def build_get_docs_by_reestr_number_envelope(
 </soapenv:Envelope>"""
 
 
+def build_get_nsi_envelope(
+    *,
+    token: str,
+    namespace: str,
+    token_header_name: str,
+    request_id: str,
+    created_time: str,
+    mode: str,
+    nsi_code44: str = "nsiAllList",
+    nsi_kind: str = "all",
+) -> str:
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="{SOAP_NS}" xmlns:ws="{escape(namespace)}">
+  <soapenv:Header>
+    <{escape(token_header_name)}>{escape(token)}</{escape(token_header_name)}>
+  </soapenv:Header>
+  <soapenv:Body>
+    <ws:getNsiRequest>
+      <index>
+        <id>{escape(request_id)}</id>
+        <createDateTime>{escape(created_time)}</createDateTime>
+        <mode>{escape(mode)}</mode>
+      </index>
+      <selectionParams>
+        <nsiCode44>{escape(nsi_code44)}</nsiCode44>
+        <nsiKind>{escape(nsi_kind)}</nsiKind>
+      </selectionParams>
+    </ws:getNsiRequest>
+  </soapenv:Body>
+</soapenv:Envelope>"""
+
+
 def build_get_docs_by_org_region_envelope(
     *,
     token: str,

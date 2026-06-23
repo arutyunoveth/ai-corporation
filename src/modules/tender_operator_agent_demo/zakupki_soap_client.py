@@ -24,6 +24,7 @@ from src.modules.tender_operator_agent_demo.zakupki_soap_templates import (
     build_attachments_envelope,
     build_details_envelope,
     build_get_docs_by_org_region_envelope,
+    build_get_nsi_envelope,
     build_get_docs_by_reestr_number_envelope,
     build_search_envelope,
 )
@@ -144,6 +145,33 @@ class ZakupkiSoapClient:
             request_id=request_id,
             expected_response_tag="getDocsByOrgRegionResponse",
             expected_request_tag="getDocsByOrgRegionRequest",
+        )
+
+    def get_nsi(self, nsi_code44: str = "nsiAllList", nsi_kind: str = "all") -> DocsArchiveResult:
+        if not self.is_configured():
+            raise RuntimeError("Источник ЕИС не настроен для getDocsIP.")
+        request_id, created_time = _request_meta()
+        envelope = build_get_nsi_envelope(
+            token=self.settings.token,
+            namespace=self.settings.individual_namespace,
+            token_header_name=self.settings.token_header_name,
+            request_id=request_id,
+            created_time=created_time,
+            mode=self.settings.mode,
+            nsi_code44=nsi_code44,
+            nsi_kind=nsi_kind,
+        )
+        xml = self._post_soap(
+            envelope,
+            soap_action=None,
+            endpoint_url=self.settings.individual_base_url,
+            method_name="getNsiRequest",
+        )
+        return parse_getdocs_response(
+            xml,
+            request_id=request_id,
+            expected_response_tag="getNsiResponse",
+            expected_request_tag="getNsiRequest",
         )
 
     def probe_xsd(self) -> dict[str, object]:

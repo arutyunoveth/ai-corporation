@@ -117,3 +117,33 @@ def test_diagnostics_marks_env_proxy_detected(monkeypatch, tmp_path):
     assert payload["env_proxy_detected"] is True
     assert payload["route_mode"] == "direct_for_eis"
     assert "user:pass" not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_diagnostics_includes_route_check(monkeypatch, tmp_path):
+    from scripts import diagnose_zakupki_soap as module
+
+    monkeypatch.chdir(tmp_path)
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def get_docs_by_reestr_number(self, _reestr_number):
+            return DocsArchiveResult(
+                request_id="req-004",
+                ref_id=None,
+                archive_url=None,
+                status="no_archive_url",
+                warnings=[],
+                safe_diagnostic={},
+            )
+
+        def probe_xsd(self):
+            return {"status": "ok"}
+
+    monkeypatch.setattr(module, "ZakupkiSoapClient", FakeClient)
+    monkeypatch.setattr(module, "_run_route_check", lambda _settings: {"dns_status": "ok", "tcp_status": "ok", "tls_status": "ok", "http_get_status": "ok"})
+    payload = run_diagnostics(settings=_settings(), reestr_number="0888200000224000038", route_check=True)
+
+    assert payload["route_check"]["dns_status"] == "ok"
+    assert payload["route_check"]["tls_status"] == "ok"
