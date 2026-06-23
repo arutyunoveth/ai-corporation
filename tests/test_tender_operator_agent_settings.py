@@ -47,3 +47,22 @@ def test_token_is_not_in_repr_or_safe_status():
 
     assert "secret-token-value" not in repr(settings)
     assert "secret-token-value" not in str(settings.safe_status())
+
+
+def test_custom_actions_and_debug_flags_are_read_from_env(monkeypatch):
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ENABLED", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TOKEN", "test-token-value-not-real")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION", "urn:Search")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION", "urn:Details")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ATTACHMENTS_ACTION", "urn:Attachments")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_DEBUG", "1")
+    clear_zakupki_soap_settings_cache()
+
+    settings = get_zakupki_soap_settings()
+
+    assert settings.search_action == "urn:Search"
+    assert settings.details_action == "urn:Details"
+    assert settings.attachments_action == "urn:Attachments"
+    assert settings.trust_env_proxy is True
+    assert settings.debug is True

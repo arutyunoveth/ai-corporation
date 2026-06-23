@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener, urlopen
 from xml.etree import ElementTree as ET
 
 from src.modules.tender_operator_agent_demo.procurement_schemas import (
@@ -36,20 +37,20 @@ class ZakupkiSoapClient:
         if not self.is_configured():
             return []
         envelope = build_search_envelope(request, self.settings.token)
-        xml = self._post_soap(envelope, soap_action="searchProcurements")
+        xml = self._post_soap(envelope, soap_action=self.settings.search_action)
         return parse_search_response(xml)[: self.settings.max_results]
 
     def get_procurement_details(self, procurement_id: str) -> ProcurementDetails:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для получения карточки закупки.")
         envelope = build_details_envelope(procurement_id, self.settings.token)
-        return parse_details_response(self._post_soap(envelope, soap_action="getProcurementDetails"))
+        return parse_details_response(self._post_soap(envelope, soap_action=self.settings.details_action))
 
     def list_attachments(self, procurement_id: str) -> list[ProcurementAttachment]:
         if not self.is_configured():
             return []
         envelope = build_attachments_envelope(procurement_id, self.settings.token)
-        return parse_attachments_response(self._post_soap(envelope, soap_action="listAttachments"))[
+        return parse_attachments_response(self._post_soap(envelope, soap_action=self.settings.attachments_action))[
             : self.settings.max_attachments
         ]
 
@@ -59,12 +60,17 @@ class ZakupkiSoapClient:
     def _post_soap(self, envelope: str, soap_action: str | None = None) -> str:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для SOAP-запросов.")
+        self._write_debug_artifact("last_request.xml", _sanitize_xml(envelope, self.settings.token))
         try:
             if self._transport is not None:
-                return self._transport(envelope, soap_action, self.settings.timeout_seconds)
-            return self._default_transport(envelope, soap_action)
+                xml = self._transport(envelope, soap_action, self.settings.timeout_seconds)
+            else:
+                xml = self._default_transport(envelope, soap_action)
+            self._write_debug_artifact("last_response.xml", _sanitize_xml(xml, self.settings.token))
+            return xml
         except Exception as exc:  # noqa: BLE001
             message = _sanitize_error(str(exc), self.settings.token)
+            self._write_debug_artifact("last_error.txt", message)
             raise RuntimeError(f"SOAP-запрос к ЕИС завершился ошибкой: {message}") from None
 
     def _default_transport(self, envelope: str, soap_action: str | None) -> str:
@@ -81,12 +87,24 @@ class ZakupkiSoapClient:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=self.settings.timeout_seconds) as response:
+            if self.settings.trust_env_proxy:
+                response = urlopen(request, timeout=self.settings.timeout_seconds)
+            else:
+                opener = build_opener(ProxyHandler({}))
+                response = opener.open(request, timeout=self.settings.timeout_seconds)
+            with response:
                 return response.read().decode("utf-8", errors="replace")
         except HTTPError as exc:
             raise RuntimeError(f"HTTP {exc.code}") from exc
         except URLError as exc:
             raise RuntimeError(str(exc.reason)) from exc
+
+    def _write_debug_artifact(self, name: str, content: str) -> None:
+        if not self.settings.debug:
+            return
+        target_dir = Path(os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", "company_agent_runs/zakupki_soap_live_diagnostics"))
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / name).write_text(content, encoding="utf-8")
 
 
 def parse_search_response(xml: str) -> list[ProcurementSearchResult]:
@@ -193,6 +211,12 @@ def _sanitize_error(message: str, token: str) -> str:
     if token:
         message = message.replace(token, "[redacted]")
     return message
+
+
+def _sanitize_xml(xml: str, token: str) -> str:
+    if token:
+        xml = xml.replace(token, "[redacted]")
+    return xml
 
 
 def _local_name(tag: str) -> str:

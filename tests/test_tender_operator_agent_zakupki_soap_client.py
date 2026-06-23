@@ -102,6 +102,46 @@ def test_soap_transport_uses_timeout_and_mocked_response():
     assert calls[0][2] == 7
 
 
+def test_soap_actions_can_be_configured():
+    calls = []
+
+    def transport(_envelope: str, soap_action: str | None, _timeout: int) -> str:
+        calls.append(soap_action)
+        return _fixture("search_response.xml")
+
+    settings = ZakupkiSoapSettings(
+        enabled=True,
+        token="test-token-value-not-real",
+        search_action="urn:custom-search",
+        details_action="urn:custom-details",
+        attachments_action="urn:custom-attachments",
+    )
+    client = ZakupkiSoapClient(settings, transport=transport)
+    client.search_procurements(ProcurementSearchRequest(query="кабель"))
+
+    assert calls == ["urn:custom-search"]
+
+
+def test_debug_artifacts_are_sanitized(tmp_path, monkeypatch):
+    diagnostics_dir = tmp_path / "soap_diagnostics"
+    monkeypatch.setenv("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", str(diagnostics_dir))
+    secret = "secret-token-value"
+    settings = ZakupkiSoapSettings(enabled=True, token=secret, debug=True)
+
+    def transport(_envelope: str, _soap_action: str | None, _timeout: int) -> str:
+        return f"<response><token>{secret}</token></response>"
+
+    client = ZakupkiSoapClient(settings, transport=transport)
+    client.search_procurements(ProcurementSearchRequest(query="кабель"))
+
+    request_dump = (diagnostics_dir / "last_request.xml").read_text(encoding="utf-8")
+    response_dump = (diagnostics_dir / "last_response.xml").read_text(encoding="utf-8")
+    assert secret not in request_dump
+    assert secret not in response_dump
+    assert "[redacted]" in request_dump
+    assert "[redacted]" in response_dump
+
+
 def test_xml_with_dtd_is_rejected():
     payload = """<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>"""
 
