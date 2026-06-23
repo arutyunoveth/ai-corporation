@@ -257,6 +257,28 @@ class ProcurementRunResponse(APIModel):
     archive_source_path: str | None = None
 
 
+class SearchResultHandoffRequest(APIModel):
+    source: str = "public_44fz"
+    reestr_number: str
+    source_url: str | None = None
+    title: str | None = None
+    customer_name: str | None = None
+    download_archive: bool = True
+    analyze_after_download: bool = True
+
+
+class SearchResultHandoffResponse(APIModel):
+    run_id: str
+    status: str
+    archive_url_present: bool = False
+    archive_downloaded: bool = False
+    documents_extracted_count: int = Field(default=0, ge=0)
+    analysis_status: str | None = None
+    run_url: str | None = None
+    report_url: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ProcurementRunDetailsResponse(APIModel):
     run_id: str
     procurement: ProcurementSearchResult

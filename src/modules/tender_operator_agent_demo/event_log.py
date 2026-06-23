@@ -10,6 +10,11 @@ from typing import Any
 EVENTS_FILE = "events.jsonl"
 
 EVENT_STEP_BY_TYPE = {
+    "public_search_started": "Поиск закупки",
+    "public_search_completed": "Поиск закупки",
+    "public_search_manual_open_required": "Поиск закупки",
+    "search_result_selected": "Поиск закупки",
+    "search_result_handoff_to_getdocs": "Документация",
     "eis_getdocs_started": "Документация",
     "eis_archive_url_received": "Документация",
     "eis_archive_download_started": "Документация",

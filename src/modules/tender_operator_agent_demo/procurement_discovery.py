@@ -18,6 +18,13 @@ from src.modules.tender_operator_agent_demo.procurement_schemas import (
     ProcurementSourceStatus,
 )
 from src.modules.tender_operator_agent_demo.schemas import ProcurementSearchResponse, ProcurementSearchResult, PublicSearchUrlResponse
+from src.modules.tender_operator_agent_demo.public_44fz_parser import (
+    Public44FzSearchStatus,
+    classify_public_search_response,
+    fetch_public_44fz_search_page,
+    parse_44fz_search_results,
+)
+from src.modules.tender_operator_agent_demo.public_44fz_search import build_44fz_search_url
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
 
@@ -275,6 +282,56 @@ def search_procurements(
         sources=descriptors,
         warnings=[],
     )
+
+
+def search_public_44fz(
+    query: str,
+    region: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    price_from: float | None = None,
+    price_to: float | None = None,
+    max_results: int = 10,
+) -> dict:
+    try:
+        url = build_44fz_search_url(
+            query=query,
+            region=region,
+            date_from=date_from,
+            date_to=date_to,
+            price_from=price_from,
+            price_to=price_to,
+            max_results=max_results,
+        )
+    except ValueError as exc:
+        return {
+            "status": "validation_error",
+            "cards": [],
+            "eis_search_url": None,
+            "error": str(exc),
+            "parser_status": Public44FzSearchStatus.MANUAL_OPEN_REQUIRED,
+        }
+
+    fetch_result = fetch_public_44fz_search_page(url)
+    parser_status = fetch_result.get("status", Public44FzSearchStatus.NETWORK_ERROR)
+
+    if parser_status != Public44FzSearchStatus.PARSED or not fetch_result.get("html"):
+        return {
+            "status": parser_status,
+            "cards": [],
+            "eis_search_url": url,
+            "error": fetch_result.get("error"),
+            "parser_status": parser_status,
+        }
+
+    cards = parse_44fz_search_results(fetch_result["html"])
+    return {
+        "status": Public44FzSearchStatus.PARSED if cards else Public44FzSearchStatus.UNSUPPORTED_LAYOUT,
+        "cards": cards[:max_results],
+        "eis_search_url": url,
+        "error": None,
+        "parser_status": Public44FzSearchStatus.PARSED if cards else Public44FzSearchStatus.UNSUPPORTED_LAYOUT,
+    }
 
 
 def build_public_search_url(

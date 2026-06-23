@@ -18,6 +18,7 @@ from src.modules.tender_operator_agent_demo.procurement_discovery import (
 )
 from src.modules.tender_operator_agent_demo.procurement_sources import get_procurement_source_descriptors
 from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult, ProcurementDetails
+from src.modules.tender_operator_agent_demo import schemas as tender_schemas
 from src.modules.tender_operator_agent_demo.schemas import (
     EisDocsArchiveRunRequest,
     ProcurementAttachmentManifestItem,
@@ -885,6 +886,37 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         ref_id=archive_result.ref_id,
         archive_source_host=archive_summary.get("host"),
         archive_source_path=archive_summary.get("path"),
+    )
+
+
+def create_run_from_search_result(
+    request: tender_schemas.SearchResultHandoffRequest,
+) -> tender_schemas.SearchResultHandoffResponse:
+    if not request.reestr_number or not request.reestr_number.strip():
+        raise HTTPException(status_code=400, detail="reestr_number обязателен для запуска getDocsIP.")
+    settings = get_zakupki_soap_settings()
+    if not settings.configured:
+        raise HTTPException(status_code=400, detail="Источник ЕИС не настроен: добавьте ZAKUPKI_GOV_RU_SOAP_TOKEN в .env.local")
+
+    eis_request = EisDocsArchiveRunRequest(
+        reestr_number=request.reestr_number.strip(),
+        law="44fz",
+        subsystem_type="PRIZ",
+        method="getDocsByReestrNumber",
+        download_archive=request.download_archive,
+        analyze_after_download=request.analyze_after_download,
+    )
+    result = create_run_from_eis_docs_archive(eis_request)
+    return tender_schemas.SearchResultHandoffResponse(
+        run_id=result.run_id,
+        status=result.status.value if hasattr(result.status, "value") else str(result.status),
+        archive_url_present=result.archive_url_present,
+        archive_downloaded=result.archive_downloaded,
+        documents_extracted_count=result.documents_extracted_count,
+        analysis_status=result.analysis_status,
+        run_url=result.run_url,
+        report_url=result.report_url,
+        warnings=result.warnings,
     )
 
 

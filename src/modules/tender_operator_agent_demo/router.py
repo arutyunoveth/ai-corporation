@@ -8,6 +8,8 @@ from src.modules.tender_operator_agent_demo.schemas import (
     ProcurementRunResponse,
     ProcurementSearchResponse,
     PublicSearchUrlResponse,
+    SearchResultHandoffRequest,
+    SearchResultHandoffResponse,
     TenderOperatorDemoReportResponse,
     TenderOperatorDemoRunResponse,
     TenderOperatorDemoStepsResponse,
@@ -23,10 +25,12 @@ from src.modules.tender_operator_agent_demo.procurement_discovery import (
     get_procurement_details,
     list_procurement_sources,
     search_procurements,
+    search_public_44fz,
 )
 from src.modules.tender_operator_agent_demo.procurement_intake_service import (
     create_run_from_eis_docs_archive,
     create_run_from_procurement,
+    create_run_from_search_result,
     get_procurement_for_run,
 )
 from src.modules.tender_operator_agent_demo.procurement_schemas import (
@@ -158,6 +162,27 @@ def get_tender_operator_public_search_url(
     return build_public_search_url(query=query, law=law, region=region, date_from=date_from, date_to=date_to)
 
 
+@router.post("/api/demo/tender-agent/procurement/public-44fz-search")
+def search_tender_operator_public_44fz(
+    query: str = "",
+    region: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    price_from: float | None = None,
+    price_to: float | None = None,
+    max_results: int = 10,
+):
+    return search_public_44fz(
+        query=query,
+        region=region,
+        date_from=date_from,
+        date_to=date_to,
+        price_from=price_from,
+        price_to=price_to,
+        max_results=max_results,
+    )
+
+
 @router.post("/api/demo/tender-agent/procurement/search", response_model=list[ProcurementSearchResultV2])
 def search_tender_operator_procurements_v2(payload: ProcurementSearchRequestV2) -> list[ProcurementSearchResultV2]:
     try:
@@ -192,6 +217,11 @@ def create_tender_operator_run_from_procurement(payload: ProcurementRunCreateReq
 @router.post("/api/demo/tender-agent/runs/from-eis-docs-archive", response_model=ProcurementRunResponse)
 def create_tender_operator_run_from_eis_docs_archive(payload: EisDocsArchiveRunRequest) -> ProcurementRunResponse:
     return create_run_from_eis_docs_archive(payload)
+
+
+@router.post("/api/demo/tender-agent/runs/from-search-result", response_model=SearchResultHandoffResponse)
+def create_tender_operator_run_from_search_result(payload: SearchResultHandoffRequest) -> SearchResultHandoffResponse:
+    return create_run_from_search_result(payload)
 
 
 @router.post("/api/demo/tender-agent/runs", response_model=TenderOperatorUploadedRunCreateResponse)
