@@ -46,3 +46,6 @@ tmp/partner_exports/
 tmp/hermes_*.json
 tmp/*_context.md
 tmp/*_context.json
+
+# Local proxy/PAC overrides and backups
+/local_config/

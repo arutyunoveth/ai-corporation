@@ -1,0 +1,38 @@
+MacBook PAC exception for EIS / zakupki.gov.ru
+
+Why:
+- The user's direct external IP is Russian.
+- The system PAC/proxy may otherwise route traffic through a European proxy.
+- EIS endpoints under zakupki.gov.ru should go DIRECT from this MacBook.
+
+PAC snippet:
+
+function FindProxyForURL(url, host) {
+if (
+dnsDomainIs(host, "zakupki.gov.ru") ||
+dnsDomainIs(host, ".zakupki.gov.ru") ||
+shExpMatch(host, "zakupki.gov.ru") ||
+shExpMatch(host, "*.zakupki.gov.ru")
+) {
+return "DIRECT";
+}
+
+// existing rules below
+}
+
+Where to insert:
+- At the top of `FindProxyForURL`, before the existing proxy-selection rules.
+
+How to verify on macOS:
+- `networksetup -getautoproxyurl "Wi-Fi"`
+- `networksetup -getproxybypassdomains "Wi-Fi"`
+
+Recommended supplemental bypass domains:
+- `networksetup -setproxybypassdomains "Wi-Fi" "*.zakupki.gov.ru" "zakupki.gov.ru" "int.zakupki.gov.ru" "int44.zakupki.gov.ru" "int44-ttls-cert.zakupki.gov.ru"`
+
+Restore note:
+- If the local patched PAC needs to be reverted, restore the previous Auto Proxy URL from the saved backup metadata under `local_config/proxy/*.url`.
+
+Warning:
+- `DIRECT` is correct here only because the user's direct external IP is Russian.
+- If the direct route later stops being Russian, this rule may no longer be correct.
