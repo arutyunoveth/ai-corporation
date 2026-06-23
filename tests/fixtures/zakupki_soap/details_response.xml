@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <getProcurementDetailsResponse>
+      <procurement>
+        <procurementId>eis-001</procurementId>
+        <noticeNumber>0373100000126000001</noticeNumber>
+        <registryNumber>0373100000126000001</registryNumber>
+        <title>Поставка электротехнического оборудования</title>
+        <customerName>Промышленный заказчик</customerName>
+        <customerInn>7700000000</customerInn>
+        <law>44-ФЗ</law>
+        <sourceUrl>https://zakupki.gov.ru/epz/order/notice/ea44/view/common-info.html?regNumber=0373100000126000001</sourceUrl>
+        <publicationDate>2026-06-20</publicationDate>
+        <deadline>2026-07-01</deadline>
+        <initialPrice>12500000.00</initialPrice>
+        <currency>RUB</currency>
+        <status>Подача заявок</status>
+        <attachmentsCount>2</attachmentsCount>
+        <description>Синтетическая карточка закупки для тестов SOAP parser.</description>
+      </procurement>
+    </getProcurementDetailsResponse>
+  </soap:Body>
+</soap:Envelope>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <listAttachmentsResponse>
+      <attachments>
+        <attachment>
+          <attachmentId>att-001</attachmentId>
+          <name>technical_spec.txt</name>
+          <url>https://zakupki.gov.ru/documents/technical_spec.txt</url>
+          <contentType>text/plain</contentType>
+          <sizeBytes>1024</sizeBytes>
+        </attachment>
+        <attachment>
+          <attachmentId>att-002</attachmentId>
+          <name>contract_draft.pdf</name>
+          <url>https://zakupki.gov.ru/documents/contract_draft.pdf</url>
+          <contentType>application/pdf</contentType>
+          <sizeBytes>2048</sizeBytes>
+        </attachment>
+      </attachments>
+    </listAttachmentsResponse>
+  </soap:Body>
+</soap:Envelope>
