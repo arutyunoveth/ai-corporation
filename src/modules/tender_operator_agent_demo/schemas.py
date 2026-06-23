@@ -147,6 +147,11 @@ class TenderOperatorRunEvent(APIModel):
     event_type: str
     message: str
     details: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime | None = None
+    message_ru: str | None = None
+    step: str = "Система"
+    severity: str = Field(default="info", pattern="^(info|warning|error)$")
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProcurementSourceDescriptor(APIModel):
@@ -277,6 +282,10 @@ class TenderOperatorUploadedRunResponse(APIModel):
     procurement_id: str | None = None
     procurement_url: str | None = None
     procurement_query: str | None = None
+    procurement_notice_number: str | None = None
+    procurement_law: str | None = None
+    downloaded_files_count: int = Field(default=0, ge=0)
+    manual_upload_required: bool = False
     attachments_status: str | None = None
     steps: list[DemoStep] = Field(default_factory=list)
     final_recommendation: DemoFinalRecommendation | None = None

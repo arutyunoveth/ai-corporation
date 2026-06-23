@@ -16,6 +16,10 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from src.modules.tender_connectors.text_extraction import extract_text_from_attachment_bytes
+from src.modules.tender_operator_agent_demo.event_log import (
+    append_tender_demo_event,
+    load_tender_demo_events,
+)
 from src.modules.tender_operator_agent_demo.quote_normalizer import (
     SpreadsheetSource,
     build_economics_summary,
@@ -270,28 +274,11 @@ def save_demo_run_metadata(run_id: str, metadata: dict[str, Any]) -> None:
 
 
 def append_demo_run_event(run_id: str, event_type: str, message: str, details: dict[str, Any] | None = None) -> None:
-    payload = {
-        "created_at": _safe_datetime(),
-        "event_type": event_type,
-        "message": message,
-        "details": details or {},
-    }
-    path = _events_path(run_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    append_tender_demo_event(run_id, event_type, message, details or {})
 
 
 def load_demo_run_events(run_id: str) -> list[TenderOperatorRunEvent]:
-    path = _events_path(run_id)
-    if not path.is_file():
-        return []
-    events: list[TenderOperatorRunEvent] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        events.append(TenderOperatorRunEvent.model_validate(json.loads(line)))
-    return events
+    return [TenderOperatorRunEvent.model_validate(item) for item in load_tender_demo_events(run_id)]
 
 
 def _sanitize_percent(value: float | None, *, default: float, field_name: str) -> float:
@@ -475,6 +462,8 @@ def append_files_to_demo_run(
         metadata["status"] = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE.value
     if metadata.get("attachments_status") in {"manual_upload_required", "unavailable_in_demo", "source_requires_authorization"}:
         metadata["attachments_status"] = "manual_upload_received"
+    metadata["downloaded_files_count"] = len(existing_files)
+    metadata["manual_upload_required"] = False
     save_demo_run_metadata(run_id, metadata)
     append_demo_run_event(
         run_id,
@@ -1430,12 +1419,29 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
     economics = outputs["economics"]
     procurement_block = ""
     if metadata.get("procurement_source"):
+        procurement = metadata.get("procurement", {})
+        documentation = procurement.get("attachment_names") or [item.get("display_name", "") for item in metadata.get("files", [])]
+        documentation_block = "\n".join(f"- {item}" for item in documentation) or "- Документация не получена."
+        blocked_note = (
+            "\nДокументация не получена. Анализ невозможен до ручной загрузки файлов.\n"
+            if metadata.get("attachments_status") == "manual_upload_required" or not metadata.get("files")
+            else ""
+        )
         procurement_block = (
-            "## Поиск закупки и intake\n"
+            "## Источник закупки\n"
             f"- Источник: {metadata.get('procurement_source')}\n"
-            f"- ID закупки: {metadata.get('procurement_id')}\n"
-            f"- URL карточки: {metadata.get('procurement_url')}\n"
-            f"- Статус документации: {metadata.get('attachments_status')}\n\n"
+            f"- Номер извещения: {metadata.get('notice_number') or metadata.get('procurement_id')}\n"
+            f"- Заказчик: {metadata.get('customer_name')}\n"
+            f"- Закон: {metadata.get('law') or procurement.get('category') or 'не указан'}\n"
+            f"- НМЦК: {procurement.get('initial_price') or 'не указана'} {procurement.get('currency') or ''}\n"
+            f"- Срок подачи: {metadata.get('deadline') or 'не указан'}\n"
+            f"- Ссылка на источник: {metadata.get('procurement_url')}\n"
+            f"- Статус скачивания: {metadata.get('attachments_status')}\n"
+            f"- Ручная загрузка требовалась: {'да' if metadata.get('manual_upload_required') else 'нет'}\n"
+            f"- Скачано/добавлено файлов: {metadata.get('downloaded_files_count', len(metadata.get('files', [])))}\n\n"
+            "### Документация\n"
+            f"{documentation_block}\n"
+            f"{blocked_note}\n"
         )
     return (
         "# Отчёт по загруженному прогону тендерного агента\n\n"
@@ -1491,6 +1497,13 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
     trace = outputs["trace"]
     files = metadata.get("files", [])
     procurement = metadata.get("procurement", {})
+    procurement_documentation = procurement.get("attachment_names") or [item.get("display_name", "") for item in files]
+    procurement_manual_required = bool(metadata.get("manual_upload_required") or metadata.get("attachments_status") == "manual_upload_required" or not files)
+    procurement_blocked_note = (
+        "<p class=\"muted\">Документация не получена. Анализ невозможен до ручной загрузки файлов.</p>"
+        if procurement_manual_required and not files
+        else ""
+    )
 
     return f"""
     <html lang="ru">
@@ -1558,15 +1571,24 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           {(
               f'''
           <div class="card">
-            <h2>Поиск закупки и intake</h2>
+            <h2>Источник закупки</h2>
             <table>
               <tr><th>Поле</th><th>Значение</th></tr>
               <tr><td>Источник</td><td>{html.escape(str(metadata.get("procurement_source") or ""))}</td></tr>
-              <tr><td>ID закупки</td><td>{html.escape(str(metadata.get("procurement_id") or ""))}</td></tr>
-              <tr><td>URL карточки</td><td>{html.escape(str(metadata.get("procurement_url") or ""))}</td></tr>
-              <tr><td>Статус документации</td><td>{html.escape(str(metadata.get("attachments_status") or ""))}</td></tr>
+              <tr><td>Номер извещения</td><td>{html.escape(str(metadata.get("notice_number") or metadata.get("procurement_id") or ""))}</td></tr>
+              <tr><td>Заказчик</td><td>{html.escape(str(metadata.get("customer_name") or ""))}</td></tr>
+              <tr><td>Закон</td><td>{html.escape(str(metadata.get("law") or procurement.get("category") or "не указан"))}</td></tr>
+              <tr><td>НМЦК</td><td>{html.escape(str(procurement.get("initial_price") or "не указана"))} {html.escape(str(procurement.get("currency") or ""))}</td></tr>
+              <tr><td>Срок подачи</td><td>{html.escape(str(metadata.get("deadline") or "не указан"))}</td></tr>
+              <tr><td>Ссылка на источник</td><td>{html.escape(str(metadata.get("procurement_url") or ""))}</td></tr>
+              <tr><td>Статус скачивания</td><td>{html.escape(str(metadata.get("attachments_status") or ""))}</td></tr>
+              <tr><td>Скачано/добавлено файлов</td><td>{html.escape(str(metadata.get("downloaded_files_count", len(files))))}</td></tr>
+              <tr><td>Ручная загрузка требовалась</td><td>{'да' if procurement_manual_required else 'нет'}</td></tr>
               <tr><td>Краткое описание</td><td>{html.escape(str(procurement.get("summary") or "—"))}</td></tr>
             </table>
+            <h3>Документация</h3>
+            <ul>{list_html([item for item in procurement_documentation if item]) or "<li>Документация не получена.</li>"}</ul>
+            {procurement_blocked_note}
           </div>
               '''
               if metadata.get("procurement_source")
@@ -1687,6 +1709,74 @@ def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, d
     }
     _write_json(output_dir / "report.json", report_json)
     _write_json(output_dir / "steps.json", {"steps": [item.model_dump(mode="json") for item in steps]})
+
+
+def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
+    procurement = metadata.get("procurement", {})
+    documentation = procurement.get("attachment_names") or [item.get("display_name", "") for item in metadata.get("files", [])]
+    documentation_html = "".join(f"<li>{html.escape(str(item))}</li>" for item in documentation) or "<li>Документация не получена.</li>"
+    return f"""
+    <html lang="ru">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Источник закупки: документация требуется</title>
+        <style>
+          body {{ margin:0; font-family: Arial, sans-serif; background:#001432; color:#fff; }}
+          .page {{ max-width:960px; margin:0 auto; padding:24px; }}
+          .card {{ background:rgba(255,255,255,.06); border:1px solid rgba(200,210,220,.16); border-radius:18px; padding:20px; margin-bottom:16px; }}
+          th, td {{ text-align:left; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.1); }}
+          table {{ width:100%; border-collapse:collapse; }}
+          th {{ color:#78FAE6; }}
+          .badge {{ display:inline-block; padding:8px 12px; border-radius:999px; background:rgba(0,200,160,.15); border:1px solid rgba(120,250,230,.25); margin-right:8px; }}
+          .warning {{ color:#78FAE6; font-weight:700; }}
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="card">
+            <span class="badge">Demo / pilot mode</span>
+            <span class="badge">Read-only</span>
+            <span class="badge">Human-in-the-loop</span>
+            <h1>{html.escape(str(metadata.get("tender_title") or "Закупка"))}</h1>
+            <p class="warning">Документация не получена. Анализ невозможен до ручной загрузки файлов.</p>
+          </div>
+          <div class="card">
+            <h2>Источник закупки</h2>
+            <table>
+              <tr><th>Поле</th><th>Значение</th></tr>
+              <tr><td>Источник</td><td>{html.escape(str(metadata.get("procurement_source") or ""))}</td></tr>
+              <tr><td>Номер извещения</td><td>{html.escape(str(metadata.get("notice_number") or metadata.get("procurement_id") or ""))}</td></tr>
+              <tr><td>Заказчик</td><td>{html.escape(str(metadata.get("customer_name") or ""))}</td></tr>
+              <tr><td>Закон</td><td>{html.escape(str(metadata.get("law") or procurement.get("category") or "не указан"))}</td></tr>
+              <tr><td>НМЦК</td><td>{html.escape(str(procurement.get("initial_price") or "не указана"))} {html.escape(str(procurement.get("currency") or ""))}</td></tr>
+              <tr><td>Срок подачи</td><td>{html.escape(str(metadata.get("deadline") or "не указан"))}</td></tr>
+              <tr><td>Ссылка на источник</td><td>{html.escape(str(metadata.get("procurement_url") or ""))}</td></tr>
+              <tr><td>Статус скачивания</td><td>{html.escape(str(metadata.get("attachments_status") or ""))}</td></tr>
+              <tr><td>Ручная загрузка требовалась</td><td>да</td></tr>
+            </table>
+          </div>
+          <div class="card">
+            <h2>Документация</h2>
+            <ul>{documentation_html}</ul>
+            <p>Следующее действие оператора: загрузить документы вручную и повторно запустить анализ.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+    """
+
+
+def _ensure_procurement_blocked_report_html(run_id: str) -> Path | None:
+    path = _report_html_path(run_id)
+    if path.is_file():
+        return path
+    metadata = _load_metadata(run_id)
+    if metadata.get("mode") != "procurement_search_intake" or metadata.get("files"):
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_render_procurement_blocked_report_html(metadata), encoding="utf-8")
+    return path
 
 
 def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeResponse:
@@ -1924,6 +2014,9 @@ def get_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunResponse:
         quote_comparison = _coerce_quote_comparison_payload(_read_json(quote_path))
     if economics_path.is_file():
         economics_summary = _coerce_economics_summary_payload(_read_json(economics_path))
+    report_path = _report_html_path(run_id)
+    if not report_path.is_file():
+        report_path = _ensure_procurement_blocked_report_html(run_id)
 
     return TenderOperatorUploadedRunResponse(
         run_id=metadata["run_id"],
@@ -1947,13 +2040,17 @@ def get_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunResponse:
         procurement_id=metadata.get("procurement_id"),
         procurement_url=metadata.get("procurement_url"),
         procurement_query=metadata.get("procurement_query"),
+        procurement_notice_number=metadata.get("notice_number"),
+        procurement_law=metadata.get("law"),
+        downloaded_files_count=metadata.get("downloaded_files_count", len(metadata.get("files", []))),
+        manual_upload_required=metadata.get("manual_upload_required", False),
         attachments_status=metadata.get("attachments_status"),
         steps=steps,
         final_recommendation=final_recommendation,
         quote_comparison=quote_comparison,
         economics_summary=economics_summary,
-        report_html_url=f"/demo/tender-agent/runs/{run_id}/report" if _report_html_path(run_id).is_file() else None,
-        report_download_url=f"/api/demo/tender-agent/runs/{run_id}/report/download" if _report_html_path(run_id).is_file() else None,
+        report_html_url=f"/demo/tender-agent/runs/{run_id}/report" if report_path and report_path.is_file() else None,
+        report_download_url=f"/api/demo/tender-agent/runs/{run_id}/report/download" if report_path and report_path.is_file() else None,
         uploaded_files_note="Используются только локальные данные. Абсолютные server-path намеренно скрыты из интерфейса.",
         events=load_demo_run_events(run_id),
     )
@@ -1986,14 +2083,14 @@ def get_uploaded_demo_report(run_id: str) -> TenderOperatorDemoReportResponse:
 
 
 def get_uploaded_demo_report_download(run_id: str) -> FileResponse:
-    path = _report_html_path(run_id)
+    path = _ensure_procurement_blocked_report_html(run_id) or _report_html_path(run_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Report HTML is not available yet")
     return FileResponse(path, media_type="text/html; charset=utf-8", filename=f"{run_id}_report.html")
 
 
 def get_uploaded_demo_report_html(run_id: str) -> str:
-    path = _report_html_path(run_id)
+    path = _ensure_procurement_blocked_report_html(run_id) or _report_html_path(run_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Report HTML is not available yet")
     return path.read_text(encoding="utf-8")

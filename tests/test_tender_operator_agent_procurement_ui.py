@@ -8,6 +8,8 @@ def test_procurement_search_tab_is_first(client):
     text = response.text
     assert text.index("Найти закупку") < text.index("Загрузить документы") < text.index("Демо-набор")
     assert "Поиск работает в безопасном read-only режиме" in text
+    assert "Источник закупки" in text
+    assert "Журнал работы агента" in text
 
 
 def test_procurement_sources_endpoint_returns_demo_and_zakupki_disabled_without_token(client, monkeypatch):

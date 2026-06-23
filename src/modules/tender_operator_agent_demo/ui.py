@@ -207,6 +207,34 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             font-size: 13px;
             margin-top: 4px;
           }}
+          .event-list {{
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 10px;
+          }}
+          .event-item {{
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.06);
+          }}
+          .event-head {{
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            color: rgba(255,255,255,0.58);
+            font-size: 12px;
+            margin-bottom: 6px;
+          }}
+          .event-severity {{
+            color: var(--mint-light);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+          }}
+          .event-severity.warning {{ color: var(--warning); }}
+          .event-severity.error {{ color: var(--danger); }}
           .step-card {{
             padding: 16px;
             border-radius: 18px;
@@ -1073,12 +1101,15 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const needsDocs = run.status === 'docs_required';
             const procurementBlock = run.procurement_source ? `
               <div class="card" style="padding:16px">
-                <div class="section-title">Поиск закупки и intake</div>
+                <div class="section-title">Источник закупки</div>
                 <div class="grid-2">
                   <div class="metric"><span class="metric-label">Источник</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_source))}}</span></div>
-                  <div class="metric"><span class="metric-label">ID закупки</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_id))}}</span></div>
-                  <div class="metric"><span class="metric-label">URL карточки</span><span class="metric-value"><a class="inline-link" href="${{escapeHtml(displayValue(run.procurement_url, '#'))}}" target="_blank" rel="noreferrer">Открыть источник</a></span></div>
+                  <div class="metric"><span class="metric-label">Номер извещения</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_notice_number || run.procurement_id))}}</span></div>
+                  <div class="metric"><span class="metric-label">Закон</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_law, 'не указан'))}}</span></div>
                   <div class="metric"><span class="metric-label">Статус документации</span><span class="metric-value">${{escapeHtml(attachmentsStatusLabel(run.attachments_status))}}</span></div>
+                  <div class="metric"><span class="metric-label">Скачано/добавлено файлов</span><span class="metric-value">${{run.downloaded_files_count || run.files.length}}</span></div>
+                  <div class="metric"><span class="metric-label">Ручная загрузка</span><span class="metric-value">${{booleanLabel(run.manual_upload_required)}}</span></div>
+                  <div class="metric"><span class="metric-label">Ссылка на источник</span><span class="metric-value"><a class="inline-link" href="${{escapeHtml(displayValue(run.procurement_url, '#'))}}" target="_blank" rel="noreferrer">Открыть источник</a></span></div>
                 </div>
               </div>
             ` : '';
@@ -1098,7 +1129,13 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               </div>
             ` : '';
             const eventItems = (run.events || []).map((item) => `
-              <li>${{escapeHtml(item.created_at)}} · <strong>${{escapeHtml(item.event_type)}}</strong> · ${{escapeHtml(item.message)}}</li>
+              <li class="event-item">
+                <div class="event-head">
+                  <span>${{escapeHtml(item.timestamp || item.created_at)}} · ${{escapeHtml(item.step || 'Система')}}</span>
+                  <span class="event-severity ${{escapeHtml(item.severity || 'info')}}">${{escapeHtml(item.severity || 'info')}}</span>
+                </div>
+                <div><strong>${{escapeHtml(item.event_type)}}</strong> · ${{escapeHtml(item.message_ru || item.message)}}</div>
+              </li>
             `).join('');
             document.getElementById('selected-run-card').innerHTML = `
               <div class="step-top">
@@ -1145,8 +1182,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div class="note" style="margin-top:12px">${{escapeHtml(run.uploaded_files_note || '')}}</div>
               <div style="height:14px"></div>
               <div class="card" style="padding:16px">
-                <div class="section-title">Лента событий</div>
-                <ul>${{eventItems || '<li>Событий пока нет.</li>'}}</ul>
+                <div class="section-title">Журнал работы агента</div>
+                <ul class="event-list">${{eventItems || '<li class="event-item">Событий пока нет.</li>'}}</ul>
               </div>
               <div style="height:14px"></div>
               ${{renderQuoteSection(run)}}

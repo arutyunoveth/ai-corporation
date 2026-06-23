@@ -168,6 +168,23 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
         "Оператор выбрал закупку из результатов поиска.",
         {"procurement_id": selected.procurement_id, "title": selected.title},
     )
+    append_demo_run_event(
+        run_id,
+        "procurement_details_loaded",
+        "Детали выбранной закупки загружены в локальный demo-run.",
+        {
+            "procurement_id": selected.procurement_id,
+            "notice_number": selected.procurement_number,
+            "source_url": selected.source_url,
+        },
+    )
+    attachments_expected = len(demo_procurement.attachments) if demo_procurement else len(details.attachments if details else [])
+    append_demo_run_event(
+        run_id,
+        "attachments_list_loaded",
+        "Список документации закупки получен для безопасного intake.",
+        {"attachments_expected": attachments_expected, "attachments_status": selected.attachments_status},
+    )
 
     files: list[dict[str, Any]] = []
     manifest: list[ProcurementAttachmentManifestItem] = []

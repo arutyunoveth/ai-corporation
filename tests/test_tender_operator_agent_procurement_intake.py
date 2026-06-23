@@ -47,6 +47,10 @@ def test_create_run_from_demo_procurement_with_attachments_and_analyze(client, m
     assert procurement_payload["procurement"]["procurement_id"] == "DEMO-PR-001"
     assert procurement_payload["attachments"]
     assert any(event["event_type"] == "run_created_from_procurement" for event in procurement_payload["events"])
+    assert all("timestamp" in event for event in procurement_payload["events"])
+    assert all("message_ru" in event for event in procurement_payload["events"])
+    assert all("step" in event for event in procurement_payload["events"])
+    assert all(event["severity"] in {"info", "warning", "error"} for event in procurement_payload["events"])
 
     analyze = client.post(f"/api/demo/tender-agent/runs/{payload['run_id']}/analyze")
     assert analyze.status_code == 200
@@ -61,7 +65,8 @@ def test_create_run_from_demo_procurement_with_attachments_and_analyze(client, m
 
     report_page = client.get(f"/demo/tender-agent/runs/{payload['run_id']}/report")
     assert report_page.status_code == 200
-    assert "Поиск закупки и intake" in report_page.text
+    assert "Источник закупки" in report_page.text
+    assert "Номер извещения" in report_page.text
 
 
 def test_create_run_from_procurement_without_attachments_becomes_docs_required(client, monkeypatch, tmp_path):
@@ -85,6 +90,12 @@ def test_create_run_from_procurement_without_attachments_becomes_docs_required(c
 
     analyze = client.post(f"/api/demo/tender-agent/runs/{payload['run_id']}/analyze")
     assert analyze.status_code == 409
+    assert "Документация ещё не загружена" in analyze.json()["detail"]
+
+    report_page = client.get(f"/demo/tender-agent/runs/{payload['run_id']}/report")
+    assert report_page.status_code == 200
+    assert "Источник закупки" in report_page.text
+    assert "Документация не получена. Анализ невозможен до ручной загрузки файлов." in report_page.text
 
 
 def test_manual_upload_to_procurement_run_enables_analysis(client, monkeypatch, tmp_path):
@@ -132,7 +143,11 @@ def test_procurement_event_log_is_written(client, monkeypatch, tmp_path):
     assert events_path.exists()
     content = events_path.read_text(encoding="utf-8")
     assert "procurement_search_started" in content
+    assert "procurement_details_loaded" in content
+    assert "attachments_list_loaded" in content
     assert "run_created_from_procurement" in content
+    assert "message_ru" in content
+    assert "severity" in content
 
 
 def test_procurement_intake_does_not_write_soap_token(client, monkeypatch, tmp_path):
