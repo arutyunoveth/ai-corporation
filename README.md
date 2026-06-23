@@ -24,13 +24,13 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Tender Operator Pilot Runner Refinement (PP1R) is complete: RFQ-first workflow for tender/operator companies with calibrated contract risk, supplier questions, RFQ draft, TKP comparison/economics, and bid decision recommendation.
 - Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
 - A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
-- Full `pytest` currently passes: `852 passed, 1 warning`.
+- Full `pytest` currently passes: `880 passed, 1 skipped, 1 warning`.
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
 - A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.
 - A dedicated Tender Operator Agent demo page is available at `/demo/tender-agent` with three controlled modes: procurement search/intake, local Upload & Analyze, and a synthetic walkthrough.
-- Tender Operator Agent demo now includes offline-safe procurement discovery (`demo_local`), local document intake, XLSX supplier-quote normalization, quote comparison, event trace, and demo-mode economics estimation without external actions.
+- Tender Operator Agent demo now includes offline-safe procurement discovery (`demo_local`), optional read-only ЕИС SOAP source (`zakupki_gov_ru_soap`), local document intake, XLSX supplier-quote normalization, quote comparison, agent work journal, HTML report, and demo-mode economics estimation without external actions.
 - Controlled pilot scenario pack, operator workflow hardening, evidence ledger, sales materials, and dry-run harness are all present.
 - No broad autonomy is open.
 - No external execution is open.
@@ -61,6 +61,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
 - [docs/demo_tender_operator_agent.md](docs/demo_tender_operator_agent.md)
 - [docs/product/tender_app_reuse_audit.md](docs/product/tender_app_reuse_audit.md)
+- [docs/product/zakupki_soap_integration.md](docs/product/zakupki_soap_integration.md)
 - [docs/product/templates/](docs/product/templates/) — pilot templates directory
 
 ## Reconciliation Docs
@@ -505,24 +506,48 @@ export AI_CORP_DATABASE_URL=postgresql+psycopg://ai_corporation:ai_corporation@l
 alembic upgrade head
 ```
 
-5. Run the API:
+5. Optional: enable read-only ЕИС SOAP search locally before starting the backend.
+
+Create `.env.local` yourself and do not commit it:
 
 ```bash
-uvicorn src.main:app --reload
+cat > .env.local <<'EOF'
+ZAKUPKI_GOV_RU_SOAP_ENABLED=1
+ZAKUPKI_GOV_RU_SOAP_TOKEN=ВСТАВИТЬ_ТОКЕН_СЮДА
+ZAKUPKI_GOV_RU_SOAP_BASE_URL=https://int44.zakupki.gov.ru/eis-integration/services-vbs
+ZAKUPKI_GOV_RU_SOAP_TIMEOUT_SECONDS=30
+ZAKUPKI_GOV_RU_SOAP_MAX_RESULTS=10
+ZAKUPKI_GOV_RU_SOAP_MAX_ATTACHMENTS=20
+ZAKUPKI_GOV_RU_SOAP_MAX_DOWNLOAD_MB=200
+EOF
+
+set -a
+source .env.local
+set +a
 ```
 
-6. Open the Tender Operator Agent demo:
+If the actual WSDL/endpoint differs, change only `ZAKUPKI_GOV_RU_SOAP_BASE_URL`.
+
+6. Run the API:
+
+```bash
+./.venv/bin/python -m uvicorn src.main:app --host 127.0.0.1 --port 8000
+```
+
+7. Open the Tender Operator Agent demo:
 
 ```text
-http://localhost:8000/demo/tender-agent
+http://127.0.0.1:8000/demo/tender-agent
 ```
 
-7. Use the first tab `Найти закупку` for offline-safe procurement discovery, the second tab `Загрузка и анализ` for local document uploads, and the third tab for the synthetic walkthrough. Demo runs are stored locally under `company_agent_runs/tender_operator_demo/` and do not trigger external actions.
+8. Use the first tab `Найти закупку` for `demo_local` or configured `zakupki_gov_ru_soap`, the second tab `Загрузка и анализ` for local document uploads, and the third tab for the synthetic walkthrough. Demo runs are stored locally under `company_agent_runs/tender_operator_demo/` and do not trigger external actions.
+
+Safety constraints: no login, no captcha bypass, no platform submission, no EDS/digital signature, no supplier email automation, and human-in-the-loop remains mandatory.
 
 ## Tests
 
 ```bash
-pytest
+./.venv/bin/python -m pytest -q
 ```
 
 ## Implemented Endpoints

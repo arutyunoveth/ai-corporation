@@ -83,4 +83,6 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [Tender_Operator_Pilot_Runbook.md](Tender_Operator_Pilot_Runbook.md)
 - [Calibrated_Contract_Risk_Method.md](Calibrated_Contract_Risk_Method.md)
 - [Tender_Operator_RFQ_Workflow.md](Tender_Operator_RFQ_Workflow.md)
+- [tender_app_reuse_audit.md](tender_app_reuse_audit.md)
+- [zakupki_soap_integration.md](zakupki_soap_integration.md)
 - [templates/](templates/) — pilot templates directory

@@ -1,137 +1,132 @@
 # Tender-app Reuse Audit
 
-## Контекст
+## Где искали
 
-В задаче был указан путь:
+Заданный путь `/Users/master/tender-app` на этой машине не содержит проект.
 
-`/Users/master/tender-app`
+Проверенные альтернативы:
 
-Фактически локальный черновик старого проекта найден по пути:
+- `/Users/master/Documents/tender-app` — проект не найден.
+- `/Users/master/Projects/tender-app` — проект не найден.
+- `/Users/master/Documents/Opencode/tender-app` — фактический локальный черновик найден.
 
-`/Users/master/Documents/Opencode/tender-app`
-
-Аудит выполнялся по этому фактическому пути.
+Аудит ниже относится к `/Users/master/Documents/Opencode/tender-app`.
 
 ## Что найдено
 
-Старый `tender-app` — отдельный Python/FastAPI-проект уровня локального MVP.
+Старый `tender-app` — отдельный Python/FastAPI MVP для закупок малого объёма:
 
-Найдены:
+- CLI для demo/production сценариев;
+- dashboard;
+- SQLite/PostgreSQL контур;
+- коннекторы `mos_portal` и `eat`;
+- real-network режимы;
+- browser fallback через Playwright как опциональная зависимость;
+- Excel export;
+- правила каталога, matching/scoring, risk/economics logic;
+- install-скрипты для Mac mini.
 
-- `README.md` с demo и production сценариями;
-- `pyproject.toml` с зависимостями `fastapi`, `requests`, `openpyxl`, опционально `playwright`;
-- коннекторы для `mos_portal` и `eat`;
-- browser fallback logic;
-- публичные HTTP/API вызовы;
-- CLI и dashboard;
-- real-network и browser-oriented сценарии;
-- `.env` и сетевые настройки, которые нельзя переносить вслепую.
+## Стек
 
-## Что можно переиспользовать
+- Python `>=3.11`;
+- FastAPI / Uvicorn;
+- SQLAlchemy / Alembic;
+- Pydantic;
+- requests;
+- openpyxl;
+- python-dotenv;
+- Typer CLI;
+- APScheduler;
+- optional Playwright.
 
-Безопасно переиспользуемые идеи:
+## Функции поиска
 
-- read-only procurement discovery как отдельный слой перед document intake;
-- нормализацию procurement cards в единый компактный результат;
-- идею аккуратного отбора только релевантных закупочных документов;
-- идею manifest для вложений и причин, почему документ не был получен.
+В старом проекте есть read-only идеи, полезные как reference:
 
-Из конкретного кода полезны как reference-only:
+- `app/connectors/mos_portal/api_client.py` — попытки публичного API поиска закупок `zakupki.mos.ru`;
+- `app/connectors/eat/api_client.py` — аналогичный API-probing контур для `eat`;
+- нормализация карточек закупок в единый внутренний формат;
+- warnings/errors для неустойчивых публичных endpoint'ов;
+- `requests.Session`, User-Agent, таймауты, proxy routing.
 
-- `install/mos_portal_extract_attachments.py`
-  - показывает безопасный паттерн `requests.Session(trust_env=False)`;
-  - показывает фильтрацию имён файлов;
-  - показывает жёсткий allowlist-подход для документов.
-- `app/connectors/mos_portal/api_client.py`
-  - показывает, что в старом проекте был read-only public API probing контур.
-- `app/connectors/mos_portal/browser_fallback.py`
-  - полезен только как индикатор того, где начинаются зоны риска и нестабильности.
+## Функции скачивания документации
+
+Найден `install/mos_portal_extract_attachments.py`.
+
+Он показывает полезные паттерны:
+
+- получать список файлов по публичному идентификатору закупки;
+- фильтровать вложения по имени;
+- нормализовать имена файлов;
+- вести manifest и reasons;
+- не считать скачивание успешным, если получена HTML-страница вместо файла.
+
+Этот код не перенесён как есть, потому что он привязан к `zakupki.mos.ru`, real-network состоянию сайта и старой архитектуре.
+
+## Зависимости
+
+Потенциально переносимые идеи не требуют монолитного переноса зависимостей.
+
+В `ai-corporation` уже использованы существующие зависимости и стандартная библиотека:
+
+- FastAPI/Pydantic для API contracts;
+- `urllib` для безопасного read-only SOAP/attachment HTTP;
+- `xml.etree.ElementTree` с защитой от DTD/ENTITY;
+- текущий upload/analyze pipeline;
+- текущий XLSX parser на `openpyxl`.
+
+## Есть ли секреты/токены
+
+В старом проекте есть `.env`/production-related настройки и install/run scripts, поэтому его нельзя копировать целиком.
+
+В `ai-corporation` секреты не переносились. Токен ЕИС хранится только локально у пользователя в `.env.local` и не должен попадать в код, docs с реальным значением, README, тесты или git history.
+
+## Что переиспользовано
+
+Переиспользованы только архитектурные идеи:
+
+- read-only procurement discovery перед document intake;
+- единый нормализованный procurement result;
+- attachments manifest;
+- причины пропуска документов;
+- manual upload fallback;
+- downstream reuse существующего Upload & Analyze pipeline.
+
+Код старого проекта не импортирован монолитом.
 
 ## Что не перенесено
 
-Сознательно не переносились:
+Не перенесены:
 
-- browser fallback через Playwright;
-- авторизация и storage state;
-- cookies / логины;
-- real network pipeline;
-- semi-automatic price search;
+- browser fallback / Playwright;
+- авторизация, cookies, storage state;
+- production install scripts;
 - dashboard/auth infrastructure;
-- production/install scripts;
-- любые обходные или нестабильные scraping paths.
+- scheduler/monitoring;
+- semi-automatic price search;
+- real-network scraping paths;
+- `mos_portal`/`eat` коннекторы как активные источники.
 
-Причины:
+Причина: эти части требуют отдельного security/legal/product review и не соответствуют текущему controlled demo/pilot scope.
 
-- не соответствует ограничениям demo/pilot режима;
-- повышает риск ложных обещаний по автономии;
-- требует отдельного security и legal review;
-- плохо вписывается в текущий объём controlled internal console.
+## Почему выбран SOAP-коннектор
 
-## Какие источники там были
+Для текущего batch выбран `zakupki_gov_ru_soap`, потому что он лучше соответствует безопасному demo/pilot контуру:
 
-По структуре старого проекта подтверждены как минимум:
+- источник конфигурируется через env;
+- включается только при `ZAKUPKI_GOV_RU_SOAP_ENABLED=1` и наличии токена;
+- не требует логина в личный кабинет;
+- не использует cookies;
+- не обходит captcha;
+- не использует browser automation;
+- работает как read-only получение публичной информации и документации.
 
-- `mos_portal`
-- `eat`
+`demo_local` остаётся стабильным offline-safe источником по умолчанию.
 
-Также есть признаки реального сетевого режима, browser doctor и production сценариев, что выводит этот контур за рамки safe demo-by-default.
+## Риски и ограничения
 
-## Есть ли скачивание документации
-
-Да, в старом проекте найден скрипт:
-
-`install/mos_portal_extract_attachments.py`
-
-Он:
-
-- вызывает публичные `zakupki.mos.ru` endpoint'ы;
-- получает список файлов по `auctionId`;
-- скачивает вложения;
-- фильтрует документы по имени и извлекаемости текста;
-- пишет manifest/reasons/examples.
-
-Это полезно как reference для будущего audited read-only connector, но не было перенесено “как есть”.
-
-## Основные риски старого проекта
-
-- рядом присутствуют `.env` и production settings;
-- есть browser automation и real-network логика;
-- есть сценарии, завязанные на внешний сайт и его текущее состояние;
-- есть storage state / auth-related paths;
-- есть operational assumptions про российский IP и proxy/no_proxy.
-
-Поэтому прямой перенос старого проекта как модуля в `ai-corporation` признан нежелательным.
-
-## Что было перенесено в этот спринт
-
-В `ai-corporation` перенесён не монолит, а минимальный безопасный слой:
-
-- procurement discovery tab в `Tender Operator Agent Demo`;
-- offline-safe `demo_local` source;
-- procurement intake -> создание run;
-- procurement metadata storage;
-- attachments manifest;
-- events log;
-- честный manual upload fallback;
-- reuse существующего upload/analyze pipeline downstream.
-
-## Минимальный безопасный перенос
-
-Решение этого спринта:
-
-- `demo_local` включён по умолчанию;
-- `mos_portal_public_api` отражён только как `disabled / experimental` источник;
-- UI честно показывает, что real source пока не активирован;
-- внешний read-only connector отложен до отдельного сетевого и продуктового аудита.
-
-## Рекомендация
-
-Следующим шагом можно делать только один audited real source connector:
-
-- без логина;
-- без captcha bypass;
-- без browser automation;
-- с таймаутами;
-- с allowlist доменов;
-- с ограничением размера и количества файлов;
-- с обязательным fallback в `manual_upload_required`.
+- Реальные SOAP mappings могут потребовать уточнения после проверки фактических ответов ЕИС.
+- Live SOAP тесты не должны быть обязательными в CI и запускаются только вручную.
+- Скачивание вложений ограничено allowlist-форматами, доменами, размером и количеством файлов.
+- Если документация недоступна, run получает `docs_required`, а оператор вручную загружает документы.
+- Система не подаёт заявки, не подписывает документы, не отправляет email и не выполняет действия на площадках.
