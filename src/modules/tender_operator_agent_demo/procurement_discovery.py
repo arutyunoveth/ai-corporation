@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+from urllib.parse import urlparse
+
 from src.modules.tender_operator_agent_demo.procurement_sources import (
     DemoProcurementRecord,
     get_demo_local_procurements,
@@ -17,9 +22,32 @@ from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_set
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
 
 
+def _load_zakupki_live_diagnostics() -> dict[str, object]:
+    diagnostics_dir = Path(os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", "company_agent_runs/zakupki_soap_live_diagnostics"))
+    status_path = diagnostics_dir / "last_status.json"
+    if status_path.is_file():
+        try:
+            payload = json.loads(status_path.read_text(encoding="utf-8"))
+            return {
+                "endpoint_host": payload.get("endpoint_host", ""),
+                "endpoint_path": payload.get("endpoint_path", ""),
+                "last_status": payload.get("last_status", ""),
+                "last_error": payload.get("last_error", ""),
+                "soap_action": payload.get("soap_action", ""),
+            }
+        except Exception:
+            return {}
+    return {}
+
+
 def list_procurement_sources() -> list[ProcurementSourceStatus]:
     zakupki_settings = get_zakupki_soap_settings()
     zakupki_status = zakupki_settings.safe_status()
+    parsed = urlparse(zakupki_settings.base_url)
+    live_diagnostics = _load_zakupki_live_diagnostics()
+    configured_reason = None
+    if zakupki_settings.configured:
+        configured_reason = "ЕИС настроена: токен найден."
     return [
         ProcurementSourceStatus(
             source="demo_local",
@@ -34,8 +62,14 @@ def list_procurement_sources() -> list[ProcurementSourceStatus]:
             label="zakupki_gov_ru_soap",
             enabled=zakupki_settings.enabled,
             configured=zakupki_settings.configured,
-            reason=zakupki_status["reason"],
-            safe_diagnostics=zakupki_status,
+            reason=zakupki_status["reason"] or configured_reason,
+            safe_diagnostics={
+                **zakupki_status,
+                "token_present": zakupki_settings.token_configured,
+                "endpoint_host": parsed.hostname or "",
+                "endpoint_path": parsed.path or "/",
+                **live_diagnostics,
+            },
         ),
     ]
 

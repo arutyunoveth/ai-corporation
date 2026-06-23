@@ -8,6 +8,7 @@ def test_procurement_search_tab_is_first(client):
     text = response.text
     assert text.index("Найти закупку") < text.index("Загрузить документы") < text.index("Демо-набор")
     assert "Поиск работает в безопасном read-only режиме" in text
+    assert "Диагностика ЕИС" in text
     assert "Источник закупки" in text
     assert "Журнал работы агента" in text
 
@@ -35,6 +36,30 @@ def test_procurement_page_does_not_render_token(client, monkeypatch):
 
     assert response.status_code == 200
     assert "secret-token-value" not in response.text
+
+
+def test_procurement_sources_endpoint_returns_safe_live_diagnostics(client, monkeypatch, tmp_path):
+    diagnostics_dir = tmp_path / "soap_diagnostics"
+    diagnostics_dir.mkdir()
+    (diagnostics_dir / "last_status.json").write_text(
+        '{"configured": true, "token_present": true, "endpoint_host": "int44.zakupki.gov.ru", "endpoint_path": "/eis-integration/services-vbs", "last_status": "error", "last_error": "Connection reset by peer", "soap_action": "searchProcurements"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", str(diagnostics_dir))
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ENABLED", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TOKEN", "test-token-value-not-real")
+    clear_zakupki_soap_settings_cache()
+
+    response = client.get("/api/demo/tender-agent/procurement/sources")
+
+    assert response.status_code == 200
+    payload = {item["source"]: item for item in response.json()}
+    diagnostics = payload["zakupki_gov_ru_soap"]["safe_diagnostics"]
+    assert payload["zakupki_gov_ru_soap"]["configured"] is True
+    assert diagnostics["token_present"] is True
+    assert diagnostics["endpoint_host"] == "int44.zakupki.gov.ru"
+    assert diagnostics["endpoint_path"] == "/eis-integration/services-vbs"
+    assert diagnostics["last_error"] == "Connection reset by peer"
 
 
 def test_procurement_search_post_returns_demo_cards(client):

@@ -500,6 +500,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                       </form>
                     </div>
                     <div class="card">
+                      <h2>Диагностика ЕИС</h2>
+                      <div id="procurement-source-diagnostics" class="list">
+                        <div class="empty">Диагностика источника загрузится автоматически.</div>
+                      </div>
+                    </div>
+                    <div class="card">
                       <h2>Безопасный режим</h2>
                       <div class="safety">
                         <span>Read-only поиск</span>
@@ -887,6 +893,39 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             if (!state.procurementSources.some((source) => source.source === select.value && source.configured)) {{
               select.value = 'demo_local';
             }}
+            renderProcurementSourceDiagnostics(select.value);
+            select.addEventListener('change', () => renderProcurementSourceDiagnostics(select.value));
+          }}
+
+          function renderProcurementSourceDiagnostics(selectedSource) {{
+            const node = document.getElementById('procurement-source-diagnostics');
+            const source = state.procurementSources.find((item) => item.source === selectedSource) || state.procurementSources[0];
+            if (!source) {{
+              node.innerHTML = `<div class="empty">Источник ещё не загружен.</div>`;
+              return;
+            }}
+            const diagnostics = source.safe_diagnostics || {{}};
+            const lastStatus = diagnostics.last_status || (source.configured ? 'configured' : 'not_configured');
+            const tokenState = diagnostics.token_present ? 'токен найден' : 'токен не найден';
+            const statusLabel = source.configured ? 'ЕИС настроена: токен найден' : (source.reason || 'ЕИС не настроена');
+            node.innerHTML = `
+              <div class="list-item">
+                <strong>${{escapeHtml(source.label)}}</strong>
+                <div class="run-meta">${{escapeHtml(statusLabel)}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Статус подключения</strong>
+                <div class="run-meta">configured=${{source.configured ? 'true' : 'false'}} · ${{escapeHtml(tokenState)}} · last_status=${{escapeHtml(String(lastStatus))}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Endpoint</strong>
+                <div class="run-meta">${{escapeHtml(displayValue(diagnostics.endpoint_host, 'не определён'))}}${{escapeHtml(displayValue(diagnostics.endpoint_path, ''))}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Последняя диагностика</strong>
+                <div class="run-meta">${{escapeHtml(displayValue(diagnostics.last_error || source.reason, 'ошибок не зафиксировано'))}}</div>
+              </div>
+            `;
           }}
 
           function renderProcurementResults() {{
@@ -946,10 +985,13 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               }});
               state.procurementResults = response || [];
               renderProcurementResults();
-              setFlash('procurement-flash', `Найдено закупок: ${{state.procurementResults.length}}.`);
+              const selectedSource = payload.source || document.getElementById('procurement-source-select').value;
+              renderProcurementSourceDiagnostics(selectedSource);
+              setFlash('procurement-flash', `Поиск выполнен, найдено закупок: ${{state.procurementResults.length}}.`);
             }} catch (error) {{
               state.procurementResults = [];
               renderProcurementResults();
+              await loadProcurementSources();
               setFlash('procurement-flash', `Не удалось выполнить поиск: ${{error.message}}`, true);
             }}
           }}

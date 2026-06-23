@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener, urlopen
 from xml.etree import ElementTree as ET
@@ -68,10 +70,12 @@ class ZakupkiSoapClient:
             else:
                 xml = self._default_transport(envelope, soap_action)
             self._write_debug_artifact("last_response.xml", _sanitize_xml(xml, self.settings.token))
+            self._write_runtime_status(last_status="ok", soap_action=soap_action)
             return xml
         except Exception as exc:  # noqa: BLE001
             message = _sanitize_error(str(exc), self.settings.token)
             self._write_debug_artifact("last_error.txt", message)
+            self._write_runtime_status(last_status="error", last_error=message, soap_action=soap_action)
             raise RuntimeError(f"SOAP-запрос к ЕИС завершился ошибкой: {message}") from None
 
     def _default_transport(self, envelope: str, soap_action: str | None) -> str:
@@ -101,11 +105,26 @@ class ZakupkiSoapClient:
             raise RuntimeError(str(exc.reason)) from exc
 
     def _write_debug_artifact(self, name: str, content: str) -> None:
-        if not self.settings.debug:
+        if not self.settings.debug and name != "last_error.txt":
             return
-        target_dir = Path(os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", "company_agent_runs/zakupki_soap_live_diagnostics"))
+        target_dir = _diagnostics_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / name).write_text(content, encoding="utf-8")
+
+    def _write_runtime_status(self, *, last_status: str, soap_action: str | None, last_error: str | None = None) -> None:
+        parsed = urlparse(self.settings.base_url)
+        payload = {
+            "configured": self.settings.configured,
+            "token_present": self.settings.token_configured,
+            "endpoint_host": parsed.hostname or "",
+            "endpoint_path": parsed.path or "/",
+            "soap_action": soap_action or "",
+            "last_status": last_status,
+            "last_error": last_error or "",
+        }
+        target_dir = _diagnostics_dir()
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "last_status.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def parse_search_response(xml: str) -> list[ProcurementSearchResult]:
@@ -232,6 +251,10 @@ def _sanitize_xml(xml: str, token: str) -> str:
     if token:
         xml = xml.replace(token, "[redacted]")
     return xml
+
+
+def _diagnostics_dir() -> Path:
+    return Path(os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", "company_agent_runs/zakupki_soap_live_diagnostics"))
 
 
 def _local_name(tag: str) -> str:
