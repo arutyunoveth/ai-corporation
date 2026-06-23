@@ -47,9 +47,20 @@
 Поддерживаемые источники:
 
 - `demo_local` — основной offline-safe источник для стабильной демонстрации;
-- `zakupki_gov_ru_soap` — read-only SOAP источник ЕИС, включается только через локальные env variables и токен пользователя.
+- `public_eis_html_44fz` — публичный HTML fallback для 44-ФЗ;
+- `public_eis_html_223fz` — публичный HTML fallback для 223-ФЗ;
 
-### Режим 2: Загрузить документы
+### Режим 2: Получить документацию по номеру
+
+Отдельный intake-режим для токена физического лица.
+
+- поиск закупки и получение документации намеренно разделены;
+- `getDocsIP` не используется как keyword search;
+- оператор сначала находит закупку, затем вставляет реестровый номер;
+- если `archiveUrl` получен, архив документации скачивается в read-only режиме и safely обрабатывается локально;
+- если `archiveUrl` не получен, run честно переходит в `docs_required`.
+
+### Режим 3: Загрузить документы
 
 Controlled demo/pilot режим для локальной загрузки файлов закупки.
 
@@ -66,7 +77,7 @@ Controlled demo/pilot режим для локальной загрузки фа
 
 Если procurement run был создан без документации, в этом же operator console можно вручную добавить документы в уже созданный run.
 
-### Режим 3: Демо-данные
+### Режим 4: Демо-данные
 
 Synthetic walkthrough на стабильных JSON fixtures из:
 
@@ -89,9 +100,11 @@ Synthetic walkthrough на стабильных JSON fixtures из:
 
 - `GET /api/demo/tender-agent/procurements/search`
 - `GET /api/demo/tender-agent/procurement/sources`
+- `GET /api/demo/tender-agent/procurement/public-search-url`
 - `POST /api/demo/tender-agent/procurement/search`
 - `GET /api/demo/tender-agent/procurement/{source}/{procurement_id}`
 - `POST /api/demo/tender-agent/runs/from-procurement`
+- `POST /api/demo/tender-agent/runs/from-eis-docs-archive`
 - `GET /api/demo/tender-agent/runs/{run_id}/procurement`
 
 ### Upload & Analyze
@@ -109,7 +122,12 @@ Synthetic walkthrough на стабильных JSON fixtures из:
 
 ## Интеграция с ЕИС
 
-Источник `zakupki_gov_ru_soap` добавлен как controlled read-only connector.
+Для токена физического лица default-сценарий теперь такой:
+
+1. Поиск закупки через `demo_local` или public HTML fallback.
+2. Получение документации через `zakupki_gov_ru_getdocs_ip`.
+
+Legacy `services-vbs` сохранён только как experimental legal-entity mode и не используется как default для текущего пользователя.
 
 Он:
 
@@ -128,11 +146,13 @@ Synthetic walkthrough на стабильных JSON fixtures из:
 ```bash
 cat > .env.local <<'EOF'
 ZAKUPKI_GOV_RU_SOAP_ENABLED=1
+ZAKUPKI_GOV_RU_SOAP_TOKEN_OWNER=individual
 ZAKUPKI_GOV_RU_SOAP_TOKEN=ВСТАВИТЬ_ТОКЕН_СЮДА
-ZAKUPKI_GOV_RU_SOAP_BASE_URL=https://int44.zakupki.gov.ru/eis-integration/services-vbs
-ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION=searchProcurements
-ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION=getProcurementDetails
-ZAKUPKI_GOV_RU_SOAP_ATTACHMENTS_ACTION=listAttachments
+ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_BASE_URL=https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP
+ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_XSD_URL=https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd
+ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_NAMESPACE=http://zakupki.gov.ru/fz44/get-docs-ip/ws
+ZAKUPKI_GOV_RU_SOAP_TOKEN_HEADER_NAME=individualPerson_token
+ZAKUPKI_GOV_RU_SOAP_MODE=PROD
 ZAKUPKI_GOV_RU_SOAP_TIMEOUT_SECONDS=30
 ZAKUPKI_GOV_RU_SOAP_MAX_RESULTS=10
 ZAKUPKI_GOV_RU_SOAP_MAX_ATTACHMENTS=20
@@ -148,7 +168,7 @@ set +a
 
 `.env.local` не коммитить.
 
-Если фактический endpoint/WSDL отличается, меняется только `ZAKUPKI_GOV_RU_SOAP_BASE_URL`.
+Если фактический endpoint/WSDL отличается, меняется только env-конфигурация. Реальный токен нигде не печатается и не попадает в UI, events, report или diagnostics.
 
 Текущий live calibration делался локально на MacBook. Токен используется только из `.env.local`, а UI, events, report и diagnostics показывают только факт наличия токена, но не его значение.
 
@@ -161,12 +181,20 @@ set +a
 - у части закупок даёт demo attachments;
 - у части закупок честно помечает `manual_upload_required`, `unavailable_in_demo` или `source_requires_authorization`.
 
-`zakupki_gov_ru_soap`:
+`public_eis_html_44fz` / `public_eis_html_223fz`:
 
-- появляется в списке источников;
+- используются только как read-only fallback для поиска;
+- могут вернуть ссылку на публичную выдачу ЕИС;
+- не притворяются полноценным parser/search API.
+
+`zakupki_gov_ru_getdocs_ip`:
+
+- не является keyword search source;
 - показывает disabled/configuration reason, если env/token не настроены;
-- при включении выполняет read-only SOAP search/details/attachments flow;
+- при включении выполняет read-only SOAP getDocsIP flow по номеру закупки;
 - игнорирует системные proxy env по умолчанию, чтобы не зависеть от локальных `HTTP_PROXY` / `HTTPS_PROXY`, если это ломает доступ к ЕИС;
+- использует SOAP Header `individualPerson_token`;
+- при скачивании архива передаёт `individualPerson_token` уже в HTTP header;
 - создаёт procurement run через тот же downstream pipeline.
 
 Система явно показывает:
@@ -334,7 +362,7 @@ UI показывает блок `Журнал работы агента`. Live 
 
 Диагностика хранится локально в:
 
-`company_agent_runs/zakupki_soap_live_diagnostics/`
+`company_agent_runs/zakupki_soap_diagnostics/`
 
 Если карточка показывает ошибку transport/service layer, это не приводит к ложному "зелёному" статусу анализа. Оператор видит проблему сразу и может:
 
@@ -372,15 +400,16 @@ UI показывает блок `Журнал работы агента`. Live 
 
 1. Открываем `/demo/tender-agent`.
 2. Выбираем `Найти закупку`.
-3. Источник: `ЕИС zakupki.gov.ru SOAP` или offline-safe `demo_local`, если токен не настроен.
-   Перед поиском смотрим карточку `Диагностика ЕИС`: она сразу показывает, настроен ли локальный live-источник.
+3. Источник: `demo_local` или public HTML fallback.
+   Перед работой смотрим карточку `Диагностика ЕИС`: она сразу показывает, настроен ли локальный `getDocsIP`.
 4. Вводим запрос: `электротехническое оборудование`.
 5. Смотрим найденные закупки.
-6. Выбираем закупку.
-7. Создаём run.
-8. Если документы доступны — скачиваем/копируем в локальный `input/`.
-9. Если документы недоступны — показываем честный manual upload fallback.
-10. Запускаем анализ.
+6. Открываем найденную закупку или публичный HTML fallback и копируем реестровый номер.
+7. Переходим во вкладку `Получить документацию по номеру`.
+8. Запрашиваем архив документации через `getDocsIP`.
+9. Если архив доступен — safely получаем документы в локальный `input/`.
+10. Если архив недоступен — показываем честный manual upload fallback.
+11. Запускаем анализ.
 11. Показываем pipeline: поиск закупки → документация → требования → вопросы → RFQ → ТКП → экономика → риски → решение.
 12. Показываем `Журнал работы агента`.
 13. Открываем HTML report.
@@ -411,8 +440,12 @@ UI показывает блок `Журнал работы агента`. Live 
 ## Known limitations
 
 - SOAP-источник ЕИС не включён по умолчанию и требует локальный токен;
+- getDocsIP и public search intentionally разделены;
 - `demo_local` остаётся основным стабильным источником;
-- real SOAP mappings и service-path могут потребовать уточнения после проверки фактических ответов ЕИС;
+- public HTML fallback пока не делает полноценный parser выдачи;
+- 223-ФЗ требует отдельного parser path и не смешивается с 44-ФЗ getDocsIP;
+- XML order для `getDocsByReestrNumberRequest` критичен;
+- если `archiveUrl` не получен, система переходит в manual upload fallback;
 - `.xls` работает ограниченно;
 - сложные Excel layout’ы могут уходить в `partial` или `needs_review`;
 - live SSE feed пока не реализован;

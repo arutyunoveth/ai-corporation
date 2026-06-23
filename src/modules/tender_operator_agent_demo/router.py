@@ -2,10 +2,12 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 from src.modules.tender_operator_agent_demo.schemas import (
+    EisDocsArchiveRunRequest,
     ProcurementRunCreateRequest,
     ProcurementRunDetailsResponse,
     ProcurementRunResponse,
     ProcurementSearchResponse,
+    PublicSearchUrlResponse,
     TenderOperatorDemoReportResponse,
     TenderOperatorDemoRunResponse,
     TenderOperatorDemoStepsResponse,
@@ -16,11 +18,13 @@ from src.modules.tender_operator_agent_demo.schemas import (
     TenderOperatorUploadedRunStepsResponse,
 )
 from src.modules.tender_operator_agent_demo.procurement_discovery import (
+    build_public_search_url,
     get_procurement_details,
     list_procurement_sources,
     search_procurements,
 )
 from src.modules.tender_operator_agent_demo.procurement_intake_service import (
+    create_run_from_eis_docs_archive,
     create_run_from_procurement,
     get_procurement_for_run,
 )
@@ -141,6 +145,17 @@ def list_tender_operator_procurement_sources() -> list[ProcurementSourceStatus]:
     return list_procurement_sources()
 
 
+@router.get("/api/demo/tender-agent/procurement/public-search-url", response_model=PublicSearchUrlResponse)
+def get_tender_operator_public_search_url(
+    query: str,
+    law: str = "44fz",
+    region: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> PublicSearchUrlResponse:
+    return build_public_search_url(query=query, law=law, region=region, date_from=date_from, date_to=date_to)
+
+
 @router.post("/api/demo/tender-agent/procurement/search", response_model=list[ProcurementSearchResultV2])
 def search_tender_operator_procurements_v2(payload: ProcurementSearchRequestV2) -> list[ProcurementSearchResultV2]:
     try:
@@ -170,6 +185,11 @@ def get_tender_operator_procurement_details(source: str, procurement_id: str) ->
 @router.post("/api/demo/tender-agent/runs/from-procurement", response_model=ProcurementRunResponse)
 def create_tender_operator_run_from_procurement(payload: ProcurementRunCreateRequest) -> ProcurementRunResponse:
     return create_run_from_procurement(payload)
+
+
+@router.post("/api/demo/tender-agent/runs/from-eis-docs-archive", response_model=ProcurementRunResponse)
+def create_tender_operator_run_from_eis_docs_archive(payload: EisDocsArchiveRunRequest) -> ProcurementRunResponse:
+    return create_run_from_eis_docs_archive(payload)
 
 
 @router.post("/api/demo/tender-agent/runs", response_model=TenderOperatorUploadedRunCreateResponse)

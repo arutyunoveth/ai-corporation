@@ -421,6 +421,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             <div class="content">
               <div class="tabs">
                 <button class="tab-button active" data-tab="search" type="button">Найти закупку</button>
+                <button class="tab-button" data-tab="docs" type="button">Получить документацию по номеру</button>
                 <button class="tab-button" data-tab="upload" type="button">Загрузить документы</button>
                 <button class="tab-button" data-tab="dataset" type="button">Демо-набор</button>
               </div>
@@ -442,7 +443,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                             Источник
                             <select name="source" id="procurement-source-select">
                               <option value="demo_local">demo_local</option>
-                              <option value="zakupki_gov_ru_soap" disabled>zakupki_gov_ru_soap — источник ЕИС не настроен</option>
+                              <option value="public_eis_html_44fz">public_eis_html_44fz</option>
+                              <option value="public_eis_html_223fz">public_eis_html_223fz</option>
                             </select>
                           </label>
                           <label>
@@ -528,8 +530,65 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                     </div>
                     <div class="card">
                       <h2>Как это работает</h2>
-                      <p>После выбора закупки система создаёт локальный run, сохраняет procurement metadata, копирует публично доступные документы в безопасную рабочую директорию и переводит вас в уже существующий operator console для анализа.</p>
+                      <p>Поиск закупки и получение документации разделены. Сначала вы находите закупку через offline-safe `demo_local` или публичный HTML fallback, затем либо переходите к ручной загрузке, либо используете отдельный getDocsIP intake по реестровому номеру.</p>
                       <div class="trace" style="margin-top:14px">Если автоматическое получение документации недоступно, интерфейс не притворяется автономным: создаётся run со статусом «нужна загрузка документов», а оператор вручную добавляет пакет и только потом запускает анализ.</div>
+                    </div>
+                  </main>
+                </div>
+              </section>
+
+              <section id="tab-docs" class="hidden">
+                <div class="layout">
+                  <aside class="stack">
+                    <div class="card">
+                      <h2>Получить документацию по номеру</h2>
+                      <p>Токен выпущен как физическое лицо. Используется сервис getDocsIP для read-only получения публичной документации по номеру закупки.</p>
+                      <div id="eis-docs-flash" class="hidden"></div>
+                      <form id="eis-docs-form">
+                        <label>
+                          Реестровый номер / номер извещения
+                          <input name="reestr_number" required placeholder="Например: 0888200000224000038" />
+                        </label>
+                        <div class="split">
+                          <label>
+                            Закон
+                            <select name="law">
+                              <option value="44fz">44-ФЗ</option>
+                            </select>
+                          </label>
+                          <label>
+                            Подсистема
+                            <input name="subsystem_type" value="PRIZ" />
+                          </label>
+                        </div>
+                        <div class="form-actions">
+                          <button class="button primary" type="submit">Получить архив через ЕИС getDocsIP</button>
+                        </div>
+                      </form>
+                    </div>
+                    <div class="card">
+                      <h2>Диагностика getDocsIP</h2>
+                      <div id="eis-docs-diagnostics" class="list">
+                        <div class="empty">Диагностика getDocsIP загрузится автоматически.</div>
+                      </div>
+                    </div>
+                    <div class="card">
+                      <h2>Ограничения</h2>
+                      <div class="safety">
+                        <span>Токен физлица</span>
+                        <span>Read-only getDocsIP</span>
+                        <span>Без личного кабинета</span>
+                        <span>Без ЭЦП</span>
+                        <span>Без подачи заявки</span>
+                        <span>Без писем поставщикам</span>
+                      </div>
+                      <p style="margin-top:14px">Токен выпущен как физическое лицо. Используется сервис getDocsIP для read-only получения публичной документации по номеру закупки. Система не входит в личный кабинет, не подаёт заявки, не использует ЭЦП и не отправляет письма.</p>
+                    </div>
+                  </aside>
+                  <main class="stack">
+                    <div class="card">
+                      <h2>Сценарий работы</h2>
+                      <div class="trace">1. Найдите закупку через `demo_local` или публичный HTML fallback. 2. Скопируйте реестровый номер. 3. Запросите архив документации через getDocsIP. 4. Если archiveUrl получен, архив скачивается и safely обрабатывается локально. 5. Если archiveUrl не получен, интерфейс честно переводит вас в ручной upload fallback.</div>
                     </div>
                   </main>
                 </div>
@@ -871,6 +930,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 }}
                 const target = button.dataset.tab;
                 document.getElementById('tab-search').classList.toggle('hidden', target !== 'search');
+                document.getElementById('tab-docs').classList.toggle('hidden', target !== 'docs');
                 document.getElementById('tab-dataset').classList.toggle('hidden', target !== 'dataset');
                 document.getElementById('tab-upload').classList.toggle('hidden', target !== 'upload');
               }});
@@ -887,13 +947,14 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           async function loadProcurementSources() {{
             state.procurementSources = await fetchJson('/api/demo/tender-agent/procurement/sources');
             const select = document.getElementById('procurement-source-select');
-            select.innerHTML = state.procurementSources.map((source) => `
+            select.innerHTML = state.procurementSources.filter((source) => ['demo_local', 'public_eis_html_44fz', 'public_eis_html_223fz'].includes(source.source)).map((source) => `
               <option value="${{escapeHtml(source.source)}}"${{source.configured ? '' : ' disabled'}}>${{escapeHtml(source.label)}}${{source.configured ? '' : ` — ${{escapeHtml(source.reason || 'не настроен')}}`}}</option>
             `).join('');
             if (!state.procurementSources.some((source) => source.source === select.value && source.configured)) {{
               select.value = 'demo_local';
             }}
             renderProcurementSourceDiagnostics(select.value);
+            renderEisDocsDiagnostics();
             select.addEventListener('change', () => renderProcurementSourceDiagnostics(select.value));
           }}
 
@@ -924,6 +985,34 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div class="list-item">
                 <strong>Последняя диагностика</strong>
                 <div class="run-meta">${{escapeHtml(displayValue(diagnostics.last_error || source.reason, 'ошибок не зафиксировано'))}}</div>
+              </div>
+            `;
+          }}
+
+          function renderEisDocsDiagnostics() {{
+            const node = document.getElementById('eis-docs-diagnostics');
+            const source = state.procurementSources.find((item) => item.source === 'zakupki_gov_ru_getdocs_ip');
+            if (!source) {{
+              node.innerHTML = `<div class="empty">Источник getDocsIP ещё не загружен.</div>`;
+              return;
+            }}
+            const diagnostics = source.safe_diagnostics || {{}};
+            node.innerHTML = `
+              <div class="list-item">
+                <strong>${{escapeHtml(source.label)}}</strong>
+                <div class="run-meta">${{escapeHtml(source.reason || 'Источник загружен')}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Статус</strong>
+                <div class="run-meta">configured=${{source.configured ? 'true' : 'false'}} · token_owner=${{escapeHtml(displayValue(diagnostics.token_owner, 'unknown'))}} · token_present=${{diagnostics.token_present ? 'true' : 'false'}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Endpoint getDocsIP</strong>
+                <div class="run-meta">${{escapeHtml(displayValue(diagnostics.endpoint_host, 'не определён'))}}${{escapeHtml(displayValue(diagnostics.endpoint_path, ''))}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Последняя диагностика</strong>
+                <div class="run-meta">${{escapeHtml(displayValue(diagnostics.last_error || diagnostics.method_name || source.reason, 'ошибок не зафиксировано'))}}</div>
               </div>
             `;
           }}
@@ -978,6 +1067,29 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               }}
             }}
             try {{
+              if (String(payload.source || '').startsWith('public_eis_html_')) {{
+                const law = payload.source === 'public_eis_html_223fz' ? '223fz' : '44fz';
+                const searchUrlPayload = await fetchJson(`/api/demo/tender-agent/procurement/public-search-url?${{new URLSearchParams({{
+                  query: String(payload.query || ''),
+                  law,
+                  region: String(payload.region || ''),
+                  date_from: String(payload.date_from || ''),
+                  date_to: String(payload.date_to || ''),
+                }})}}`);
+                state.procurementResults = [];
+                document.getElementById('procurement-results').innerHTML = `
+                  <div class="run-item">
+                    <strong>Публичный HTML fallback</strong>
+                    <p style="margin-top:10px">${{escapeHtml(searchUrlPayload.note)}}</p>
+                    <div class="form-actions" style="margin-top:12px">
+                      <a class="link-button" href="${{searchUrlPayload.eis_search_url}}" target="_blank" rel="noreferrer">Открыть поиск ЕИС</a>
+                    </div>
+                  </div>
+                `;
+                renderProcurementSourceDiagnostics(payload.source);
+                setFlash('procurement-flash', 'Сформирована публичная ссылка поиска ЕИС. Выберите закупку вручную и затем используйте getDocsIP по номеру.');
+                return;
+              }}
               const response = await fetchJson('/api/demo/tender-agent/procurement/search', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
@@ -1013,6 +1125,31 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               }}
             }} catch (error) {{
               setFlash('procurement-flash', `Не удалось создать run: ${{error.message}}`, true);
+            }}
+          }}
+
+          async function handleEisDocsArchive(event) {{
+            event.preventDefault();
+            clearFlash('eis-docs-flash');
+            const form = event.currentTarget;
+            const payload = Object.fromEntries(new FormData(form).entries());
+            setFlash('eis-docs-flash', `Запрашиваем документацию по номеру ${{payload.reestr_number}} через getDocsIP…`);
+            try {{
+              const response = await fetchJson('/api/demo/tender-agent/runs/from-eis-docs-archive', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify(payload),
+              }});
+              await loadProcurementSources();
+              await loadRuns();
+              await selectRun(response.run_id, true);
+              if (response.status !== 'docs_required') {{
+                await analyzeRun(response.run_id);
+              }}
+              setFlash('eis-docs-flash', `Создан run ${{response.run_id}}. Статус документации: ${{attachmentsStatusLabel(response.attachments_status)}}.`);
+            }} catch (error) {{
+              await loadProcurementSources();
+              setFlash('eis-docs-flash', `Не удалось получить документацию: ${{error.message}}`, true);
             }}
           }}
 
@@ -1402,6 +1539,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           async function bootstrap() {{
             wireTabs();
             document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
+            document.getElementById('eis-docs-form').addEventListener('submit', handleEisDocsArchive);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);
             document.getElementById('upload-form').addEventListener('submit', handleUpload);
             await loadProcurementSources();

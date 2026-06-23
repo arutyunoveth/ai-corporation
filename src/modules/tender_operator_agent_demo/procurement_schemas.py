@@ -83,6 +83,26 @@ class ProcurementIntakeResult(APIModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class DocsArchiveResult(APIModel):
+    request_id: str
+    ref_id: str | None = None
+    archive_url: str | None = None
+    archive_size: int | None = Field(default=None, ge=0)
+    status: str
+    warnings: list[str] = Field(default_factory=list)
+    raw_summary: str | None = None
+    safe_diagnostic: dict[str, Any] = Field(default_factory=dict)
+
+
+class DownloadedAttachment(APIModel):
+    file_name: str
+    stored_name: str
+    size_bytes: int = Field(ge=0)
+    content_type: str | None = None
+    source_url_host: str | None = None
+    source_url_path: str | None = None
+
+
 class ProcurementEvent(APIModel):
     event_type: str
     timestamp: datetime

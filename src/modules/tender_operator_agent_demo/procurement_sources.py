@@ -60,11 +60,25 @@ def get_procurement_source_descriptors() -> list[ProcurementSourceDescriptor]:
             note="Офлайн-источник для стабильной демонстрации без сети.",
         ),
         ProcurementSourceDescriptor(
-            code="zakupki_gov_ru_soap",
-            label="zakupki_gov_ru_soap",
+            code="public_eis_html_44fz",
+            label="public_eis_html_44fz",
+            enabled=True,
+            read_only=True,
+            note="Публичный fallback: открыть поиск ЕИС по 44-ФЗ, выбрать закупку и вставить реестровый номер в getDocsIP.",
+        ),
+        ProcurementSourceDescriptor(
+            code="public_eis_html_223fz",
+            label="public_eis_html_223fz",
+            enabled=True,
+            read_only=True,
+            note="Публичный fallback: открыть поиск ЕИС по 223-ФЗ и продолжить работу вручную. Отдельный parser не включён в этом спринте.",
+        ),
+        ProcurementSourceDescriptor(
+            code="zakupki_gov_ru_getdocs_ip",
+            label="zakupki_gov_ru_getdocs_ip",
             enabled=bool(zakupki_status["configured"]),
             read_only=True,
-            note=zakupki_status["reason"] or "Источник ЕИС включён в безопасном read-only режиме.",
+            note=zakupki_status["reason"] or "Токен физлица найден. getDocsIP доступен для read-only получения документации по номеру закупки.",
         ),
     ]
 

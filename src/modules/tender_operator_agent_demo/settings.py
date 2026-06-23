@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 
 PLACEHOLDER_TOKENS = {
@@ -13,6 +13,15 @@ PLACEHOLDER_TOKENS = {
     "insert_token_here",
     "вставить_токен_сюда",
 }
+
+DEFAULT_LEGACY_BASE_URL = "https://int44.zakupki.gov.ru/eis-integration/services-vbs"
+DEFAULT_INDIVIDUAL_BASE_URL = "https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP"
+DEFAULT_INDIVIDUAL_XSD_URL = f"{DEFAULT_INDIVIDUAL_BASE_URL}?xsd=getDocsIP-ws-api.xsd"
+DEFAULT_INDIVIDUAL_NAMESPACE = "http://zakupki.gov.ru/fz44/get-docs-ip/ws"
+DEFAULT_TOKEN_HEADER_NAME = "individualPerson_token"
+DEFAULT_SOAP_MODE = "PROD"
+
+TokenOwner = Literal["individual", "legal_entity"]
 
 
 def _read_bool(name: str, default: bool = False) -> bool:
@@ -32,11 +41,24 @@ def _read_int(name: str, default: int, *, minimum: int = 1) -> int:
         return default
 
 
+def _read_token_owner() -> TokenOwner:
+    value = os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN_OWNER", "individual").strip().lower()
+    if value in {"legal", "legal_entity", "company", "organization"}:
+        return "legal_entity"
+    return "individual"
+
+
 @dataclass(frozen=True)
 class ZakupkiSoapSettings:
     enabled: bool = False
     token: str = field(default="", repr=False)
-    base_url: str = "https://int44.zakupki.gov.ru/eis-integration/services-vbs"
+    token_owner: TokenOwner = "individual"
+    base_url: str = DEFAULT_LEGACY_BASE_URL
+    individual_base_url: str = DEFAULT_INDIVIDUAL_BASE_URL
+    individual_xsd_url: str = DEFAULT_INDIVIDUAL_XSD_URL
+    individual_namespace: str = DEFAULT_INDIVIDUAL_NAMESPACE
+    token_header_name: str = DEFAULT_TOKEN_HEADER_NAME
+    mode: str = DEFAULT_SOAP_MODE
     search_action: str = "searchProcurements"
     details_action: str = "getProcurementDetails"
     attachments_action: str = "listAttachments"
@@ -52,11 +74,18 @@ class ZakupkiSoapSettings:
         return cls(
             enabled=_read_bool("ZAKUPKI_GOV_RU_SOAP_ENABLED", False),
             token=os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN", "").strip(),
-            base_url=os.environ.get(
-                "ZAKUPKI_GOV_RU_SOAP_BASE_URL",
-                "https://int44.zakupki.gov.ru/eis-integration/services-vbs",
-            ).strip()
-            or "https://int44.zakupki.gov.ru/eis-integration/services-vbs",
+            token_owner=_read_token_owner(),
+            base_url=os.environ.get("ZAKUPKI_GOV_RU_SOAP_BASE_URL", DEFAULT_LEGACY_BASE_URL).strip()
+            or DEFAULT_LEGACY_BASE_URL,
+            individual_base_url=os.environ.get("ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_BASE_URL", DEFAULT_INDIVIDUAL_BASE_URL).strip()
+            or DEFAULT_INDIVIDUAL_BASE_URL,
+            individual_xsd_url=os.environ.get("ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_XSD_URL", DEFAULT_INDIVIDUAL_XSD_URL).strip()
+            or DEFAULT_INDIVIDUAL_XSD_URL,
+            individual_namespace=os.environ.get("ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_NAMESPACE", DEFAULT_INDIVIDUAL_NAMESPACE).strip()
+            or DEFAULT_INDIVIDUAL_NAMESPACE,
+            token_header_name=os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN_HEADER_NAME", DEFAULT_TOKEN_HEADER_NAME).strip()
+            or DEFAULT_TOKEN_HEADER_NAME,
+            mode=os.environ.get("ZAKUPKI_GOV_RU_SOAP_MODE", DEFAULT_SOAP_MODE).strip() or DEFAULT_SOAP_MODE,
             search_action=os.environ.get("ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION", "searchProcurements").strip()
             or "searchProcurements",
             details_action=os.environ.get("ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION", "getProcurementDetails").strip()
@@ -79,18 +108,35 @@ class ZakupkiSoapSettings:
     def configured(self) -> bool:
         return self.enabled and self.token_configured
 
+    @property
+    def individual_mode(self) -> bool:
+        return self.token_owner == "individual"
+
+    @property
+    def active_docs_endpoint(self) -> str:
+        return self.individual_base_url if self.individual_mode else self.base_url
+
     def safe_status(self) -> dict[str, Any]:
         reason = None
         if not self.token_configured:
             reason = "Источник ЕИС не настроен: добавьте ZAKUPKI_GOV_RU_SOAP_TOKEN в .env.local"
         elif not self.enabled:
             reason = "Источник ЕИС не включён: установите ZAKUPKI_GOV_RU_SOAP_ENABLED=1"
+        elif self.individual_mode:
+            reason = None
         return {
-            "source": "zakupki_gov_ru_soap",
+            "source": "zakupki_gov_ru_getdocs_ip",
             "enabled": self.enabled,
             "configured": self.configured,
             "reason": reason,
-            "base_url_configured": bool(self.base_url),
+            "token_owner": self.token_owner,
+            "token_header_name": self.token_header_name,
+            "mode": self.mode,
+            "individual_base_url_configured": bool(self.individual_base_url),
+            "legacy_base_url_configured": bool(self.base_url),
+            "individual_namespace": self.individual_namespace,
+            "individual_xsd_url": self.individual_xsd_url,
+            "active_docs_endpoint": self.active_docs_endpoint,
             "search_action": self.search_action,
             "details_action": self.details_action,
             "attachments_action": self.attachments_action,
@@ -100,6 +146,7 @@ class ZakupkiSoapSettings:
             "max_download_mb": self.max_download_mb,
             "trust_env_proxy": self.trust_env_proxy,
             "debug": self.debug,
+            "legacy_mode_note": "services-vbs / legal entity mode / experimental",
         }
 
 

@@ -183,7 +183,7 @@ def test_soap_procurement_without_download_urls_becomes_manual_upload_required(c
     _set_runs_root(monkeypatch, tmp_path)
 
     class Descriptor:
-        code = "zakupki_gov_ru_soap"
+        code = "zakupki_gov_ru_getdocs_ip"
         enabled = True
         note = None
 
@@ -194,7 +194,7 @@ def test_soap_procurement_without_download_urls_becomes_manual_upload_required(c
             title="SOAP shaped procurement",
             customer_name="Промышленный заказчик",
             law="44-ФЗ",
-            source="zakupki_gov_ru_soap",
+            source="zakupki_gov_ru_getdocs_ip",
             source_url="https://zakupki.gov.ru/",
             attachments_count=1,
             attachments_status="manual_upload_required",
@@ -222,7 +222,7 @@ def test_soap_procurement_without_download_urls_becomes_manual_upload_required(c
         "/api/demo/tender-agent/runs/from-procurement",
         json={
             "procurement_id": "soap-001",
-            "source": "zakupki_gov_ru_soap",
+            "source": "zakupki_gov_ru_getdocs_ip",
             "query": "шкаф управления",
         },
     )

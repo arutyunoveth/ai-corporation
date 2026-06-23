@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlparse
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import ProxyHandler, Request, build_opener, urlopen
+from uuid import uuid4
 from xml.etree import ElementTree as ET
 
 from src.modules.tender_operator_agent_demo.procurement_schemas import (
+    DocsArchiveResult,
+    DownloadedAttachment,
     ProcurementAttachment,
     ProcurementDetails,
     ProcurementSearchRequest,
@@ -20,18 +23,27 @@ from src.modules.tender_operator_agent_demo.settings import ZakupkiSoapSettings
 from src.modules.tender_operator_agent_demo.zakupki_soap_templates import (
     build_attachments_envelope,
     build_details_envelope,
+    build_get_docs_by_org_region_envelope,
+    build_get_docs_by_reestr_number_envelope,
     build_search_envelope,
 )
 
 
 SoapTransport = Callable[[str, str | None, int], str]
+HttpTransport = Callable[[str, dict[str, str], int, int], tuple[bytes, str | None]]
 MAX_XML_CHARS = 5_000_000
 
 
 class ZakupkiSoapClient:
-    def __init__(self, settings: ZakupkiSoapSettings, transport: SoapTransport | None = None) -> None:
+    def __init__(
+        self,
+        settings: ZakupkiSoapSettings,
+        transport: SoapTransport | None = None,
+        http_transport: HttpTransport | None = None,
+    ) -> None:
         self.settings = settings
         self._transport = transport
+        self._http_transport = http_transport
 
     def is_configured(self) -> bool:
         return self.settings.configured
@@ -40,27 +52,178 @@ class ZakupkiSoapClient:
         if not self.is_configured():
             return []
         envelope = build_search_envelope(request, self.settings.token)
-        xml = self._post_soap(envelope, soap_action=self.settings.search_action)
+        xml = self._post_soap(
+            envelope,
+            soap_action=self.settings.search_action,
+            endpoint_url=self.settings.base_url,
+            method_name="legacy_searchProcurements",
+        )
         return parse_search_response(xml)[: self.settings.max_results]
 
     def get_procurement_details(self, procurement_id: str) -> ProcurementDetails:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для получения карточки закупки.")
         envelope = build_details_envelope(procurement_id, self.settings.token)
-        return parse_details_response(self._post_soap(envelope, soap_action=self.settings.details_action))
+        xml = self._post_soap(
+            envelope,
+            soap_action=self.settings.details_action,
+            endpoint_url=self.settings.base_url,
+            method_name="legacy_getProcurementDetails",
+        )
+        return parse_details_response(xml)
 
     def list_attachments(self, procurement_id: str) -> list[ProcurementAttachment]:
         if not self.is_configured():
             return []
         envelope = build_attachments_envelope(procurement_id, self.settings.token)
-        return parse_attachments_response(self._post_soap(envelope, soap_action=self.settings.attachments_action))[
-            : self.settings.max_attachments
-        ]
+        xml = self._post_soap(
+            envelope,
+            soap_action=self.settings.attachments_action,
+            endpoint_url=self.settings.base_url,
+            method_name="legacy_listAttachments",
+        )
+        return parse_attachments_response(xml)[: self.settings.max_attachments]
 
-    def download_attachment(self, attachment: ProcurementAttachment, target_dir: Path):
-        raise RuntimeError("Скачивание вложений выполняется через attachment_downloader.")
+    def get_docs_by_reestr_number(self, reestr_number: str, subsystem_type: str = "PRIZ") -> DocsArchiveResult:
+        if not self.is_configured():
+            raise RuntimeError("Источник ЕИС не настроен для getDocsIP.")
+        request_id, created_time = _request_meta()
+        envelope = build_get_docs_by_reestr_number_envelope(
+            token=self.settings.token,
+            namespace=self.settings.individual_namespace,
+            token_header_name=self.settings.token_header_name,
+            request_id=request_id,
+            created_time=created_time,
+            mode=self.settings.mode,
+            reestr_number=reestr_number,
+            subsystem_type=subsystem_type,
+        )
+        xml = self._post_soap(
+            envelope,
+            soap_action=None,
+            endpoint_url=self.settings.individual_base_url,
+            method_name="getDocsByReestrNumberRequest",
+        )
+        return parse_getdocs_response(
+            xml,
+            request_id=request_id,
+            expected_response_tag="getDocsByReestrNumberResponse",
+            expected_request_tag="getDocsByReestrNumberRequest",
+        )
 
-    def _post_soap(self, envelope: str, soap_action: str | None = None) -> str:
+    def get_docs_by_org_region(
+        self,
+        org_region: str,
+        exact_date: str,
+        document_type44: str,
+        subsystem_type: str = "PRIZ",
+    ) -> DocsArchiveResult:
+        if not self.is_configured():
+            raise RuntimeError("Источник ЕИС не настроен для getDocsIP.")
+        request_id, created_time = _request_meta()
+        envelope = build_get_docs_by_org_region_envelope(
+            token=self.settings.token,
+            namespace=self.settings.individual_namespace,
+            token_header_name=self.settings.token_header_name,
+            request_id=request_id,
+            created_time=created_time,
+            mode=self.settings.mode,
+            org_region=org_region,
+            exact_date=exact_date,
+            document_type44=document_type44,
+            subsystem_type=subsystem_type,
+        )
+        xml = self._post_soap(
+            envelope,
+            soap_action=None,
+            endpoint_url=self.settings.individual_base_url,
+            method_name="getDocsByOrgRegionRequest",
+        )
+        return parse_getdocs_response(
+            xml,
+            request_id=request_id,
+            expected_response_tag="getDocsByOrgRegionResponse",
+            expected_request_tag="getDocsByOrgRegionRequest",
+        )
+
+    def probe_xsd(self) -> dict[str, object]:
+        if not self.is_configured():
+            return {"status": "not_configured", "token_present": self.settings.token_configured}
+        try:
+            payload, _content_type = self._http_get(
+                self.settings.individual_xsd_url,
+                headers={"User-Agent": "ai-corporation-tender-demo/1.0"},
+                timeout=self.settings.timeout_seconds,
+                max_bytes=512 * 1024,
+            )
+        except Exception as exc:  # noqa: BLE001
+            message = _sanitize_error(str(exc), self.settings.token)
+            self._write_runtime_status(
+                last_status="error",
+                last_error=message,
+                soap_action="xsd_probe",
+                endpoint_url=self.settings.individual_xsd_url,
+                method_name="xsd_probe",
+            )
+            return {"status": "error", "token_present": self.settings.token_configured, "error": message}
+
+        text = payload.decode("utf-8", errors="replace")
+        self._write_runtime_status(
+            last_status="ok",
+            soap_action="xsd_probe",
+            endpoint_url=self.settings.individual_xsd_url,
+            method_name="xsd_probe",
+        )
+        return {
+            "status": "ok",
+            "token_present": self.settings.token_configured,
+            "contains_schema": "<schema" in text.lower() or "<xsd:schema" in text.lower(),
+            "bytes": len(payload),
+        }
+
+    def download_archive(self, archive_url: str, target_dir: Path) -> DownloadedAttachment:
+        if not self.is_configured():
+            raise RuntimeError("Источник ЕИС не настроен для скачивания архива.")
+        parsed = urlparse(archive_url)
+        if parsed.scheme not in {"http", "https"}:
+            raise RuntimeError("Разрешены только http/https ссылки для скачивания архива.")
+        if not (parsed.path or "").lower().endswith(".zip"):
+            raise RuntimeError("Поддерживается только ZIP-архив документации.")
+
+        max_bytes = self.settings.max_download_mb * 1024 * 1024
+        headers = {
+            "User-Agent": "ai-corporation-tender-demo/1.0",
+            self.settings.token_header_name: self.settings.token,
+        }
+        payload, content_type = self._http_get(
+            archive_url,
+            headers=headers,
+            timeout=max(self.settings.timeout_seconds, 120),
+            max_bytes=max_bytes,
+        )
+        if len(payload) > max_bytes:
+            raise RuntimeError("Размер архива превышает лимит скачивания.")
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        stored_name = "documentation-archive.zip"
+        (target_dir / stored_name).write_bytes(payload)
+        return DownloadedAttachment(
+            file_name=Path(parsed.path or "archive.zip").name or "archive.zip",
+            stored_name=stored_name,
+            size_bytes=len(payload),
+            content_type=content_type,
+            source_url_host=parsed.hostname or "",
+            source_url_path=parsed.path or "/",
+        )
+
+    def _post_soap(
+        self,
+        envelope: str,
+        *,
+        soap_action: str | None,
+        endpoint_url: str,
+        method_name: str,
+    ) -> str:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для SOAP-запросов.")
         self._write_debug_artifact("last_request.xml", _sanitize_xml(envelope, self.settings.token))
@@ -68,17 +231,28 @@ class ZakupkiSoapClient:
             if self._transport is not None:
                 xml = self._transport(envelope, soap_action, self.settings.timeout_seconds)
             else:
-                xml = self._default_transport(envelope, soap_action)
+                xml = self._default_transport(envelope, soap_action, endpoint_url)
             self._write_debug_artifact("last_response.xml", _sanitize_xml(xml, self.settings.token))
-            self._write_runtime_status(last_status="ok", soap_action=soap_action)
+            self._write_runtime_status(
+                last_status="ok",
+                soap_action=soap_action,
+                endpoint_url=endpoint_url,
+                method_name=method_name,
+            )
             return xml
         except Exception as exc:  # noqa: BLE001
             message = _sanitize_error(str(exc), self.settings.token)
             self._write_debug_artifact("last_error.txt", message)
-            self._write_runtime_status(last_status="error", last_error=message, soap_action=soap_action)
+            self._write_runtime_status(
+                last_status="error",
+                last_error=message,
+                soap_action=soap_action,
+                endpoint_url=endpoint_url,
+                method_name=method_name,
+            )
             raise RuntimeError(f"SOAP-запрос к ЕИС завершился ошибкой: {message}") from None
 
-    def _default_transport(self, envelope: str, soap_action: str | None) -> str:
+    def _default_transport(self, envelope: str, soap_action: str | None, endpoint_url: str) -> str:
         headers = {
             "Content-Type": "text/xml; charset=utf-8",
             "User-Agent": "ai-corporation-tender-demo/1.0",
@@ -86,19 +260,34 @@ class ZakupkiSoapClient:
         if soap_action:
             headers["SOAPAction"] = soap_action
         request = Request(
-            self.settings.base_url,
+            endpoint_url,
             data=envelope.encode("utf-8"),
             headers=headers,
             method="POST",
         )
         try:
-            if self.settings.trust_env_proxy:
-                response = urlopen(request, timeout=self.settings.timeout_seconds)
-            else:
-                opener = build_opener(ProxyHandler({}))
-                response = opener.open(request, timeout=self.settings.timeout_seconds)
-            with response:
+            opener = _build_http_opener(self.settings.trust_env_proxy)
+            with opener.open(request, timeout=self.settings.timeout_seconds) as response:
                 return response.read().decode("utf-8", errors="replace")
+        except HTTPError as exc:
+            raise RuntimeError(f"HTTP {exc.code}") from exc
+        except URLError as exc:
+            raise RuntimeError(str(exc.reason)) from exc
+
+    def _http_get(self, url: str, *, headers: dict[str, str], timeout: int, max_bytes: int) -> tuple[bytes, str | None]:
+        if self._http_transport is not None:
+            return self._http_transport(url, headers, timeout, max_bytes)
+        request = Request(url, headers=headers, method="GET")
+        try:
+            opener = _build_http_opener(self.settings.trust_env_proxy)
+            with opener.open(request, timeout=timeout) as response:
+                content_length = response.headers.get("Content-Length")
+                if content_length and int(content_length) > max_bytes:
+                    raise RuntimeError("file exceeds size limit")
+                payload = response.read(max_bytes + 1)
+                if len(payload) > max_bytes:
+                    raise RuntimeError("file exceeds size limit")
+                return payload, response.headers.get("Content-Type")
         except HTTPError as exc:
             raise RuntimeError(f"HTTP {exc.code}") from exc
         except URLError as exc:
@@ -111,16 +300,27 @@ class ZakupkiSoapClient:
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / name).write_text(content, encoding="utf-8")
 
-    def _write_runtime_status(self, *, last_status: str, soap_action: str | None, last_error: str | None = None) -> None:
-        parsed = urlparse(self.settings.base_url)
+    def _write_runtime_status(
+        self,
+        *,
+        last_status: str,
+        soap_action: str | None,
+        endpoint_url: str,
+        method_name: str,
+        last_error: str | None = None,
+    ) -> None:
+        parsed = urlparse(endpoint_url)
         payload = {
             "configured": self.settings.configured,
             "token_present": self.settings.token_configured,
+            "token_owner": self.settings.token_owner,
             "endpoint_host": parsed.hostname or "",
             "endpoint_path": parsed.path or "/",
             "soap_action": soap_action or "",
+            "method_name": method_name,
             "last_status": last_status,
             "last_error": last_error or "",
+            "mode": self.settings.mode,
         }
         target_dir = _diagnostics_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -156,7 +356,7 @@ def parse_search_response(xml: str) -> list[ProcurementSearchResult]:
                 customer_name=customer_name or "Не указан",
                 customer_inn=_first_text(node, "customer_inn", "customerInn", "inn"),
                 law=_first_text(node, "law", "fz", "lawName"),
-                source="zakupki_gov_ru_soap",
+                source="zakupki_gov_ru_soap_legacy",
                 source_url=source_url or "https://zakupki.gov.ru/",
                 publication_date=_parse_date_text(_first_text(node, "publication_date", "publicationDate", "publishDate")),
                 deadline=_parse_date_text(_first_text(node, "deadline", "endDate", "submissionDeadline")),
@@ -188,7 +388,7 @@ def parse_details_response(xml: str) -> ProcurementDetails:
             title=_first_text(root, "title", "name", "purchaseName", "subject") or "Закупка без названия",
             customer_name=_first_text(root, "customer_name", "customerName", "customer") or "Не указан",
             law=_first_text(root, "law", "fz", "lawName"),
-            source="zakupki_gov_ru_soap",
+            source="zakupki_gov_ru_soap_legacy",
             source_url=_first_text(root, "source_url", "sourceUrl", "url", "href") or "https://zakupki.gov.ru/",
             attachments_count=0,
             attachments_status="manual_upload_required",
@@ -232,6 +432,67 @@ def parse_attachments_response(xml: str) -> list[ProcurementAttachment]:
     return attachments
 
 
+def parse_getdocs_response(
+    xml: str,
+    *,
+    request_id: str | None = None,
+    expected_response_tag: str,
+    expected_request_tag: str,
+) -> DocsArchiveResult:
+    root = _safe_parse_xml(xml)
+    raw_summary = _first_text(root, "faultstring", "message", "errorMessage", "description", "resultMessage")
+    fault = _find_first_node(root, {"Fault"})
+    if fault is not None:
+        return DocsArchiveResult(
+            request_id=request_id or _first_text(root, "id") or "unknown",
+            ref_id=_first_text(root, "refId", "refID"),
+            archive_url=None,
+            status="soap_fault",
+            warnings=[raw_summary or "SOAP Fault returned by EIS getDocsIP."],
+            raw_summary=raw_summary,
+            safe_diagnostic={"response_kind": "soap_fault"},
+        )
+
+    response_node = _find_first_node(root, {expected_response_tag})
+    request_echo_node = _find_first_node(root, {expected_request_tag})
+    archive_url = _first_text(root, "archiveUrl", "archiveURL")
+    parsed_request_id = _first_text(root, "id") or request_id or "unknown"
+    ref_id = _first_text(root, "refId", "refID")
+    warnings: list[str] = []
+
+    if _looks_like_validation_error(root, raw_summary):
+        status = "validation_error"
+    elif response_node is None and request_echo_node is not None:
+        status = "echo_request_unprocessed"
+        warnings.append("Ответ похож на echo request без обработанного response payload.")
+    elif archive_url:
+        status = "completed"
+    else:
+        status = "no_archive_url"
+        warnings.append("В ответе getDocsIP не найден archiveUrl.")
+
+    if response_node is None and status != "echo_request_unprocessed":
+        warnings.append("Ожидаемый response tag не найден в SOAP-ответе.")
+    if not archive_url and _find_first_node(root, {"dataInfo"}) is not None and status == "no_archive_url":
+        warnings.append("dataInfo присутствует, но archiveUrl отсутствует.")
+
+    return DocsArchiveResult(
+        request_id=parsed_request_id,
+        ref_id=ref_id,
+        archive_url=archive_url,
+        archive_size=_to_int(_first_text(root, "archiveSize", "sizeBytes")),
+        status=status,
+        warnings=warnings,
+        raw_summary=raw_summary,
+        safe_diagnostic={
+            "response_kind": status,
+            "archive_url_present": bool(archive_url),
+            "expected_response_tag": expected_response_tag,
+            "ref_id_present": bool(ref_id),
+        },
+    )
+
+
 def _safe_parse_xml(xml: str) -> ET.Element:
     if len(xml) > MAX_XML_CHARS:
         raise ValueError("SOAP XML response is too large")
@@ -254,7 +515,22 @@ def _sanitize_xml(xml: str, token: str) -> str:
 
 
 def _diagnostics_dir() -> Path:
-    return Path(os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", "company_agent_runs/zakupki_soap_live_diagnostics"))
+    configured = os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR")
+    if configured:
+        return Path(configured)
+    new_default = Path("company_agent_runs/zakupki_soap_diagnostics")
+    old_default = Path("company_agent_runs/zakupki_soap_live_diagnostics")
+    return new_default if new_default.exists() or not old_default.exists() else old_default
+
+
+def _request_meta() -> tuple[str, str]:
+    return str(uuid4()), datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+def _build_http_opener(trust_env_proxy: bool):
+    if trust_env_proxy:
+        return build_opener()
+    return build_opener(ProxyHandler({}))
 
 
 def _local_name(tag: str) -> str:
@@ -265,12 +541,31 @@ def _candidate_nodes(root: ET.Element, names: set[str]) -> list[ET.Element]:
     return [node for node in root.iter() if _local_name(node.tag) in names]
 
 
+def _find_first_node(root: ET.Element, names: set[str]) -> ET.Element | None:
+    for node in root.iter():
+        if _local_name(node.tag) in names:
+            return node
+    return None
+
+
 def _first_text(node: ET.Element, *names: str) -> str | None:
     lowered = {name.lower() for name in names}
     for child in node.iter():
         if _local_name(child.tag).lower() in lowered and child.text and child.text.strip():
             return child.text.strip()
     return None
+
+
+def _looks_like_validation_error(root: ET.Element, raw_summary: str | None) -> bool:
+    if raw_summary and any(token in raw_summary.lower() for token in ("validation", "валидац", "schema", "xsd")):
+        return True
+    for node in root.iter():
+        local = _local_name(node.tag).lower()
+        if "validation" in local or "schema" in local or "error" == local:
+            text = (node.text or "").strip().lower()
+            if any(token in text for token in ("validation", "валидац", "schema", "xsd", "order")):
+                return True
+    return False
 
 
 def _to_int(value: str | None) -> int | None:

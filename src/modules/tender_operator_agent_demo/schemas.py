@@ -198,6 +198,21 @@ class ProcurementRunCreateRequest(APIModel):
     download_attachments: bool = True
 
 
+class EisDocsArchiveRunRequest(APIModel):
+    reestr_number: str
+    law: str = "44fz"
+    subsystem_type: str = "PRIZ"
+    download_archive: bool = True
+
+
+class PublicSearchUrlResponse(APIModel):
+    source: str
+    law: str
+    query: str
+    eis_search_url: str
+    note: str
+
+
 class ProcurementAttachmentManifestItem(APIModel):
     name: str
     stored_name: str | None = None

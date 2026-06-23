@@ -1,6 +1,11 @@
 import pytest
+from urllib.parse import unquote
 
-from src.modules.tender_operator_agent_demo.procurement_discovery import list_procurement_sources, search_procurements
+from src.modules.tender_operator_agent_demo.procurement_discovery import (
+    build_public_search_url,
+    list_procurement_sources,
+    search_procurements,
+)
 from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementSearchRequest
 from src.modules.tender_operator_agent_demo.settings import clear_zakupki_soap_settings_cache
 
@@ -41,7 +46,7 @@ def test_unknown_procurement_source_is_rejected(client):
 def test_disabled_procurement_source_returns_warning(client):
     response = client.get(
         "/api/demo/tender-agent/procurements/search",
-        params={"query": "кабель", "source": "zakupki_gov_ru_soap"},
+        params={"query": "кабель", "source": "public_eis_html_44fz"},
     )
 
     assert response.status_code == 200
@@ -58,8 +63,9 @@ def test_procurement_sources_include_zakupki_disabled_without_token(monkeypatch)
     sources = {item.source: item for item in list_procurement_sources()}
 
     assert sources["demo_local"].configured is True
-    assert sources["zakupki_gov_ru_soap"].configured is False
-    assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in (sources["zakupki_gov_ru_soap"].reason or "")
+    assert sources["public_eis_html_44fz"].configured is True
+    assert sources["zakupki_gov_ru_getdocs_ip"].configured is False
+    assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in (sources["zakupki_gov_ru_getdocs_ip"].reason or "")
 
 
 def test_procurement_discovery_request_schema_searches_demo_local():
@@ -78,39 +84,16 @@ def test_procurement_discovery_unknown_source_rejected_directly():
         search_procurements(ProcurementSearchRequest(source="unknown_source", query="кабель"))
 
 
-def test_procurement_discovery_returns_live_source_results(monkeypatch):
-    from src.modules.tender_operator_agent_demo import procurement_discovery as module
-    from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementSearchResult
+def test_public_search_url_is_built_for_44fz():
+    payload = build_public_search_url(query="кабель", law="44fz", region="77")
 
-    class FakeClient:
-        def __init__(self, _settings):
-            pass
+    assert payload.source == "public_eis_html_44fz"
+    assert "extendedsearch" in payload.eis_search_url
+    assert "кабель" in unquote(payload.eis_search_url)
+    assert payload.note
 
-        def search_procurements(self, _request):
-            return [
-                ProcurementSearchResult(
-                    procurement_id="live-001",
-                    notice_number="123",
-                    title="Live-shaped result",
-                    customer_name="АО Заказчик",
-                    law="44-ФЗ",
-                    source="zakupki_gov_ru_soap",
-                    source_url="https://zakupki.gov.ru/",
-                    attachments_status="manual_upload_required",
-                )
-            ]
 
-    monkeypatch.setattr(module, "ZakupkiSoapClient", FakeClient)
-    monkeypatch.setattr(
-        module,
-        "list_procurement_sources",
-        lambda: [
-            type("SourceStatus", (), {"source": "demo_local", "configured": True}),
-            type("SourceStatus", (), {"source": "zakupki_gov_ru_soap", "configured": True}),
-        ],
-    )
+def test_getdocs_source_returns_empty_results_in_search_mode():
+    results = search_procurements(ProcurementSearchRequest(source="zakupki_gov_ru_getdocs_ip", query="кабель"))
 
-    results = search_procurements(ProcurementSearchRequest(source="zakupki_gov_ru_soap", query="кабель"))
-
-    assert results[0].procurement_id == "live-001"
-    assert results[0].source == "zakupki_gov_ru_soap"
+    assert results == []

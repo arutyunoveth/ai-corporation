@@ -1,0 +1,89 @@
+import json
+
+from scripts.diagnose_zakupki_soap import run_diagnostics, save_diagnostics
+from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult
+from src.modules.tender_operator_agent_demo.settings import ZakupkiSoapSettings
+
+
+def _settings(token: str = "test-token-value-not-real") -> ZakupkiSoapSettings:
+    return ZakupkiSoapSettings(enabled=True, token=token, token_owner="individual")
+
+
+def test_diagnostics_sanitizes_token_and_reports_no_archive(monkeypatch, tmp_path):
+    from scripts import diagnose_zakupki_soap as module
+
+    diagnostics_root = tmp_path / "zakupki_soap_diagnostics"
+    monkeypatch.chdir(tmp_path)
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def probe_xsd(self):
+            return {"status": "ok"}
+
+        def get_docs_by_reestr_number(self, _reestr_number):
+            return DocsArchiveResult(
+                request_id="req-001",
+                ref_id=None,
+                archive_url=None,
+                status="no_archive_url",
+                warnings=["archiveUrl not found"],
+                safe_diagnostic={"archive_url_present": False},
+            )
+
+    monkeypatch.setattr(module, "ZakupkiSoapClient", FakeClient)
+    payload = run_diagnostics(
+        settings=_settings("secret-token-value"),
+        reestr_number="0888200000224000038",
+        check_xsd=True,
+        download_archive=False,
+    )
+    path = save_diagnostics(payload)
+
+    assert payload["token_present"] is True
+    assert payload["response_kind"] == "no_archive_url"
+    assert "secret-token-value" not in json.dumps(payload, ensure_ascii=False)
+    assert path.exists()
+
+
+def test_diagnostics_reports_downloaded_archive(monkeypatch, tmp_path):
+    from scripts import diagnose_zakupki_soap as module
+    from src.modules.tender_operator_agent_demo.procurement_schemas import DownloadedAttachment
+
+    monkeypatch.chdir(tmp_path)
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def get_docs_by_reestr_number(self, _reestr_number):
+            return DocsArchiveResult(
+                request_id="req-002",
+                ref_id="ref-002",
+                archive_url="https://int44.zakupki.gov.ru/archive/demo.zip",
+                status="completed",
+                warnings=[],
+                safe_diagnostic={"archive_url_present": True},
+            )
+
+        def download_archive(self, _archive_url, _target_dir):
+            return DownloadedAttachment(
+                file_name="demo.zip",
+                stored_name="documentation-archive.zip",
+                size_bytes=128,
+                content_type="application/zip",
+                source_url_host="int44.zakupki.gov.ru",
+                source_url_path="/archive/demo.zip",
+            )
+
+    monkeypatch.setattr(module, "ZakupkiSoapClient", FakeClient)
+    payload = run_diagnostics(
+        settings=_settings(),
+        reestr_number="0888200000224000038",
+        download_archive=True,
+    )
+
+    assert payload["archive_url_present"] is True
+    assert payload["download_status"] == "downloaded"
+    assert payload["archive_url_summary"]["host"] == "int44.zakupki.gov.ru"

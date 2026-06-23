@@ -66,7 +66,7 @@ def test_mocked_search_xml_maps_to_normalized_results():
     assert len(results) == 1
     assert results[0].procurement_id == "eis-001"
     assert results[0].notice_number == "0373100000126000001"
-    assert results[0].source == "zakupki_gov_ru_soap"
+    assert results[0].source == "zakupki_gov_ru_soap_legacy"
     assert results[0].can_download_attachments is True
     assert results[0].warnings == []
 
@@ -200,7 +200,7 @@ def test_live_zakupki_soap_search_smoke():
 
     try:
         results = client.search_procurements(
-            ProcurementSearchRequest(source="zakupki_gov_ru_soap", query="электротехническое оборудование", max_results=1)
+            ProcurementSearchRequest(source="zakupki_gov_ru_soap_legacy", query="электротехническое оборудование", max_results=1)
         )
     except RuntimeError as exc:
         message = str(exc)

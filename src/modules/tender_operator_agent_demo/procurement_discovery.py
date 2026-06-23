@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from src.modules.tender_operator_agent_demo.procurement_sources import (
     DemoProcurementRecord,
@@ -17,14 +17,22 @@ from src.modules.tender_operator_agent_demo.procurement_schemas import (
     ProcurementSearchResult as ProcurementSearchResultV2,
     ProcurementSourceStatus,
 )
-from src.modules.tender_operator_agent_demo.schemas import ProcurementSearchResponse, ProcurementSearchResult
+from src.modules.tender_operator_agent_demo.schemas import ProcurementSearchResponse, ProcurementSearchResult, PublicSearchUrlResponse
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
 
 
+def _diagnostics_dir() -> Path:
+    configured = os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR")
+    if configured:
+        return Path(configured)
+    new_default = Path("company_agent_runs/zakupki_soap_diagnostics")
+    old_default = Path("company_agent_runs/zakupki_soap_live_diagnostics")
+    return new_default if new_default.exists() or not old_default.exists() else old_default
+
+
 def _load_zakupki_live_diagnostics() -> dict[str, object]:
-    diagnostics_dir = Path(os.environ.get("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", "company_agent_runs/zakupki_soap_live_diagnostics"))
-    status_path = diagnostics_dir / "last_status.json"
+    status_path = _diagnostics_dir() / "last_status.json"
     if status_path.is_file():
         try:
             payload = json.loads(status_path.read_text(encoding="utf-8"))
@@ -34,6 +42,9 @@ def _load_zakupki_live_diagnostics() -> dict[str, object]:
                 "last_status": payload.get("last_status", ""),
                 "last_error": payload.get("last_error", ""),
                 "soap_action": payload.get("soap_action", ""),
+                "method_name": payload.get("method_name", ""),
+                "token_owner": payload.get("token_owner", ""),
+                "mode": payload.get("mode", ""),
             }
         except Exception:
             return {}
@@ -43,11 +54,9 @@ def _load_zakupki_live_diagnostics() -> dict[str, object]:
 def list_procurement_sources() -> list[ProcurementSourceStatus]:
     zakupki_settings = get_zakupki_soap_settings()
     zakupki_status = zakupki_settings.safe_status()
-    parsed = urlparse(zakupki_settings.base_url)
+    parsed = urlparse(zakupki_settings.active_docs_endpoint)
     live_diagnostics = _load_zakupki_live_diagnostics()
-    configured_reason = None
-    if zakupki_settings.configured:
-        configured_reason = "ЕИС настроена: токен найден."
+    getdocs_reason = zakupki_status["reason"] or "Токен физлица найден. getDocsIP настроен для read-only получения документации."
     return [
         ProcurementSourceStatus(
             source="demo_local",
@@ -58,11 +67,27 @@ def list_procurement_sources() -> list[ProcurementSourceStatus]:
             safe_diagnostics={"mode": "offline_demo"},
         ),
         ProcurementSourceStatus(
-            source="zakupki_gov_ru_soap",
-            label="zakupki_gov_ru_soap",
+            source="public_eis_html_44fz",
+            label="public_eis_html_44fz",
+            enabled=True,
+            configured=True,
+            reason="Публичный HTML fallback. Поиск и выбор закупки выполняются вручную в ЕИС.",
+            safe_diagnostics={"mode": "public_html_fallback", "law": "44fz"},
+        ),
+        ProcurementSourceStatus(
+            source="public_eis_html_223fz",
+            label="public_eis_html_223fz",
+            enabled=True,
+            configured=True,
+            reason="Публичный HTML fallback. Для 223-ФЗ требуется отдельный parser path.",
+            safe_diagnostics={"mode": "public_html_fallback", "law": "223fz"},
+        ),
+        ProcurementSourceStatus(
+            source="zakupki_gov_ru_getdocs_ip",
+            label="zakupki_gov_ru_getdocs_ip",
             enabled=zakupki_settings.enabled,
             configured=zakupki_settings.configured,
-            reason=zakupki_status["reason"] or configured_reason,
+            reason=getdocs_reason,
             safe_diagnostics={
                 **zakupki_status,
                 "token_present": zakupki_settings.token_configured,
@@ -204,10 +229,8 @@ def search_procurements(
             raise ValueError(f"Unknown procurement source: {request.source}")
         if request.source == "demo_local":
             return _search_demo_local_v2(request)
-        if request.source == "zakupki_gov_ru_soap":
-            if not sources[request.source].configured:
-                return []
-            return ZakupkiSoapClient(get_zakupki_soap_settings()).search_procurements(request)
+        if request.source in {"public_eis_html_44fz", "public_eis_html_223fz", "zakupki_gov_ru_getdocs_ip"}:
+            return []
         return []
 
     descriptors = get_procurement_source_descriptors()
@@ -228,7 +251,7 @@ def search_procurements(
             source=source,
             results=[],
             sources=descriptors,
-            warnings=["В текущем спринте включён только offline-safe источник demo_local."],
+            warnings=[allowed_sources[source].note or "Поиск выполняется вручную через публичный HTML fallback."],
         )
 
     records = []
@@ -254,6 +277,41 @@ def search_procurements(
     )
 
 
+def build_public_search_url(
+    *,
+    query: str,
+    law: str,
+    region: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> PublicSearchUrlResponse:
+    normalized_law = "223fz" if law.lower() == "223fz" else "44fz"
+    base_url = (
+        "https://zakupki.gov.ru/epz/order223/extendedsearch/results.html"
+        if normalized_law == "223fz"
+        else "https://zakupki.gov.ru/epz/order/extendedsearch/results.html"
+    )
+    params = {
+        "searchString": query,
+        "morphology": "on",
+        "sortDirection": "false",
+    }
+    if region:
+        params["regionDeleted"] = "false"
+        params["region"] = region
+    if date_from:
+        params["publishDateFrom"] = date_from
+    if date_to:
+        params["publishDateTo"] = date_to
+    return PublicSearchUrlResponse(
+        source=f"public_eis_html_{normalized_law}",
+        law=normalized_law,
+        query=query,
+        eis_search_url=f"{base_url}?{urlencode(params)}",
+        note="Откройте ЕИС, выберите закупку и вставьте реестровый номер в поле getDocsIP.",
+    )
+
+
 def get_demo_procurement(source: str, procurement_id: str) -> DemoProcurementRecord | None:
     if source != "demo_local":
         return None
@@ -267,11 +325,10 @@ def get_procurement_details(source: str, procurement_id: str) -> ProcurementDeta
     sources = {item.source for item in list_procurement_sources()}
     if source not in sources:
         raise ValueError(f"Unknown procurement source: {source}")
-    if source == "zakupki_gov_ru_soap":
-        settings = get_zakupki_soap_settings()
-        if not settings.configured:
-            raise ValueError("Источник ЕИС не настроен: добавьте ZAKUPKI_GOV_RU_SOAP_TOKEN в .env.local")
-        return ZakupkiSoapClient(settings).get_procurement_details(procurement_id)
+    if source == "zakupki_gov_ru_getdocs_ip":
+        raise ValueError("getDocsIP не используется как поиск карточки. Сначала найдите закупку публично, затем запросите документацию по номеру.")
+    if source in {"public_eis_html_44fz", "public_eis_html_223fz"}:
+        raise ValueError("Для public HTML fallback карточка закупки открывается вручную в ЕИС.")
     record = get_demo_procurement(source, procurement_id)
     if record is None:
         raise ValueError("Procurement was not found")
