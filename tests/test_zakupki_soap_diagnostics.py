@@ -43,6 +43,8 @@ def test_diagnostics_sanitizes_token_and_reports_no_archive(monkeypatch, tmp_pat
 
     assert payload["token_present"] is True
     assert payload["response_kind"] == "no_archive_url"
+    assert payload["eis_proxy_disabled"] is True
+    assert payload["client_trust_env"] is False
     assert "secret-token-value" not in json.dumps(payload, ensure_ascii=False)
     assert path.exists()
 
@@ -87,3 +89,31 @@ def test_diagnostics_reports_downloaded_archive(monkeypatch, tmp_path):
     assert payload["archive_url_present"] is True
     assert payload["download_status"] == "downloaded"
     assert payload["archive_url_summary"]["host"] == "int44.zakupki.gov.ru"
+
+
+def test_diagnostics_marks_env_proxy_detected(monkeypatch, tmp_path):
+    from scripts import diagnose_zakupki_soap as module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HTTP_PROXY", "http://user:pass@proxy.example:8080")
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def get_docs_by_reestr_number(self, _reestr_number):
+            return DocsArchiveResult(
+                request_id="req-003",
+                ref_id=None,
+                archive_url=None,
+                status="no_archive_url",
+                warnings=[],
+                safe_diagnostic={},
+            )
+
+    monkeypatch.setattr(module, "ZakupkiSoapClient", FakeClient)
+    payload = run_diagnostics(settings=_settings(), reestr_number="0888200000224000038")
+
+    assert payload["env_proxy_detected"] is True
+    assert payload["route_mode"] == "direct_for_eis"
+    assert "user:pass" not in json.dumps(payload, ensure_ascii=False)

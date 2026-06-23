@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import ProxyHandler, Request, build_opener, urlopen
+from urllib.request import ProxyHandler, Request, build_opener, getproxies_environment, urlopen
 from uuid import uuid4
 from xml.etree import ElementTree as ET
 
@@ -189,10 +189,12 @@ class ZakupkiSoapClient:
             raise RuntimeError("Разрешены только http/https ссылки для скачивания архива.")
         if not (parsed.path or "").lower().endswith(".zip"):
             raise RuntimeError("Поддерживается только ZIP-архив документации.")
+        if not _is_allowed_eis_host((parsed.hostname or "").lower(), self.settings.allowed_hosts):
+            raise RuntimeError("Хост архива не входит в allowlist ЕИС.")
 
         max_bytes = self.settings.max_download_mb * 1024 * 1024
         headers = {
-            "User-Agent": "ai-corporation-tender-demo/1.0",
+            "User-Agent": self.settings.user_agent,
             self.settings.token_header_name: self.settings.token,
         }
         payload, content_type = self._http_get(
@@ -254,10 +256,10 @@ class ZakupkiSoapClient:
 
     def _default_transport(self, envelope: str, soap_action: str | None, endpoint_url: str) -> str:
         headers = {
-            "Content-Type": "text/xml; charset=utf-8",
-            "User-Agent": "ai-corporation-tender-demo/1.0",
+            "Content-Type": self.settings.content_type,
+            "User-Agent": self.settings.user_agent,
         }
-        if soap_action:
+        if soap_action and self.settings.use_soap_action:
             headers["SOAPAction"] = soap_action
         request = Request(
             endpoint_url,
@@ -266,7 +268,7 @@ class ZakupkiSoapClient:
             method="POST",
         )
         try:
-            opener = _build_http_opener(self.settings.trust_env_proxy)
+            opener, route_mode = _build_http_opener(self.settings, endpoint_url)
             with opener.open(request, timeout=self.settings.timeout_seconds) as response:
                 return response.read().decode("utf-8", errors="replace")
         except HTTPError as exc:
@@ -279,7 +281,7 @@ class ZakupkiSoapClient:
             return self._http_transport(url, headers, timeout, max_bytes)
         request = Request(url, headers=headers, method="GET")
         try:
-            opener = _build_http_opener(self.settings.trust_env_proxy)
+            opener, _route_mode = _build_http_opener(self.settings, url)
             with opener.open(request, timeout=timeout) as response:
                 content_length = response.headers.get("Content-Length")
                 if content_length and int(content_length) > max_bytes:
@@ -310,6 +312,12 @@ class ZakupkiSoapClient:
         last_error: str | None = None,
     ) -> None:
         parsed = urlparse(endpoint_url)
+        target_host = parsed.hostname or ""
+        env_proxy_detected = _env_proxy_detected()
+        no_proxy_value = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+        target_host_allowed = _is_allowed_eis_host(target_host, self.settings.allowed_hosts)
+        direct_for_eis = bool(self.settings.disable_proxy_for_eis and target_host_allowed)
+        client_trust_env = not direct_for_eis and self.settings.trust_env_proxy
         payload = {
             "configured": self.settings.configured,
             "token_present": self.settings.token_configured,
@@ -321,6 +329,14 @@ class ZakupkiSoapClient:
             "last_status": last_status,
             "last_error": last_error or "",
             "mode": self.settings.mode,
+            "system_proxy_detected": env_proxy_detected,
+            "env_proxy_detected": env_proxy_detected,
+            "client_trust_env": client_trust_env,
+            "eis_proxy_disabled": self.settings.disable_proxy_for_eis,
+            "target_host": target_host,
+            "target_host_allowed": target_host_allowed,
+            "no_proxy_contains_zakupki": "zakupki.gov.ru" in no_proxy_value.lower(),
+            "route_mode": "direct_for_eis" if direct_for_eis else ("env_proxy" if client_trust_env else "unknown"),
         }
         target_dir = _diagnostics_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -527,10 +543,33 @@ def _request_meta() -> tuple[str, str]:
     return str(uuid4()), datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
-def _build_http_opener(trust_env_proxy: bool):
-    if trust_env_proxy:
-        return build_opener()
-    return build_opener(ProxyHandler({}))
+def _build_http_opener(settings: ZakupkiSoapSettings, target_url: str):
+    hostname = (urlparse(target_url).hostname or "").lower()
+    target_allowed = _is_allowed_eis_host(hostname, settings.allowed_hosts)
+    if settings.disable_proxy_for_eis and target_allowed:
+        return build_opener(ProxyHandler({})), "direct_for_eis"
+    if settings.trust_env_proxy:
+        return build_opener(), "env_proxy"
+    return build_opener(ProxyHandler({})), "direct_no_env"
+
+
+def _is_allowed_eis_host(hostname: str, allowed_hosts: tuple[str, ...]) -> bool:
+    for host in allowed_hosts:
+        normalized = host.strip().lower()
+        if not normalized:
+            continue
+        if normalized.startswith("."):
+            if hostname.endswith(normalized):
+                return True
+            continue
+        if hostname == normalized or hostname.endswith(f".{normalized}"):
+            return True
+    return False
+
+
+def _env_proxy_detected() -> bool:
+    proxies = getproxies_environment()
+    return any(proxies.get(key) for key in ("http", "https", "all"))
 
 
 def _local_name(tag: str) -> str:

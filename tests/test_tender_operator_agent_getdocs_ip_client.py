@@ -1,3 +1,4 @@
+import json
 import os
 
 import pytest
@@ -133,6 +134,13 @@ def test_download_archive_uses_individual_token_header(tmp_path):
     assert downloaded.size_bytes > 0
 
 
+def test_download_archive_rejects_non_eis_host(tmp_path):
+    client = ZakupkiSoapClient(_settings())
+
+    with pytest.raises(RuntimeError, match="allowlist ЕИС"):
+        client.download_archive("https://example.com/archive/demo.zip", tmp_path)
+
+
 def test_getdocs_client_transport_error_sanitizes_token():
     secret = "secret-token-value"
 
@@ -146,6 +154,26 @@ def test_getdocs_client_transport_error_sanitizes_token():
 
     assert secret not in str(excinfo.value)
     assert "[redacted]" in str(excinfo.value)
+
+
+def test_runtime_diagnostics_show_direct_route_for_eis(tmp_path, monkeypatch):
+    diagnostics_dir = tmp_path / "soap_diagnostics"
+    monkeypatch.setenv("AI_CORP_ZAKUPKI_SOAP_DIAGNOSTICS_DIR", str(diagnostics_dir))
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.example:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
+
+    def transport(_envelope: str, _soap_action: str | None, _timeout: int) -> str:
+        return """<Envelope><Body><getDocsByReestrNumberResponse><index><id>req-001</id></index><dataInfo><archiveUrl>https://int.zakupki.gov.ru/archive/demo.zip</archiveUrl></dataInfo></getDocsByReestrNumberResponse></Body></Envelope>"""
+
+    settings = _settings()
+    client = ZakupkiSoapClient(settings, transport=transport)
+    client.get_docs_by_reestr_number("0888200000224000038")
+
+    payload = json.loads((diagnostics_dir / "last_status.json").read_text(encoding="utf-8"))
+    assert payload["client_trust_env"] is False
+    assert payload["eis_proxy_disabled"] is True
+    assert payload["target_host_allowed"] is True
+    assert payload["route_mode"] == "direct_for_eis"
 
 
 @pytest.mark.skipif(not os.getenv("ZAKUPKI_GOV_RU_SOAP_LIVE_TEST"), reason="live getDocsIP smoke is opt-in")

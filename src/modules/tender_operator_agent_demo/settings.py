@@ -15,11 +15,14 @@ PLACEHOLDER_TOKENS = {
 }
 
 DEFAULT_LEGACY_BASE_URL = "https://int44.zakupki.gov.ru/eis-integration/services-vbs"
-DEFAULT_INDIVIDUAL_BASE_URL = "https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP"
+DEFAULT_INDIVIDUAL_BASE_URL = "https://int.zakupki.gov.ru/eis-integration/services/getDocsIP"
 DEFAULT_INDIVIDUAL_XSD_URL = f"{DEFAULT_INDIVIDUAL_BASE_URL}?xsd=getDocsIP-ws-api.xsd"
-DEFAULT_INDIVIDUAL_NAMESPACE = "http://zakupki.gov.ru/fz44/get-docs-ip/ws"
+DEFAULT_INDIVIDUAL_NAMESPACE = "https://int.zakupki.gov.ru/eis-integration/services/getDocsIP"
 DEFAULT_TOKEN_HEADER_NAME = "individualPerson_token"
 DEFAULT_SOAP_MODE = "PROD"
+DEFAULT_ALLOWED_HOSTS = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru,int44-ttls-cert.zakupki.gov.ru"
+DEFAULT_USER_AGENT = "ArvectumTenderAgent/0.1 read-only"
+DEFAULT_CONTENT_TYPE = "text/xml; charset=utf-8"
 
 TokenOwner = Literal["individual", "legal_entity"]
 
@@ -59,6 +62,12 @@ class ZakupkiSoapSettings:
     individual_namespace: str = DEFAULT_INDIVIDUAL_NAMESPACE
     token_header_name: str = DEFAULT_TOKEN_HEADER_NAME
     mode: str = DEFAULT_SOAP_MODE
+    disable_proxy_for_eis: bool = True
+    require_direct_ru_route: bool = True
+    allowed_hosts_raw: str = DEFAULT_ALLOWED_HOSTS
+    user_agent: str = DEFAULT_USER_AGENT
+    content_type: str = DEFAULT_CONTENT_TYPE
+    use_soap_action: bool = False
     search_action: str = "searchProcurements"
     details_action: str = "getProcurementDetails"
     attachments_action: str = "listAttachments"
@@ -86,6 +95,13 @@ class ZakupkiSoapSettings:
             token_header_name=os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN_HEADER_NAME", DEFAULT_TOKEN_HEADER_NAME).strip()
             or DEFAULT_TOKEN_HEADER_NAME,
             mode=os.environ.get("ZAKUPKI_GOV_RU_SOAP_MODE", DEFAULT_SOAP_MODE).strip() or DEFAULT_SOAP_MODE,
+            disable_proxy_for_eis=_read_bool("ZAKUPKI_GOV_RU_SOAP_DISABLE_PROXY_FOR_EIS", True),
+            require_direct_ru_route=_read_bool("ZAKUPKI_GOV_RU_SOAP_REQUIRE_DIRECT_RU_ROUTE", True),
+            allowed_hosts_raw=os.environ.get("ZAKUPKI_GOV_RU_SOAP_ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS).strip()
+            or DEFAULT_ALLOWED_HOSTS,
+            user_agent=os.environ.get("ZAKUPKI_GOV_RU_SOAP_USER_AGENT", DEFAULT_USER_AGENT).strip() or DEFAULT_USER_AGENT,
+            content_type=os.environ.get("ZAKUPKI_GOV_RU_SOAP_CONTENT_TYPE", DEFAULT_CONTENT_TYPE).strip() or DEFAULT_CONTENT_TYPE,
+            use_soap_action=_read_bool("ZAKUPKI_GOV_RU_SOAP_USE_SOAP_ACTION", False),
             search_action=os.environ.get("ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION", "searchProcurements").strip()
             or "searchProcurements",
             details_action=os.environ.get("ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION", "getProcurementDetails").strip()
@@ -116,6 +132,10 @@ class ZakupkiSoapSettings:
     def active_docs_endpoint(self) -> str:
         return self.individual_base_url if self.individual_mode else self.base_url
 
+    @property
+    def allowed_hosts(self) -> tuple[str, ...]:
+        return tuple(item.strip().lower() for item in self.allowed_hosts_raw.split(",") if item.strip())
+
     def safe_status(self) -> dict[str, Any]:
         reason = None
         if not self.token_configured:
@@ -132,6 +152,12 @@ class ZakupkiSoapSettings:
             "token_owner": self.token_owner,
             "token_header_name": self.token_header_name,
             "mode": self.mode,
+            "disable_proxy_for_eis": self.disable_proxy_for_eis,
+            "require_direct_ru_route": self.require_direct_ru_route,
+            "allowed_hosts": list(self.allowed_hosts),
+            "user_agent": self.user_agent,
+            "content_type": self.content_type,
+            "use_soap_action": self.use_soap_action,
             "individual_base_url_configured": bool(self.individual_base_url),
             "legacy_base_url_configured": bool(self.base_url),
             "individual_namespace": self.individual_namespace,

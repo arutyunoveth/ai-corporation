@@ -17,7 +17,9 @@ def test_zakupki_soap_disabled_without_token(monkeypatch):
     assert settings.enabled is False
     assert settings.configured is False
     assert settings.token_owner == "individual"
-    assert settings.active_docs_endpoint.endswith("/services/getDocsIP")
+    assert settings.active_docs_endpoint == "https://int.zakupki.gov.ru/eis-integration/services/getDocsIP"
+    assert settings.disable_proxy_for_eis is True
+    assert settings.require_direct_ru_route is True
     assert is_zakupki_soap_configured(settings) is False
     assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in settings.safe_status()["reason"]
 
@@ -61,6 +63,8 @@ def test_custom_actions_and_debug_flags_are_read_from_env(monkeypatch):
     monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ATTACHMENTS_ACTION", "urn:Attachments")
     monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY", "1")
     monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_DEBUG", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_DISABLE_PROXY_FOR_EIS", "0")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_USE_SOAP_ACTION", "1")
     clear_zakupki_soap_settings_cache()
 
     settings = get_zakupki_soap_settings()
@@ -70,6 +74,8 @@ def test_custom_actions_and_debug_flags_are_read_from_env(monkeypatch):
     assert settings.attachments_action == "urn:Attachments"
     assert settings.trust_env_proxy is True
     assert settings.debug is True
+    assert settings.disable_proxy_for_eis is False
+    assert settings.use_soap_action is True
 
 
 def test_individual_owner_settings_are_read_from_env(monkeypatch):
@@ -89,3 +95,19 @@ def test_individual_owner_settings_are_read_from_env(monkeypatch):
     assert settings.individual_namespace == "http://example.test/ws"
     assert settings.token_header_name == "individualPerson_token"
     assert settings.mode == "PROD"
+
+
+def test_allowed_hosts_and_user_agent_are_read(monkeypatch):
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ENABLED", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TOKEN", "test-token-value-not-real")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ALLOWED_HOSTS", "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_USER_AGENT", "ArvectumTenderAgent/0.1 read-only")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_CONTENT_TYPE", "text/xml; charset=utf-8")
+    clear_zakupki_soap_settings_cache()
+
+    settings = get_zakupki_soap_settings()
+
+    assert "zakupki.gov.ru" in settings.allowed_hosts
+    assert ".zakupki.gov.ru" in settings.allowed_hosts
+    assert settings.user_agent == "ArvectumTenderAgent/0.1 read-only"
+    assert settings.content_type == "text/xml; charset=utf-8"

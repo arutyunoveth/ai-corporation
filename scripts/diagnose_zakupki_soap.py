@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from src.modules.tender_operator_agent_demo.settings import ZakupkiSoapSettings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
@@ -35,6 +37,14 @@ def run_diagnostics(
         "archive_url_present": False,
         "download_status": "not_requested",
         "sanitized_error": "",
+        "system_proxy_detected": bool(os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or os.getenv("ALL_PROXY") or os.getenv("all_proxy")),
+        "env_proxy_detected": bool(os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or os.getenv("ALL_PROXY") or os.getenv("all_proxy")),
+        "client_trust_env": False if settings.disable_proxy_for_eis else settings.trust_env_proxy,
+        "eis_proxy_disabled": settings.disable_proxy_for_eis,
+        "target_host": urlparse(settings.individual_base_url).hostname or "",
+        "target_host_allowed": (urlparse(settings.individual_base_url).hostname or "").lower() in [host.lstrip(".") for host in settings.allowed_hosts] or any((urlparse(settings.individual_base_url).hostname or "").lower().endswith(host) for host in settings.allowed_hosts if host.startswith(".")),
+        "no_proxy_contains_zakupki": "zakupki.gov.ru" in ((os.getenv("NO_PROXY") or os.getenv("no_proxy") or "").lower()),
+        "route_mode": "direct_for_eis" if settings.disable_proxy_for_eis else ("env_proxy" if settings.trust_env_proxy else "unknown"),
     }
     if not settings.configured:
         payload["soap_post_status"] = "not_configured"
