@@ -1782,6 +1782,8 @@ def _ensure_procurement_blocked_report_html(run_id: str) -> Path | None:
 def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeResponse:
     metadata = _load_metadata(run_id)
     if not metadata.get("files") and metadata.get("status") == TenderOperatorUploadedRunStatus.DOCS_REQUIRED.value:
+        metadata["analysis_status"] = "blocked"
+        _save_metadata(run_id, metadata)
         append_demo_run_event(
             run_id,
             "analysis_blocked",
@@ -1792,6 +1794,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
 
     metadata["status"] = TenderOperatorUploadedRunStatus.ANALYZING.value
     metadata["analysis_mode"] = "analyzing"
+    metadata["analysis_status"] = "analyzing"
     _save_metadata(run_id, metadata)
     append_demo_run_event(
         run_id,
@@ -1858,6 +1861,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         metadata["warnings"] = sorted(set(warnings))
         metadata["limitations"] = limitations
         metadata["analysis_mode"] = analysis_mode
+        metadata["analysis_status"] = "completed"
 
         outputs = _build_output_payloads(
             metadata=metadata,
@@ -1901,6 +1905,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
     except Exception as exc:
         metadata["status"] = TenderOperatorUploadedRunStatus.FAILED.value
         metadata["analysis_mode"] = "failed"
+        metadata["analysis_status"] = "failed"
         metadata["warnings"] = list(dict.fromkeys(metadata.get("warnings", []) + [f"Analysis failed safely: {exc}"]))
         metadata["limitations"] = list(dict.fromkeys(metadata.get("limitations", []) + ["Fallback report generation failed. Manual operator review required."]))
         _save_metadata(run_id, metadata)
@@ -2042,6 +2047,16 @@ def get_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunResponse:
         procurement_query=metadata.get("procurement_query"),
         procurement_notice_number=metadata.get("notice_number"),
         procurement_law=metadata.get("law"),
+        token_owner=metadata.get("token_owner"),
+        soap_method=metadata.get("soap_method"),
+        eis_ref_id=metadata.get("getdocs_ref_id"),
+        archive_url_present=metadata.get("archive_url_present", False),
+        archive_downloaded=metadata.get("archive_downloaded", False),
+        archive_download_status=metadata.get("archive_download_status"),
+        archive_download_attempts=metadata.get("archive_download_attempts", 0),
+        archive_source_host=metadata.get("archive_source_host"),
+        archive_source_path=metadata.get("archive_source_path"),
+        documents_extracted_count=metadata.get("documents_extracted_count", 0),
         downloaded_files_count=metadata.get("downloaded_files_count", len(metadata.get("files", []))),
         manual_upload_required=metadata.get("manual_upload_required", False),
         attachments_status=metadata.get("attachments_status"),

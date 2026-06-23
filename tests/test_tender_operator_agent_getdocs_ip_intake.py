@@ -27,7 +27,7 @@ def test_getdocs_archive_endpoint_creates_run_with_archive_metadata(client, monk
             return DocsArchiveResult(
                 request_id="req-001",
                 ref_id="ref-001",
-                archive_url="https://int44.zakupki.gov.ru/archive/demo.zip",
+                archive_url="https://int44.zakupki.gov.ru/archive/demo.zip?ticket=secret",
                 status="completed",
                 warnings=[],
                 safe_diagnostic={"archive_url_present": True},
@@ -76,19 +76,42 @@ def test_getdocs_archive_endpoint_creates_run_with_archive_metadata(client, monk
 
     response = client.post(
         "/api/demo/tender-agent/runs/from-eis-docs-archive",
-        json={"reestr_number": "0888200000224000038", "law": "44fz", "subsystem_type": "PRIZ", "download_archive": True},
+        json={
+            "reestr_number": "0888200000224000038",
+            "law": "44fz",
+            "subsystem_type": "PRIZ",
+            "method": "getDocsByReestrNumber",
+            "download_archive": True,
+            "analyze_after_download": False,
+        },
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ready_to_analyze"
     assert payload["attachments_status"] == "downloaded"
+    assert payload["archive_url_present"] is True
+    assert payload["archive_downloaded"] is True
+    assert payload["documents_extracted_count"] == 1
+    assert payload["soap_method"] == "getDocsByReestrNumber"
+    assert payload["ref_id"] == "ref-001"
+    assert payload["archive_source_host"] == "int44.zakupki.gov.ru"
+    assert payload["archive_source_path"] == "/archive/demo.zip"
     metadata = json.loads((runs_root / payload["run_id"] / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["source"] == "zakupki_gov_ru_getdocs_ip"
     assert metadata["token_owner"] == "individual"
     assert metadata["archive_url_present"] is True
     assert metadata["archive_downloaded"] is True
     assert metadata["documents_extracted_count"] == 1
+    assert metadata["soap_method"] == "getDocsByReestrNumber"
+    assert metadata["archive_source_host"] == "int44.zakupki.gov.ru"
+    assert metadata["archive_source_path"] == "/archive/demo.zip"
+    assert "ticket=secret" not in json.dumps(metadata, ensure_ascii=False)
+    eis_metadata = json.loads((runs_root / payload["run_id"] / "procurement" / "eis_getdocs_metadata.json").read_text(encoding="utf-8"))
+    assert eis_metadata["archive_summary"]["host"] == "int44.zakupki.gov.ru"
+    assert eis_metadata["archive_summary"]["path"] == "/archive/demo.zip"
+    assert eis_metadata["archive_summary"]["has_query"] is True
+    assert "ticket=secret" not in json.dumps(eis_metadata, ensure_ascii=False)
     clear_zakupki_soap_settings_cache()
 
 
@@ -128,6 +151,7 @@ def test_getdocs_archive_endpoint_falls_back_to_manual_upload(client, monkeypatc
     assert payload["status"] == "docs_required"
     assert payload["manual_upload_required"] is True
     assert payload["attachments_status"] == "manual_upload_required"
+    assert payload["archive_url_present"] is False
     clear_zakupki_soap_settings_cache()
 
 
@@ -189,6 +213,10 @@ def test_getdocs_archive_endpoint_retries_transient_archive_download(client, mon
     assert metadata["archive_downloaded"] is True
     assert metadata["archive_download_attempts"] == 2
     assert metadata["archive_download_status"] == "downloaded"
+    events_raw = (runs_root / payload["run_id"] / "events.jsonl").read_text(encoding="utf-8")
+    assert "eis_archive_download_started" in events_raw
+    assert "eis_archive_downloaded" in events_raw
+    assert "eis_archive_extracted" in events_raw
     clear_zakupki_soap_settings_cache()
 
 
@@ -235,4 +263,22 @@ def test_getdocs_archive_endpoint_marks_archive_not_ready_after_retries(client, 
     assert metadata["archive_download_status"] == "archive_not_ready"
     assert metadata["archive_download_attempts"] == 2
     assert metadata["manual_upload_required"] is True
+    events_raw = (runs_root / payload["run_id"] / "events.jsonl").read_text(encoding="utf-8")
+    assert "eis_archive_not_ready" in events_raw
     clear_zakupki_soap_settings_cache()
+
+
+def test_getdocs_archive_rejects_unsupported_method(client):
+    response = client.post(
+        "/api/demo/tender-agent/runs/from-eis-docs-archive",
+        json={
+            "reestr_number": "0888200000224000038",
+            "law": "44fz",
+            "subsystem_type": "PRIZ",
+            "method": "getDocsByOrgRegion",
+            "download_archive": True,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "getDocsByReestrNumber" in response.json()["detail"]

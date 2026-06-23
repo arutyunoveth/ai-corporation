@@ -10,6 +10,14 @@ from typing import Any
 EVENTS_FILE = "events.jsonl"
 
 EVENT_STEP_BY_TYPE = {
+    "eis_getdocs_started": "Документация",
+    "eis_archive_url_received": "Документация",
+    "eis_archive_download_started": "Документация",
+    "eis_archive_downloaded": "Документация",
+    "eis_archive_not_ready": "Документация",
+    "eis_archive_extracted": "Документация",
+    "run_created_from_eis_archive": "Документация",
+    "analysis_ready": "Документация",
     "procurement_search_started": "Поиск закупки",
     "procurement_search_completed": "Поиск закупки",
     "procurement_search_failed": "Поиск закупки",
@@ -33,6 +41,7 @@ WARNING_EVENTS = {
     "attachment_skipped",
     "manual_upload_required",
     "analysis_blocked",
+    "eis_archive_not_ready",
 }
 
 

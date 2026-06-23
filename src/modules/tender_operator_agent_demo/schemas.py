@@ -202,7 +202,9 @@ class EisDocsArchiveRunRequest(APIModel):
     reestr_number: str
     law: str = "44fz"
     subsystem_type: str = "PRIZ"
+    method: str = "getDocsByReestrNumber"
     download_archive: bool = True
+    analyze_after_download: bool = False
 
 
 class PublicSearchUrlResponse(APIModel):
@@ -235,6 +237,16 @@ class ProcurementRunResponse(APIModel):
     attachments_status: str
     procurement: ProcurementSearchResult
     attachments: list[ProcurementAttachmentManifestItem] = Field(default_factory=list)
+    archive_url_present: bool = False
+    archive_downloaded: bool = False
+    archive_download_status: str | None = None
+    archive_download_attempts: int = Field(default=0, ge=0)
+    documents_extracted_count: int = Field(default=0, ge=0)
+    analysis_status: str | None = None
+    soap_method: str | None = None
+    ref_id: str | None = None
+    archive_source_host: str | None = None
+    archive_source_path: str | None = None
 
 
 class ProcurementRunDetailsResponse(APIModel):
@@ -299,6 +311,16 @@ class TenderOperatorUploadedRunResponse(APIModel):
     procurement_query: str | None = None
     procurement_notice_number: str | None = None
     procurement_law: str | None = None
+    token_owner: str | None = None
+    soap_method: str | None = None
+    eis_ref_id: str | None = None
+    archive_url_present: bool = False
+    archive_downloaded: bool = False
+    archive_download_status: str | None = None
+    archive_download_attempts: int = Field(default=0, ge=0)
+    archive_source_host: str | None = None
+    archive_source_path: str | None = None
+    documents_extracted_count: int = Field(default=0, ge=0)
     downloaded_files_count: int = Field(default=0, ge=0)
     manual_upload_required: bool = False
     attachments_status: str | None = None

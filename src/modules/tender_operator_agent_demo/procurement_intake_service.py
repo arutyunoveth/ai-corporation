@@ -6,6 +6,7 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
@@ -115,6 +116,21 @@ def _write_procurement_artifacts(
     )
 
 
+def _sanitize_archive_url_summary(archive_url: str | None) -> dict[str, Any]:
+    if not archive_url:
+        return {
+            "host": None,
+            "path": None,
+            "has_query": False,
+        }
+    parsed = urlparse(archive_url)
+    return {
+        "host": parsed.hostname or "",
+        "path": parsed.path or "/",
+        "has_query": bool(parsed.query),
+    }
+
+
 def _build_getdocs_result(reestr_number: str, archive_result: DocsArchiveResult) -> ProcurementSearchResult:
     warnings = list(archive_result.warnings)
     if archive_result.status != "completed":
@@ -131,7 +147,7 @@ def _build_getdocs_result(reestr_number: str, archive_result: DocsArchiveResult)
         initial_price=None,
         currency="RUB",
         region=None,
-        source_url=archive_result.archive_url or "https://zakupki.gov.ru/",
+        source_url="https://zakupki.gov.ru/",
         attachments_status="downloadable" if archive_result.archive_url else "manual_upload_required",
         attachments_count=1 if archive_result.archive_url else 0,
         available_attachments_count=1 if archive_result.archive_url else 0,
@@ -193,7 +209,8 @@ def _extract_safe_archive_into_run(run_id: str, archive_path: Path) -> tuple[lis
     files: list[dict[str, Any]] = []
     manifest: list[ProcurementAttachmentManifestItem] = []
     extracted_count = 0
-    input_dir = get_demo_run_input_dir(run_id)
+    extracted_dir = get_demo_run_input_dir(run_id) / "extracted"
+    extracted_dir.mkdir(parents=True, exist_ok=True)
     try:
         with zipfile.ZipFile(archive_path) as archive:
             members = [item for item in archive.infolist() if not item.is_dir()]
@@ -249,13 +266,14 @@ def _extract_safe_archive_into_run(run_id: str, archive_path: Path) -> tuple[lis
                     continue
                 raw = archive.read(item)
                 original_name, stored_name = sanitize_demo_filename(entry_name, extracted_count + 1)
-                (input_dir / stored_name).write_bytes(raw)
+                relative_stored_name = str(Path("extracted") / stored_name)
+                (extracted_dir / stored_name).write_bytes(raw)
                 extracted_count += 1
                 files.append(
                     build_demo_file_descriptor(
                         file_id=f"FILE-{extracted_count:02d}",
                         original_name=original_name,
-                        stored_name=stored_name,
+                        stored_name=relative_stored_name,
                         size_bytes=len(raw),
                         content_type="application/octet-stream",
                         source="eis_getdocs_archive",
@@ -264,7 +282,7 @@ def _extract_safe_archive_into_run(run_id: str, archive_path: Path) -> tuple[lis
                 manifest.append(
                     ProcurementAttachmentManifestItem(
                         name=original_name,
-                        stored_name=stored_name,
+                        stored_name=relative_stored_name,
                         extension=ext,
                         status="saved",
                         note="Файл извлечён из getDocsIP архива в безопасном локальном режиме.",
@@ -281,6 +299,42 @@ def _extract_safe_archive_into_run(run_id: str, archive_path: Path) -> tuple[lis
             )
         )
     return files, manifest, extracted_count
+
+
+def _write_eis_procurement_artifacts(
+    run_id: str,
+    *,
+    request,
+    archive_result: DocsArchiveResult,
+    archive_summary: dict[str, Any],
+    archive_manifest: list[ProcurementAttachmentManifestItem],
+) -> None:
+    procurement_dir = get_demo_run_procurement_dir(run_id)
+    payload = {
+        "source": "zakupki_gov_ru_getdocs_ip",
+        "token_owner": "individual",
+        "law": request.law,
+        "reestr_number": request.reestr_number,
+        "subsystem_type": request.subsystem_type,
+        "soap_method": request.method,
+        "request_id": archive_result.request_id,
+        "ref_id": archive_result.ref_id,
+        "status": archive_result.status,
+        "archive_url_present": bool(archive_result.archive_url or archive_result.archive_urls),
+        "archive_urls_count": len(archive_result.archive_urls),
+        "archive_name": archive_result.archive_name,
+        "archive_summary": archive_summary,
+        "warnings": archive_result.warnings,
+        "safe_diagnostic": archive_result.safe_diagnostic,
+    }
+    (procurement_dir / "eis_getdocs_metadata.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (procurement_dir / "archive_manifest.json").write_text(
+        json.dumps([item.model_dump(mode="json") for item in archive_manifest], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def create_run_from_procurement(request: ProcurementRunCreateRequest) -> ProcurementRunResponse:
@@ -558,6 +612,8 @@ def create_run_from_procurement(request: ProcurementRunCreateRequest) -> Procure
 def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> ProcurementRunResponse:
     if request.law.lower() != "44fz":
         raise HTTPException(status_code=400, detail="getDocsIP intake currently supports only 44fz in this demo contour")
+    if request.method != "getDocsByReestrNumber":
+        raise HTTPException(status_code=400, detail="Only getDocsByReestrNumber is supported for this EIS intake route")
 
     settings = get_zakupki_soap_settings()
     if not settings.configured:
@@ -566,6 +622,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
     client = ZakupkiSoapClient(settings)
     archive_result = client.get_docs_by_reestr_number(request.reestr_number, subsystem_type=request.subsystem_type)
     selected = _build_getdocs_result(request.reestr_number, archive_result)
+    archive_summary = _sanitize_archive_url_summary(archive_result.archive_url)
 
     run_id = make_demo_run_id()
     ensure_demo_run_structure(run_id, exist_ok=False)
@@ -573,9 +630,13 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
 
     append_demo_run_event(
         run_id,
-        "attachments_download_started",
+        "eis_getdocs_started",
         "Запрошена документация по номеру закупки через ЕИС getDocsIP.",
-        {"reestr_number": request.reestr_number, "subsystem_type": request.subsystem_type},
+        {
+            "reestr_number": request.reestr_number,
+            "subsystem_type": request.subsystem_type,
+            "soap_method": request.method,
+        },
     )
 
     manifest: list[ProcurementAttachmentManifestItem] = []
@@ -586,8 +647,31 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
     documents_extracted_count = 0
 
     archive_urls = archive_result.archive_urls or ([archive_result.archive_url] if archive_result.archive_url else [])
+    if archive_urls:
+        append_demo_run_event(
+            run_id,
+            "eis_archive_url_received",
+            "ЕИС вернула ссылку на архив документации.",
+            {
+                "archive_url_present": True,
+                "archive_urls_count": len(archive_urls),
+                "archive_source_host": archive_summary.get("host"),
+                "archive_source_path": archive_summary.get("path"),
+                "archive_has_query": archive_summary.get("has_query"),
+                "ref_id": archive_result.ref_id,
+            },
+        )
 
     if archive_urls and request.download_archive:
+        append_demo_run_event(
+            run_id,
+            "eis_archive_download_started",
+            "Начато безопасное скачивание архива документации ЕИС.",
+            {
+                "archive_source_host": archive_summary.get("host"),
+                "archive_source_path": archive_summary.get("path"),
+            },
+        )
         downloaded, archive_download_status, retry_warnings, archive_download_attempts = _download_archive_with_retry(
             client,
             archive_urls,
@@ -611,9 +695,9 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
             )
             append_demo_run_event(
                 run_id,
-                "manual_upload_required",
+                "eis_archive_not_ready" if archive_download_status == "archive_not_ready" else "manual_upload_required",
                 (
-                    "Архив документации ещё формируется в ЕИС. Повторите позже или загрузите документы вручную."
+                    "Архив документации ещё формируется в ЕИС. Повторите попытку позже или загрузите документы вручную."
                     if archive_download_status == "archive_not_ready"
                     else "Архив документации не удалось скачать автоматически. Продолжение возможно после ручной загрузки документов."
                 ),
@@ -622,6 +706,8 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
                     "archive_url_present": bool(archive_urls),
                     "archive_download_status": archive_download_status,
                     "archive_download_attempts": archive_download_attempts,
+                    "archive_source_host": archive_summary.get("host"),
+                    "archive_source_path": archive_summary.get("path"),
                 },
             )
             status = TenderOperatorUploadedRunStatus.DOCS_REQUIRED
@@ -629,7 +715,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
             archive_downloaded = True
             append_demo_run_event(
                 run_id,
-                "attachment_saved",
+                "eis_archive_downloaded",
                 "Архив документации ЕИС сохранён локально.",
                 {"stored_name": downloaded.stored_name, "size_bytes": downloaded.size_bytes},
             )
@@ -650,8 +736,8 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
             manifest.extend(extracted_manifest)
             append_demo_run_event(
                 run_id,
-                "attachments_download_completed",
-                "Архив документации получен и безопасно обработан.",
+                "eis_archive_extracted",
+                "Архив документации получен и безопасно распакован.",
                 {
                     "documents_extracted_count": documents_extracted_count,
                     "archive_downloaded": True,
@@ -659,6 +745,13 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
                 },
             )
             status = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE if files else TenderOperatorUploadedRunStatus.DOCS_REQUIRED
+            if status == TenderOperatorUploadedRunStatus.READY_TO_ANALYZE:
+                append_demo_run_event(
+                    run_id,
+                    "analysis_ready",
+                    "Документы распакованы и готовы к запуску анализа.",
+                    {"documents_extracted_count": documents_extracted_count},
+                )
     else:
         note = (
             "Архив документации не получен из ответа getDocsIP. Нужна ручная загрузка документов."
@@ -694,7 +787,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         "analysis_mode": "not_started",
         "procurement_source": "zakupki_gov_ru_getdocs_ip",
         "procurement_id": request.reestr_number,
-        "procurement_url": selected.source_url,
+        "procurement_url": "https://zakupki.gov.ru/",
         "procurement_query": request.reestr_number,
         "publication_date": None,
         "deadline": None,
@@ -720,9 +813,12 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         "token_owner": settings.token_owner,
         "reestr_number": request.reestr_number,
         "subsystem_type": request.subsystem_type,
+        "soap_method": request.method,
         "archive_url_present": bool(archive_urls),
         "archive_urls_count": len(archive_urls),
         "archive_name": archive_result.archive_name,
+        "archive_source_host": archive_summary.get("host"),
+        "archive_source_path": archive_summary.get("path"),
         "archive_downloaded": archive_downloaded,
         "archive_download_status": archive_download_status,
         "archive_download_attempts": archive_download_attempts,
@@ -731,12 +827,21 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         "getdocs_request_id": archive_result.request_id,
         "getdocs_ref_id": archive_result.ref_id,
         "archive_safe_diagnostic": archive_result.safe_diagnostic,
+        "analysis_status": "not_started",
+        "requested_analyze_after_download": request.analyze_after_download,
     }
     save_demo_run_metadata(run_id, metadata)
+    _write_eis_procurement_artifacts(
+        run_id,
+        request=request,
+        archive_result=archive_result,
+        archive_summary=archive_summary,
+        archive_manifest=manifest,
+    )
     _write_procurement_artifacts(run_id, selected=selected, manifest=manifest)
     append_demo_run_event(
         run_id,
-        "run_created_from_procurement",
+        "run_created_from_eis_archive",
         "Создан run из архива документации ЕИС getDocsIP.",
         {"mode": "procurement_search_intake", "file_count": len(files), "token_owner": settings.token_owner},
     )
@@ -754,6 +859,16 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         attachments_status=metadata["attachments_status"],
         procurement=selected,
         attachments=manifest,
+        archive_url_present=bool(archive_urls),
+        archive_downloaded=archive_downloaded,
+        archive_download_status=archive_download_status,
+        archive_download_attempts=archive_download_attempts,
+        documents_extracted_count=documents_extracted_count,
+        analysis_status=metadata["analysis_status"],
+        soap_method=request.method,
+        ref_id=archive_result.ref_id,
+        archive_source_host=archive_summary.get("host"),
+        archive_source_path=archive_summary.get("path"),
     )
 
 
