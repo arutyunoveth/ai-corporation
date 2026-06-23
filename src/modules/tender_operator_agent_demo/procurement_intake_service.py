@@ -31,6 +31,7 @@ from src.modules.tender_operator_agent_demo.upload_service import (
     ALLOWED_EXTENSIONS,
     MAX_ZIP_ENTRY_COUNT,
     MAX_ZIP_TOTAL_BYTES,
+    analyze_uploaded_demo_run,
     append_demo_run_event,
     build_demo_file_descriptor,
     ensure_demo_run_structure,
@@ -335,6 +336,13 @@ def _write_eis_procurement_artifacts(
         json.dumps([item.model_dump(mode="json") for item in archive_manifest], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def analyze_eis_archive_run(run_id: str):
+    metadata = load_demo_run_metadata(run_id)
+    if metadata.get("procurement_source") != "zakupki_gov_ru_getdocs_ip":
+        raise HTTPException(status_code=400, detail="Run is not an EIS getDocsIP intake run")
+    return analyze_uploaded_demo_run(run_id)
 
 
 def create_run_from_procurement(request: ProcurementRunCreateRequest) -> ProcurementRunResponse:
@@ -845,15 +853,23 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         "Создан run из архива документации ЕИС getDocsIP.",
         {"mode": "procurement_search_intake", "file_count": len(files), "token_owner": settings.token_owner},
     )
+
+    final_status = status
+    analysis_status = metadata["analysis_status"]
+    if request.analyze_after_download and status == TenderOperatorUploadedRunStatus.READY_TO_ANALYZE:
+        analysis_result = analyze_eis_archive_run(run_id)
+        final_status = analysis_result.status
+        analysis_status = analysis_result.status.value
+
     return ProcurementRunResponse(
         run_id=run_id,
-        status=status,
+        status=final_status,
         created_at=datetime.fromisoformat(created_at),
         file_count=len(files),
         run_url=f"/demo/tender-agent/runs/{run_id}",
         report_url=f"/demo/tender-agent/runs/{run_id}/report",
         downloaded_files_count=len(files),
-        manual_upload_required=status == TenderOperatorUploadedRunStatus.DOCS_REQUIRED,
+        manual_upload_required=final_status == TenderOperatorUploadedRunStatus.DOCS_REQUIRED,
         warnings=list(archive_result.warnings),
         limitations=metadata["limitations"],
         attachments_status=metadata["attachments_status"],
@@ -864,7 +880,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         archive_download_status=archive_download_status,
         archive_download_attempts=archive_download_attempts,
         documents_extracted_count=documents_extracted_count,
-        analysis_status=metadata["analysis_status"],
+        analysis_status=analysis_status,
         soap_method=request.method,
         ref_id=archive_result.ref_id,
         archive_source_host=archive_summary.get("host"),

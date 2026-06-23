@@ -44,7 +44,7 @@ from src.modules.tender_operator_agent_demo.schemas import (
 )
 
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip", ".xml"}
 MAX_FILE_COUNT = 16
 MAX_FILE_SIZE_BYTES = 12 * 1024 * 1024
 MAX_TOTAL_UPLOAD_BYTES = 40 * 1024 * 1024
@@ -546,7 +546,7 @@ def _detect_role(name: str) -> str:
 def _extract_document_text(file_name: str, content: bytes) -> tuple[str | None, list[str]]:
     ext = Path(file_name).suffix.lower()
     warnings: list[str] = []
-    if ext in {".txt", ".csv"}:
+    if ext in {".txt", ".csv", ".xml"}:
         return _decode_text(content), warnings
     if ext in {".pdf", ".docx"}:
         text = extract_text_from_attachment_bytes(url=file_name, content=content)
@@ -1504,6 +1504,9 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
         if procurement_manual_required and not files
         else ""
     )
+    archive_source_summary = "—"
+    if metadata.get("archive_source_host") and metadata.get("archive_source_path"):
+        archive_source_summary = f"{metadata.get('archive_source_host')}{metadata.get('archive_source_path')}"
 
     return f"""
     <html lang="ru">
@@ -1570,6 +1573,21 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
 
           {(
               f'''
+          <div class="card">
+            <h2>Документы получены через ЕИС</h2>
+            <table>
+              <tr><th>Поле</th><th>Значение</th></tr>
+              <tr><td>Реестровый номер</td><td>{html.escape(str(metadata.get("notice_number") or metadata.get("procurement_id") or ""))}</td></tr>
+              <tr><td>SOAP method</td><td>{html.escape(str(metadata.get("soap_method") or "не указан"))}</td></tr>
+              <tr><td>refId</td><td>{html.escape(str(metadata.get("getdocs_ref_id") or "не указан"))}</td></tr>
+              <tr><td>archiveUrl получен</td><td>{'да' if metadata.get("archive_url_present") else 'нет'}</td></tr>
+              <tr><td>Архив скачан</td><td>{'да' if metadata.get("archive_downloaded") else 'нет'}</td></tr>
+              <tr><td>Статус архива</td><td>{html.escape(str(metadata.get("archive_download_status") or "не указан"))}</td></tr>
+              <tr><td>Распаковано документов</td><td>{html.escape(str(metadata.get("documents_extracted_count") or 0))}</td></tr>
+              <tr><td>Источник архива</td><td>{html.escape(archive_source_summary)}</td></tr>
+            </table>
+            <p class="muted">Полный archive URL и ticket намеренно не отображаются в отчёте.</p>
+          </div>
           <div class="card">
             <h2>Источник закупки</h2>
             <table>
@@ -1754,6 +1772,11 @@ def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
               <tr><td>Ссылка на источник</td><td>{html.escape(str(metadata.get("procurement_url") or ""))}</td></tr>
               <tr><td>Статус скачивания</td><td>{html.escape(str(metadata.get("attachments_status") or ""))}</td></tr>
               <tr><td>Ручная загрузка требовалась</td><td>да</td></tr>
+              <tr><td>SOAP method</td><td>{html.escape(str(metadata.get("soap_method") or "не указан"))}</td></tr>
+              <tr><td>refId</td><td>{html.escape(str(metadata.get("getdocs_ref_id") or "не указан"))}</td></tr>
+              <tr><td>Статус архива</td><td>{html.escape(str(metadata.get("archive_download_status") or "не указан"))}</td></tr>
+              <tr><td>Распаковано документов</td><td>{html.escape(str(metadata.get("documents_extracted_count") or 0))}</td></tr>
+              <tr><td>Источник архива</td><td>{html.escape(archive_source_summary)}</td></tr>
             </table>
           </div>
           <div class="card">

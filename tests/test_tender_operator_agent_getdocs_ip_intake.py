@@ -287,3 +287,127 @@ def test_getdocs_archive_rejects_unsupported_method(client):
 
     assert response.status_code == 400
     assert "getDocsByReestrNumber" in response.json()["detail"]
+
+
+def test_getdocs_archive_can_auto_analyze_after_download(client, monkeypatch, tmp_path):
+    from src.modules.tender_operator_agent_demo import procurement_intake_service as service
+    from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult, DownloadedAttachment
+    from src.modules.tender_operator_agent_demo.settings import clear_zakupki_soap_settings_cache
+
+    runs_root = _set_runs_root(monkeypatch, tmp_path)
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ENABLED", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TOKEN", "test-token-value-not-real")
+    clear_zakupki_soap_settings_cache()
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def get_docs_by_reestr_number(self, _reestr_number, subsystem_type="PRIZ"):
+            return DocsArchiveResult(
+                request_id="req-005",
+                ref_id="ref-005",
+                archive_url="https://int.zakupki.gov.ru/dstore/common/download/compound?ticket=secret",
+                archive_urls=["https://int.zakupki.gov.ru/dstore/common/download/compound?ticket=secret"],
+                archive_name="bundle.zip",
+                status="completed",
+                warnings=[],
+                safe_diagnostic={"archive_url_present": True, "archive_urls_count": 1},
+            )
+
+        def download_archive(self, _archive_url, target_dir):
+            payload = target_dir / "documentation-archive.zip"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            with ZipFile(payload, "w") as archive:
+                archive.writestr("notice.txt", "Извещение о закупке электротехнического оборудования.")
+                archive.writestr("technical_spec.txt", "Техническая спецификация: срок поставки 45 дней, гарантия 12 месяцев.")
+                archive.writestr("contract_draft.txt", "Проект договора: штрафы за просрочку, постоплата 45 дней.")
+            return DownloadedAttachment(
+                file_name="bundle.zip",
+                stored_name="documentation-archive.zip",
+                size_bytes=payload.stat().st_size,
+                content_type="application/zip",
+                source_url_host="int.zakupki.gov.ru",
+                source_url_path="/dstore/common/download/compound",
+            )
+
+    monkeypatch.setattr(service, "ZakupkiSoapClient", FakeClient)
+    response = client.post(
+        "/api/demo/tender-agent/runs/from-eis-docs-archive",
+        json={
+            "reestr_number": "0888200000224000038",
+            "law": "44fz",
+            "subsystem_type": "PRIZ",
+            "method": "getDocsByReestrNumber",
+            "download_archive": True,
+            "analyze_after_download": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"completed_with_warnings", "needs_review", "completed"}
+    assert payload["analysis_status"] in {"completed", "completed_with_warnings", "needs_review"}
+    report_html = (runs_root / payload["run_id"] / "output" / "report.html").read_text(encoding="utf-8")
+    assert "Документы получены через ЕИС" in report_html
+    assert "ticket=secret" not in report_html
+    clear_zakupki_soap_settings_cache()
+
+
+def test_getdocs_archive_xml_only_is_partial_not_crash(client, monkeypatch, tmp_path):
+    from src.modules.tender_operator_agent_demo import procurement_intake_service as service
+    from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult, DownloadedAttachment
+    from src.modules.tender_operator_agent_demo.settings import clear_zakupki_soap_settings_cache
+
+    _set_runs_root(monkeypatch, tmp_path)
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ENABLED", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TOKEN", "test-token-value-not-real")
+    clear_zakupki_soap_settings_cache()
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def get_docs_by_reestr_number(self, _reestr_number, subsystem_type="PRIZ"):
+            return DocsArchiveResult(
+                request_id="req-006",
+                ref_id="ref-006",
+                archive_url="https://int.zakupki.gov.ru/dstore/common/download/compound",
+                archive_urls=["https://int.zakupki.gov.ru/dstore/common/download/compound"],
+                archive_name="bundle.zip",
+                status="completed",
+                warnings=[],
+                safe_diagnostic={"archive_url_present": True, "archive_urls_count": 1},
+            )
+
+        def download_archive(self, _archive_url, target_dir):
+            payload = target_dir / "documentation-archive.zip"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            with ZipFile(payload, "w") as archive:
+                archive.writestr("notice.xml", "<notice><title>Закупка</title><delivery>45 дней</delivery></notice>")
+            return DownloadedAttachment(
+                file_name="bundle.zip",
+                stored_name="documentation-archive.zip",
+                size_bytes=payload.stat().st_size,
+                content_type="application/zip",
+                source_url_host="int.zakupki.gov.ru",
+                source_url_path="/dstore/common/download/compound",
+            )
+
+    monkeypatch.setattr(service, "ZakupkiSoapClient", FakeClient)
+    response = client.post(
+        "/api/demo/tender-agent/runs/from-eis-docs-archive",
+        json={
+            "reestr_number": "0888200000224000038",
+            "law": "44fz",
+            "subsystem_type": "PRIZ",
+            "method": "getDocsByReestrNumber",
+            "download_archive": True,
+            "analyze_after_download": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] in {"completed_with_warnings", "needs_review"}
+    clear_zakupki_soap_settings_cache()
