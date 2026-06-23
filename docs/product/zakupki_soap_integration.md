@@ -121,6 +121,10 @@ set +a
 5. Открыть `/demo/tender-agent`.
 6. Для поиска использовать `demo_local` или public HTML fallback.
 7. Для документации использовать вкладку `Получить документацию по номеру`.
+8. Ввести `reestrNumber`.
+9. Нажать `Получить документацию из ЕИС`.
+10. Дождаться `archiveUrl`, скачивания архива и safe extract.
+11. Открыть созданный run и при необходимости запустить анализ.
 
 Если endpoint/WSDL отличается, меняйте только env-конфигурацию. Не хардкодьте URL в коде.
 
@@ -147,6 +151,24 @@ HTTP header при скачивании архива:
 
 - `index -> selectionParams`
 - внутри `selectionParams`: `subsystemType -> reestrNumber`
+
+## Live archive to run flow
+
+Текущий live flow поддерживает:
+
+- `getDocsByReestrNumberRequest`;
+- получение `archiveUrl`;
+- safe download архива через `individualPerson_token` header;
+- safe unzip в локальный `company_agent_runs/tender_operator_demo/{run_id}/input/extracted/`;
+- создание локального run;
+- передачу документов в existing Tender Operator Agent analysis pipeline;
+- polling event feed для UI.
+
+В metadata/report/events intentionally не сохраняются:
+
+- реальный токен;
+- полный archive URL ticket;
+- абсолютные локальные пути.
 
 ## Как запустить backend
 

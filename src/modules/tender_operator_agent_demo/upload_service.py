@@ -1733,6 +1733,9 @@ def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
     procurement = metadata.get("procurement", {})
     documentation = procurement.get("attachment_names") or [item.get("display_name", "") for item in metadata.get("files", [])]
     documentation_html = "".join(f"<li>{html.escape(str(item))}</li>" for item in documentation) or "<li>Документация не получена.</li>"
+    archive_source_summary = "—"
+    if metadata.get("archive_source_host") and metadata.get("archive_source_path"):
+        archive_source_summary = f"{metadata.get('archive_source_host')}{metadata.get('archive_source_path')}"
     return f"""
     <html lang="ru">
       <head>

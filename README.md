@@ -558,6 +558,21 @@ http://127.0.0.1:8000/demo/tender-agent
 
 8. Use the first tab `Найти закупку` for `demo_local` or public HTML fallback, the second tab `Получить документацию по номеру` for read-only `getDocsIP`, the third tab `Загрузка и анализ` for local document uploads, and the fourth tab for the synthetic walkthrough. Demo runs are stored locally under `company_agent_runs/tender_operator_demo/` and do not trigger external actions.
 
+9. Live EIS archive flow:
+
+```text
+Получить документацию по номеру -> archiveUrl -> archive download -> safe extract -> local run -> analyze -> report
+```
+
+In the `Получить документацию по номеру` tab you can now:
+
+- enter `reestr_number`;
+- keep `SOAP method = getDocsByReestrNumber`;
+- choose whether to download the archive;
+- choose whether to start analysis immediately after download;
+- open the created run and report;
+- watch the agent work journal update via polling.
+
 Safety constraints: no login, no captcha bypass, no platform submission, no EDS/digital signature, no supplier email automation, and human-in-the-loop remains mandatory.
 
 Optional live SOAP smoke on MacBook:
@@ -570,6 +585,13 @@ ZAKUPKI_GOV_RU_SOAP_LIVE_TEST=1 ./.venv/bin/python -m pytest -q tests/test_tende
 ```
 
 Diagnostics for the configured `getDocsIP` source are exposed in the demo UI cards `Диагностика ЕИС` / `Диагностика getDocsIP` and written locally to `company_agent_runs/zakupki_soap_diagnostics/` without storing the real token in UI, reports, events, or git-tracked files.
+
+Troubleshooting:
+
+- `Connection reset by peer` before PAC fix usually means the request is still going through the European proxy path.
+- If `archive_not_ready` appears, wait and retry later; EIS may still be preparing the archive asynchronously.
+- If the run is created with `manual_upload_required`, continue through the same run and add documents manually.
+- Keep `NO_PROXY` explicit for all `zakupki.gov.ru` hosts when validating the MacBook live path.
 
 ## Tests
 
