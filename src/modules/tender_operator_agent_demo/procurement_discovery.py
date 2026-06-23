@@ -14,6 +14,7 @@ from src.modules.tender_operator_agent_demo.procurement_schemas import (
 )
 from src.modules.tender_operator_agent_demo.schemas import ProcurementSearchResponse, ProcurementSearchResult
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
+from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
 
 
 def list_procurement_sources() -> list[ProcurementSourceStatus]:
@@ -172,7 +173,7 @@ def search_procurements(
         if request.source == "zakupki_gov_ru_soap":
             if not sources[request.source].configured:
                 return []
-            return []
+            return ZakupkiSoapClient(get_zakupki_soap_settings()).search_procurements(request)
         return []
 
     descriptors = get_procurement_source_descriptors()
@@ -233,7 +234,10 @@ def get_procurement_details(source: str, procurement_id: str) -> ProcurementDeta
     if source not in sources:
         raise ValueError(f"Unknown procurement source: {source}")
     if source == "zakupki_gov_ru_soap":
-        raise ValueError("Источник ЕИС пока доступен только как настроенный skeleton без live details на Sprint 1.")
+        settings = get_zakupki_soap_settings()
+        if not settings.configured:
+            raise ValueError("Источник ЕИС не настроен: добавьте ZAKUPKI_GOV_RU_SOAP_TOKEN в .env.local")
+        return ZakupkiSoapClient(settings).get_procurement_details(procurement_id)
     record = get_demo_procurement(source, procurement_id)
     if record is None:
         raise ValueError("Procurement was not found")

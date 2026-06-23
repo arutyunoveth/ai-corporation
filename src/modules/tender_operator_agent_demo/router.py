@@ -15,10 +15,20 @@ from src.modules.tender_operator_agent_demo.schemas import (
     TenderOperatorUploadedRunResponse,
     TenderOperatorUploadedRunStepsResponse,
 )
-from src.modules.tender_operator_agent_demo.procurement_discovery import search_procurements
+from src.modules.tender_operator_agent_demo.procurement_discovery import (
+    get_procurement_details,
+    list_procurement_sources,
+    search_procurements,
+)
 from src.modules.tender_operator_agent_demo.procurement_intake_service import (
     create_run_from_procurement,
     get_procurement_for_run,
+)
+from src.modules.tender_operator_agent_demo.procurement_schemas import (
+    ProcurementDetails,
+    ProcurementSearchRequest as ProcurementSearchRequestV2,
+    ProcurementSearchResult as ProcurementSearchResultV2,
+    ProcurementSourceStatus,
 )
 from src.modules.tender_operator_agent_demo.service import (
     ASSET_MAP,
@@ -124,6 +134,37 @@ def search_tender_operator_procurements(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/api/demo/tender-agent/procurement/sources", response_model=list[ProcurementSourceStatus])
+def list_tender_operator_procurement_sources() -> list[ProcurementSourceStatus]:
+    return list_procurement_sources()
+
+
+@router.post("/api/demo/tender-agent/procurement/search", response_model=list[ProcurementSearchResultV2])
+def search_tender_operator_procurements_v2(payload: ProcurementSearchRequestV2) -> list[ProcurementSearchResultV2]:
+    try:
+        results = search_procurements(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if not isinstance(results, list):
+        raise HTTPException(status_code=500, detail="Unexpected procurement search response")
+    return results
+
+
+@router.get(
+    "/api/demo/tender-agent/procurement/{source}/{procurement_id}",
+    response_model=ProcurementDetails,
+)
+def get_tender_operator_procurement_details(source: str, procurement_id: str) -> ProcurementDetails:
+    try:
+        return get_procurement_details(source, procurement_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/api/demo/tender-agent/runs/from-procurement", response_model=ProcurementRunResponse)

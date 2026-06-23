@@ -393,7 +393,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             <div class="content">
               <div class="tabs">
                 <button class="tab-button active" data-tab="search" type="button">Найти закупку</button>
-                <button class="tab-button" data-tab="upload" type="button">Загрузка и анализ</button>
+                <button class="tab-button" data-tab="upload" type="button">Загрузить документы</button>
                 <button class="tab-button" data-tab="dataset" type="button">Демо-набор</button>
               </div>
 
@@ -412,14 +412,28 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                         <div class="split">
                           <label>
                             Источник
-                            <select name="source">
+                            <select name="source" id="procurement-source-select">
                               <option value="demo_local">demo_local</option>
-                              <option value="mos_portal_public_api" disabled>mos_portal_public_api — experimental / disabled</option>
+                              <option value="zakupki_gov_ru_soap" disabled>zakupki_gov_ru_soap — источник ЕИС не настроен</option>
                             </select>
                           </label>
                           <label>
                             Макс. результатов
                             <input name="max_results" type="number" min="1" max="20" value="10" />
+                          </label>
+                        </div>
+                        <div class="split">
+                          <label>
+                            Закон
+                            <select name="law">
+                              <option value="">Все</option>
+                              <option value="44-ФЗ">44-ФЗ</option>
+                              <option value="223-ФЗ">223-ФЗ</option>
+                            </select>
+                          </label>
+                          <label>
+                            ИНН заказчика
+                            <input name="customer_inn" placeholder="Необязательно" />
                           </label>
                         </div>
                         <div class="split">
@@ -467,7 +481,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                         <span>Без писем поставщикам</span>
                         <span>Требуется подтверждение человека</span>
                       </div>
-                      <p style="margin-top:14px">Поиск работает в безопасном режиме только чтения. Система не подаёт заявки, не входит на площадки под учётной записью, не обходит captcha, не использует ЭЦП и не отправляет письма поставщикам.</p>
+                      <p style="margin-top:14px">Поиск работает в безопасном read-only режиме. Система не подаёт заявки, не входит на площадки под учётной записью, не обходит captcha, не использует ЭЦП и не отправляет письма поставщикам.</p>
                     </div>
                   </aside>
 
@@ -610,6 +624,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
         <script>
           const state = {{
+            procurementSources: [],
             procurementResults: [],
             datasetRun: null,
             datasetReplayActive: false,
@@ -829,10 +844,21 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           }}
 
           function procurementActionLabel(result) {{
-            if (result.attachments_status === 'downloadable') {{
+            if (result.can_download_attachments || result.attachments_status === 'downloadable') {{
               return 'Скачать документацию и анализировать';
             }}
             return 'Создать run и загрузить документы вручную';
+          }}
+
+          async function loadProcurementSources() {{
+            state.procurementSources = await fetchJson('/api/demo/tender-agent/procurement/sources');
+            const select = document.getElementById('procurement-source-select');
+            select.innerHTML = state.procurementSources.map((source) => `
+              <option value="${{escapeHtml(source.source)}}"${{source.configured ? '' : ' disabled'}}>${{escapeHtml(source.label)}}${{source.configured ? '' : ` — ${{escapeHtml(source.reason || 'не настроен')}}`}}</option>
+            `).join('');
+            if (!state.procurementSources.some((source) => source.source === select.value && source.configured)) {{
+              select.value = 'demo_local';
+            }}
           }}
 
           function renderProcurementResults() {{
@@ -846,7 +872,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="step-top" style="margin-bottom:8px">
                   <div>
                     <strong>${{escapeHtml(result.title)}}</strong>
-                    <div class="run-meta">${{escapeHtml(result.procurement_number || result.procurement_id)}} · ${{escapeHtml(result.customer_name)}} · ${{escapeHtml(result.source)}}</div>
+                    <div class="run-meta">${{escapeHtml(result.notice_number || result.procurement_number || result.procurement_id)}} · ${{escapeHtml(result.customer_name)}} · ${{escapeHtml(result.law || result.source)}}</div>
                   </div>
                   <span class="status-chip ${{result.attachments_status === 'downloadable' ? 'status-done' : 'status-needs_review'}}">${{escapeHtml(attachmentsStatusLabel(result.attachments_status))}}</span>
                 </div>
@@ -857,12 +883,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <div class="metric"><span class="metric-label">Регион</span><span class="metric-value">${{escapeHtml(displayValue(result.region))}}</span></div>
                 </div>
                 <div style="height:12px"></div>
-                <p>${{escapeHtml(result.summary || '')}}</p>
-                <div class="note" style="margin-top:10px">${{escapeHtml(result.source_note || '')}}</div>
-                <div class="note" style="margin-top:8px">Вложений: ${{result.attachments_count}} · доступно: ${{result.available_attachments_count}}</div>
+                <p>${{escapeHtml(result.summary || result.status || '')}}</p>
+                <div class="note" style="margin-top:10px">${{escapeHtml((result.warnings || []).join(' '))}}</div>
+                <div class="note" style="margin-top:8px">Вложений: ${{result.attachments_count}} · статус: ${{attachmentsStatusLabel(result.attachments_status)}}</div>
                 <div class="form-actions" style="margin-top:12px">
                   <a class="link-button" href="${{result.source_url}}" target="_blank" rel="noreferrer">Открыть источник</a>
-                  <button class="button primary procurement-run-button" type="button" data-procurement-id="${{escapeHtml(result.procurement_id)}}" data-source="${{escapeHtml(result.source)}}" data-auto-analyze="${{result.attachments_status === 'downloadable' ? 'true' : 'false'}}">${{procurementActionLabel(result)}}</button>
+                  <button class="button primary procurement-run-button" type="button" data-procurement-id="${{escapeHtml(result.procurement_id)}}" data-source="${{escapeHtml(result.source)}}" data-auto-analyze="${{result.can_download_attachments || result.attachments_status === 'downloadable' ? 'true' : 'false'}}">${{procurementActionLabel(result)}}</button>
                 </div>
               </div>
             `).join('');
@@ -878,15 +904,19 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             event.preventDefault();
             clearFlash('procurement-flash');
             const form = event.currentTarget;
-            const params = new URLSearchParams();
+            const payload = {{}};
             for (const [key, value] of new FormData(form).entries()) {{
               if (String(value).trim() !== '') {{
-                params.set(key, String(value));
+                payload[key] = ['max_results', 'price_from', 'price_to'].includes(key) ? Number(value) : String(value);
               }}
             }}
             try {{
-              const payload = await fetchJson(`/api/demo/tender-agent/procurements/search?${{params.toString()}}`);
-              state.procurementResults = payload.results || [];
+              const response = await fetchJson('/api/demo/tender-agent/procurement/search', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify(payload),
+              }});
+              state.procurementResults = response || [];
               renderProcurementResults();
               setFlash('procurement-flash', `Найдено закупок: ${{state.procurementResults.length}}.`);
             }} catch (error) {{
@@ -1295,6 +1325,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);
             document.getElementById('upload-form').addEventListener('submit', handleUpload);
+            await loadProcurementSources();
             await loadDataset();
             await loadRuns();
             if (state.selectedRunId) {{
