@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns2="http://zakupki.gov.ru/eis-integration/services-vbs">
+  <soap:Body>
+    <ns2:getDocsByReestrNumberResponse>
+      <result>
+        <purchase>
+          <id>real-shaped-001</id>
+          <noticeNumber>32514445109</noticeNumber>
+          <name>Поставка шкафов управления и кабельной продукции</name>
+          <organizationName>АО "Демо-заказчик"</organizationName>
+          <fz>223-ФЗ</fz>
+          <publishDate>24.06.2026 10:30</publishDate>
+          <submissionDeadline>30.06.2026</submissionDeadline>
+          <maxPrice>12 500 000,50</maxPrice>
+          <currencyCode>RUB</currencyCode>
+          <statusName>Прием заявок</statusName>
+          <documentsCount>3</documentsCount>
+        </purchase>
+        <purchase>
+          <guid>real-shaped-002</guid>
+          <purchaseNumber>0373100000126000002</purchaseNumber>
+          <subject>Закупка без явного URL и заказчика</subject>
+          <publishDate>2026/06/24</publishDate>
+          <documentsCount>0</documentsCount>
+        </purchase>
+      </result>
+    </ns2:getDocsByReestrNumberResponse>
+  </soap:Body>
+</soap:Envelope>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns2="http://zakupki.gov.ru/eis-integration/services-vbs">
+  <soap:Body>
+    <ns2:getProcurementInfoResponse>
+      <response>
+        <procurement>
+          <procurementId>real-details-001</procurementId>
+          <noticeNumber>0373100000126000003</noticeNumber>
+          <title>Поставка комплектов КИПиА</title>
+          <customerName>ООО "Тестовый заказчик"</customerName>
+          <customerInn>7701001001</customerInn>
+          <law>44-ФЗ</law>
+          <publicationDate>2026-06-23T12:00:00</publicationDate>
+          <deadline>27.06.2026 18:00</deadline>
+          <initialPrice>4 750 000,00</initialPrice>
+          <currency>RUB</currency>
+          <status>Работа комиссии</status>
+          <description>Детализированная карточка для real-shaped parser tests.</description>
+        </procurement>
+      </response>
+    </ns2:getProcurementInfoResponse>
+  </soap:Body>
+</soap:Envelope>

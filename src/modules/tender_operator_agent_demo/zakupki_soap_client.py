@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
@@ -119,10 +120,18 @@ def parse_search_response(xml: str) -> list[ProcurementSearchResult]:
             continue
         attachments_count = _to_int(_first_text(node, "attachments_count", "attachmentsCount", "documentsCount")) or 0
         can_download = attachments_count > 0
+        warnings: list[str] = []
+        notice_number = _first_text(node, "notice_number", "noticeNumber", "purchaseNumber")
+        if not customer_name:
+            warnings.append("Не удалось извлечь заказчика из SOAP-ответа.")
+        if not source_url:
+            warnings.append("Ссылка на карточку не сформирована: формат URL требует уточнения.")
+        if not _first_text(node, "law", "fz", "lawName"):
+            warnings.append("Не удалось определить закон закупки из SOAP-ответа.")
         results.append(
             ProcurementSearchResult(
                 procurement_id=procurement_id,
-                notice_number=_first_text(node, "notice_number", "noticeNumber", "purchaseNumber"),
+                notice_number=notice_number,
                 registry_number=_first_text(node, "registry_number", "registryNumber"),
                 title=title,
                 customer_name=customer_name or "Не указан",
@@ -130,8 +139,8 @@ def parse_search_response(xml: str) -> list[ProcurementSearchResult]:
                 law=_first_text(node, "law", "fz", "lawName"),
                 source="zakupki_gov_ru_soap",
                 source_url=source_url or "https://zakupki.gov.ru/",
-                publication_date=_first_text(node, "publication_date", "publicationDate", "publishDate"),
-                deadline=_first_text(node, "deadline", "endDate", "submissionDeadline"),
+                publication_date=_parse_date_text(_first_text(node, "publication_date", "publicationDate", "publishDate")),
+                deadline=_parse_date_text(_first_text(node, "deadline", "endDate", "submissionDeadline")),
                 initial_price=_to_float(_first_text(node, "initial_price", "initialPrice", "maxPrice")),
                 currency=_first_text(node, "currency", "currencyCode") or "RUB",
                 status=_first_text(node, "status", "state", "statusName"),
@@ -139,7 +148,7 @@ def parse_search_response(xml: str) -> list[ProcurementSearchResult]:
                 attachments_status="downloadable" if can_download else "manual_upload_required",
                 can_download_attachments=can_download,
                 requires_manual_upload=not can_download,
-                warnings=[],
+                warnings=warnings,
             )
         )
     return results
@@ -148,9 +157,11 @@ def parse_search_response(xml: str) -> list[ProcurementSearchResult]:
 def parse_details_response(xml: str) -> ProcurementDetails:
     root = _safe_parse_xml(xml)
     results = parse_search_response(xml)
+    warnings: list[str] = []
     if results:
         procurement = results[0]
     else:
+        warnings.append("SOAP details method не дал нормализованный procurement node; используется partial fallback.")
         procurement = ProcurementSearchResult(
             procurement_id=_first_text(root, "procurement_id", "procurementId", "id") or "unknown",
             notice_number=_first_text(root, "notice_number", "noticeNumber", "purchaseNumber"),
@@ -164,12 +175,13 @@ def parse_details_response(xml: str) -> ProcurementDetails:
             attachments_status="manual_upload_required",
             can_download_attachments=False,
             requires_manual_upload=True,
+            warnings=["Использован partial details fallback."],
         )
     return ProcurementDetails(
         procurement=procurement,
         attachments=parse_attachments_response(xml),
         raw_source_summary=_first_text(root, "description", "summary"),
-        warnings=[],
+        warnings=warnings + procurement.warnings,
     )
 
 
@@ -251,6 +263,20 @@ def _to_float(value: str | None) -> float | None:
         return float(value.replace(" ", "").replace(",", "."))
     except ValueError:
         return None
+
+
+def _parse_date_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%d.%m.%Y", "%d.%m.%Y %H:%M", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return text
 
 
 def _extension_from_name(name: str) -> str | None:

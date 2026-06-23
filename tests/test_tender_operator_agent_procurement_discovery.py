@@ -76,3 +76,41 @@ def test_procurement_discovery_request_schema_searches_demo_local():
 def test_procurement_discovery_unknown_source_rejected_directly():
     with pytest.raises(ValueError, match="Unknown procurement source"):
         search_procurements(ProcurementSearchRequest(source="unknown_source", query="кабель"))
+
+
+def test_procurement_discovery_returns_live_source_results(monkeypatch):
+    from src.modules.tender_operator_agent_demo import procurement_discovery as module
+    from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementSearchResult
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def search_procurements(self, _request):
+            return [
+                ProcurementSearchResult(
+                    procurement_id="live-001",
+                    notice_number="123",
+                    title="Live-shaped result",
+                    customer_name="АО Заказчик",
+                    law="44-ФЗ",
+                    source="zakupki_gov_ru_soap",
+                    source_url="https://zakupki.gov.ru/",
+                    attachments_status="manual_upload_required",
+                )
+            ]
+
+    monkeypatch.setattr(module, "ZakupkiSoapClient", FakeClient)
+    monkeypatch.setattr(
+        module,
+        "list_procurement_sources",
+        lambda: [
+            type("SourceStatus", (), {"source": "demo_local", "configured": True}),
+            type("SourceStatus", (), {"source": "zakupki_gov_ru_soap", "configured": True}),
+        ],
+    )
+
+    results = search_procurements(ProcurementSearchRequest(source="zakupki_gov_ru_soap", query="кабель"))
+
+    assert results[0].procurement_id == "live-001"
+    assert results[0].source == "zakupki_gov_ru_soap"

@@ -68,6 +68,7 @@ def test_mocked_search_xml_maps_to_normalized_results():
     assert results[0].notice_number == "0373100000126000001"
     assert results[0].source == "zakupki_gov_ru_soap"
     assert results[0].can_download_attachments is True
+    assert results[0].warnings == []
 
 
 def test_mocked_details_xml_maps_to_details():
@@ -76,6 +77,37 @@ def test_mocked_details_xml_maps_to_details():
     assert details.procurement.procurement_id == "eis-001"
     assert details.procurement.customer_name == "Промышленный заказчик"
     assert details.raw_source_summary == "Синтетическая карточка закупки для тестов SOAP parser."
+
+
+def test_real_shaped_search_xml_maps_dates_money_and_warnings():
+    results = parse_search_response(_fixture("real_shaped_search_response.xml"))
+
+    assert len(results) == 2
+    assert results[0].procurement_id == "real-shaped-001"
+    assert results[0].customer_name == 'АО "Демо-заказчик"'
+    assert results[0].publication_date == "2026-06-24"
+    assert results[0].deadline == "2026-06-30"
+    assert results[0].initial_price == 12500000.50
+    assert results[0].attachments_status == "downloadable"
+    assert results[1].initial_price is None
+    assert results[1].customer_name == "Не указан"
+    assert results[1].attachments_status == "manual_upload_required"
+    assert results[1].warnings
+
+
+def test_real_shaped_details_response_maps_partial_details():
+    details = parse_details_response(_fixture("real_shaped_details_response.xml"))
+
+    assert details.procurement.procurement_id == "real-details-001"
+    assert details.procurement.notice_number == "0373100000126000003"
+    assert details.procurement.publication_date == "2026-06-23"
+    assert details.procurement.deadline == "2026-06-27"
+    assert details.procurement.initial_price == 4750000.00
+    assert details.raw_source_summary == "Детализированная карточка для real-shaped parser tests."
+
+
+def test_empty_search_response_does_not_crash():
+    assert parse_search_response('<?xml version="1.0"?><Envelope><Body/></Envelope>') == []
 
 
 def test_mocked_attachments_xml_maps_to_attachments():
@@ -154,8 +186,14 @@ def test_live_zakupki_soap_search_smoke():
     settings = ZakupkiSoapSettings.from_env()
     client = ZakupkiSoapClient(settings)
 
-    results = client.search_procurements(
-        ProcurementSearchRequest(source="zakupki_gov_ru_soap", query="электротехническое оборудование", max_results=1)
-    )
-
-    assert isinstance(results, list)
+    try:
+        results = client.search_procurements(
+            ProcurementSearchRequest(source="zakupki_gov_ru_soap", query="электротехническое оборудование", max_results=1)
+        )
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "SOAP-запрос к ЕИС завершился ошибкой:" in message
+        assert "[redacted]" not in message
+        assert "token" not in message.lower()
+    else:
+        assert isinstance(results, list)
