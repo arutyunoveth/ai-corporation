@@ -31,6 +31,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.
 - A dedicated Tender Operator Agent demo page is available at `/demo/tender-agent` with three controlled modes: procurement search/intake, local Upload & Analyze, and a synthetic walkthrough.
 - Tender Operator Agent demo now separates procurement search from documentation intake: offline-safe procurement discovery (`demo_local`), public HTML fallback for ЕИС search, read-only `getDocsIP` intake for an individual-person token, local document intake, XLSX supplier-quote normalization, quote comparison, agent work journal, HTML report, and demo-mode economics estimation without external actions.
+- Public 44-ФЗ search to live getDocsIP flow: keyword search on zakupki.gov.ru, lightweight HTML parser extracts cards, one-click handoff to getDocsIP archive download, safe extraction, analysis, and report — all without login or captcha bypass.
 - Controlled pilot scenario pack, operator workflow hardening, evidence ledger, sales materials, and dry-run harness are all present.
 - No broad autonomy is open.
 - No external execution is open.

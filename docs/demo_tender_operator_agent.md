@@ -101,10 +101,12 @@ Synthetic walkthrough на стабильных JSON fixtures из:
 - `GET /api/demo/tender-agent/procurements/search`
 - `GET /api/demo/tender-agent/procurement/sources`
 - `GET /api/demo/tender-agent/procurement/public-search-url`
+- `POST /api/demo/tender-agent/procurement/public-44fz-search`
 - `POST /api/demo/tender-agent/procurement/search`
 - `GET /api/demo/tender-agent/procurement/{source}/{procurement_id}`
 - `POST /api/demo/tender-agent/runs/from-procurement`
 - `POST /api/demo/tender-agent/runs/from-eis-docs-archive`
+- `POST /api/demo/tender-agent/runs/from-search-result`
 - `GET /api/demo/tender-agent/runs/{run_id}/procurement`
 
 ### Upload & Analyze
@@ -188,11 +190,22 @@ set +a
 - у части закупок даёт demo attachments;
 - у части закупок честно помечает `manual_upload_required`, `unavailable_in_demo` или `source_requires_authorization`.
 
-`public_eis_html_44fz` / `public_eis_html_223fz`:
+`public_eis_html_44fz`:
 
-- используются только как read-only fallback для поиска;
-- могут вернуть ссылку на публичную выдачу ЕИС;
-- не притворяются полноценным parser/search API.
+- используется как read-only публичный поиск по 44-ФЗ;
+- формирует безопасный URL поиска ЕИС;
+- пытается загрузить и распарсить публичную HTML-страницу выдачи;
+- при успешном парсинге показывает карточки закупок;
+- из карточек извлекается reestrNumber для handoff в getDocsIP;
+- если HTML не парсится (captcha, JS-heavy, изменилась структура) — честно показывает кнопку «Откройте поиск в ЕИС» и поле для ручного ввода номера;
+- не обходит captcha, не использует cookies, не делает POST-действий;
+- не превышает лимиты: таймаут 15 секунд, макс. размер ответа 5 MB.
+
+`public_eis_html_223fz`:
+
+- используется только как read-only fallback для поиска;
+- может вернуть ссылку на публичную выдачу ЕИС;
+- отдельный parser не включён в этом спринте.
 
 `zakupki_gov_ru_getdocs_ip`:
 
@@ -214,6 +227,7 @@ set +a
 - цену, если есть;
 - статус документации;
 - можно ли продолжить автоматически или нужен ручной upload.
+- в UI поиска отображается предупреждение: «Поиск работает в read-only режиме. Система не входит в личный кабинет, не обходит captcha, не подаёт заявку. Система только получает публичную документацию и готовит анализ для человека.».
 
 ## Ручная загрузка как fallback
 

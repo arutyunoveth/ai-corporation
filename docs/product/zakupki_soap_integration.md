@@ -4,10 +4,12 @@
 
 В текущем rework-контуре интеграция ЕИС разделена на два разных сценария:
 
-- Procurement Search: `demo_local` или public HTML fallback для поиска закупки.
+- Procurement Search: `demo_local` или public HTML parser для поиска закупки (44-ФЗ), с честным fallback на ручной ввод.
 - Documentation Intake: `zakupki_gov_ru_getdocs_ip` для получения публичной документации по реестровому номеру.
 
 `getDocsIP` не используется как универсальный keyword search. Это read-only сервис получения документации по номеру закупки для токена физического лица.
+
+Для 44-ФЗ публичный поиск через `/api/demo/tender-agent/procurement/public-44fz-search` строит безопасный URL, загружает HTML страницу выдачи ЕИС, классифицирует ответ (parsed / captcha_or_blocked / js_heavy / empty_results / unsupported_layout), и при успехе извлекает карточки закупок. Из карточки извлекается reestrNumber, который передаётся в `POST /api/demo/tender-agent/runs/from-search-result` для вызова getDocsIP и создания run.
 
 ## Безопасный read-only режим
 
