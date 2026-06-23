@@ -24,7 +24,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Tender Operator Pilot Runner Refinement (PP1R) is complete: RFQ-first workflow for tender/operator companies with calibrated contract risk, supplier questions, RFQ draft, TKP comparison/economics, and bid decision recommendation.
 - Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
 - A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
-- Full `pytest` currently passes: `880 passed, 1 skipped, 1 warning`.
+- Full `pytest` currently passes: `890 passed, 1 skipped, 1 warning`.
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
@@ -515,10 +515,15 @@ cat > .env.local <<'EOF'
 ZAKUPKI_GOV_RU_SOAP_ENABLED=1
 ZAKUPKI_GOV_RU_SOAP_TOKEN=ВСТАВИТЬ_ТОКЕН_СЮДА
 ZAKUPKI_GOV_RU_SOAP_BASE_URL=https://int44.zakupki.gov.ru/eis-integration/services-vbs
+ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION=searchProcurements
+ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION=getProcurementDetails
+ZAKUPKI_GOV_RU_SOAP_ATTACHMENTS_ACTION=listAttachments
 ZAKUPKI_GOV_RU_SOAP_TIMEOUT_SECONDS=30
 ZAKUPKI_GOV_RU_SOAP_MAX_RESULTS=10
 ZAKUPKI_GOV_RU_SOAP_MAX_ATTACHMENTS=20
 ZAKUPKI_GOV_RU_SOAP_MAX_DOWNLOAD_MB=200
+ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY=0
+ZAKUPKI_GOV_RU_SOAP_DEBUG=0
 EOF
 
 set -a
@@ -526,7 +531,7 @@ source .env.local
 set +a
 ```
 
-If the actual WSDL/endpoint differs, change only `ZAKUPKI_GOV_RU_SOAP_BASE_URL`.
+If the actual WSDL/endpoint differs, change only `ZAKUPKI_GOV_RU_SOAP_BASE_URL`. The live calibration on MacBook also keeps SOAP action names and proxy behavior configurable, so you can override `ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION`, `ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION`, `ZAKUPKI_GOV_RU_SOAP_ATTACHMENTS_ACTION`, and `ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY` without editing code.
 
 6. Run the API:
 
@@ -543,6 +548,17 @@ http://127.0.0.1:8000/demo/tender-agent
 8. Use the first tab `Найти закупку` for `demo_local` or configured `zakupki_gov_ru_soap`, the second tab `Загрузка и анализ` for local document uploads, and the third tab for the synthetic walkthrough. Demo runs are stored locally under `company_agent_runs/tender_operator_demo/` and do not trigger external actions.
 
 Safety constraints: no login, no captcha bypass, no platform submission, no EDS/digital signature, no supplier email automation, and human-in-the-loop remains mandatory.
+
+Optional live SOAP smoke on MacBook:
+
+```bash
+set -a
+source .env.local
+set +a
+ZAKUPKI_GOV_RU_SOAP_LIVE_TEST=1 ./.venv/bin/python -m pytest -q tests/test_tender_operator_agent_zakupki_soap_client.py -k live
+```
+
+Diagnostics for the configured SOAP source are exposed in the demo UI card `Диагностика ЕИС` and written locally to `company_agent_runs/zakupki_soap_live_diagnostics/` without storing the real token in UI, reports, events, or git-tracked files.
 
 ## Tests
 

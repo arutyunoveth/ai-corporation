@@ -34,10 +34,15 @@
 - `ZAKUPKI_GOV_RU_SOAP_ENABLED`
 - `ZAKUPKI_GOV_RU_SOAP_TOKEN`
 - `ZAKUPKI_GOV_RU_SOAP_BASE_URL`
+- `ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION`
+- `ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION`
+- `ZAKUPKI_GOV_RU_SOAP_ATTACHMENTS_ACTION`
 - `ZAKUPKI_GOV_RU_SOAP_TIMEOUT_SECONDS`
 - `ZAKUPKI_GOV_RU_SOAP_MAX_RESULTS`
 - `ZAKUPKI_GOV_RU_SOAP_MAX_ATTACHMENTS`
 - `ZAKUPKI_GOV_RU_SOAP_MAX_DOWNLOAD_MB`
+- `ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY`
+- `ZAKUPKI_GOV_RU_SOAP_DEBUG`
 
 Источник включается только если `ZAKUPKI_GOV_RU_SOAP_ENABLED=1` и токен не является placeholder.
 
@@ -50,10 +55,15 @@ cat > .env.local <<'EOF'
 ZAKUPKI_GOV_RU_SOAP_ENABLED=1
 ZAKUPKI_GOV_RU_SOAP_TOKEN=ВСТАВИТЬ_ТОКЕН_СЮДА
 ZAKUPKI_GOV_RU_SOAP_BASE_URL=https://int44.zakupki.gov.ru/eis-integration/services-vbs
+ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION=searchProcurements
+ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION=getProcurementDetails
+ZAKUPKI_GOV_RU_SOAP_ATTACHMENTS_ACTION=listAttachments
 ZAKUPKI_GOV_RU_SOAP_TIMEOUT_SECONDS=30
 ZAKUPKI_GOV_RU_SOAP_MAX_RESULTS=10
 ZAKUPKI_GOV_RU_SOAP_MAX_ATTACHMENTS=20
 ZAKUPKI_GOV_RU_SOAP_MAX_DOWNLOAD_MB=200
+ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY=0
+ZAKUPKI_GOV_RU_SOAP_DEBUG=0
 EOF
 
 set -a
@@ -65,6 +75,17 @@ set +a
 
 Не вставляйте реальный токен в код, README, docs, тесты или git history.
 
+## Локальная калибровка на MacBook
+
+Текущий live calibration batch выполнялся локально на MacBook в репозитории `~/Documents/AI-Corporation`.
+
+Практическое наблюдение из этого цикла:
+
+- ambient proxy variables в macOS-сессии могут ломать SOAP transport;
+- по умолчанию клиент поэтому игнорирует `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`;
+- если нужен корпоративный proxy, его можно вернуть через `ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY=1`;
+- live network result зависит от фактического service path ЕИС, поэтому `base_url` и SOAP actions оставлены полностью конфигурируемыми.
+
 ## Как включить источник
 
 1. Создать `.env.local` локально.
@@ -75,6 +96,16 @@ set +a
 6. В режиме `Найти закупку` выбрать источник `zakupki_gov_ru_soap`.
 
 Если endpoint/WSDL отличается, меняйте только `ZAKUPKI_GOV_RU_SOAP_BASE_URL`. Не хардкодьте URL в коде.
+
+## Проверенные SOAP methods
+
+В controlled pilot слое сейчас калибруются три action name:
+
+- `searchProcurements`
+- `getProcurementDetails`
+- `listAttachments`
+
+Они не зашиты жёстко и могут быть переопределены env-переменными, если фактический SOAP service использует другие action names.
 
 ## Как запустить backend
 
@@ -105,6 +136,18 @@ curl -s http://127.0.0.1:8000/api/demo/tender-agent/procurement/search \
   -H 'content-type: application/json' \
   -d '{"source":"zakupki_gov_ru_soap","query":"электротехническое оборудование","max_results":10}'
 ```
+
+## Фактический статус live calibration
+
+На текущем MacBook batch подтвердил следующее:
+
+- `search`: local mapping и parsing покрыты тестами и проходят на real-shaped fixtures;
+- `details`: local mapping и partial fallback покрыты тестами и проходят;
+- `attachments`: local mapping и manual-upload fallback покрыты тестами и проходят;
+- `download`: безопасный downloader работает только для разрешённых `http/https` вложений и не включается без валидного download URL;
+- `live smoke`: был выполнен с локальным `.env.local`, а при проблемах с endpoint возвращает только sanitized diagnostic error без утечки токена.
+
+Если ЕИС отвечает transport error или service path не совпадает с фактическим endpoint, procurement run не притворяется полным: UI показывает диагностический статус и переводит оператора в manual upload path.
 
 ## Как создать run из закупки
 
@@ -170,14 +213,41 @@ Downloader проверяет:
 Локальный smoke можно включить только вручную, когда env настроен:
 
 ```bash
-ZAKUPKI_GOV_RU_SOAP_LIVE_TEST=1 ./.venv/bin/python -m pytest tests/test_tender_operator_agent_zakupki_soap_client.py -q
+set -a
+source .env.local
+set +a
+ZAKUPKI_GOV_RU_SOAP_LIVE_TEST=1 ./.venv/bin/python -m pytest -q tests/test_tender_operator_agent_zakupki_soap_client.py -k live
 ```
 
 В обычном CI/pytest live network не требуется.
 
+## Диагностика
+
+Безопасные диагностические артефакты пишутся локально в:
+
+```text
+company_agent_runs/zakupki_soap_live_diagnostics/
+```
+
+Используются:
+
+- `last_status.json` — безопасный статус последнего вызова без токена;
+- `last_error.txt` — sanitized transport/service error;
+- `last_request.xml` и `last_response.xml` — только если `ZAKUPKI_GOV_RU_SOAP_DEBUG=1`, с замаскированным токеном.
+
+UI показывает этот статус в карточке `Диагностика ЕИС`.
+
+Если в диагностике видно `last_status=error`, оператор должен:
+
+1. проверить `ZAKUPKI_GOV_RU_SOAP_BASE_URL`;
+2. проверить нужен ли proxy или, наоборот, мешают системные proxy env;
+3. повторить live smoke;
+4. при необходимости перейти в `demo_local` или ручную загрузку документов.
+
 ## Known limitations
 
 - SOAP envelope и parsing рассчитаны на controlled pilot и могут потребовать уточнения после фактических ответов ЕИС.
+- Generic `https://int44.zakupki.gov.ru/eis-integration/services-vbs` path может требовать дополнительной service-path калибровки для реального live search на конкретной машине.
 - PDF/DOCX/OCR извлечение остаётся ограниченным текущими parser utilities.
 - ZIP обрабатывается только по существующим safe rules.
 - Нет scheduled monitoring.
