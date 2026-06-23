@@ -148,11 +148,18 @@ cat > .env.local <<'EOF'
 ZAKUPKI_GOV_RU_SOAP_ENABLED=1
 ZAKUPKI_GOV_RU_SOAP_TOKEN_OWNER=individual
 ZAKUPKI_GOV_RU_SOAP_TOKEN=ВСТАВИТЬ_ТОКЕН_СЮДА
-ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_BASE_URL=https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP
-ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_XSD_URL=https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd
+ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_BASE_URL=https://int.zakupki.gov.ru/eis-integration/services/getDocsIP
+ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_XSD_URL=https://int.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd
 ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_NAMESPACE=http://zakupki.gov.ru/fz44/get-docs-ip/ws
 ZAKUPKI_GOV_RU_SOAP_TOKEN_HEADER_NAME=individualPerson_token
 ZAKUPKI_GOV_RU_SOAP_MODE=PROD
+ZAKUPKI_GOV_RU_SOAP_DISABLE_PROXY_FOR_EIS=1
+ZAKUPKI_GOV_RU_SOAP_REQUIRE_DIRECT_RU_ROUTE=1
+ZAKUPKI_GOV_RU_SOAP_ALLOWED_HOSTS=zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru,int44-ttls-cert.zakupki.gov.ru
+ZAKUPKI_GOV_RU_SOAP_USER_AGENT=ArvectumTenderAgent/0.1 read-only
+ZAKUPKI_GOV_RU_SOAP_CONTENT_TYPE=text/xml; charset=utf-8
+ZAKUPKI_GOV_RU_SOAP_USE_SOAP_ACTION=1
+ZAKUPKI_GOV_RU_SOAP_SOAP_ACTION=http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip
 ZAKUPKI_GOV_RU_SOAP_TIMEOUT_SECONDS=30
 ZAKUPKI_GOV_RU_SOAP_MAX_RESULTS=10
 ZAKUPKI_GOV_RU_SOAP_MAX_ATTACHMENTS=20
@@ -193,6 +200,7 @@ set +a
 - показывает disabled/configuration reason, если env/token не настроены;
 - при включении выполняет read-only SOAP getDocsIP flow по номеру закупки;
 - игнорирует системные proxy env по умолчанию, чтобы не зависеть от локальных `HTTP_PROXY` / `HTTPS_PROXY`, если это ломает доступ к ЕИС;
+- для MacBook с системным PAC рекомендуется отдельное правило `DIRECT` для `zakupki.gov.ru` и `*.zakupki.gov.ru`;
 - использует SOAP Header `individualPerson_token`;
 - при скачивании архива передаёт `individualPerson_token` уже в HTTP header;
 - создаёт procurement run через тот же downstream pipeline.

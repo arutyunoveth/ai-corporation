@@ -63,11 +63,18 @@ cat > .env.local <<'EOF'
 ZAKUPKI_GOV_RU_SOAP_ENABLED=1
 ZAKUPKI_GOV_RU_SOAP_TOKEN_OWNER=individual
 ZAKUPKI_GOV_RU_SOAP_TOKEN=ВСТАВИТЬ_ТОКЕН_СЮДА
-ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_BASE_URL=https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP
-ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_XSD_URL=https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd
+ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_BASE_URL=https://int.zakupki.gov.ru/eis-integration/services/getDocsIP
+ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_XSD_URL=https://int.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd
 ZAKUPKI_GOV_RU_SOAP_INDIVIDUAL_NAMESPACE=http://zakupki.gov.ru/fz44/get-docs-ip/ws
 ZAKUPKI_GOV_RU_SOAP_TOKEN_HEADER_NAME=individualPerson_token
 ZAKUPKI_GOV_RU_SOAP_MODE=PROD
+ZAKUPKI_GOV_RU_SOAP_DISABLE_PROXY_FOR_EIS=1
+ZAKUPKI_GOV_RU_SOAP_REQUIRE_DIRECT_RU_ROUTE=1
+ZAKUPKI_GOV_RU_SOAP_ALLOWED_HOSTS=zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru,int44-ttls-cert.zakupki.gov.ru
+ZAKUPKI_GOV_RU_SOAP_USER_AGENT=ArvectumTenderAgent/0.1 read-only
+ZAKUPKI_GOV_RU_SOAP_CONTENT_TYPE=text/xml; charset=utf-8
+ZAKUPKI_GOV_RU_SOAP_USE_SOAP_ACTION=1
+ZAKUPKI_GOV_RU_SOAP_SOAP_ACTION=http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip
 ZAKUPKI_GOV_RU_SOAP_TIMEOUT_SECONDS=30
 ZAKUPKI_GOV_RU_SOAP_MAX_RESULTS=10
 ZAKUPKI_GOV_RU_SOAP_MAX_ATTACHMENTS=20
@@ -94,8 +101,16 @@ set +a
 - ambient proxy variables в macOS-сессии могут ломать SOAP transport;
 - по умолчанию клиент поэтому игнорирует `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY`;
 - если нужен корпоративный proxy, его можно вернуть через `ZAKUPKI_GOV_RU_SOAP_TRUST_ENV_PROXY=1`;
-- для токена физлица default endpoint теперь `https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP`;
+- для токена физлица default endpoint теперь `https://int.zakupki.gov.ru/eis-integration/services/getDocsIP`;
 - legacy `services-vbs` сохранён только как experimental legal-entity mode.
+
+## MacBook: системный proxy и DIRECT-route для ЕИС
+
+- на MacBook может быть включён системный PAC/proxy, который отправляет обычный трафик через европейский proxy;
+- для `zakupki.gov.ru` и `*.zakupki.gov.ru` нужен `DIRECT`, если прямой внешний IP машины российский;
+- в Python-клиенте demo-модуля EIS-запросы по умолчанию идут без env/system proxy;
+- дополнительно рекомендуется явно выставлять `NO_PROXY=zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru,int44-ttls-cert.zakupki.gov.ru`;
+- если direct IP перестанет быть российским, `DIRECT` для ЕИС уже не будет корректным решением.
 
 ## Как включить источник
 
