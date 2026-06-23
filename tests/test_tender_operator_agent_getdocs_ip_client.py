@@ -16,8 +16,8 @@ def _settings(token: str = "test-token-value-not-real") -> ZakupkiSoapSettings:
         enabled=True,
         token=token,
         token_owner="individual",
-        individual_base_url="https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP",
-        individual_xsd_url="https://int44.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd",
+        individual_base_url="https://int.zakupki.gov.ru/eis-integration/services/getDocsIP",
+        individual_xsd_url="https://int.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd",
         individual_namespace="http://zakupki.gov.ru/fz44/get-docs-ip/ws",
         token_header_name="individualPerson_token",
         mode="PROD",
@@ -51,7 +51,42 @@ def test_getdocs_response_parser_extracts_archive_url():
     assert result.request_id == "req-001"
     assert result.ref_id == "ref-001"
     assert result.archive_url == "https://int44.zakupki.gov.ru/archive/demo.zip"
+    assert result.archive_urls == ["https://int44.zakupki.gov.ru/archive/demo.zip"]
+    assert result.archive_name == "demo.zip"
     assert result.status == "completed"
+
+
+def test_getdocs_response_parser_extracts_multiple_archive_urls():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <ns2:getDocsByReestrNumberResponse xmlns:ns2="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+          <index>
+            <id>req-001</id>
+            <refId>ref-001</refId>
+          </index>
+          <dataInfo>
+            <archiveUrl>https://int.zakupki.gov.ru/archive/part-1.zip</archiveUrl>
+            <archiveUrl>https://int.zakupki.gov.ru/archive/part-2.zip</archiveUrl>
+          </dataInfo>
+        </ns2:getDocsByReestrNumberResponse>
+      </soapenv:Body>
+    </soapenv:Envelope>"""
+
+    result = parse_getdocs_response(
+        xml,
+        request_id="req-001",
+        expected_response_tag="getDocsByReestrNumberResponse",
+        expected_request_tag="getDocsByReestrNumberRequest",
+    )
+
+    assert result.status == "completed"
+    assert result.archive_url == "https://int.zakupki.gov.ru/archive/part-1.zip"
+    assert result.archive_urls == [
+        "https://int.zakupki.gov.ru/archive/part-1.zip",
+        "https://int.zakupki.gov.ru/archive/part-2.zip",
+    ]
+    assert result.safe_diagnostic["archive_urls_count"] == 2
 
 
 def test_getdocs_response_parser_handles_soap_fault():
@@ -116,6 +151,38 @@ def test_getdocs_response_parser_handles_missing_archive_url():
     assert result.archive_url is None
 
 
+def test_getdocs_response_parser_handles_processing_error():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <ns2:getDocsByReestrNumberResponse xmlns:ns2="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+          <index>
+            <id>server-001</id>
+            <refId>client-001</refId>
+          </index>
+          <dataInfo>
+            <errorInfo>
+              <code>0</code>
+              <message>Непредвиденная ошибка в процессе обработки запроса getDocsByReestrNumberRequest</message>
+            </errorInfo>
+          </dataInfo>
+        </ns2:getDocsByReestrNumberResponse>
+      </soapenv:Body>
+    </soapenv:Envelope>"""
+
+    result = parse_getdocs_response(
+        xml,
+        request_id="client-001",
+        expected_response_tag="getDocsByReestrNumberResponse",
+        expected_request_tag="getDocsByReestrNumberRequest",
+    )
+
+    assert result.status == "processing_error"
+    assert result.ref_id == "client-001"
+    assert result.safe_diagnostic["error_code"] == "0"
+    assert "Непредвиденная ошибка" in " ".join(result.warnings)
+
+
 def test_download_archive_uses_individual_token_header(tmp_path):
     captured = {}
 
@@ -132,6 +199,22 @@ def test_download_archive_uses_individual_token_header(tmp_path):
     assert captured["headers"]["individualPerson_token"] == "test-token-value-not-real"
     assert downloaded.stored_name == "documentation-archive.zip"
     assert downloaded.size_bytes > 0
+
+
+def test_download_archive_accepts_eis_compound_url_without_zip_suffix(tmp_path):
+    captured = {}
+
+    def http_transport(url: str, headers: dict[str, str], timeout: int, max_bytes: int):
+        captured["url"] = url
+        captured["headers"] = headers
+        return b"PK\x03\x04demo", "application/octet-stream"
+
+    client = ZakupkiSoapClient(_settings(), http_transport=http_transport)
+    downloaded = client.download_archive("https://int.zakupki.gov.ru/dstore/common/download/compound", tmp_path)
+
+    assert captured["headers"]["individualPerson_token"] == "test-token-value-not-real"
+    assert downloaded.file_name.endswith(".zip")
+    assert downloaded.stored_name == "documentation-archive.zip"
 
 
 def test_download_archive_rejects_non_eis_host(tmp_path):

@@ -79,6 +79,7 @@ def _run_method(client: ZakupkiSoapClient, method: str, reestr_number: str) -> d
         "soap_post_status": "ok",
         "response_kind": result.status,
         "archive_url_present": bool(result.archive_url),
+        "archive_urls_count": len(result.archive_urls),
         "ref_id_present": bool(result.ref_id),
         "warnings": result.warnings,
         "safe_diagnostic": result.safe_diagnostic,
@@ -87,6 +88,7 @@ def _run_method(client: ZakupkiSoapClient, method: str, reestr_number: str) -> d
         payload["sanitized_error"] = " ".join(result.warnings)
     if result.archive_url:
         parsed = urlparse(result.archive_url)
+        payload["_archive_url"] = result.archive_url
         payload["archive_url_summary"] = {
             "host": parsed.hostname or "",
             "path": parsed.path or "/",
@@ -193,7 +195,9 @@ def run_diagnostics(
         payload["sanitized_error"] = primary["sanitized_error"]
 
     if download_archive and primary.get("archive_url_present") and primary.get("archive_url_summary"):
-        archive_url = "https://" + primary["archive_url_summary"]["host"] + primary["archive_url_summary"]["path"]
+        archive_url = primary.get("_archive_url") or (
+            "https://" + primary["archive_url_summary"]["host"] + primary["archive_url_summary"]["path"]
+        )
         try:
             target_dir = diagnostics_dir() / "downloads"
             downloaded = client.download_archive(archive_url, target_dir)
@@ -210,6 +214,9 @@ def run_diagnostics(
         payload["archive_url_summary"] = primary.get("archive_url_summary", {})
     elif payload["download_status"] == "not_requested":
         payload["download_status"] = "no_archive_url"
+
+    for method_payload in payload.get("methods", {}).values():
+        method_payload.pop("_archive_url", None)
 
     return payload
 

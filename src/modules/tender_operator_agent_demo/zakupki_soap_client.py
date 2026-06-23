@@ -101,7 +101,7 @@ class ZakupkiSoapClient:
         )
         xml = self._post_soap(
             envelope,
-            soap_action=None,
+            soap_action=self.settings.soap_action_uri,
             endpoint_url=self.settings.individual_base_url,
             method_name="getDocsByReestrNumberRequest",
         )
@@ -136,7 +136,7 @@ class ZakupkiSoapClient:
         )
         xml = self._post_soap(
             envelope,
-            soap_action=None,
+            soap_action=self.settings.soap_action_uri,
             endpoint_url=self.settings.individual_base_url,
             method_name="getDocsByOrgRegionRequest",
         )
@@ -163,7 +163,7 @@ class ZakupkiSoapClient:
         )
         xml = self._post_soap(
             envelope,
-            soap_action=None,
+            soap_action=self.settings.soap_action_uri,
             endpoint_url=self.settings.individual_base_url,
             method_name="getNsiRequest",
         )
@@ -215,8 +215,6 @@ class ZakupkiSoapClient:
         parsed = urlparse(archive_url)
         if parsed.scheme not in {"http", "https"}:
             raise RuntimeError("Разрешены только http/https ссылки для скачивания архива.")
-        if not (parsed.path or "").lower().endswith(".zip"):
-            raise RuntimeError("Поддерживается только ZIP-архив документации.")
         if not _is_allowed_eis_host((parsed.hostname or "").lower(), self.settings.allowed_hosts):
             raise RuntimeError("Хост архива не входит в allowlist ЕИС.")
 
@@ -233,12 +231,16 @@ class ZakupkiSoapClient:
         )
         if len(payload) > max_bytes:
             raise RuntimeError("Размер архива превышает лимит скачивания.")
+        raw_name = Path(parsed.path or "").name or "archive"
+        file_name = raw_name if raw_name.lower().endswith(".zip") else f"{raw_name}.zip"
+        if not payload.startswith(b"PK"):
+            raise RuntimeError("Поддерживается только ZIP-архив документации.")
 
         target_dir.mkdir(parents=True, exist_ok=True)
         stored_name = "documentation-archive.zip"
         (target_dir / stored_name).write_bytes(payload)
         return DownloadedAttachment(
-            file_name=Path(parsed.path or "archive.zip").name or "archive.zip",
+            file_name=file_name,
             stored_name=stored_name,
             size_bytes=len(payload),
             content_type=content_type,
@@ -499,16 +501,35 @@ def parse_getdocs_response(
 
     response_node = _find_first_node(root, {expected_response_tag})
     request_echo_node = _find_first_node(root, {expected_request_tag})
-    archive_url = _first_text(root, "archiveUrl", "archiveURL")
+    archive_urls = _all_texts(root, "archiveUrl", "archiveURL")
+    archive_url = archive_urls[0] if archive_urls else None
     parsed_request_id = _first_text(root, "id") or request_id or "unknown"
     ref_id = _first_text(root, "refId", "refID")
     warnings: list[str] = []
+    error_info = _find_first_node(root, {"errorInfo"})
+    error_code = _first_text(error_info, "code") if error_info is not None else None
+    error_message = _first_text(error_info, "message", "errorMessage", "description") if error_info is not None else None
+    no_data = (_first_text(root, "noData") or "").strip().lower() == "true"
+    archive_name = _first_text(root, "archiveName", "name")
+    if archive_name is None and archive_url:
+        archive_name = Path(urlparse(archive_url).path or "").name or None
 
     if _looks_like_validation_error(root, raw_summary):
         status = "validation_error"
     elif response_node is None and request_echo_node is not None:
         status = "echo_request_unprocessed"
         warnings.append("Ответ похож на echo request без обработанного response payload.")
+    elif error_info is not None:
+        status = "processing_error"
+        if error_message:
+            warnings.append(error_message)
+        elif error_code:
+            warnings.append(f"ЕИС вернул errorInfo code={error_code}.")
+        else:
+            warnings.append("ЕИС вернул errorInfo без archiveUrl.")
+    elif no_data:
+        status = "no_data"
+        warnings.append("ЕИС сообщил, что документы по запросу отсутствуют.")
     elif archive_url:
         status = "completed"
     else:
@@ -524,15 +545,20 @@ def parse_getdocs_response(
         request_id=parsed_request_id,
         ref_id=ref_id,
         archive_url=archive_url,
+        archive_urls=archive_urls,
+        archive_name=archive_name,
         archive_size=_to_int(_first_text(root, "archiveSize", "sizeBytes")),
         status=status,
         warnings=warnings,
-        raw_summary=raw_summary,
+        raw_summary=raw_summary or error_message,
         safe_diagnostic={
             "response_kind": status,
             "archive_url_present": bool(archive_url),
+            "archive_urls_count": len(archive_urls),
             "expected_response_tag": expected_response_tag,
             "ref_id_present": bool(ref_id),
+            "error_code": error_code,
+            "no_data": no_data,
         },
     )
 
@@ -621,6 +647,16 @@ def _first_text(node: ET.Element, *names: str) -> str | None:
         if _local_name(child.tag).lower() in lowered and child.text and child.text.strip():
             return child.text.strip()
     return None
+
+
+def _all_texts(node: ET.Element, *names: str) -> list[str]:
+    lowered = {name.lower() for name in names}
+    values: list[str] = []
+    for child in node.iter():
+        if _local_name(child.tag).lower() not in lowered or not child.text or not child.text.strip():
+            continue
+        values.append(child.text.strip())
+    return values
 
 
 def _looks_like_validation_error(root: ET.Element, raw_summary: str | None) -> bool:

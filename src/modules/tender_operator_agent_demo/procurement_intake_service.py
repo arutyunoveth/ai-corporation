@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -42,6 +43,10 @@ from src.modules.tender_operator_agent_demo.upload_service import (
 )
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
+
+
+ARCHIVE_DOWNLOAD_RETRY_ATTEMPTS = 5
+ARCHIVE_DOWNLOAD_RETRY_DELAY_SECONDS = 10
 
 
 def _now_iso() -> str:
@@ -134,6 +139,54 @@ def _build_getdocs_result(reestr_number: str, archive_result: DocsArchiveResult)
         attachment_names=["documentation-archive.zip"] if archive_result.archive_url else [],
         source_note="Read-only getDocsIP intake для токена физлица.",
     )
+
+
+def _is_retryable_archive_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "http 404",
+            "http 409",
+            "http 423",
+            "http 425",
+            "http 429",
+            "http 500",
+            "http 502",
+            "http 503",
+            "http 504",
+            "timed out",
+            "temporarily unavailable",
+            "connection reset",
+        )
+    )
+
+
+def _download_archive_with_retry(
+    client: ZakupkiSoapClient,
+    archive_urls: list[str],
+    target_dir: Path,
+) -> tuple[Any | None, str, list[str], int]:
+    warnings: list[str] = []
+    if not archive_urls:
+        return None, "no_archive_url", warnings, 0
+
+    attempts_made = 0
+    for attempt in range(1, ARCHIVE_DOWNLOAD_RETRY_ATTEMPTS + 1):
+        attempts_made = attempt
+        for archive_url in archive_urls:
+            try:
+                downloaded = client.download_archive(archive_url, target_dir)
+            except RuntimeError as exc:
+                message = str(exc)
+                warnings.append(f"Попытка {attempt}: {message}")
+                if not _is_retryable_archive_error(message):
+                    return None, "download_error", warnings, attempts_made
+                continue
+            return downloaded, "downloaded", warnings, attempts_made
+        if attempt < ARCHIVE_DOWNLOAD_RETRY_ATTEMPTS:
+            time.sleep(ARCHIVE_DOWNLOAD_RETRY_DELAY_SECONDS)
+    return None, "archive_not_ready", warnings, attempts_made
 
 
 def _extract_safe_archive_into_run(run_id: str, archive_path: Path) -> tuple[list[dict[str, Any]], list[ProcurementAttachmentManifestItem], int]:
@@ -528,43 +581,88 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
     manifest: list[ProcurementAttachmentManifestItem] = []
     files: list[dict[str, Any]] = []
     archive_downloaded = False
+    archive_download_status = "not_requested"
+    archive_download_attempts = 0
     documents_extracted_count = 0
 
-    if archive_result.archive_url and request.download_archive:
-        downloaded = client.download_archive(archive_result.archive_url, get_demo_run_input_dir(run_id))
-        archive_downloaded = True
-        append_demo_run_event(
-            run_id,
-            "attachment_saved",
-            "Архив документации ЕИС сохранён локально.",
-            {"stored_name": downloaded.stored_name, "size_bytes": downloaded.size_bytes},
+    archive_urls = archive_result.archive_urls or ([archive_result.archive_url] if archive_result.archive_url else [])
+
+    if archive_urls and request.download_archive:
+        downloaded, archive_download_status, retry_warnings, archive_download_attempts = _download_archive_with_retry(
+            client,
+            archive_urls,
+            get_demo_run_input_dir(run_id),
         )
-        manifest.append(
-            ProcurementAttachmentManifestItem(
-                name=downloaded.file_name,
-                stored_name=downloaded.stored_name,
-                extension=".zip",
-                status="saved",
-                note="Архив документации скачан через getDocsIP в read-only режиме.",
+        archive_result.warnings.extend(retry_warnings)
+        if downloaded is None:
+            note = (
+                "Архив документации найден, но ещё формируется в ЕИС. Повторите попытку позже или загрузите документы вручную."
+                if archive_download_status == "archive_not_ready"
+                else "Архив документации не удалось скачать автоматически. Продолжение возможно после ручной загрузки документов."
             )
-        )
-        extracted_files, extracted_manifest, documents_extracted_count = _extract_safe_archive_into_run(
-            run_id,
-            get_demo_run_input_dir(run_id) / downloaded.stored_name,
-        )
-        files.extend(extracted_files)
-        manifest.extend(extracted_manifest)
-        append_demo_run_event(
-            run_id,
-            "attachments_download_completed",
-            "Архив документации получен и безопасно обработан.",
-            {"documents_extracted_count": documents_extracted_count, "archive_downloaded": True},
-        )
-        status = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE if files else TenderOperatorUploadedRunStatus.DOCS_REQUIRED
+            manifest.append(
+                ProcurementAttachmentManifestItem(
+                    name=archive_result.archive_name or "documentation-archive.zip",
+                    stored_name=None,
+                    extension=".zip",
+                    status="manual_upload_required",
+                    note=note,
+                )
+            )
+            append_demo_run_event(
+                run_id,
+                "manual_upload_required",
+                (
+                    "Архив документации ещё формируется в ЕИС. Повторите позже или загрузите документы вручную."
+                    if archive_download_status == "archive_not_ready"
+                    else "Архив документации не удалось скачать автоматически. Продолжение возможно после ручной загрузки документов."
+                ),
+                {
+                    "getdocs_status": archive_result.status,
+                    "archive_url_present": bool(archive_urls),
+                    "archive_download_status": archive_download_status,
+                    "archive_download_attempts": archive_download_attempts,
+                },
+            )
+            status = TenderOperatorUploadedRunStatus.DOCS_REQUIRED
+        else:
+            archive_downloaded = True
+            append_demo_run_event(
+                run_id,
+                "attachment_saved",
+                "Архив документации ЕИС сохранён локально.",
+                {"stored_name": downloaded.stored_name, "size_bytes": downloaded.size_bytes},
+            )
+            manifest.append(
+                ProcurementAttachmentManifestItem(
+                    name=downloaded.file_name,
+                    stored_name=downloaded.stored_name,
+                    extension=".zip",
+                    status="saved",
+                    note="Архив документации скачан через getDocsIP в read-only режиме.",
+                )
+            )
+            extracted_files, extracted_manifest, documents_extracted_count = _extract_safe_archive_into_run(
+                run_id,
+                get_demo_run_input_dir(run_id) / downloaded.stored_name,
+            )
+            files.extend(extracted_files)
+            manifest.extend(extracted_manifest)
+            append_demo_run_event(
+                run_id,
+                "attachments_download_completed",
+                "Архив документации получен и безопасно обработан.",
+                {
+                    "documents_extracted_count": documents_extracted_count,
+                    "archive_downloaded": True,
+                    "archive_download_attempts": archive_download_attempts,
+                },
+            )
+            status = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE if files else TenderOperatorUploadedRunStatus.DOCS_REQUIRED
     else:
         note = (
             "Архив документации не получен из ответа getDocsIP. Нужна ручная загрузка документов."
-            if not archive_result.archive_url
+            if not archive_urls
             else "Архив не скачивался автоматически по параметрам запроса."
         )
         manifest.append(
@@ -580,7 +678,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
             run_id,
             "manual_upload_required",
             "Архив документации не получен автоматически. Продолжение возможно после ручной загрузки документов.",
-            {"getdocs_status": archive_result.status, "archive_url_present": bool(archive_result.archive_url)},
+            {"getdocs_status": archive_result.status, "archive_url_present": bool(archive_urls)},
         )
         status = TenderOperatorUploadedRunStatus.DOCS_REQUIRED
 
@@ -622,8 +720,12 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         "token_owner": settings.token_owner,
         "reestr_number": request.reestr_number,
         "subsystem_type": request.subsystem_type,
-        "archive_url_present": bool(archive_result.archive_url),
+        "archive_url_present": bool(archive_urls),
+        "archive_urls_count": len(archive_urls),
+        "archive_name": archive_result.archive_name,
         "archive_downloaded": archive_downloaded,
+        "archive_download_status": archive_download_status,
+        "archive_download_attempts": archive_download_attempts,
         "documents_extracted_count": documents_extracted_count,
         "getdocs_status": archive_result.status,
         "getdocs_request_id": archive_result.request_id,

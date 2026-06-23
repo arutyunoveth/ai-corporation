@@ -17,12 +17,13 @@ PLACEHOLDER_TOKENS = {
 DEFAULT_LEGACY_BASE_URL = "https://int44.zakupki.gov.ru/eis-integration/services-vbs"
 DEFAULT_INDIVIDUAL_BASE_URL = "https://int.zakupki.gov.ru/eis-integration/services/getDocsIP"
 DEFAULT_INDIVIDUAL_XSD_URL = f"{DEFAULT_INDIVIDUAL_BASE_URL}?xsd=getDocsIP-ws-api.xsd"
-DEFAULT_INDIVIDUAL_NAMESPACE = "https://int.zakupki.gov.ru/eis-integration/services/getDocsIP"
+DEFAULT_INDIVIDUAL_NAMESPACE = "http://zakupki.gov.ru/fz44/get-docs-ip/ws"
 DEFAULT_TOKEN_HEADER_NAME = "individualPerson_token"
 DEFAULT_SOAP_MODE = "PROD"
 DEFAULT_ALLOWED_HOSTS = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru,int44-ttls-cert.zakupki.gov.ru"
 DEFAULT_USER_AGENT = "ArvectumTenderAgent/0.1 read-only"
 DEFAULT_CONTENT_TYPE = "text/xml; charset=utf-8"
+DEFAULT_SOAP_ACTION_URI = "http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"
 
 TokenOwner = Literal["individual", "legal_entity"]
 
@@ -67,7 +68,8 @@ class ZakupkiSoapSettings:
     allowed_hosts_raw: str = DEFAULT_ALLOWED_HOSTS
     user_agent: str = DEFAULT_USER_AGENT
     content_type: str = DEFAULT_CONTENT_TYPE
-    use_soap_action: bool = False
+    use_soap_action: bool = True
+    soap_action_uri: str = DEFAULT_SOAP_ACTION_URI
     search_action: str = "searchProcurements"
     details_action: str = "getProcurementDetails"
     attachments_action: str = "listAttachments"
@@ -101,7 +103,9 @@ class ZakupkiSoapSettings:
             or DEFAULT_ALLOWED_HOSTS,
             user_agent=os.environ.get("ZAKUPKI_GOV_RU_SOAP_USER_AGENT", DEFAULT_USER_AGENT).strip() or DEFAULT_USER_AGENT,
             content_type=os.environ.get("ZAKUPKI_GOV_RU_SOAP_CONTENT_TYPE", DEFAULT_CONTENT_TYPE).strip() or DEFAULT_CONTENT_TYPE,
-            use_soap_action=_read_bool("ZAKUPKI_GOV_RU_SOAP_USE_SOAP_ACTION", False),
+            use_soap_action=_read_bool("ZAKUPKI_GOV_RU_SOAP_USE_SOAP_ACTION", True),
+            soap_action_uri=os.environ.get("ZAKUPKI_GOV_RU_SOAP_SOAP_ACTION", DEFAULT_SOAP_ACTION_URI).strip()
+            or DEFAULT_SOAP_ACTION_URI,
             search_action=os.environ.get("ZAKUPKI_GOV_RU_SOAP_SEARCH_ACTION", "searchProcurements").strip()
             or "searchProcurements",
             details_action=os.environ.get("ZAKUPKI_GOV_RU_SOAP_DETAILS_ACTION", "getProcurementDetails").strip()
@@ -158,6 +162,7 @@ class ZakupkiSoapSettings:
             "user_agent": self.user_agent,
             "content_type": self.content_type,
             "use_soap_action": self.use_soap_action,
+            "soap_action_uri": self.soap_action_uri,
             "individual_base_url_configured": bool(self.individual_base_url),
             "legacy_base_url_configured": bool(self.base_url),
             "individual_namespace": self.individual_namespace,

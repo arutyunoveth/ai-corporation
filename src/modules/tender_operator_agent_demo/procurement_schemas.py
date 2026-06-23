@@ -87,6 +87,8 @@ class DocsArchiveResult(APIModel):
     request_id: str
     ref_id: str | None = None
     archive_url: str | None = None
+    archive_urls: list[str] = Field(default_factory=list)
+    archive_name: str | None = None
     archive_size: int | None = Field(default=None, ge=0)
     status: str
     warnings: list[str] = Field(default_factory=list)

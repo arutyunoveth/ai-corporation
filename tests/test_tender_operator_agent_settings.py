@@ -18,8 +18,11 @@ def test_zakupki_soap_disabled_without_token(monkeypatch):
     assert settings.configured is False
     assert settings.token_owner == "individual"
     assert settings.active_docs_endpoint == "https://int.zakupki.gov.ru/eis-integration/services/getDocsIP"
+    assert settings.individual_namespace == "http://zakupki.gov.ru/fz44/get-docs-ip/ws"
     assert settings.disable_proxy_for_eis is True
     assert settings.require_direct_ru_route is True
+    assert settings.use_soap_action is True
+    assert settings.soap_action_uri == "http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"
     assert is_zakupki_soap_configured(settings) is False
     assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in settings.safe_status()["reason"]
 
