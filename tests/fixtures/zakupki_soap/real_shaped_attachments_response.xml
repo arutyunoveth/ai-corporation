@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns2="http://zakupki.gov.ru/eis-integration/services-vbs">
+  <soap:Body>
+    <ns2:getAvailableDocumentsResponse>
+      <documents>
+        <document>
+          <documentId>doc-001</documentId>
+          <documentName>technical_specification.pdf</documentName>
+          <downloadUrl>https://zakupki.gov.ru/files/technical_specification.pdf</downloadUrl>
+          <fileSize>2048</fileSize>
+          <mimeType>application/pdf</mimeType>
+        </document>
+        <document>
+          <documentId>doc-002</documentId>
+          <documentName>contract_draft.docx</documentName>
+          <fileSize>4096</fileSize>
+          <mimeType>application/vnd.openxmlformats-officedocument.wordprocessingml.document</mimeType>
+        </document>
+      </documents>
+    </ns2:getAvailableDocumentsResponse>
+  </soap:Body>
+</soap:Envelope>

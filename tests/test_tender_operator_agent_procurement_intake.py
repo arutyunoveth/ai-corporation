@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementAttachment, ProcurementDetails, ProcurementSearchResult
+
 
 def _set_runs_root(monkeypatch, tmp_path: Path) -> Path:
     runs_root = tmp_path / "tender_operator_demo_runs"
@@ -173,3 +175,61 @@ def test_procurement_intake_does_not_write_soap_token(client, monkeypatch, tmp_p
     combined = "\n".join(path.read_text(encoding="utf-8") for path in run_dir.rglob("*.json*"))
     assert token not in combined
     clear_zakupki_soap_settings_cache()
+
+
+def test_soap_procurement_without_download_urls_becomes_manual_upload_required(client, monkeypatch, tmp_path):
+    from src.modules.tender_operator_agent_demo import procurement_intake_service as service
+
+    _set_runs_root(monkeypatch, tmp_path)
+
+    class Descriptor:
+        code = "zakupki_gov_ru_soap"
+        enabled = True
+        note = None
+
+    details = ProcurementDetails(
+        procurement=ProcurementSearchResult(
+            procurement_id="soap-001",
+            notice_number="123456",
+            title="SOAP shaped procurement",
+            customer_name="Промышленный заказчик",
+            law="44-ФЗ",
+            source="zakupki_gov_ru_soap",
+            source_url="https://zakupki.gov.ru/",
+            attachments_count=1,
+            attachments_status="manual_upload_required",
+            can_download_attachments=False,
+            requires_manual_upload=True,
+        ),
+        attachments=[
+            ProcurementAttachment(
+                attachment_id="doc-001",
+                name="contract_draft.docx",
+                url=None,
+                can_download=False,
+                requires_manual_upload=True,
+                warnings=["В ответе ЕИС есть идентификатор документа, но нет прямой ссылки на скачивание."],
+            )
+        ],
+        warnings=["SOAP details partial response"],
+    )
+
+    monkeypatch.setattr(service, "_find_descriptor", lambda _code: Descriptor())
+    monkeypatch.setattr(service, "get_demo_procurement", lambda _source, _procurement_id: None)
+    monkeypatch.setattr(service, "get_procurement_details", lambda _source, _procurement_id: details)
+
+    create = client.post(
+        "/api/demo/tender-agent/runs/from-procurement",
+        json={
+            "procurement_id": "soap-001",
+            "source": "zakupki_gov_ru_soap",
+            "query": "шкаф управления",
+        },
+    )
+
+    assert create.status_code == 200
+    payload = create.json()
+    assert payload["status"] == "docs_required"
+    assert payload["attachments_status"] == "manual_upload_required"
+    assert payload["manual_upload_required"] is True
+    assert payload["downloaded_files_count"] == 0

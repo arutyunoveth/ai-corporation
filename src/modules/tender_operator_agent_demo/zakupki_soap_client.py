@@ -190,10 +190,13 @@ def parse_attachments_response(xml: str) -> list[ProcurementAttachment]:
     attachments: list[ProcurementAttachment] = []
     for node in _candidate_nodes(root, {"attachment", "document", "file"}):
         name = _first_text(node, "name", "fileName", "filename", "documentName")
-        attachment_id = _first_text(node, "attachment_id", "attachmentId", "id", "fileId")
+        attachment_id = _first_text(node, "attachment_id", "attachmentId", "id", "fileId", "documentId", "docId")
         if not name:
             continue
         url = _first_text(node, "url", "downloadUrl", "href")
+        warnings: list[str] = []
+        if not url and attachment_id:
+            warnings.append("В ответе ЕИС есть идентификатор документа, но нет прямой ссылки на скачивание.")
         attachments.append(
             ProcurementAttachment(
                 attachment_id=attachment_id or name,
@@ -204,7 +207,7 @@ def parse_attachments_response(xml: str) -> list[ProcurementAttachment]:
                 extension=_extension_from_name(name),
                 can_download=bool(url),
                 requires_manual_upload=not bool(url),
-                warnings=[] if url else ["В ответе ЕИС нет ссылки на скачивание."],
+                warnings=warnings or ([] if url else ["В ответе ЕИС нет ссылки на скачивание."]),
             )
         )
     return attachments

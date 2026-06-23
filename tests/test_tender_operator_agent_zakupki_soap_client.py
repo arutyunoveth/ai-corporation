@@ -119,6 +119,18 @@ def test_mocked_attachments_xml_maps_to_attachments():
     assert attachments[0].can_download is True
 
 
+def test_real_shaped_attachments_response_maps_url_and_manual_fallback():
+    attachments = parse_attachments_response(_fixture("real_shaped_attachments_response.xml"))
+
+    assert len(attachments) == 2
+    assert attachments[0].attachment_id == "doc-001"
+    assert attachments[0].can_download is True
+    assert attachments[1].attachment_id == "doc-002"
+    assert attachments[1].can_download is False
+    assert attachments[1].requires_manual_upload is True
+    assert attachments[1].warnings
+
+
 def test_soap_transport_uses_timeout_and_mocked_response():
     calls = []
 
