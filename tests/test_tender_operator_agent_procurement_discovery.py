@@ -1,3 +1,10 @@
+import pytest
+
+from src.modules.tender_operator_agent_demo.procurement_discovery import list_procurement_sources, search_procurements
+from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementSearchRequest
+from src.modules.tender_operator_agent_demo.settings import clear_zakupki_soap_settings_cache
+
+
 def test_demo_local_procurement_search_returns_results(client):
     response = client.get(
         "/api/demo/tender-agent/procurements/search",
@@ -34,10 +41,38 @@ def test_unknown_procurement_source_is_rejected(client):
 def test_disabled_procurement_source_returns_warning(client):
     response = client.get(
         "/api/demo/tender-agent/procurements/search",
-        params={"query": "кабель", "source": "mos_portal_public_api"},
+        params={"query": "кабель", "source": "zakupki_gov_ru_soap"},
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["results"] == []
     assert payload["warnings"]
+
+
+def test_procurement_sources_include_zakupki_disabled_without_token(monkeypatch):
+    monkeypatch.delenv("ZAKUPKI_GOV_RU_SOAP_ENABLED", raising=False)
+    monkeypatch.delenv("ZAKUPKI_GOV_RU_SOAP_TOKEN", raising=False)
+    clear_zakupki_soap_settings_cache()
+
+    sources = {item.source: item for item in list_procurement_sources()}
+
+    assert sources["demo_local"].configured is True
+    assert sources["zakupki_gov_ru_soap"].configured is False
+    assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in (sources["zakupki_gov_ru_soap"].reason or "")
+
+
+def test_procurement_discovery_request_schema_searches_demo_local():
+    results = search_procurements(
+        ProcurementSearchRequest(source="demo_local", query="кабель", max_results=3)
+    )
+
+    assert results
+    assert results[0].notice_number
+    assert results[0].source == "demo_local"
+    assert results[0].attachments_count >= 0
+
+
+def test_procurement_discovery_unknown_source_rejected_directly():
+    with pytest.raises(ValueError, match="Unknown procurement source"):
+        search_procurements(ProcurementSearchRequest(source="unknown_source", query="кабель"))

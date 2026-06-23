@@ -13,11 +13,15 @@ build/
 *.egg-info/
 alembic.log
 .env
+.env.local
+.env.*.local
+*.token
 ai_corporation.db
 
 # Local pilot data — never commit real partner data
 /local_pilot_runs/
 /pilot_runs/
+operator_logs/
 tmp/partner_exports/
 /tests/fixtures/local_pilot_runs/**/05_partner_export/*.md
 /tests/fixtures/local_pilot_runs/**/05_partner_export/*.json

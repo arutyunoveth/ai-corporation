@@ -6,6 +6,7 @@ from io import BytesIO
 from openpyxl import Workbook
 
 from src.modules.tender_operator_agent_demo.schemas import ProcurementSourceDescriptor
+from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ def _quote_workbook_bytes(supplier_name: str, total_multiplier: float) -> bytes:
 
 
 def get_procurement_source_descriptors() -> list[ProcurementSourceDescriptor]:
+    zakupki_status = get_zakupki_soap_settings().safe_status()
     return [
         ProcurementSourceDescriptor(
             code="demo_local",
@@ -58,14 +60,11 @@ def get_procurement_source_descriptors() -> list[ProcurementSourceDescriptor]:
             note="Офлайн-источник для стабильной демонстрации без сети.",
         ),
         ProcurementSourceDescriptor(
-            code="mos_portal_public_api",
-            label="mos_portal_public_api",
-            enabled=False,
+            code="zakupki_gov_ru_soap",
+            label="zakupki_gov_ru_soap",
+            enabled=bool(zakupki_status["configured"]),
             read_only=True,
-            note=(
-                "Найден в старом tender-app как read-only идея через публичные endpoint'ы, "
-                "но не включён в demo по умолчанию: нужен отдельный аудит устойчивости и сетевых ограничений."
-            ),
+            note=zakupki_status["reason"] or "Источник ЕИС включён в безопасном read-only режиме.",
         ),
     ]
 
