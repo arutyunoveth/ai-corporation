@@ -755,6 +755,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             datasetDisplayStatuses: new Map(),
             uploadedRuns: [],
             selectedRunId: {initial_run_id},
+            eventsPollTimer: null,
           }};
 
           const STEP_STATUS_LABELS = {{
@@ -938,6 +939,47 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               throw new Error(detail);
             }}
             return response.json();
+          }}
+
+          function renderRunEventList(events) {{
+            return (events || []).map((item) => `
+              <li class="event-item">
+                <div class="event-head">
+                  <span>${{escapeHtml(item.timestamp || item.created_at)}} · ${{escapeHtml(item.step || 'Система')}}</span>
+                  <span class="event-severity ${{escapeHtml(item.severity || 'info')}}">${{escapeHtml(item.severity || 'info')}}</span>
+                </div>
+                <div><strong>${{escapeHtml(item.event_type)}}</strong> · ${{escapeHtml(item.message_ru || item.message)}}</div>
+              </li>
+            `).join('');
+          }}
+
+          async function refreshRunEvents(runId) {{
+            if (!runId) {{
+              return;
+            }}
+            try {{
+              const events = await fetchJson(`/api/demo/tender-agent/runs/${{encodeURIComponent(runId)}}/events`);
+              const node = document.getElementById('run-events-list');
+              if (!node || state.selectedRunId !== runId) {{
+                return;
+              }}
+              node.innerHTML = renderRunEventList(events) || '<li class="event-item">Событий пока нет.</li>';
+            }} catch (_error) {{
+            }}
+          }}
+
+          function startRunEventsPolling(runId) {{
+            if (state.eventsPollTimer) {{
+              window.clearInterval(state.eventsPollTimer);
+              state.eventsPollTimer = null;
+            }}
+            if (!runId) {{
+              return;
+            }}
+            refreshRunEvents(runId);
+            state.eventsPollTimer = window.setInterval(() => {{
+              refreshRunEvents(runId);
+            }}, 2500);
           }}
 
           function setFlash(nodeId, message, isError = false) {{
@@ -1226,10 +1268,6 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               await loadProcurementSources();
               await loadRuns();
               await selectRun(response.run_id, true);
-              if (payload.analyze_after_download && response.status !== 'docs_required') {{
-                await analyzeRun(response.run_id);
-                await selectRun(response.run_id, false);
-              }}
               setFlash('eis-docs-flash', `Создан run ${{response.run_id}}. Статус документации: ${{attachmentsStatusLabel(response.attachments_status)}}. Статус архива: ${{displayValue(response.archive_download_status, 'не определён')}}.`);
             }} catch (error) {{
               await loadProcurementSources();
@@ -1409,15 +1447,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 </form>
               </div>
             ` : '';
-            const eventItems = (run.events || []).map((item) => `
-              <li class="event-item">
-                <div class="event-head">
-                  <span>${{escapeHtml(item.timestamp || item.created_at)}} · ${{escapeHtml(item.step || 'Система')}}</span>
-                  <span class="event-severity ${{escapeHtml(item.severity || 'info')}}">${{escapeHtml(item.severity || 'info')}}</span>
-                </div>
-                <div><strong>${{escapeHtml(item.event_type)}}</strong> · ${{escapeHtml(item.message_ru || item.message)}}</div>
-              </li>
-            `).join('');
+            const eventItems = renderRunEventList(run.events);
             document.getElementById('selected-run-card').innerHTML = `
               <div class="step-top">
                 <div>
@@ -1466,7 +1496,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div style="height:14px"></div>
               <div class="card" style="padding:16px">
                 <div class="section-title">Журнал работы агента</div>
-                <ul class="event-list">${{eventItems || '<li class="event-item">Событий пока нет.</li>'}}</ul>
+                <ul class="event-list" id="run-events-list">${{eventItems || '<li class="event-item">Событий пока нет.</li>'}}</ul>
               </div>
               <div style="height:14px"></div>
               ${{renderQuoteSection(run)}}
@@ -1481,6 +1511,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             if (manualUploadForm) {{
               manualUploadForm.addEventListener('submit', (event) => handleManualRunUpload(event, run.run_id));
             }}
+            startRunEventsPolling(run.run_id);
           }}
 
           function renderSelectedRunSteps(run) {{

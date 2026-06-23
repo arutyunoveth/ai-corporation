@@ -154,6 +154,14 @@ class TenderOperatorRunEvent(APIModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class TenderOperatorRunEventFeedItem(APIModel):
+    timestamp: datetime
+    event_type: str
+    message_ru: str
+    step: str
+    severity: str = Field(default="info", pattern="^(info|warning|error)$")
+
+
 class ProcurementSourceDescriptor(APIModel):
     code: str
     label: str

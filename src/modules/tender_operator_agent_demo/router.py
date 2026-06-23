@@ -15,6 +15,7 @@ from src.modules.tender_operator_agent_demo.schemas import (
     TenderOperatorUploadedRunCreateResponse,
     TenderOperatorUploadedRunListResponse,
     TenderOperatorUploadedRunResponse,
+    TenderOperatorRunEventFeedItem,
     TenderOperatorUploadedRunStepsResponse,
 )
 from src.modules.tender_operator_agent_demo.procurement_discovery import (
@@ -53,6 +54,7 @@ from src.modules.tender_operator_agent_demo.upload_service import (
     get_uploaded_demo_report_html,
     get_uploaded_demo_run,
     get_uploaded_demo_run_steps,
+    load_demo_run_events,
     list_uploaded_demo_runs,
 )
 
@@ -239,6 +241,20 @@ def list_tender_operator_uploaded_runs() -> TenderOperatorUploadedRunListRespons
 @router.get("/api/demo/tender-agent/runs/{run_id}", response_model=TenderOperatorUploadedRunResponse)
 def get_tender_operator_uploaded_run(run_id: str) -> TenderOperatorUploadedRunResponse:
     return get_uploaded_demo_run(run_id)
+
+
+@router.get("/api/demo/tender-agent/runs/{run_id}/events", response_model=list[TenderOperatorRunEventFeedItem])
+def get_tender_operator_uploaded_run_events(run_id: str) -> list[TenderOperatorRunEventFeedItem]:
+    return [
+        TenderOperatorRunEventFeedItem(
+            timestamp=item.timestamp or item.created_at,
+            event_type=item.event_type,
+            message_ru=item.message_ru or item.message,
+            step=item.step,
+            severity=item.severity,
+        )
+        for item in load_demo_run_events(run_id)
+    ]
 
 
 @router.get("/api/demo/tender-agent/runs/{run_id}/procurement", response_model=ProcurementRunDetailsResponse)
