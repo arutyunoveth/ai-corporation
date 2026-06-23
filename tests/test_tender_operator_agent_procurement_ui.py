@@ -94,4 +94,6 @@ def test_procurement_ui_contains_getdocs_tab(client):
 
     assert response.status_code == 200
     assert "Получить документацию по номеру" in response.text
-    assert "Получить архив через ЕИС getDocsIP" in response.text
+    assert "Получить документацию из ЕИС" in response.text
+    assert "Запустить анализ после скачивания" in response.text
+    assert "Результат получения документации" in response.text

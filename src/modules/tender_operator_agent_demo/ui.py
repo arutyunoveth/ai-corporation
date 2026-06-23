@@ -307,6 +307,21 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             font-size: 14px;
             color: rgba(255,255,255,0.86);
           }}
+          .checkbox {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }}
+          .checkbox input {{
+            width: 18px;
+            min-height: 18px;
+            height: 18px;
+            margin: 0;
+            padding: 0;
+          }}
+          .checkbox span {{
+            color: rgba(255,255,255,0.86);
+          }}
           input, select, textarea {{
             width: 100%;
             min-height: 46px;
@@ -561,8 +576,20 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                             <input name="subsystem_type" value="PRIZ" />
                           </label>
                         </div>
+                        <label>
+                          SOAP method
+                          <input name="method" value="getDocsByReestrNumber" readonly />
+                        </label>
+                        <label class="checkbox">
+                          <input name="download_archive" type="checkbox" checked />
+                          <span>Скачать архив</span>
+                        </label>
+                        <label class="checkbox">
+                          <input name="analyze_after_download" type="checkbox" />
+                          <span>Запустить анализ после скачивания</span>
+                        </label>
                         <div class="form-actions">
-                          <button class="button primary" type="submit">Получить архив через ЕИС getDocsIP</button>
+                          <button class="button primary" type="submit">Получить документацию из ЕИС</button>
                         </div>
                       </form>
                     </div>
@@ -589,6 +616,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                     <div class="card">
                       <h2>Сценарий работы</h2>
                       <div class="trace">1. Найдите закупку через `demo_local` или публичный HTML fallback. 2. Скопируйте реестровый номер. 3. Запросите архив документации через getDocsIP. 4. Если archiveUrl получен, архив скачивается и safely обрабатывается локально. 5. Если archiveUrl не получен, интерфейс честно переводит вас в ручной upload fallback.</div>
+                    </div>
+                    <div class="card" id="eis-docs-result-card">
+                      <h2>Результат получения документации</h2>
+                      <div id="eis-docs-result" class="empty">После запроса сюда попадут статус SOAP, статус архива, количество распакованных файлов и ссылки на run/report.</div>
                     </div>
                   </main>
                 </div>
@@ -1056,6 +1087,49 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
           }}
 
+          function renderEisDocsResult(result) {{
+            const node = document.getElementById('eis-docs-result');
+            if (!result) {{
+              node.innerHTML = 'После запроса сюда попадут статус SOAP, статус архива, количество распакованных файлов и ссылки на run/report.';
+              node.className = 'empty';
+              return;
+            }}
+            node.className = '';
+            const analyzeButton = result.status !== 'docs_required'
+              ? `<button class="button primary" type="button" id="eis-result-analyze-button">Запустить анализ</button>`
+              : '';
+            const reportLink = result.report_url
+              ? `<a class="link-button" href="${{escapeHtml(result.report_url)}}" target="_blank" rel="noreferrer">Открыть report</a>`
+              : '';
+            node.innerHTML = `
+              <div class="grid-2">
+                <div class="metric"><span class="metric-label">Run ID</span><span class="metric-value">${{escapeHtml(result.run_id)}}</span></div>
+                <div class="metric"><span class="metric-label">Статус run</span><span class="metric-value">${{escapeHtml(statusLabel(result.status))}}</span></div>
+                <div class="metric"><span class="metric-label">SOAP method</span><span class="metric-value">${{escapeHtml(displayValue(result.soap_method))}}</span></div>
+                <div class="metric"><span class="metric-label">refId</span><span class="metric-value">${{escapeHtml(displayValue(result.ref_id))}}</span></div>
+                <div class="metric"><span class="metric-label">archiveUrl</span><span class="metric-value">${{booleanLabel(result.archive_url_present)}}</span></div>
+                <div class="metric"><span class="metric-label">Статус скачивания</span><span class="metric-value">${{escapeHtml(displayValue(result.archive_download_status))}}</span></div>
+                <div class="metric"><span class="metric-label">Архив скачан</span><span class="metric-value">${{booleanLabel(result.archive_downloaded)}}</span></div>
+                <div class="metric"><span class="metric-label">Распаковано документов</span><span class="metric-value">${{escapeHtml(displayValue(result.documents_extracted_count, '0'))}}</span></div>
+                <div class="metric"><span class="metric-label">Источник архива</span><span class="metric-value">${{escapeHtml(displayValue(result.archive_source_host && result.archive_source_path ? `${{result.archive_source_host}}${{result.archive_source_path}}` : null))}}</span></div>
+                <div class="metric"><span class="metric-label">Analysis status</span><span class="metric-value">${{escapeHtml(displayValue(result.analysis_status, 'not_started'))}}</span></div>
+              </div>
+              <div class="form-actions" style="margin-top:14px">
+                <a class="link-button" href="${{escapeHtml(result.run_url)}}" target="_blank" rel="noreferrer">Открыть run</a>
+                ${{reportLink}}
+                ${{analyzeButton}}
+              </div>
+              <div class="note" style="margin-top:12px">Полный archive URL и ticket в интерфейсе не показываются. Отображаются только host/path summary.</div>
+            `;
+            const analyzeButtonNode = document.getElementById('eis-result-analyze-button');
+            if (analyzeButtonNode) {{
+              analyzeButtonNode.addEventListener('click', async () => {{
+                await analyzeRun(result.run_id);
+                await selectRun(result.run_id, true);
+              }});
+            }}
+          }}
+
           async function handleProcurementSearch(event) {{
             event.preventDefault();
             clearFlash('procurement-flash');
@@ -1132,7 +1206,15 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             event.preventDefault();
             clearFlash('eis-docs-flash');
             const form = event.currentTarget;
-            const payload = Object.fromEntries(new FormData(form).entries());
+            const data = new FormData(form);
+            const payload = {{
+              reestr_number: String(data.get('reestr_number') || ''),
+              law: String(data.get('law') || '44fz'),
+              subsystem_type: String(data.get('subsystem_type') || 'PRIZ'),
+              method: String(data.get('method') || 'getDocsByReestrNumber'),
+              download_archive: data.get('download_archive') === 'on',
+              analyze_after_download: data.get('analyze_after_download') === 'on',
+            }};
             setFlash('eis-docs-flash', `Запрашиваем документацию по номеру ${{payload.reestr_number}} через getDocsIP…`);
             try {{
               const response = await fetchJson('/api/demo/tender-agent/runs/from-eis-docs-archive', {{
@@ -1140,15 +1222,18 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 headers: {{ 'Content-Type': 'application/json' }},
                 body: JSON.stringify(payload),
               }});
+              renderEisDocsResult(response);
               await loadProcurementSources();
               await loadRuns();
               await selectRun(response.run_id, true);
-              if (response.status !== 'docs_required') {{
+              if (payload.analyze_after_download && response.status !== 'docs_required') {{
                 await analyzeRun(response.run_id);
+                await selectRun(response.run_id, false);
               }}
-              setFlash('eis-docs-flash', `Создан run ${{response.run_id}}. Статус документации: ${{attachmentsStatusLabel(response.attachments_status)}}.`);
+              setFlash('eis-docs-flash', `Создан run ${{response.run_id}}. Статус документации: ${{attachmentsStatusLabel(response.attachments_status)}}. Статус архива: ${{displayValue(response.archive_download_status, 'не определён')}}.`);
             }} catch (error) {{
               await loadProcurementSources();
+              renderEisDocsResult(null);
               setFlash('eis-docs-flash', `Не удалось получить документацию: ${{error.message}}`, true);
             }}
           }}
@@ -1278,6 +1363,23 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                  <a class="link-button" href="${{run.report_download_url}}">Скачать артефакт отчёта</a>`
               : `<span class="note">HTML-отчёт будет доступен после анализа.</span>`;
             const needsDocs = run.status === 'docs_required';
+            const eisBlock = run.procurement_source === 'zakupki_gov_ru_getdocs_ip' ? `
+              <div class="card" style="padding:16px">
+                <div class="section-title">Источник: ЕИС getDocsIP</div>
+                <div class="grid-2">
+                  <div class="metric"><span class="metric-label">Реестровый номер</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_notice_number || run.procurement_id))}}</span></div>
+                  <div class="metric"><span class="metric-label">SOAP method</span><span class="metric-value">${{escapeHtml(displayValue(run.soap_method))}}</span></div>
+                  <div class="metric"><span class="metric-label">refId</span><span class="metric-value">${{escapeHtml(displayValue(run.eis_ref_id))}}</span></div>
+                  <div class="metric"><span class="metric-label">Токен owner</span><span class="metric-value">${{escapeHtml(displayValue(run.token_owner))}}</span></div>
+                  <div class="metric"><span class="metric-label">archiveUrl</span><span class="metric-value">${{booleanLabel(run.archive_url_present)}}</span></div>
+                  <div class="metric"><span class="metric-label">Архив скачан</span><span class="metric-value">${{booleanLabel(run.archive_downloaded)}}</span></div>
+                  <div class="metric"><span class="metric-label">Статус скачивания</span><span class="metric-value">${{escapeHtml(displayValue(run.archive_download_status))}}</span></div>
+                  <div class="metric"><span class="metric-label">Распаковано документов</span><span class="metric-value">${{escapeHtml(displayValue(run.documents_extracted_count, '0'))}}</span></div>
+                  <div class="metric"><span class="metric-label">Источник архива</span><span class="metric-value">${{escapeHtml(displayValue(run.archive_source_host && run.archive_source_path ? `${{run.archive_source_host}}${{run.archive_source_path}}` : null))}}</span></div>
+                </div>
+                <div class="note" style="margin-top:12px">Полный archive URL и ticket не отображаются в UI.</div>
+              </div>
+            ` : '';
             const procurementBlock = run.procurement_source ? `
               <div class="card" style="padding:16px">
                 <div class="section-title">Источник закупки</div>
@@ -1352,6 +1454,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                     <ul>${{[...run.warnings, ...run.limitations].map((item) => `<li>${{escapeHtml(item)}}</li>`).join('')}}</ul>
                   </div>
                 </div>
+              <div style="height:14px"></div>
+              ${{eisBlock}}
               <div style="height:14px"></div>
               ${{procurementBlock}}
               <div style="height:14px"></div>

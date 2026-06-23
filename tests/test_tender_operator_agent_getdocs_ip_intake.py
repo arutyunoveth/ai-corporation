@@ -112,6 +112,11 @@ def test_getdocs_archive_endpoint_creates_run_with_archive_metadata(client, monk
     assert eis_metadata["archive_summary"]["path"] == "/archive/demo.zip"
     assert eis_metadata["archive_summary"]["has_query"] is True
     assert "ticket=secret" not in json.dumps(eis_metadata, ensure_ascii=False)
+    run_payload = client.get(f"/api/demo/tender-agent/runs/{payload['run_id']}").json()
+    assert run_payload["soap_method"] == "getDocsByReestrNumber"
+    assert run_payload["archive_source_host"] == "int44.zakupki.gov.ru"
+    assert run_payload["archive_source_path"] == "/archive/demo.zip"
+    assert "ticket=secret" not in json.dumps(run_payload, ensure_ascii=False)
     clear_zakupki_soap_settings_cache()
 
 
