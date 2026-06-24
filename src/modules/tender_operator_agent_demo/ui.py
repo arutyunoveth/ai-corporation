@@ -159,6 +159,11 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
           }}
+          .grid-3 {{
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+          }}
           .metric {{
             padding: 14px;
             border-radius: 16px;
@@ -439,6 +444,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <button class="tab-button" data-tab="docs" type="button">Получить документацию по номеру</button>
                 <button class="tab-button" data-tab="upload" type="button">Загрузить документы</button>
                 <button class="tab-button" data-tab="dataset" type="button">Демо-набор</button>
+                <button class="tab-button" data-tab="profile" type="button">Профиль поставщика</button>
               </div>
 
               <section id="tab-search">
@@ -743,6 +749,27 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   </main>
                 </div>
               </section>
+
+              <section id="tab-profile" class="hidden">
+                <div class="layout">
+                  <aside class="stack">
+                    <div class="card">
+                      <h2>Профиль поставщика</h2>
+                      <p>Настройки профиля используются для оценки релевантности закупок. Все настройки хранятся в памяти сессии и сбрасываются при перезагрузке страницы.</p>
+                      <div id="supplier-profile-flash" class="hidden"></div>
+                      <div class="form-actions">
+                        <button class="button primary" id="reset-supplier-profile" type="button">Сбросить профиль на демо-настройки</button>
+                      </div>
+                      <div class="note" style="margin-top:12px">Профиль поставщика влияет на скоринг релевантности в результатах публичного поиска 44-ФЗ и на глубинный анализ документов.</div>
+                    </div>
+                  </aside>
+                  <main class="stack">
+                    <div class="card" id="supplier-profile-display">
+                      <div class="empty">Загрузка профиля поставщика…</div>
+                    </div>
+                  </main>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -847,6 +874,42 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const number = Number(value);
             const suffix = currency ? ` ${{currency}}` : '';
             return `${{number.toLocaleString('ru-RU', {{ maximumFractionDigits: 2 }})}}${{suffix}}`;
+          }}
+
+          function relevanceBadge(rel) {{
+            const score = rel.score || 0;
+            const status = rel.status || 'not_recommended';
+            let cls = 'status-chip status-warning';
+            let label = `${{Math.round(score)}}% · не рекомендовано`;
+            if (status === 'high') {{ cls = 'status-chip status-done'; label = `${{Math.round(score)}}% · высокая релевантность`; }}
+            else if (status === 'medium') {{ cls = 'status-chip status-review'; label = `${{Math.round(score)}}% · средняя релевантность`; }}
+            else if (status === 'low') {{ cls = 'status-chip status-warning'; label = `${{Math.round(score)}}% · низкая релевантность`; }}
+            return `<span class="${{cls}}">${{label}}</span>`;
+          }}
+
+          function relevanceBreakdownHtml(rel) {{
+            const breakdown = rel.breakdown || {{}};
+            const reasons = rel.reasons || [];
+            const entries = Object.entries(breakdown);
+            const items = [];
+            for (let i = 0; i < entries.length; i++) {{
+              const key = entries[i][0];
+              const val = entries[i][1];
+              let displayVal = String(val);
+              if (typeof val === 'number' && val > 0) displayVal = '+' + val;
+              items.push('<div class="metric"><span class="metric-label">' + escapeHtml(key) + '</span><span class="metric-value" style="font-size:13px">' + displayVal + '</span></div>');
+            }}
+            const itemsHtml = items.join('');
+            let reasonsHtml = '';
+            if (reasons.length) {{
+              const reasonItems = reasons.map(function(r) {{ return '<div>\\u00B7 ' + escapeHtml(r) + '</div>'; }}).join('');
+              reasonsHtml = '<div style="margin-top:6px;font-size:12px;color:var(--soft-gray)">' + reasonItems + '</div>';
+            }}
+            return '<div style="margin-top:10px;padding:12px;background:var(--panel);border-radius:12px">' +
+              '<div class="section-title" style="margin-bottom:6px">Оценка релевантности</div>' +
+              '<div class="grid-3" style="gap:4px">' + itemsHtml + '</div>' +
+              reasonsHtml +
+              '</div>';
           }}
 
           function renderQuoteSection(run) {{
@@ -1008,6 +1071,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 document.getElementById('tab-docs').classList.toggle('hidden', target !== 'docs');
                 document.getElementById('tab-dataset').classList.toggle('hidden', target !== 'dataset');
                 document.getElementById('tab-upload').classList.toggle('hidden', target !== 'upload');
+                document.getElementById('tab-profile').classList.toggle('hidden', target !== 'profile');
+                if (target === 'profile') {{
+                  loadSupplierProfile();
+                }}
               }});
             }}
           }}
@@ -1017,6 +1084,62 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               return 'Скачать документацию и анализировать';
             }}
             return 'Создать run и загрузить документы вручную';
+          }}
+
+          async function loadSupplierProfile() {{
+            try {{
+              const profile = await fetchJson('/api/demo/tender-agent/supplier-profile');
+              renderSupplierProfile(profile);
+            }} catch (error) {{
+              document.getElementById('supplier-profile-display').innerHTML = '<div class="empty">Не удалось загрузить профиль: ' + escapeHtml(error.message) + '</div>';
+            }}
+          }}
+
+          function renderSupplierProfile(profile) {{
+            const criteria = profile.criteria || {{}};
+            const risk = profile.risk_preferences || {{}};
+            const html = `
+              <div class="card">
+                <h2>${{escapeHtml(profile.name)}}</h2>
+                <div class="grid-2">
+                  <div class="metric"><span class="metric-label">ID</span><span class="metric-value">${{escapeHtml(profile.supplier_id)}}</span></div>
+                  <div class="metric"><span class="metric-label">ИНН</span><span class="metric-value">${{escapeHtml(profile.inn || 'не указан')}}</span></div>
+                  <div class="metric"><span class="metric-label">Категории</span><span class="metric-value" style="font-size:13px">${{(criteria.categories || []).join(', ') || 'не указаны'}}</span></div>
+                  <div class="metric"><span class="metric-label">Регионы</span><span class="metric-value" style="font-size:13px">${{(criteria.regions || []).join(', ') || 'не указаны'}}</span></div>
+                  <div class="metric"><span class="metric-label">Цена от</span><span class="metric-value">${{criteria.price_min != null ? formatMoney(criteria.price_min, 'RUB') : 'не указано'}}</span></div>
+                  <div class="metric"><span class="metric-label">Цена до</span><span class="metric-value">${{criteria.price_max != null ? formatMoney(criteria.price_max, 'RUB') : 'не указано'}}</span></div>
+                </div>
+                <div style="margin-top:14px">
+                  <div class="section-title">Ключевые слова</div>
+                  <div class="safety">${{(criteria.keywords || []).map(function(k) {{ return '<span>' + escapeHtml(k) + '</span>'; }}).join('') || '<span>не указаны</span>'}}</div>
+                </div>
+                <div style="margin-top:10px">
+                  <div class="section-title">Стоп-слова</div>
+                  <div class="safety">${{(criteria.stop_words || []).map(function(k) {{ return '<span>' + escapeHtml(k) + '</span>'; }}).join('') || '<span>не указаны</span>'}}</div>
+                </div>
+                <div style="margin-top:14px">
+                  <div class="section-title">Риски и предпочтения</div>
+                  <div class="grid-2">
+                    <div class="metric"><span class="metric-label">Толерантность</span><span class="metric-value">${{escapeHtml(risk.tolerance || 'medium')}}</span></div>
+                    <div class="metric"><span class="metric-label">Макс. штраф, %</span><span class="metric-value">${{risk.max_penalty_percent != null ? risk.max_penalty_percent + '%' : 'не указано'}}</span></div>
+                    <div class="metric"><span class="metric-label">Макс. задержка, дней</span><span class="metric-value">${{risk.max_delay_days != null ? risk.max_delay_days : 'не указано'}}</span></div>
+                    <div class="metric"><span class="metric-label">Сертификаты</span><span class="metric-value">${{risk.require_certificates ? 'требуются' : 'не требуются'}}</span></div>
+                  </div>
+                </div>
+                ${{(profile.certificates || []).length ? '<div style="margin-top:14px"><div class="section-title">Сертификаты</div><div class="safety">' + profile.certificates.map(function(c) {{ return '<span>' + escapeHtml(c) + '</span>'; }}).join('') + '</div></div>' : ''}}
+              </div>
+            `;
+            document.getElementById('supplier-profile-display').innerHTML = html;
+          }}
+
+          async function resetSupplierProfile() {{
+            try {{
+              const profile = await fetchJson('/api/demo/tender-agent/supplier-profile/reset', {{ method: 'POST' }});
+              renderSupplierProfile(profile);
+              setFlash('supplier-profile-flash', 'Профиль сброшен на демо-настройки.');
+            }} catch (error) {{
+              setFlash('supplier-profile-flash', 'Ошибка сброса профиля: ' + escapeHtml(error.message), true);
+            }}
           }}
 
           async function loadProcurementSources() {{
@@ -1137,14 +1260,21 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               node.innerHTML = `<div class="empty">По вашему запросу закупки не найдены.</div>`;
               return;
             }}
-            node.innerHTML = cards.map((card, index) => `
+            node.innerHTML = cards.map((card, index) => {{
+              const rel = card.relevance || null;
+              const relBadge = rel ? relevanceBadge(rel) : '';
+              const relBreakdown = rel ? relevanceBreakdownHtml(rel) : '';
+              return `
               <div class="run-item">
                 <div class="step-top" style="margin-bottom:8px">
                   <div>
                     <strong>${{escapeHtml(card.title || 'Закупка без названия')}}</strong>
                     <div class="run-meta">${{card.notice_number || card.reestr_number || ''}} · ${{escapeHtml(card.customer_name || 'Заказчик не указан')}} · 44-ФЗ</div>
                   </div>
-                  <span class="status-chip status-done">Публичный поиск ЕИС</span>
+                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                    ${{relBadge}}
+                    <span class="status-chip status-done">Публичный поиск ЕИС</span>
+                  </div>
                 </div>
                 <div class="grid-2">
                   <div class="metric"><span class="metric-label">Номер извещения</span><span class="metric-value">${{escapeHtml(card.notice_number || card.reestr_number || 'не указан')}}</span></div>
@@ -1152,6 +1282,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <div class="metric"><span class="metric-label">Дата публикации</span><span class="metric-value">${{escapeHtml(card.publication_date || 'не указана')}}</span></div>
                   <div class="metric"><span class="metric-label">Заказчик</span><span class="metric-value">${{escapeHtml(card.customer_name || 'не указан')}}</span></div>
                 </div>
+                ${{relBreakdown}}
                 ${{(card.warnings || []).length ? `<div class="note" style="margin-top:10px">${{escapeHtml(card.warnings.join('; '))}}</div>` : ''}}
                 <div class="form-actions" style="margin-top:12px">
                   ${{card.reestr_number ? `<button class="button primary public-search-handoff-button" type="button" data-reestr="${{escapeHtml(card.reestr_number)}}" data-title="${{escapeHtml(card.title)}}" data-customer="${{escapeHtml(card.customer_name || '')}}" data-url="${{escapeHtml(card.source_url || '')}}">Получить документацию и анализировать</button>` : ''}}
@@ -1159,7 +1290,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 </div>
                 <div class="note" style="margin-top:8px">Поиск работает в read-only режиме. Система не входит в личный кабинет, не обходит captcha, не подаёт заявку.</div>
               </div>
-            `).join('');
+            `;
+            }}).join('');
             for (const button of node.querySelectorAll('.public-search-handoff-button')) {{
               button.addEventListener('click', () => {{
                 handlePublicSearchHandoff(button.dataset.reestr, button.dataset.title, button.dataset.customer, button.dataset.url);
@@ -1799,6 +1931,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             document.getElementById('eis-docs-form').addEventListener('submit', handleEisDocsArchive);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);
             document.getElementById('upload-form').addEventListener('submit', handleUpload);
+            const resetBtn = document.getElementById('reset-supplier-profile');
+            if (resetBtn) resetBtn.addEventListener('click', resetSupplierProfile);
             await loadProcurementSources();
             await loadDataset();
             await loadRuns();

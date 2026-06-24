@@ -24,8 +24,9 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Tender Operator Pilot Runner Refinement (PP1R) is complete: RFQ-first workflow for tender/operator companies with calibrated contract risk, supplier questions, RFQ draft, TKP comparison/economics, and bid decision recommendation.
 - Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
 - A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
-- Full `pytest` currently passes: `905 passed, 2 skipped, 1 warning`.
+- Full `pytest` currently passes: `986 passed, 2 skipped, 1 warning`.
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
+- Supplier Profile Relevance Scoring is now available in the Tender Operator Agent Demo: deterministic rule-based scoring of 44-ФЗ search results and document text against a configurable supplier profile, with a UI panel for profile management.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
 - A minimal internal commercial operator console is available for dashboard/report/requirements/risk/trace review and controlled internal actions.
 - A commercial workspace now links manual TKP registration, deterministic economics, and bid-readiness checks into an internal-only reportable flow.

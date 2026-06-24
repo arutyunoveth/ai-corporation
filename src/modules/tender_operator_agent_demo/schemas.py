@@ -362,6 +362,7 @@ class TenderOperatorUploadedRunResponse(APIModel):
     report_download_url: str | None = None
     uploaded_files_note: str | None = None
     events: list[TenderOperatorRunEvent] = Field(default_factory=list)
+    document_relevance: dict | None = None
 
 
 class TenderOperatorUploadedRunListResponse(APIModel):

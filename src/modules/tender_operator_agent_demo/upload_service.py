@@ -20,6 +20,8 @@ from src.modules.tender_operator_agent_demo.event_log import (
     append_tender_demo_event,
     load_tender_demo_events,
 )
+from src.modules.tender_operator_agent_demo.procurement_discovery import get_supplier_profile
+from src.modules.tender_operator_agent_demo.relevance_scoring import score_procurement_document_text
 from src.modules.tender_operator_agent_demo.quote_normalizer import (
     SpreadsheetSource,
     build_economics_summary,
@@ -1841,6 +1843,16 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         spreadsheet_sources = _collect_spreadsheet_sources(documents)
         economics_inputs = metadata.get("economics_inputs", {})
 
+        profile = get_supplier_profile()
+        doc_relevance = score_procurement_document_text(text=combined_text or "", profile=profile)
+        metadata["document_relevance"] = doc_relevance
+        append_demo_run_event(
+            run_id,
+            "relevance_document_scoring_completed",
+            f"Скоринг документов выполнен: найдено {len(doc_relevance.get('document_matched_terms', []))} совпадений.",
+            {"document_score": doc_relevance.get("document_score")},
+        )
+
         core_complete = bool(technical_spec_text and contract_draft_text and notice_text)
         if not technical_spec_text and combined_text:
             technical_spec_text = combined_text[:6000]
@@ -2094,6 +2106,7 @@ def get_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunResponse:
         report_download_url=f"/api/demo/tender-agent/runs/{run_id}/report/download" if report_path and report_path.is_file() else None,
         uploaded_files_note="Используются только локальные данные. Абсолютные server-path намеренно скрыты из интерфейса.",
         events=load_demo_run_events(run_id),
+        document_relevance=metadata.get("document_relevance"),
     )
 
 

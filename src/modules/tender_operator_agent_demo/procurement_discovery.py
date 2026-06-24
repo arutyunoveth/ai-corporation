@@ -17,7 +17,9 @@ from src.modules.tender_operator_agent_demo.procurement_schemas import (
     ProcurementSearchResult as ProcurementSearchResultV2,
     ProcurementSourceStatus,
 )
+from src.modules.tender_operator_agent_demo.relevance_scoring import score_procurement_card
 from src.modules.tender_operator_agent_demo.schemas import ProcurementSearchResponse, ProcurementSearchResult, PublicSearchUrlResponse
+from src.modules.tender_operator_agent_demo.supplier_profile import SupplierProfile
 from src.modules.tender_operator_agent_demo.public_44fz_parser import (
     Public44FzSearchStatus,
     classify_public_search_response,
@@ -284,6 +286,27 @@ def search_procurements(
     )
 
 
+_current_supplier_profile: SupplierProfile | None = None
+
+
+def get_supplier_profile() -> SupplierProfile:
+    global _current_supplier_profile
+    if _current_supplier_profile is None:
+        _current_supplier_profile = SupplierProfile.load_demo_fixture()
+    return _current_supplier_profile
+
+
+def reset_supplier_profile() -> SupplierProfile:
+    global _current_supplier_profile
+    _current_supplier_profile = SupplierProfile.load_demo_fixture()
+    return _current_supplier_profile
+
+
+def set_supplier_profile(profile: SupplierProfile) -> None:
+    global _current_supplier_profile
+    _current_supplier_profile = profile
+
+
 def search_public_44fz(
     query: str,
     region: str | None = None,
@@ -325,9 +348,22 @@ def search_public_44fz(
         }
 
     cards = parse_44fz_search_results(fetch_result["html"])
+    profile = get_supplier_profile()
+    scored_cards = []
+    for card in cards[:max_results]:
+        result = score_procurement_card(
+            title=card.get("title", ""),
+            initial_price=card.get("initial_price"),
+            customer_name=card.get("customer_name"),
+            profile=profile,
+        )
+        card_with_relevance = dict(card)
+        card_with_relevance["relevance"] = result.to_dict()
+        scored_cards.append(card_with_relevance)
+
     return {
         "status": Public44FzSearchStatus.PARSED if cards else Public44FzSearchStatus.UNSUPPORTED_LAYOUT,
-        "cards": cards[:max_results],
+        "cards": scored_cards,
         "eis_search_url": url,
         "error": None,
         "parser_status": Public44FzSearchStatus.PARSED if cards else Public44FzSearchStatus.UNSUPPORTED_LAYOUT,

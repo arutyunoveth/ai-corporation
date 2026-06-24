@@ -40,6 +40,10 @@ EVENT_STEP_BY_TYPE = {
     "analysis_started": "Анализ",
     "analysis_completed": "Решение",
     "analysis_blocked": "Анализ",
+    "relevance_precheck_started": "Оценка релевантности",
+    "relevance_precheck_completed": "Оценка релевантности",
+    "relevance_document_scoring_started": "Оценка релевантности",
+    "relevance_document_scoring_completed": "Оценка релевантности",
 }
 
 WARNING_EVENTS = {

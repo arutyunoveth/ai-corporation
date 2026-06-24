@@ -23,7 +23,9 @@ from src.modules.tender_operator_agent_demo.schemas import (
 from src.modules.tender_operator_agent_demo.procurement_discovery import (
     build_public_search_url,
     get_procurement_details,
+    get_supplier_profile,
     list_procurement_sources,
+    reset_supplier_profile,
     search_procurements,
     search_public_44fz,
 )
@@ -149,6 +151,16 @@ def search_tender_operator_procurements(
 @router.get("/api/demo/tender-agent/procurement/sources", response_model=list[ProcurementSourceStatus])
 def list_tender_operator_procurement_sources() -> list[ProcurementSourceStatus]:
     return list_procurement_sources()
+
+
+@router.get("/api/demo/tender-agent/supplier-profile")
+def get_supplier_profile_endpoint():
+    return get_supplier_profile().model_dump(mode="json")
+
+
+@router.post("/api/demo/tender-agent/supplier-profile/reset")
+def reset_supplier_profile_endpoint():
+    return reset_supplier_profile().model_dump(mode="json")
 
 
 @router.get("/api/demo/tender-agent/procurement/public-search-url", response_model=PublicSearchUrlResponse)
