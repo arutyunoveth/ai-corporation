@@ -626,7 +626,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
 
     settings = get_zakupki_soap_settings()
     if not settings.configured:
-        raise HTTPException(status_code=400, detail="Источник ЕИС не настроен: добавьте ZAKUPKI_GOV_RU_SOAP_TOKEN в .env.local")
+        raise HTTPException(status_code=400, detail="Источник ЕИС не настроен: добавьте токен сервиса ЕИС в .env.local")
 
     client = ZakupkiSoapClient(settings)
     archive_result = client.get_docs_by_reestr_number(request.reestr_number, subsystem_type=request.subsystem_type)
@@ -896,7 +896,7 @@ def create_run_from_search_result(
         raise HTTPException(status_code=400, detail="reestr_number обязателен для запуска getDocsIP.")
     settings = get_zakupki_soap_settings()
     if not settings.configured:
-        raise HTTPException(status_code=400, detail="Источник ЕИС не настроен: добавьте ZAKUPKI_GOV_RU_SOAP_TOKEN в .env.local")
+        raise HTTPException(status_code=400, detail="Источник ЕИС не настроен: добавьте токен сервиса ЕИС в .env.local")
 
     eis_request = EisDocsArchiveRunRequest(
         reestr_number=request.reestr_number.strip(),

@@ -61,6 +61,15 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Tender_Operator_Pilot_Runbook.md](docs/product/Tender_Operator_Pilot_Runbook.md)
 - [docs/product/Calibrated_Contract_Risk_Method.md](docs/product/Calibrated_Contract_Risk_Method.md)
 - [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
+## Customer Demo Package
+
+- [docs/demo/customer_demo_script_7min.md](docs/demo/customer_demo_script_7min.md) — 7-minute demo script with presenter cues
+- [docs/demo/customer_one_pager.md](docs/demo/customer_one_pager.md) — one-pager for the customer
+- [docs/demo/pilot_scope.md](docs/demo/pilot_scope.md) — pilot scope, metrics, and success criteria
+- [docs/demo/security_and_limits_faq.md](docs/demo/security_and_limits_faq.md) — honest FAQ for customer security questions
+- [docs/demo/demo_runbook.md](docs/demo/demo_runbook.md) — pre-meeting runbook with checks and fallbacks
+- [docs/product/tender_agent_demo_acceptance_checklist.md](docs/product/tender_agent_demo_acceptance_checklist.md) — internal acceptance checklist
+
 - [docs/demo_tender_operator_agent.md](docs/demo_tender_operator_agent.md)
 - [docs/product/tender_app_reuse_audit.md](docs/product/tender_app_reuse_audit.md)
 - [docs/product/zakupki_soap_integration.md](docs/product/zakupki_soap_integration.md)
