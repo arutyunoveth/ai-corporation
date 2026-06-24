@@ -69,7 +69,7 @@ def list_procurement_sources() -> list[ProcurementSourceStatus]:
     return [
         ProcurementSourceStatus(
             source="demo_local",
-            label="demo_local",
+            label="Демо-набор (локальный)",
             enabled=True,
             configured=True,
             reason=None,
@@ -77,7 +77,7 @@ def list_procurement_sources() -> list[ProcurementSourceStatus]:
         ),
         ProcurementSourceStatus(
             source="public_eis_html_44fz",
-            label="public_eis_html_44fz",
+            label="Публичный поиск ЕИС 44-ФЗ",
             enabled=True,
             configured=True,
             reason="Публичный HTML fallback. Поиск и выбор закупки выполняются вручную в ЕИС.",
@@ -85,7 +85,7 @@ def list_procurement_sources() -> list[ProcurementSourceStatus]:
         ),
         ProcurementSourceStatus(
             source="public_eis_html_223fz",
-            label="public_eis_html_223fz",
+            label="Публичный поиск ЕИС 223-ФЗ (fallback)",
             enabled=True,
             configured=True,
             reason="Публичный HTML fallback. Для 223-ФЗ требуется отдельный parser path.",

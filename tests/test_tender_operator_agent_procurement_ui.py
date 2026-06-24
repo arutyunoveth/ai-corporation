@@ -26,7 +26,7 @@ def test_procurement_sources_endpoint_returns_demo_and_zakupki_disabled_without_
     assert sources["demo_local"]["configured"] is True
     assert sources["public_eis_html_44fz"]["configured"] is True
     assert sources["zakupki_gov_ru_getdocs_ip"]["configured"] is False
-    assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in sources["zakupki_gov_ru_getdocs_ip"]["reason"]
+    assert "не настроен" in sources["zakupki_gov_ru_getdocs_ip"]["reason"]
 
 
 def test_procurement_page_does_not_render_token(client, monkeypatch):

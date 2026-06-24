@@ -885,13 +885,13 @@ def render_tender_operator_demo_html() -> str:
                 <div class="brand">
                   <img src="/demo/tender-agent/assets/logo-horizontal.svg" alt="Arvectum" />
                 </div>
-                <div class="eyebrow">Tender Operator Agent Demo</div>
+                <div class="eyebrow">Демо тендерного агента</div>
                 <h1>Тендерный агент</h1>
                 <p class="subtitle">Как ИИ-агент разбирает закупку и готовит решение для человека</p>
               </div>
               <div class="header-actions">
-                <span class="badge">Demo mode / Human-in-the-loop</span>
-                <span class="badge">Synthetic data / No external actions</span>
+                <span class="badge">Демо-режим / подтверждение человеком</span>
+                <span class="badge">Синтетические данные / без внешних действий</span>
               </div>
             </header>
 
@@ -911,7 +911,7 @@ def render_tender_operator_demo_html() -> str:
                   </div>
                 </section>
                 <section class="card">
-                  <h2>Human-in-the-loop</h2>
+                  <h2>Подтверждение человека</h2>
                   <p id="safety-message">Агент не выполняет внешние действия самостоятельно. Подача заявки, юридически значимые действия, отправка поставщикам и подписание документов выполняются только после подтверждения человеком.</p>
                   <ul class="bullet-list" id="safety-list"></ul>
                 </section>

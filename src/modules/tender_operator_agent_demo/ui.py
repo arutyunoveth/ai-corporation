@@ -531,7 +531,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                     <div class="card">
                       <h2>Безопасный режим</h2>
                       <div class="safety">
-                        <span>Read-only поиск</span>
+                        <span>Только чтение (поиск)</span>
                         <span>Без логина и паролей</span>
                         <span>Без обхода captcha</span>
                         <span>Без подачи на площадку</span>
@@ -584,7 +584,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           </label>
                         </div>
                         <label>
-                          SOAP method
+                          SOAP-метод
                           <input name="method" value="getDocsByReestrNumber" readonly />
                         </label>
                         <label class="checkbox">
@@ -610,7 +610,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                       <h2>Ограничения</h2>
                       <div class="safety">
                         <span>Токен физлица</span>
-                        <span>Read-only getDocsIP</span>
+                        <span>Только чтение getDocsIP</span>
                         <span>Без личного кабинета</span>
                         <span>Без ЭЦП</span>
                         <span>Без подачи заявки</span>
@@ -1167,6 +1167,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const lastStatus = diagnostics.last_status || (source.configured ? 'configured' : 'not_configured');
             const tokenState = diagnostics.token_present ? 'токен найден' : 'токен не найден';
             const statusLabel = source.configured ? 'ЕИС настроена: токен найден' : (source.reason || 'ЕИС не настроена');
+            const structuredStatus = source.configured ? `настроен · ${{tokenState}}` : (source.reason || 'не настроен');
             node.innerHTML = `
               <div class="list-item">
                 <strong>${{escapeHtml(source.label)}}</strong>
@@ -1174,7 +1175,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               </div>
               <div class="list-item">
                 <strong>Статус подключения</strong>
-                <div class="run-meta">configured=${{source.configured ? 'true' : 'false'}} · ${{escapeHtml(tokenState)}} · last_status=${{escapeHtml(String(lastStatus))}}</div>
+                <div class="run-meta">${{escapeHtml(structuredStatus)}} · последний статус: ${{escapeHtml(String(lastStatus))}}</div>
               </div>
               <div class="list-item">
                 <strong>Endpoint</strong>
@@ -1195,6 +1196,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               return;
             }}
             const diagnostics = source.safe_diagnostics || {{}};
+            const eisStatus = source.configured ? 'настроен' : 'не настроен';
+            const eisTokenState = diagnostics.token_present ? 'токен найден' : 'токен не найден';
             node.innerHTML = `
               <div class="list-item">
                 <strong>${{escapeHtml(source.label)}}</strong>
@@ -1202,10 +1205,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               </div>
               <div class="list-item">
                 <strong>Статус</strong>
-                <div class="run-meta">configured=${{source.configured ? 'true' : 'false'}} · token_owner=${{escapeHtml(displayValue(diagnostics.token_owner, 'unknown'))}} · token_present=${{diagnostics.token_present ? 'true' : 'false'}}</div>
+                <div class="run-meta">${{escapeHtml(eisStatus)}} · ${{escapeHtml(eisTokenState)}} · владелец: ${{escapeHtml(displayValue(diagnostics.token_owner, 'неизвестно'))}}</div>
               </div>
               <div class="list-item">
-                <strong>Endpoint getDocsIP</strong>
+                <strong>Адрес getDocsIP</strong>
                 <div class="run-meta">${{escapeHtml(displayValue(diagnostics.endpoint_host, 'не определён'))}}${{escapeHtml(displayValue(diagnostics.endpoint_path, ''))}}</div>
               </div>
               <div class="list-item">
@@ -1373,14 +1376,14 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div class="grid-2">
                 <div class="metric"><span class="metric-label">Run ID</span><span class="metric-value">${{escapeHtml(result.run_id)}}</span></div>
                 <div class="metric"><span class="metric-label">Статус run</span><span class="metric-value">${{escapeHtml(statusLabel(result.status))}}</span></div>
-                <div class="metric"><span class="metric-label">SOAP method</span><span class="metric-value">${{escapeHtml(displayValue(result.soap_method))}}</span></div>
-                <div class="metric"><span class="metric-label">refId</span><span class="metric-value">${{escapeHtml(displayValue(result.ref_id))}}</span></div>
-                <div class="metric"><span class="metric-label">archiveUrl</span><span class="metric-value">${{booleanLabel(result.archive_url_present)}}</span></div>
+                <div class="metric"><span class="metric-label">SOAP-метод</span><span class="metric-value">${{escapeHtml(displayValue(result.soap_method))}}</span></div>
+                <div class="metric"><span class="metric-label">ID запроса (refId)</span><span class="metric-value">${{escapeHtml(displayValue(result.ref_id))}}</span></div>
+                <div class="metric"><span class="metric-label">URL архива (archiveUrl)</span><span class="metric-value">${{booleanLabel(result.archive_url_present)}}</span></div>
                 <div class="metric"><span class="metric-label">Статус скачивания</span><span class="metric-value">${{escapeHtml(displayValue(result.archive_download_status))}}</span></div>
                 <div class="metric"><span class="metric-label">Архив скачан</span><span class="metric-value">${{booleanLabel(result.archive_downloaded)}}</span></div>
                 <div class="metric"><span class="metric-label">Распаковано документов</span><span class="metric-value">${{escapeHtml(displayValue(result.documents_extracted_count, '0'))}}</span></div>
                 <div class="metric"><span class="metric-label">Источник архива</span><span class="metric-value">${{escapeHtml(displayValue(result.archive_source_host && result.archive_source_path ? `${{result.archive_source_host}}${{result.archive_source_path}}` : null))}}</span></div>
-                <div class="metric"><span class="metric-label">Analysis status</span><span class="metric-value">${{escapeHtml(displayValue(result.analysis_status, 'not_started'))}}</span></div>
+                <div class="metric"><span class="metric-label">Статус анализа</span><span class="metric-value">${{escapeHtml(displayValue(result.analysis_status, 'not_started'))}}</span></div>
               </div>
               <div class="form-actions" style="margin-top:14px">
                 <a class="link-button" href="${{escapeHtml(result.run_url)}}" target="_blank" rel="noreferrer">Открыть run</a>
@@ -1660,10 +1663,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="section-title">Источник: ЕИС getDocsIP</div>
                 <div class="grid-2">
                   <div class="metric"><span class="metric-label">Реестровый номер</span><span class="metric-value">${{escapeHtml(displayValue(run.procurement_notice_number || run.procurement_id))}}</span></div>
-                  <div class="metric"><span class="metric-label">SOAP method</span><span class="metric-value">${{escapeHtml(displayValue(run.soap_method))}}</span></div>
-                  <div class="metric"><span class="metric-label">refId</span><span class="metric-value">${{escapeHtml(displayValue(run.eis_ref_id))}}</span></div>
-                  <div class="metric"><span class="metric-label">Токен owner</span><span class="metric-value">${{escapeHtml(displayValue(run.token_owner))}}</span></div>
-                  <div class="metric"><span class="metric-label">archiveUrl</span><span class="metric-value">${{booleanLabel(run.archive_url_present)}}</span></div>
+                  <div class="metric"><span class="metric-label">SOAP-метод</span><span class="metric-value">${{escapeHtml(displayValue(run.soap_method))}}</span></div>
+                  <div class="metric"><span class="metric-label">ID запроса (refId)</span><span class="metric-value">${{escapeHtml(displayValue(run.eis_ref_id))}}</span></div>
+                  <div class="metric"><span class="metric-label">Владелец токена</span><span class="metric-value">${{escapeHtml(displayValue(run.token_owner))}}</span></div>
+                  <div class="metric"><span class="metric-label">URL архива (archiveUrl)</span><span class="metric-value">${{booleanLabel(run.archive_url_present)}}</span></div>
                   <div class="metric"><span class="metric-label">Архив скачан</span><span class="metric-value">${{booleanLabel(run.archive_downloaded)}}</span></div>
                   <div class="metric"><span class="metric-label">Статус скачивания</span><span class="metric-value">${{escapeHtml(displayValue(run.archive_download_status))}}</span></div>
                   <div class="metric"><span class="metric-label">Распаковано документов</span><span class="metric-value">${{escapeHtml(displayValue(run.documents_extracted_count, '0'))}}</span></div>

@@ -143,7 +143,7 @@ class ZakupkiSoapSettings:
     def safe_status(self) -> dict[str, Any]:
         reason = None
         if not self.token_configured:
-            reason = "Источник ЕИС не настроен: добавьте ZAKUPKI_GOV_RU_SOAP_TOKEN в .env.local"
+            reason = "Источник ЕИС не настроен: добавьте токен сервиса ЕИС в .env.local"
         elif not self.enabled:
             reason = "Источник ЕИС не включён: установите ZAKUPKI_GOV_RU_SOAP_ENABLED=1"
         elif self.individual_mode:

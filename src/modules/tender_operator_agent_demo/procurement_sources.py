@@ -54,21 +54,21 @@ def get_procurement_source_descriptors() -> list[ProcurementSourceDescriptor]:
     return [
         ProcurementSourceDescriptor(
             code="demo_local",
-            label="demo_local",
+            label="Демо-набор (локальный)",
             enabled=True,
             read_only=True,
             note="Офлайн-источник для стабильной демонстрации без сети.",
         ),
         ProcurementSourceDescriptor(
             code="public_eis_html_44fz",
-            label="public_eis_html_44fz",
+            label="Публичный поиск ЕИС 44-ФЗ",
             enabled=True,
             read_only=True,
             note="Публичный fallback: открыть поиск ЕИС по 44-ФЗ, выбрать закупку и вставить реестровый номер в getDocsIP.",
         ),
         ProcurementSourceDescriptor(
             code="public_eis_html_223fz",
-            label="public_eis_html_223fz",
+            label="Публичный поиск ЕИС 223-ФЗ (fallback)",
             enabled=True,
             read_only=True,
             note="Публичный fallback: открыть поиск ЕИС по 223-ФЗ и продолжить работу вручную. Отдельный parser не включён в этом спринте.",

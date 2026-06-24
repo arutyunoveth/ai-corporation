@@ -65,7 +65,7 @@ def test_procurement_sources_include_zakupki_disabled_without_token(monkeypatch)
     assert sources["demo_local"].configured is True
     assert sources["public_eis_html_44fz"].configured is True
     assert sources["zakupki_gov_ru_getdocs_ip"].configured is False
-    assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in (sources["zakupki_gov_ru_getdocs_ip"].reason or "")
+    assert "не настроен" in (sources["zakupki_gov_ru_getdocs_ip"].reason or "")
 
 
 def test_procurement_discovery_request_schema_searches_demo_local():

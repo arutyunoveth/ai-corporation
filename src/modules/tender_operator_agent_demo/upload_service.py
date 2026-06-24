@@ -1580,9 +1580,9 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
             <table>
               <tr><th>Поле</th><th>Значение</th></tr>
               <tr><td>Реестровый номер</td><td>{html.escape(str(metadata.get("notice_number") or metadata.get("procurement_id") or ""))}</td></tr>
-              <tr><td>SOAP method</td><td>{html.escape(str(metadata.get("soap_method") or "не указан"))}</td></tr>
-              <tr><td>refId</td><td>{html.escape(str(metadata.get("getdocs_ref_id") or "не указан"))}</td></tr>
-              <tr><td>archiveUrl получен</td><td>{'да' if metadata.get("archive_url_present") else 'нет'}</td></tr>
+              <tr><td>SOAP-метод</td><td>{html.escape(str(metadata.get("soap_method") or "не указан"))}</td></tr>
+              <tr><td>ID запроса (refId)</td><td>{html.escape(str(metadata.get("getdocs_ref_id") or "не указан"))}</td></tr>
+              <tr><td>URL архива получен</td><td>{'да' if metadata.get("archive_url_present") else 'нет'}</td></tr>
               <tr><td>Архив скачан</td><td>{'да' if metadata.get("archive_downloaded") else 'нет'}</td></tr>
               <tr><td>Статус архива</td><td>{html.escape(str(metadata.get("archive_download_status") or "не указан"))}</td></tr>
               <tr><td>Распаковано документов</td><td>{html.escape(str(metadata.get("documents_extracted_count") or 0))}</td></tr>
@@ -1758,9 +1758,9 @@ def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
       <body>
         <div class="page">
           <div class="card">
-            <span class="badge">Demo / pilot mode</span>
-            <span class="badge">Read-only</span>
-            <span class="badge">Human-in-the-loop</span>
+            <span class="badge">Демо / пилотный режим</span>
+            <span class="badge">Без внешних действий</span>
+            <span class="badge">Требуется подтверждение человека</span>
             <h1>{html.escape(str(metadata.get("tender_title") or "Закупка"))}</h1>
             <p class="warning">Документация не получена. Анализ невозможен до ручной загрузки файлов.</p>
           </div>
@@ -1777,8 +1777,8 @@ def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
               <tr><td>Ссылка на источник</td><td>{html.escape(str(metadata.get("procurement_url") or ""))}</td></tr>
               <tr><td>Статус скачивания</td><td>{html.escape(str(metadata.get("attachments_status") or ""))}</td></tr>
               <tr><td>Ручная загрузка требовалась</td><td>да</td></tr>
-              <tr><td>SOAP method</td><td>{html.escape(str(metadata.get("soap_method") or "не указан"))}</td></tr>
-              <tr><td>refId</td><td>{html.escape(str(metadata.get("getdocs_ref_id") or "не указан"))}</td></tr>
+              <tr><td>SOAP-метод</td><td>{html.escape(str(metadata.get("soap_method") or "не указан"))}</td></tr>
+              <tr><td>ID запроса (refId)</td><td>{html.escape(str(metadata.get("getdocs_ref_id") or "не указан"))}</td></tr>
               <tr><td>Статус архива</td><td>{html.escape(str(metadata.get("archive_download_status") or "не указан"))}</td></tr>
               <tr><td>Распаковано документов</td><td>{html.escape(str(metadata.get("documents_extracted_count") or 0))}</td></tr>
               <tr><td>Источник архива</td><td>{html.escape(archive_source_summary)}</td></tr>

@@ -24,7 +24,7 @@ def test_zakupki_soap_disabled_without_token(monkeypatch):
     assert settings.use_soap_action is True
     assert settings.soap_action_uri == "http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"
     assert is_zakupki_soap_configured(settings) is False
-    assert "ZAKUPKI_GOV_RU_SOAP_TOKEN" in settings.safe_status()["reason"]
+    assert "не настроен" in settings.safe_status()["reason"]
 
 
 def test_placeholder_token_is_not_configured(monkeypatch):
