@@ -130,6 +130,9 @@ class TestPP1RNoTKP:
             out / "supplier_questions.json",
             out / "rfq_request_draft.md",
             out / "calibrated_contract_risk_memo.md",
+            out / "human_review_required.json",
+            out / "human_review_checklist.md",
+            out / "operator_decision_form.md",
         ]
         for p in expected:
             assert p.exists(), f"Missing no-TKP output: {p}"
@@ -183,6 +186,9 @@ class TestPP1RWithTKP:
             out / "supplier_questions.json",
             out / "rfq_request_draft.md",
             out / "calibrated_contract_risk_memo.md",
+            out / "human_review_required.json",
+            out / "human_review_checklist.md",
+            out / "operator_decision_form.md",
             out / "tkp_normalized_quotes.json",
             out / "tkp_normalization_report.md",
             out / "tkp_comparison.json",
@@ -213,12 +219,26 @@ class TestPP1RWithTKP:
         assert "completed_at_utc" in summary
         assert "supplier_sourcing" in summary
         assert summary["supplier_sourcing"]["manual_candidates_file_found"] is True
+        assert "human_review_pack_status" in summary
+        assert "human_review_blocking_count" in summary
+        assert "human_review_warning_count" in summary
+        assert "human_review_files" in summary
 
     def test_internal_analysis_contains_supplier_sourcing(self, tkp_output):
         out, _ = tkp_output
         analysis = (out / "internal_operator_analysis.md").read_text()
         assert "## Supplier Sourcing" in analysis
         assert "supplier_candidates.md" in analysis
+
+    def test_human_review_outputs_exist(self, tkp_output):
+        out, _ = tkp_output
+        pack = json.loads((out / "human_review_required.json").read_text())
+        checklist = (out / "human_review_checklist.md").read_text()
+        decision_form = (out / "operator_decision_form.md").read_text()
+        assert pack["overall_status"] in {"ready_for_review", "blocked", "needs_operator_input"}
+        assert "## Quick Checks" in checklist
+        assert "- [ ] проверить НДС" in checklist
+        assert "# Operator Decision Form" in decision_form
 
     def test_three_intake_records(self, tkp_output):
         out, _ = tkp_output
@@ -271,6 +291,7 @@ class TestPP1RWithTKP:
         assert requirements["llm_control"]["resolved_provider"] == "stub"
         assert "## Requirements Summary" in rfq
         assert comparison["method"] == "llm_normalized"
+        assert summary["human_review_pack_status"] in {"ready_for_review", "blocked", "needs_operator_input"}
 
 
 # ---------------------------------------------------------------------------

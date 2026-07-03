@@ -4,6 +4,12 @@
 
 `C5` adds an internal-only commercial workspace that links manual TKP collection, deterministic economics, and bid-readiness checks for the Commercial MVP v1 flow.
 
+The Tender Operator pilot now reuses the same internal posture for:
+
+- structured TKP normalization from local supplier files;
+- deterministic economics from normalized quote totals;
+- a post-run Human Review Pack that aggregates blockers and warnings into a single checklist.
+
 This layer is orchestration-only:
 
 - it reuses canonical supplier, quote, economics, approval, and readiness modules;
@@ -51,6 +57,7 @@ This layer is orchestration-only:
 - `ready_for_human_submission` means an internal human-reviewed state only.
 - Final submission remains outside repository scope.
 - LLM output, if used upstream, still requires schema validation and explicit human review.
+- Human Review Pack artifacts are internal-only and never imply automatic approval.
 
 ## Typical Flow
 
@@ -68,6 +75,6 @@ This layer is orchestration-only:
 ## Current Limitations
 
 - No automatic outbound supplier email.
-- No quote parsing from uploaded supplier files yet; manual quote values are registered directly.
+- Quote parsing from local files is available in the Tender Operator pilot, but still requires manual confirmation of supplier match, VAT, delivery, and final pricing.
 - No procurement platform integration.
 - No automatic legal/commercial final decision.

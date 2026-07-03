@@ -319,6 +319,9 @@ Review these files in `05_system_output/`:
 - `supplier_questions.json`
 - `rfq_request_draft.md`
 - `calibrated_contract_risk_memo.md`
+- `human_review_required.json`
+- `human_review_checklist.md`
+- `operator_decision_form.md`
 
 And review these files in `06_partner_export/`:
 
@@ -330,6 +333,7 @@ What to check:
 - `run_summary.json` contains `pilot_status=rfq_ready_collect_tkp`
 - `run_summary.json` contains `requested_provider` and `resolved_provider`
 - `run_summary.json` contains `supplier_sourcing`
+- `run_summary.json` contains `human_review_pack_status`
 - `supplier_questions.json` is usable for supplier outreach
 - `rfq_request_draft.md` is usable as the starting RFQ text
 - `export_summary.json` has no unexpected blocked sections
@@ -339,6 +343,9 @@ If supplier registry data is available, also check:
 - `supplier_sourcing.registry_supplier_count`
 - `supplier_sourcing.vendor_list_supplier_count`
 - `supplier_sourcing.top_suppliers[*].inclusion_reason`
+- `human_review_required.json` contains the current blocker/warning list
+- `human_review_checklist.md` is suitable for operator sign-off work
+- `operator_decision_form.md` remains manual only
 
 At this stage, these files should **not** exist:
 
@@ -403,6 +410,9 @@ Expected console behavior:
 
 Additional files should now exist in `05_system_output/`:
 
+- `human_review_required.json`
+- `human_review_checklist.md`
+- `operator_decision_form.md`
 - `tkp_normalized_quotes.json`
 - `tkp_normalization_report.md`
 - `tkp_comparison.json`
@@ -413,11 +423,13 @@ Check specifically:
 
 - `run_summary.json` contains `tkp_found=true`
 - `run_summary.json` contains `pilot_status=tkp_received_economics_ready`
+- `run_summary.json` contains `human_review_*` fields
 - `tkp_normalized_quotes.json` contains one structured draft per supplier file
 - each normalized quote includes `normalization_status`, `extraction_confidence`, `fields_needing_review`, and `human_review_required=true`
 - `tkp_normalization_report.md` clearly shows parsed vs review-needed files
 - `tkp_comparison.json` includes all supplier files from `04_tkp/`
 - `bid_decision_recommendation.md` is treated as preliminary only
+- `human_review_checklist.md` groups manual checks across requirements, sourcing, TKP, economics, risks, and bid decision
 
 ## Step 12: Human Review Before Delivery
 
@@ -454,6 +466,9 @@ Do not send:
 - `requirements.json`
 - `supplier_questions.json`
 - `calibrated_contract_risk_memo.md`
+- `human_review_required.json`
+- `human_review_checklist.md`
+- `operator_decision_form.md`
 - `tkp_comparison.json`
 - `economics_summary.json`
 - `run_summary.json`

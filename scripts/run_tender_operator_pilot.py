@@ -50,6 +50,12 @@ from src.modules.quote_repository.tkp_normalization import (
     build_tkp_normalization_report,
     normalize_tkp_quotes,
 )
+from src.modules.tender_operator_review.service import (
+    build_human_review_checklist_markdown,
+    build_human_review_pack,
+    build_operator_decision_form_markdown,
+    update_run_summary_with_human_review,
+)
 from src.shared.config.settings import get_settings
 
 
@@ -415,6 +421,8 @@ def _run_stub_economics(tkp_comparison: dict[str, Any], operator_profile: dict[s
         highest_price = max(price_values)
         average_price = round(sum(price_values) / len(price_values), 2)
 
+    economics_status = "needs_operator_review" if price_values else "insufficient_data"
+    status = "preliminary" if price_values else "blocked"
     return {
         "supplier_count": len(suppliers),
         "target_margin": target_margin or "unknown",
@@ -430,6 +438,9 @@ def _run_stub_economics(tkp_comparison: dict[str, Any], operator_profile: dict[s
         "recommended_bid_price": "unknown",
         "currency": "RUB",
         "method": "rule_based_placeholder",
+        "economics_status": economics_status,
+        "status": status,
+        "human_review_required": True,
         "note": "Economics are placeholders. Operator must fill actual values from TKP data.",
         "generated_at": datetime.now(UTC).isoformat(),
     }
@@ -1493,6 +1504,26 @@ def main() -> None:
         supplier_candidates_notes=supplier_candidates_notes,
         supplier_sourcing=supplier_sourcing,
     )
+
+    print("[11A] Building human review pack...")
+    review_pack = build_human_review_pack(
+        output_dir,
+        operator_id=operator_id,
+        tender_label=tender_label,
+    )
+    human_review_json_path = output_dir / "human_review_required.json"
+    human_review_md_path = output_dir / "human_review_checklist.md"
+    operator_decision_form_path = output_dir / "operator_decision_form.md"
+    human_review_json_path.write_text(
+        json.dumps(review_pack.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    human_review_md_path.write_text(build_human_review_checklist_markdown(review_pack), encoding="utf-8")
+    operator_decision_form_path.write_text(build_operator_decision_form_markdown(review_pack), encoding="utf-8")
+    update_run_summary_with_human_review(output_dir, review_pack)
+    print(f"  Human review pack:          {human_review_json_path}")
+    print(f"  Human review checklist:     {human_review_md_path}")
+    print(f"  Operator decision form:     {operator_decision_form_path}")
 
     # Step 12: Record feedback and outcome
     print("[12] Recording feedback and outcome...")
