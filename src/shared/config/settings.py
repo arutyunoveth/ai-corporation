@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     app_name: str = "AI Corporation Sprint 1 API"
     debug: bool = False
     database_url: str = "sqlite:///./ai_corporation.db"
+    allowed_hosts: str = ""
+    cors_allow_origins: str = ""
+    tender_pilot_basic_auth_enabled: bool = False
+    tender_pilot_basic_auth_username: str | None = None
+    tender_pilot_basic_auth_password: str | None = None
     llm_provider: str = "stub"
     llm_model: str | None = None
     llm_timeout_seconds: int = 30
@@ -31,7 +36,17 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    def allowed_hosts_list(self) -> list[str]:
+        return _split_csv(self.allowed_hosts)
+
+    def cors_allow_origins_list(self) -> list[str]:
+        return _split_csv(self.cors_allow_origins)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+def _split_csv(raw_value: str) -> list[str]:
+    return [item.strip() for item in raw_value.split(",") if item.strip()]

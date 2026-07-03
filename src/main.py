@@ -91,11 +91,13 @@ from src.modules.vendor_connectors.router import router as vendor_connectors_rou
 from src.modules.workflow_runs.router import router as workflow_runs_router
 from src.modules.workspace_feed.router import router as workspace_feed_router
 from src.shared.api.errors import register_exception_handlers
+from src.shared.api.middleware import install_runtime_middlewares
 from src.shared.config.settings import get_settings
 
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
+install_runtime_middlewares(app, settings)
 register_exception_handlers(app)
 
 app.include_router(deals_router)

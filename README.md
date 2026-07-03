@@ -59,6 +59,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/First_Restricted_Pilot_Checklist.md](docs/product/First_Restricted_Pilot_Checklist.md)
 - [docs/product/Run_Partner_Tender_Folder.md](docs/product/Run_Partner_Tender_Folder.md)
 - [docs/product/Tender_Operator_Pilot_Runbook.md](docs/product/Tender_Operator_Pilot_Runbook.md)
+- [docs/product/Tender_Operator_Site_Deployment.md](docs/product/Tender_Operator_Site_Deployment.md)
 - [docs/product/Calibrated_Contract_Risk_Method.md](docs/product/Calibrated_Contract_Risk_Method.md)
 - [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
 ## Customer Demo Package

@@ -27,6 +27,7 @@ Before using the runner, read:
 - `Calibrated_Contract_Risk_Method.md`
 - `Tender_Operator_RFQ_Workflow.md`
 - `Partner_Report_Export_Policy.md`
+- `Tender_Operator_Site_Deployment.md` if you plan to expose the pilot behind the website domain
 
 ## Verified State
 
