@@ -350,6 +350,59 @@ grep -Eo "https://[-a-zA-Z0-9.]+trycloudflare.com" ~/arvectum-runtime/logs/cloud
 ```
 Update the landing page with the new URL.
 
+## Recommended tunnel: CloudPub
+
+CloudPub is the current recommended tunnel for the Mac mini demo/pilot.
+
+**Why CloudPub instead of Cloudflare/ngrok/xtunnel:**
+- Cloudflare Quick Tunnel drops after ~6s (QUIC/UDP blocked by ISP)
+- ngrok blocked due to sanctions (ERR_NGROK_9040)
+- xtunnel free tier HAProxy bootstrap fails
+- CloudPub works with HTTP 200 and stable response times (~0.1s local, ~5s external)
+
+**Prerequisites:**
+
+1. Register at https://cloudpub.ru/
+2. Install CLI:
+```bash
+curl -L https://cloudpub.ru/download/stable/clo-3.1.0-stable-macos-aarch64.tar.gz -o clo.tar.gz
+tar -xzf clo.tar.gz && sudo cp clo /opt/homebrew/bin/clo && rm -rf clo clo.tar.gz
+```
+3. Login:
+```bash
+clo login
+```
+
+**Start tunnel:**
+```bash
+scripts/local/start_cloudpub_tunnel.sh
+```
+
+**Stop tunnel:**
+```bash
+scripts/local/stop_tunnels.sh
+```
+
+**Get the landing page config:**
+```bash
+CLOUDPUB_URL=$(clo ls | grep -Eo "https://[^ ]+" | head -1)
+echo "window.ARVECTUM_PILOT_API_BASE = \"$CLOUDPUB_URL\";"
+```
+
+**Full startup sequence after reboot:**
+```bash
+scripts/local/start_llamacpp_server.sh
+scripts/local/start_macmini_backend_host.sh
+scripts/local/start_cloudpub_tunnel.sh
+scripts/local/check_macmini_backend.sh
+```
+
+**Note on CORS / Allowed Hosts:**
+The backend `.env.macmini.host.local` must include `*.cloudpub.ru` in `AI_CORP_ALLOWED_HOSTS`:
+```
+AI_CORP_ALLOWED_HOSTS=localhost,127.0.0.1,*.trycloudflare.com,*.ngrok-free.app,*.cloudpub.ru,api.arvectum.com
+```
+
 ## Known Limitations
 
 - Tunnel URL is **temporary** -- changes on each cloudflared restart
