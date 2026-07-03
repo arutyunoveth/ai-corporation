@@ -365,8 +365,19 @@ When supplier offers arrive, save them into:
 - `04_tkp/supplier_002_tkp.*`
 - additional supplier files as needed
 
-The current `stub` flow detects file presence and creates placeholder
-comparison/economics outputs. Operator review is still required.
+Supported first-pass normalization formats:
+
+- `.xlsx`
+- `.csv`
+- `.txt`
+- `.md`
+
+Current limitation:
+
+- `.pdf` remains manual-review territory unless safe extracted text already exists
+
+The runner now normalizes supported TKP files into structured draft quotes before
+building comparison and economics outputs. Operator review is still required.
 
 ## Step 10: Re-run After TKP Collection
 
@@ -392,6 +403,8 @@ Expected console behavior:
 
 Additional files should now exist in `05_system_output/`:
 
+- `tkp_normalized_quotes.json`
+- `tkp_normalization_report.md`
 - `tkp_comparison.json`
 - `economics_summary.json`
 - `bid_decision_recommendation.md`
@@ -400,6 +413,9 @@ Check specifically:
 
 - `run_summary.json` contains `tkp_found=true`
 - `run_summary.json` contains `pilot_status=tkp_received_economics_ready`
+- `tkp_normalized_quotes.json` contains one structured draft per supplier file
+- each normalized quote includes `normalization_status`, `extraction_confidence`, `fields_needing_review`, and `human_review_required=true`
+- `tkp_normalization_report.md` clearly shows parsed vs review-needed files
 - `tkp_comparison.json` includes all supplier files from `04_tkp/`
 - `bid_decision_recommendation.md` is treated as preliminary only
 
@@ -599,6 +615,7 @@ What this means:
 - runtime traces record `redaction_applied`, `input_chars_before`, and `input_chars_after`
 - raw LLM responses are not persisted by default
 - deterministic economics stay in Python and are not delegated to the LLM
+- LLM quote normalization is limited to structured extraction only; final quote acceptance remains manual
 
 Recommended local setup:
 

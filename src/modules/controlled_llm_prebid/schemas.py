@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from src.modules.quote_repository.tkp_normalization_schemas import NormalizedTKPQuoteBatch
+
 
 class LLMTenderSummaryDraft(BaseModel):
     tender_summary: str = Field(min_length=1)
@@ -67,26 +69,8 @@ class LLMTenderOperatorContractRiskMemoDraft(BaseModel):
     contract_risks: list[LLMContractRiskItemDraft] = Field(min_length=1)
 
 
-class LLMNormalizedQuoteDraft(BaseModel):
-    supplier_label: str = Field(min_length=1)
-    price_per_unit: str = Field(min_length=1)
-    price_total: str = Field(min_length=1)
-    currency: str = Field(min_length=1)
-    price_with_vat: str = Field(min_length=1)
-    price_without_vat: str = Field(min_length=1)
-    delivery_cost: str = Field(min_length=1)
-    delivery_time_days: str = Field(min_length=1)
-    warranty_months: str = Field(min_length=1)
-    payment_terms: str = Field(min_length=1)
-    offer_validity_days: str = Field(min_length=1)
-    has_certificates: str = Field(min_length=1)
-    installation_included: str = Field(min_length=1)
-    notes: str = Field(min_length=1)
-    status: str = Field(pattern="^(normalized|needs_operator_review)$")
-
-
-class LLMQuoteNormalizationDraft(BaseModel):
-    suppliers: list[LLMNormalizedQuoteDraft] = Field(min_length=1)
+class LLMQuoteNormalizationDraft(NormalizedTKPQuoteBatch):
+    pass
 
 
 class LLMTenderOperatorBidDecisionDraft(BaseModel):

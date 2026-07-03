@@ -44,6 +44,12 @@ from src.modules.partner_workspace.service import (
 from src.modules.pilot_access_boundary.schemas import VisibilityLevel
 from src.modules.pilot_feedback.schemas import FeedbackSource, FeedbackType, FinalDecision, NextAction
 from src.modules.pilot_feedback.service import create_feedback, create_outcome
+from src.modules.quote_repository.tkp_normalization import (
+    build_tkp_comparison_from_normalized_quotes,
+    build_tkp_llm_inputs,
+    build_tkp_normalization_report,
+    normalize_tkp_quotes,
+)
 from src.shared.config.settings import get_settings
 
 
@@ -388,7 +394,14 @@ def _run_stub_economics(tkp_comparison: dict[str, Any], operator_profile: dict[s
 
     price_values: list[float] = []
     for supplier in suppliers:
-        for field_name in ("price_total", "price_with_vat", "price_without_vat", "price_per_unit"):
+        for field_name in (
+            "total_amount",
+            "total_amount_without_vat",
+            "price_total",
+            "price_with_vat",
+            "price_without_vat",
+            "price_per_unit",
+        ):
             parsed = _extract_numeric_value(supplier.get(field_name))
             if parsed is not None:
                 price_values.append(parsed)
@@ -520,15 +533,7 @@ def _try_llm_workflow_analysis(
         with Session(engine) as session:
             from src.modules.controlled_llm_prebid.service import run_controlled_tender_operator_workflow
 
-            tkp_inputs = [
-                {
-                    "supplier_label": tkp_file.stem,
-                    "source_file": str(tkp_file),
-                    "quote_text": _clip_text(_read_text_file(tkp_file), max_chars=8000),
-                }
-                for tkp_file in tkp_files
-                if tkp_file.is_file()
-            ]
+            tkp_inputs = build_tkp_llm_inputs([tkp_file for tkp_file in tkp_files if tkp_file.is_file()])
             llm_context = {
                 "deal_id": f"PP1R-{datetime.now(UTC).strftime('%Y%m%d')}",
                 "operator_id": operator_id,
@@ -597,6 +602,7 @@ def _build_internal_operator_analysis(
     operator_profile: dict[str, Any],
     supplier_candidates_notes: dict[str, Any],
     supplier_sourcing: dict[str, Any] | None,
+    normalized_quotes: list[dict[str, Any]] | None,
     tkp_comparison: dict[str, Any] | None,
     economics: dict[str, Any] | None,
     bid_decision: dict[str, Any] | None,
@@ -668,6 +674,18 @@ def _build_internal_operator_analysis(
         requirements.get("tender_summary", "No summary generated"),
         "",
     ]
+
+    if normalized_quotes:
+        lines += ["## TKP Normalization", ""]
+        for quote in normalized_quotes:
+            lines.append(
+                f"- {quote.get('supplier_label', 'unknown')}: "
+                f"status={quote.get('normalization_status', 'unknown')}; "
+                f"confidence={quote.get('extraction_confidence', 'unknown')}; "
+                f"total={quote.get('total_amount', 'unknown')} {quote.get('currency_code', 'RUB')}; "
+                f"review={', '.join(quote.get('fields_needing_review', [])) or 'none'}"
+            )
+        lines += [""]
 
     tech_reqs = requirements.get("technical_requirements", [])
     if tech_reqs:
@@ -861,6 +879,8 @@ def _write_outputs(
     tkp_comparison: dict[str, Any] | None,
     economics: dict[str, Any] | None,
     bid_decision: dict[str, Any] | None,
+    normalized_quotes: list[dict[str, Any]] | None,
+    tkp_normalization_report_md: str | None,
     internal_analysis_md: str,
     rfq_request_draft_md: str,
     package_id: str,
@@ -904,6 +924,7 @@ def _write_outputs(
         ],
         "tkp_found": has_tkp,
         "tkp_supplier_count": len(tkp_comparison.get("suppliers", [])) if tkp_comparison and has_tkp else 0,
+        "tkp_normalized_quotes_count": len(normalized_quotes) if normalized_quotes and has_tkp else 0,
         "requirements_extracted": bool(requirements.get("technical_requirements")),
         "supplier_questions_generated": len(supplier_questions),
         "calibrated_risks": [
@@ -936,6 +957,12 @@ def _write_outputs(
         _build_risk_memo_markdown(calibrated_risks), encoding="utf-8"
     )
 
+    if has_tkp and normalized_quotes is not None:
+        (output_dir / "tkp_normalized_quotes.json").write_text(
+            json.dumps(normalized_quotes, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    if has_tkp and tkp_normalization_report_md is not None:
+        (output_dir / "tkp_normalization_report.md").write_text(tkp_normalization_report_md, encoding="utf-8")
     if has_tkp and tkp_comparison:
         (output_dir / "tkp_comparison.json").write_text(json.dumps(tkp_comparison, ensure_ascii=False, indent=2), encoding="utf-8")
     if has_tkp and economics:
@@ -955,6 +982,8 @@ def _write_outputs(
     print(f"  RFQ draft:                  {output_dir / 'rfq_request_draft.md'}")
     print(f"  Contract risk memo:         {output_dir / 'calibrated_contract_risk_memo.md'}")
     if has_tkp:
+        print(f"  TKP normalized quotes:      {output_dir / 'tkp_normalized_quotes.json'}")
+        print(f"  TKP normalization report:   {output_dir / 'tkp_normalization_report.md'}")
         print(f"  TKP comparison:             {output_dir / 'tkp_comparison.json'}")
         print(f"  Economics summary:          {output_dir / 'economics_summary.json'}")
         print(f"  Bid decision:               {output_dir / 'bid_decision_recommendation.md'}")
@@ -1318,18 +1347,15 @@ def main() -> None:
 
     tkp_files = _detect_tkp_files(tender_dir)
     has_tkp = len(tkp_files) > 0
+    llm_result: dict[str, Any] | None = None
+    normalized_quotes_payload: list[dict[str, Any]] | None = None
+    tkp_normalization_report_md: str | None = None
     tkp_comparison: dict[str, Any] | None = None
     economics: dict[str, Any] | None = None
     bid_decision: dict[str, Any] | None = None
 
     if has_tkp:
         print(f"  TKP files found: {len(tkp_files)}")
-        tkp_comparison = _run_stub_tkp_comparison(tkp_files)
-        economics = _run_stub_economics(tkp_comparison, operator_profile)
-        bid_decision = _run_stub_bid_decision(tkp_comparison, economics, calibrated_risks)
-        print(f"  TKP comparison generated: {len(tkp_comparison.get('suppliers', []))} suppliers")
-        print(f"  Economics summary generated")
-        print(f"  Bid decision: {bid_decision.get('preliminary_recommendation', 'N/A')}")
     else:
         print("  No TKP files found. Run will stop at rfq_ready / collect_tkp.")
 
@@ -1357,24 +1383,47 @@ def main() -> None:
                 rfq_request_draft_md = _build_structured_rfq_draft_markdown(llm_result["rfq_draft"])
             if llm_result.get("contract_risks"):
                 calibrated_risks = llm_result["contract_risks"]
-            if has_tkp and llm_result.get("quote_normalization"):
-                tkp_comparison = dict(llm_result["quote_normalization"])
-                tkp_comparison["comparison_generated_at"] = datetime.now(UTC).isoformat()
-                tkp_comparison["method"] = "llm_normalized"
-                tkp_comparison["note"] = "Normalized from supplier TKP via controlled LLM workflow. Operator review remains required."
-                economics = _run_stub_economics(tkp_comparison, operator_profile)
-            if has_tkp and llm_result.get("bid_decision"):
-                bid_decision = _materialize_llm_bid_decision(
-                    llm_result["bid_decision"],
-                    tkp_comparison,
-                    calibrated_risks,
-                )
-            elif has_tkp and tkp_comparison and economics:
-                bid_decision = _run_stub_bid_decision(tkp_comparison, economics, calibrated_risks)
             print(f"  Controlled workflow mode: {analysis_mode}")
         else:
             resolved_provider = "stub"
             print("  -> Falling back to stub analysis")
+
+    if has_tkp:
+        from src.shared.db import models as _db_models  # noqa: F401
+        from src.shared.db.base import Base
+        from src.shared.db.session import SessionLocal, engine
+
+        Base.metadata.create_all(engine)
+        llm_quotes = None
+        if llm_result and llm_result.get("quote_normalization"):
+            llm_quotes = llm_result["quote_normalization"].get("quotes", [])
+        with SessionLocal() as session:
+            normalized_quotes = normalize_tkp_quotes(session, tkp_files=tkp_files, llm_quotes=llm_quotes)
+        normalized_quotes_payload = [quote.model_dump() for quote in normalized_quotes]
+        tkp_normalization_report_md = build_tkp_normalization_report(normalized_quotes)
+        tkp_method = (
+            "llm_normalized"
+            if any(quote.parser_mode in {"llm", "hybrid"} for quote in normalized_quotes)
+            else "deterministic_normalized"
+        )
+        tkp_comparison = build_tkp_comparison_from_normalized_quotes(
+            normalized_quotes,
+            analysis_mode=analysis_mode,
+            method=tkp_method,
+        )
+        economics = _run_stub_economics(tkp_comparison, operator_profile)
+        if llm_result and llm_result.get("bid_decision"):
+            bid_decision = _materialize_llm_bid_decision(
+                llm_result["bid_decision"],
+                tkp_comparison,
+                calibrated_risks,
+            )
+        else:
+            bid_decision = _run_stub_bid_decision(tkp_comparison, economics, calibrated_risks)
+        print(f"  TKP normalization generated: {len(normalized_quotes_payload)} files")
+        print(f"  TKP comparison generated: {len(tkp_comparison.get('suppliers', []))} suppliers")
+        print("  Economics summary generated")
+        print(f"  Bid decision: {bid_decision.get('preliminary_recommendation', 'N/A')}")
 
     supplier_sourcing = _build_supplier_sourcing_summary(requirements)
     if supplier_sourcing:
@@ -1394,7 +1443,7 @@ def main() -> None:
     internal_md = _build_internal_operator_analysis(
         requirements, calibrated_risks, supplier_questions,
         operator_profile, supplier_candidates_notes, supplier_sourcing,
-        tkp_comparison, economics, bid_decision,
+        normalized_quotes_payload, tkp_comparison, economics, bid_decision,
         records_with_refs, notice_text, technical_spec_text, contract_draft_text,
     )
 
@@ -1429,6 +1478,8 @@ def main() -> None:
         tkp_comparison=tkp_comparison,
         economics=economics,
         bid_decision=bid_decision,
+        normalized_quotes=normalized_quotes_payload,
+        tkp_normalization_report_md=tkp_normalization_report_md,
         internal_analysis_md=internal_md,
         rfq_request_draft_md=rfq_request_draft_md,
         package_id=package.export_package_id,

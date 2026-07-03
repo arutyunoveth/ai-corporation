@@ -40,7 +40,7 @@ def test_controlled_tender_operator_stub_workflow_returns_structured_artifacts_a
         "deal_breaker_candidate",
     }
     assert result.quote_normalization is not None
-    assert result.quote_normalization["suppliers"][0]["supplier_label"] == "supplier_alpha"
+    assert result.quote_normalization["quotes"][0]["supplier_label"] == "supplier_alpha"
     assert result.bid_decision is not None
     assert result.bid_decision["preliminary_recommendation"] == "NEEDS_REVIEW"
 

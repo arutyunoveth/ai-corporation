@@ -137,6 +137,8 @@ class TestPP1RNoTKP:
     def test_no_tkp_optional_outputs_absent(self, no_tkp_output):
         out, _ = no_tkp_output
         optional = [
+            out / "tkp_normalized_quotes.json",
+            out / "tkp_normalization_report.md",
             out / "tkp_comparison.json",
             out / "economics_summary.json",
             out / "bid_decision_recommendation.md",
@@ -181,6 +183,8 @@ class TestPP1RWithTKP:
             out / "supplier_questions.json",
             out / "rfq_request_draft.md",
             out / "calibrated_contract_risk_memo.md",
+            out / "tkp_normalized_quotes.json",
+            out / "tkp_normalization_report.md",
             out / "tkp_comparison.json",
             out / "economics_summary.json",
             out / "bid_decision_recommendation.md",
@@ -225,6 +229,14 @@ class TestPP1RWithTKP:
         out, _ = tkp_output
         comp = json.loads((out / "tkp_comparison.json").read_text())
         assert len(comp.get("suppliers", [])) >= 2
+        assert comp["method"] in {"deterministic_normalized", "llm_normalized"}
+
+    def test_tkp_normalized_quotes_exist(self, tkp_output):
+        out, _ = tkp_output
+        quotes = json.loads((out / "tkp_normalized_quotes.json").read_text())
+        assert len(quotes) >= 2
+        assert all("normalization_status" in quote for quote in quotes)
+        assert all("extraction_confidence" in quote for quote in quotes)
 
     def test_bid_decision_has_recommendation(self, tkp_output):
         out, _ = tkp_output
@@ -438,16 +450,17 @@ class TestPP1RNoProductCatalog:
                 assert "product line" not in item.lower()
                 assert "price list" not in item.lower()
 
-    def test_tkp_placeholder_has_needs_operator(self, tkp_output):
+    def test_tkp_normalization_marks_review_or_parsed(self, tkp_output):
         out, _ = tkp_output
-        comp = json.loads((out / "tkp_comparison.json").read_text())
-        for s in comp.get("suppliers", []):
-            assert s.get("status") == "needs_operator_input"
+        quotes = json.loads((out / "tkp_normalized_quotes.json").read_text())
+        for quote in quotes:
+            assert quote.get("normalization_status") in {"parsed", "needs_review", "failed", "unsupported_format"}
+            assert quote.get("human_review_required") is True
 
-    def test_economics_has_unknown_placeholders(self, tkp_output):
+    def test_economics_uses_normalized_quote_totals(self, tkp_output):
         out, _ = tkp_output
         econ = json.loads((out / "economics_summary.json").read_text())
-        assert econ.get("lowest_price") == "unknown"
+        assert econ.get("lowest_price") == 4200000.0
 
 
 # ---------------------------------------------------------------------------

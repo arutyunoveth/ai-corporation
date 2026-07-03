@@ -180,10 +180,12 @@ TENDER_OPERATOR_PROMPT_SPECS = {
         purpose="Normalize supplier TKP/quote data into a comparison-friendly structure.",
         output_schema_ref="LLMQuoteNormalizationDraft",
         template=(
-            "Return JSON with key suppliers. Each item must include supplier_label, price_per_unit, price_total, "
-            "currency, price_with_vat, price_without_vat, delivery_cost, delivery_time_days, warranty_months, "
-            "payment_terms, offer_validity_days, has_certificates, installation_included, notes, and status. "
-            "Use status normalized or needs_operator_review. Unknown values should be the string 'unknown'."
+            "Return JSON with key quotes. Each item must contain supplier_label, supplier_id, source_file, "
+            "normalization_status, quote_date, valid_until, currency_code, vat_included, vat_rate, total_amount, "
+            "total_amount_without_vat, delivery_cost, delivery_time_days, payment_terms, warranty_months, "
+            "availability, includes_delivery, includes_installation, certificates_available, contact_email, "
+            "contact_phone, line_items, extraction_confidence, fields_needing_review, warnings, parser_mode, "
+            "and human_review_required=true. Unknown values must be null, not free-form placeholder strings."
         ),
     ),
     "bid_decision": _PromptSpec(
@@ -534,48 +536,72 @@ class _TenderOperatorStubProvider:
             }
         if section == "quote_normalization":
             tkp_inputs = context.get("tkp_inputs", [])
-            suppliers: list[dict[str, Any]] = []
+            quotes: list[dict[str, Any]] = []
             for item in tkp_inputs:
-                suppliers.append(
+                quotes.append(
                     {
                         "supplier_label": item.get("supplier_label", "unknown_supplier"),
-                        "price_per_unit": "unknown",
-                        "price_total": "unknown",
-                        "currency": "RUB",
-                        "price_with_vat": "unknown",
-                        "price_without_vat": "unknown",
-                        "delivery_cost": "unknown",
-                        "delivery_time_days": "unknown",
-                        "warranty_months": "unknown",
-                        "payment_terms": "unknown",
-                        "offer_validity_days": "unknown",
-                        "has_certificates": "unknown",
-                        "installation_included": "unknown",
-                        "notes": "Stub normalization. Operator review required.",
-                        "status": "needs_operator_review",
+                        "supplier_id": None,
+                        "source_file": item.get("source_file", "unknown"),
+                        "normalization_status": "needs_review",
+                        "quote_date": None,
+                        "valid_until": None,
+                        "currency_code": "RUB",
+                        "vat_included": None,
+                        "vat_rate": None,
+                        "total_amount": None,
+                        "total_amount_without_vat": None,
+                        "delivery_cost": None,
+                        "delivery_time_days": None,
+                        "payment_terms": None,
+                        "warranty_months": None,
+                        "availability": None,
+                        "includes_delivery": None,
+                        "includes_installation": None,
+                        "certificates_available": None,
+                        "contact_email": None,
+                        "contact_phone": None,
+                        "line_items": [],
+                        "extraction_confidence": 0.2,
+                        "fields_needing_review": ["total_amount", "delivery_time_days", "payment_terms", "line_items", "supplier_id"],
+                        "warnings": ["stub_placeholder"],
+                        "parser_mode": "llm",
+                        "human_review_required": True,
                     }
                 )
-            if not suppliers:
-                suppliers.append(
+            if not quotes:
+                quotes.append(
                     {
                         "supplier_label": "unknown_supplier",
-                        "price_per_unit": "unknown",
-                        "price_total": "unknown",
-                        "currency": "RUB",
-                        "price_with_vat": "unknown",
-                        "price_without_vat": "unknown",
-                        "delivery_cost": "unknown",
-                        "delivery_time_days": "unknown",
-                        "warranty_months": "unknown",
-                        "payment_terms": "unknown",
-                        "offer_validity_days": "unknown",
-                        "has_certificates": "unknown",
-                        "installation_included": "unknown",
-                        "notes": "No TKP inputs were provided.",
-                        "status": "needs_operator_review",
+                        "supplier_id": None,
+                        "source_file": "unknown",
+                        "normalization_status": "needs_review",
+                        "quote_date": None,
+                        "valid_until": None,
+                        "currency_code": "RUB",
+                        "vat_included": None,
+                        "vat_rate": None,
+                        "total_amount": None,
+                        "total_amount_without_vat": None,
+                        "delivery_cost": None,
+                        "delivery_time_days": None,
+                        "payment_terms": None,
+                        "warranty_months": None,
+                        "availability": None,
+                        "includes_delivery": None,
+                        "includes_installation": None,
+                        "certificates_available": None,
+                        "contact_email": None,
+                        "contact_phone": None,
+                        "line_items": [],
+                        "extraction_confidence": 0.0,
+                        "fields_needing_review": ["source_file", "line_items", "supplier_id"],
+                        "warnings": ["no_tkp_inputs"],
+                        "parser_mode": "llm",
+                        "human_review_required": True,
                     }
                 )
-            return {"suppliers": suppliers}
+            return {"quotes": quotes}
         if section == "bid_decision":
             risks = validated_sections.get("contract_risk_memo", {}).get("contract_risks", [])
             deal_breakers = [

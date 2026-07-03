@@ -60,6 +60,8 @@ Tender operators do not have fixed product catalogs or known supplier prices. Th
 1. Receive TKP/commercial offers from suppliers via external channel.
 2. Save each TKP to `04_tkp/` with a clear supplier label.
 3. Track receipt status.
+4. The system may normalize `.xlsx`, `.csv`, `.txt`, and `.md` TKP files into structured draft quotes.
+5. PDF without safe extracted text remains manual-review territory in this sprint.
 
 ### Step 6: TKP Comparison
 
@@ -70,6 +72,8 @@ Tender operators do not have fixed product catalogs or known supplier prices. Th
    - Payment terms
    - Certificates
 2. Generate comparison table.
+3. Use normalized quote drafts as input where extraction confidence is sufficient.
+4. Keep human review for ambiguous line items, supplier matching, VAT assumptions, and unsupported formats.
 
 ### Step 7: Economics Calculation
 
