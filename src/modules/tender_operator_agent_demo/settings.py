@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -25,6 +26,7 @@ DEFAULT_ALLOWED_HOSTS = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44
 DEFAULT_USER_AGENT = "ArvectumTenderAgent/0.1 read-only"
 DEFAULT_CONTENT_TYPE = "text/xml; charset=utf-8"
 DEFAULT_SOAP_ACTION_URI = "http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"
+_ENV_FILES_SEEDED = False
 
 TokenOwner = Literal["individual", "legal_entity"]
 
@@ -48,9 +50,16 @@ def _seed_env_from_file(path: Path) -> None:
 
 
 def _seed_env_from_local_files() -> None:
+    global _ENV_FILES_SEEDED
+    if _ENV_FILES_SEEDED:
+        return
+    if "pytest" in sys.modules:
+        _ENV_FILES_SEEDED = True
+        return
     root = _settings_root()
     _seed_env_from_file(root / ".env")
     _seed_env_from_file(root / ".env.local")
+    _ENV_FILES_SEEDED = True
 
 
 def _read_bool(name: str, default: bool = False) -> bool:

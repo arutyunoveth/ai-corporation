@@ -212,6 +212,72 @@ Optional but recommended:
 
 The runner does not search the internet for suppliers.
 
+## Step 5A: Import a Vendor-List Into Supplier Registry
+
+Use this step when the operator already has a local supplier spreadsheet and wants
+the existing Supplier Registry and Supplier Search modules to reuse it.
+
+Supported formats:
+
+- `.csv`
+- `.xlsx`
+
+Supported columns:
+
+- `legal_name`
+- `display_name`
+- `inn`
+- `website`
+- `email`
+- `phone`
+- `categories`
+- `brands`
+- `region`
+- `notes`
+
+Russian aliases are also supported, including `Юрлицо`, `Наименование`,
+`Название`, `ИНН`, `Сайт`, `Почта`, `Телефон`, `Категории`, `Бренды`,
+`Регион`, and `Примечание`.
+
+Example spreadsheet shape:
+
+```text
+| Наименование        | ИНН        | Сайт              | Почта            | Категории          | Бренды | Регион |
+|---------------------|------------|-------------------|------------------|--------------------|--------|--------|
+| ООО Электро Поставка | 7701234567 | electro.example.ru | sales@example.ru | Electro;Automation | IEK    | Moscow |
+```
+
+Run the import manually:
+
+```bash
+.venv/bin/python scripts/import_vendor_list.py \
+  --operator-id tender_operator_001 \
+  --file local_pilot_runs/tender_operator_001/vendor_list.xlsx \
+  --source-label "vendor-list-2026-07"
+```
+
+Expected outputs:
+
+- `local_pilot_runs/<operator_label>/vendor_imports/<timestamp>/vendor_import_summary.json`
+- `local_pilot_runs/<operator_label>/vendor_imports/<timestamp>/vendor_import_report.md`
+
+What the import does:
+
+- creates or updates canonical `SupplierProfile` records
+- adds `SupplierContact`, `SupplierExternalRef`, and `SupplierTag`
+- deduplicates primarily by INN
+- marks missing-INN rows for review instead of aborting the batch
+- flags possible duplicates for human review instead of auto-merging
+
+What it does not do:
+
+- does not send RFQ email
+- does not submit anything to procurement platforms
+- does not sign anything
+
+The tender runner does not auto-import vendor-lists. Keep import as a deliberate,
+separate operator action.
+
 ## Step 6: Run the First Pass Without TKP
 
 Use this run when documents are ready but supplier offers are not collected yet.
@@ -262,9 +328,17 @@ And review these files in `06_partner_export/`:
 What to check:
 
 - `run_summary.json` contains `pilot_status=rfq_ready_collect_tkp`
+- `run_summary.json` contains `requested_provider` and `resolved_provider`
+- `run_summary.json` contains `supplier_sourcing`
 - `supplier_questions.json` is usable for supplier outreach
 - `rfq_request_draft.md` is usable as the starting RFQ text
 - `export_summary.json` has no unexpected blocked sections
+
+If supplier registry data is available, also check:
+
+- `supplier_sourcing.registry_supplier_count`
+- `supplier_sourcing.vendor_list_supplier_count`
+- `supplier_sourcing.top_suppliers[*].inclusion_reason`
 
 At this stage, these files should **not** exist:
 
@@ -383,7 +457,7 @@ After delivery:
 |---|---|---|---|
 | `--operator-id` | Yes | — | Operator identifier used in the internal workspace |
 | `--tender-dir` | Yes | — | Tender folder containing `02_extracted_text/` |
-| `--provider` | Yes | — | `stub` or `llm` |
+| `--provider` | Yes | — | `stub`, `llm`, `openai_compatible`, `gigachat`, `yandex`, `alice`, or `cloudru` |
 | `--output-dir` | No | `<tender-dir>/05_system_output` | Directory for system output files |
 
 ## Provider Guidance
@@ -402,21 +476,164 @@ What it does:
 - generates deterministic placeholder analysis
 - uses file presence in `04_tkp/` to decide whether to produce TKP/economics outputs
 
-### `llm`
+### `llm` (legacy entrypoint)
 
-Use this only when the controlled LLM setup is intentionally enabled.
+Use this when you want the runner to read `AI_CORP_LLM_PROVIDER` from the environment.
 
 Minimum requirements:
 
 - dependencies installed
 - `AI_CORP_DATABASE_URL` configured
-- `AI_CORP_OPENAI_API_KEY` configured
+- `AI_CORP_LLM_PROVIDER` configured to the intended backend
 - compatible DB schema available for the controlled LLM path
 
 If unavailable, the runner prints a warning and falls back to `stub`.
 
+### Explicit cloud provider flags
+
+Use these when you want the CLI invocation to force the backend regardless of `AI_CORP_LLM_PROVIDER`:
+
+- `openai_compatible`
+- `gigachat`
+- `yandex`
+- `alice`
+- `cloudru`
+
+The run summary records both:
+
+- `requested_provider`
+- `resolved_provider`
+
+`resolved_provider` becomes `stub` if the cloud path fails and the runner falls back safely.
+
+## Launch Examples
+
+### Stub
+
+```bash
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider stub
+```
+
+### Legacy `llm` entrypoint via environment
+
+```bash
+export AI_CORP_LLM_PROVIDER=gigachat
+export AI_CORP_LLM_MODEL=GigaChat
+
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider llm
+```
+
+### Force OpenAI-compatible
+
+```bash
+export AI_CORP_LLM_MODEL=gpt-4.1-mini
+
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider openai_compatible
+```
+
+### Force GigaChat
+
+```bash
+export AI_CORP_LLM_MODEL=GigaChat
+
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider gigachat
+```
+
+### Force Yandex AI Studio
+
+```bash
+export AI_CORP_LLM_MODEL=<yandex-model-id>
+
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider yandex
+```
+
+### Force Alice AI
+
+```bash
+export AI_CORP_LLM_MODEL=<alice-model-id>
+
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider alice
+```
+
+### Force Cloud.ru
+
+```bash
+export AI_CORP_LLM_MODEL=<cloudru-model-id>
+
+.venv/bin/python scripts/run_tender_operator_pilot.py \
+  --operator-id tender_operator_001 \
+  --tender-dir local_pilot_runs/tender_operator_001/tender_001 \
+  --provider cloudru
+```
+
+## Cloud LLM Data Handling
+
+Default posture for cloud-provider runs:
+
+- `AI_CORP_LLM_ALLOW_RAW_PARTNER_DATA=false`
+- `AI_CORP_LLM_STORE_RAW_RESPONSE=false`
+- human review is required for all LLM-generated artifacts
+- external actions remain manual only
+
+What this means:
+
+- provider-bound context is sanitized before sending when raw partner data is not explicitly allowed
+- runtime traces record `redaction_applied`, `input_chars_before`, and `input_chars_after`
+- raw LLM responses are not persisted by default
+- deterministic economics stay in Python and are not delegated to the LLM
+
+Recommended local setup:
+
+```bash
+cp .env.example .env.local
+```
+
+Example `.env.local` shape without real secrets:
+
+```bash
+AI_CORP_DATABASE_URL=sqlite:///./ai_corporation.db
+AI_CORP_LLM_PROVIDER=stub
+AI_CORP_LLM_MODEL=
+AI_CORP_LLM_ALLOW_RAW_PARTNER_DATA=false
+AI_CORP_LLM_STORE_RAW_RESPONSE=false
+
+AI_CORP_OPENAI_API_KEY=
+AI_CORP_OPENAI_BASE_URL=https://api.openai.com/v1
+
+AI_CORP_GIGACHAT_AUTH_KEY=
+AI_CORP_GIGACHAT_SCOPE=GIGACHAT_API_PERS
+AI_CORP_GIGACHAT_OAUTH_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
+AI_CORP_GIGACHAT_BASE_URL=https://gigachat.devices.sberbank.ru/api/v1
+
+AI_CORP_YANDEX_API_KEY=
+AI_CORP_YANDEX_IAM_TOKEN=
+AI_CORP_YANDEX_BASE_URL=https://ai.api.cloud.yandex.net/v1
+
+AI_CORP_CLOUDRU_API_KEY=
+AI_CORP_CLOUDRU_BASE_URL=https://foundation-models.api.cloud.ru/v1
+```
+
 ## Operational Notes
 
+- Imported vendor-lists stay local-only and must not be committed.
 - `06_partner_export/` is always written under the tender folder even if `--output-dir` points elsewhere.
 - Real raw tender files belong in ignored local folders only.
 - Real TKP files belong in ignored local folders only.
@@ -425,6 +642,7 @@ If unavailable, the runner prints a warning and falls back to `stub`.
 - The current script records internal placeholder feedback/outcome data for the run. Treat that as internal bookkeeping, not real partner feedback.
 - The `delivered_manually` status is an internal marker only. It does **not** mean that the repository actually sent anything.
 - Final bid submission remains fully manual.
+- Imported vendor-list suppliers can influence shortlist ordering, but RFQ sending remains manual.
 
 ## Troubleshooting
 
@@ -450,7 +668,7 @@ Check:
 
 - `.env` or environment variables
 - `AI_CORP_DATABASE_URL`
-- `AI_CORP_OPENAI_API_KEY`
+- provider-specific credentials for the resolved backend
 - DB accessibility from the current shell
 
 ### Export looks incomplete

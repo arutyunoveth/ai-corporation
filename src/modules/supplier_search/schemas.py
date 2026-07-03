@@ -12,6 +12,7 @@ class BuildSupplierShortlistRequest(APIModel):
     compliance_matrix_id: str | None = None
     document_requirement_set_id: str | None = None
     risk_flag_set_id: str | None = None
+    top_n: int = 5
 
 
 class SupplierShortlistRowResponse(APIModel):

@@ -30,10 +30,22 @@ Tender operators do not have fixed product catalogs or known supplier prices. Th
 ### Step 3: Supplier Search Preparation
 
 1. Identify categories of goods/works/services needed.
-2. Search internal supplier database or external sources.
+2. Optionally import a local vendor-list into the existing Supplier Registry before ranking suppliers.
+   - Supported formats: `.csv`, `.xlsx`
+   - Supported columns: `legal_name`, `display_name`, `inn`, `website`, `email`, `phone`, `categories`, `brands`, `region`, `notes`
+   - Russian aliases are supported for operational spreadsheets
+   - Import remains a separate manual action and is never auto-triggered by the runner
+3. Search internal supplier database or external sources.
    - Note: The system does not perform automatic internet search.
    - The operator must search manually.
-3. Document potential supplier candidates in `03_supplier_search/`.
+4. Document potential supplier candidates in `03_supplier_search/`.
+5. Supplier Search may combine:
+   - canonical registry suppliers
+   - vendor-list suppliers imported into the registry
+   - manual operator notes from `03_supplier_search/supplier_candidates.md`
+6. Relevance scoring should remain explainable.
+   - Example signals: category, brand, region, contact completeness, vendor-list origin, tender-ready tags, extracted requirement/domain match
+   - Human review remains required before any RFQ is sent externally
 
 ### Step 4: RFQ/TKP Request Preparation
 
@@ -80,6 +92,30 @@ Tender operators do not have fixed product catalogs or known supplier prices. Th
 3. Prepare bid documents manually.
 4. Submit via procurement platform.
    - Note: Submission remains fully manual.
+
+## Vendor-List Import
+
+Use the dedicated import script when the operator has a local supplier spreadsheet:
+
+```bash
+.venv/bin/python scripts/import_vendor_list.py \
+  --operator-id tender_operator_001 \
+  --file local_pilot_runs/tender_operator_001/vendor_list.xlsx \
+  --source-label "vendor-list-2026-07"
+```
+
+Expected outputs:
+
+- `local_pilot_runs/<operator_id>/vendor_imports/<timestamp>/vendor_import_summary.json`
+- `local_pilot_runs/<operator_id>/vendor_imports/<timestamp>/vendor_import_report.md`
+
+The import:
+
+- creates or updates `SupplierProfile`
+- adds `SupplierContact`, `SupplierExternalRef`, and `SupplierTag`
+- deduplicates primarily by INN
+- marks missing-INN rows for review instead of breaking the batch
+- never sends email or performs any external action
 
 ## Milestone States
 

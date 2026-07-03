@@ -1,10 +1,12 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from scripts.run_tender_operator_pilot import _resolve_provider_request
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "tests" / "fixtures" / "local_pilot_runs" / "tender_operator_001"
@@ -19,8 +21,12 @@ def _run_script(
     tender_dir: Path = TENDER_DIR,
     operator_id: str = "tender_operator_001",
     provider: str = "stub",
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
     """Run the PP1R script with given params."""
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
     return subprocess.run(
         [sys.executable, str(SCRIPT),
          "--operator-id", operator_id,
@@ -29,6 +35,7 @@ def _run_script(
          "--output-dir", str(output_dir)],
         capture_output=True,
         text=True,
+        env=env,
         timeout=30,
     )
 
@@ -93,6 +100,16 @@ class TestPP1RScriptStructure:
         code = SCRIPT.read_text()
         assert "'stub'" in code or '"stub"' in code
         assert "'llm'" in code or '"llm"' in code
+
+    def test_provider_resolution_rules(self):
+        assert _resolve_provider_request("stub", "gigachat") == ("stub", "stub")
+        assert _resolve_provider_request("llm", "stub") == ("stub", "stub")
+        assert _resolve_provider_request("llm", "gigachat") == ("llm", "gigachat")
+        assert _resolve_provider_request("openai_compatible", "stub") == ("llm", "openai_compatible")
+        assert _resolve_provider_request("gigachat", "stub") == ("llm", "gigachat")
+        assert _resolve_provider_request("yandex", "stub") == ("llm", "yandex")
+        assert _resolve_provider_request("alice", "stub") == ("llm", "alice")
+        assert _resolve_provider_request("cloudru", "stub") == ("llm", "cloudru")
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +207,14 @@ class TestPP1RWithTKP:
         assert "workspace_id" in summary and summary["workspace_id"]
         assert "export_package_id" in summary and summary["export_package_id"]
         assert "completed_at_utc" in summary
+        assert "supplier_sourcing" in summary
+        assert summary["supplier_sourcing"]["manual_candidates_file_found"] is True
+
+    def test_internal_analysis_contains_supplier_sourcing(self, tkp_output):
+        out, _ = tkp_output
+        analysis = (out / "internal_operator_analysis.md").read_text()
+        assert "## Supplier Sourcing" in analysis
+        assert "supplier_candidates.md" in analysis
 
     def test_three_intake_records(self, tkp_output):
         out, _ = tkp_output
@@ -205,6 +230,35 @@ class TestPP1RWithTKP:
         out, _ = tkp_output
         bd = json.loads((out / "tkp_comparison.json").read_text())
         assert bd is not None
+
+    def test_llm_mode_uses_controlled_workflow_artifacts(self, tmp_path):
+        out = tmp_path / "llm_output"
+        db_path = tmp_path / "llm_workflow.sqlite"
+        result = _run_script(
+            out,
+            provider="llm",
+            extra_env={
+                "AI_CORP_DATABASE_URL": f"sqlite:///{db_path}",
+                "AI_CORP_LLM_PROVIDER": "stub",
+                "AI_CORP_LLM_MODEL": "stub-controlled-model",
+            },
+        )
+        assert result.returncode == 0, f"LLM-mode script failed:\nSTDERR:\n{result.stderr}\nSTDOUT:\n{result.stdout}"
+
+        summary = json.loads((out / "run_summary.json").read_text())
+        requirements = json.loads((out / "requirements.json").read_text())
+        rfq = (out / "rfq_request_draft.md").read_text()
+        comparison = json.loads((out / "tkp_comparison.json").read_text())
+
+        assert summary["analysis_mode"] == "llm_tender_operator_stub"
+        assert summary["requested_provider"] == "llm"
+        assert summary["resolved_provider"] == "stub"
+        assert "llm_control" in requirements
+        assert "llm_analysis" not in requirements
+        assert requirements["llm_control"]["analysis_mode"] == "llm_tender_operator_stub"
+        assert requirements["llm_control"]["resolved_provider"] == "stub"
+        assert "## Requirements Summary" in rfq
+        assert comparison["method"] == "llm_normalized"
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +457,7 @@ class TestPP1RNoProductCatalog:
 class TestPP1RNoExternalActions:
     def test_no_sqlalchemy_top_import(self):
         code = SCRIPT.read_text()
-        assert "from sqlalchemy" not in code or "_try_llm_analysis" in code
+        assert "from sqlalchemy" not in code or "_try_llm_workflow_analysis" in code
 
     def test_no_smtplib(self):
         code = SCRIPT.read_text()

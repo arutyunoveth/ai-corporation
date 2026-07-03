@@ -19,6 +19,7 @@ Usage:
 import argparse
 import copy
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,6 +44,7 @@ from src.modules.partner_workspace.service import (
 from src.modules.pilot_access_boundary.schemas import VisibilityLevel
 from src.modules.pilot_feedback.schemas import FeedbackSource, FeedbackType, FinalDecision, NextAction
 from src.modules.pilot_feedback.service import create_feedback, create_outcome
+from src.shared.config.settings import get_settings
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +79,48 @@ def _read_text_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _clip_text(text: str, *, max_chars: int = 12000) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "\n...[truncated for controlled analysis]..."
+
+
+SUPPORTED_PROVIDER_FLAGS = [
+    "stub",
+    "llm",
+    "openai_compatible",
+    "gigachat",
+    "yandex",
+    "alice",
+    "cloudru",
+]
+
+
+def _canonical_provider_name(provider_name: str) -> str:
+    normalized = provider_name.strip().lower()
+    if normalized in {"openai", "openai-compatible", "openai_compatible"}:
+        return "openai_compatible"
+    if normalized in {"gigachat", "sber", "sber_gigachat"}:
+        return "gigachat"
+    if normalized in {"yandex", "yandex_ai_studio"}:
+        return "yandex"
+    if normalized in {"alice", "alice_ai"}:
+        return "alice"
+    if normalized in {"cloudru", "cloud.ru", "cloud_ru"}:
+        return "cloudru"
+    return normalized
+
+
+def _resolve_provider_request(requested_provider: str, env_provider: str) -> tuple[str, str]:
+    requested = _canonical_provider_name(requested_provider)
+    if requested == "stub":
+        return "stub", "stub"
+    if requested == "llm":
+        resolved = _canonical_provider_name(env_provider or "stub")
+        return ("stub" if resolved == "stub" else "llm"), resolved
+    return "llm", requested
+
+
 # ---------------------------------------------------------------------------
 # Operator profile
 # ---------------------------------------------------------------------------
@@ -104,6 +148,26 @@ def _read_operator_profile(operator_dir: Path) -> dict[str, Any]:
         "has_margin_info": False,
         "has_categories": False,
         "preview": "",
+    }
+
+
+def _read_supplier_candidates_notes(tender_dir: Path) -> dict[str, Any]:
+    path = tender_dir / "03_supplier_search" / "supplier_candidates.md"
+    if not path.is_file():
+        return {
+            "found": False,
+            "path": str(path),
+            "line_count": 0,
+            "preview": "",
+        }
+
+    text = path.read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return {
+        "found": True,
+        "path": str(path),
+        "line_count": len(lines),
+        "preview": " ".join(lines[:8])[:280],
     }
 
 
@@ -298,18 +362,52 @@ def _run_stub_tkp_comparison(tkp_files: list[Path]) -> dict[str, Any]:
     }
 
 
+def _extract_numeric_value(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text or text in {"unknown", "n/a", "none", "null"}:
+        return None
+    normalized = text.replace("\u00a0", "").replace(" ", "").replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", normalized)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
 def _run_stub_economics(tkp_comparison: dict[str, Any], operator_profile: dict[str, Any]) -> dict[str, Any]:
     suppliers = tkp_comparison.get("suppliers", [])
     target_margin = None
     if operator_profile.get("found") and operator_profile.get("has_margin_info"):
         target_margin = "needs_extraction"
 
+    price_values: list[float] = []
+    for supplier in suppliers:
+        for field_name in ("price_total", "price_with_vat", "price_without_vat", "price_per_unit"):
+            parsed = _extract_numeric_value(supplier.get(field_name))
+            if parsed is not None:
+                price_values.append(parsed)
+                break
+
+    lowest_price: str | float = "unknown"
+    highest_price: str | float = "unknown"
+    average_price: str | float = "unknown"
+    if price_values:
+        lowest_price = min(price_values)
+        highest_price = max(price_values)
+        average_price = round(sum(price_values) / len(price_values), 2)
+
     return {
         "supplier_count": len(suppliers),
         "target_margin": target_margin or "unknown",
-        "lowest_price": "unknown",
-        "highest_price": "unknown",
-        "average_price": "unknown",
+        "lowest_price": lowest_price,
+        "highest_price": highest_price,
+        "average_price": average_price,
         "margin_at_lowest": "unknown",
         "margin_at_average": "unknown",
         "contract_security_cost": "unknown",
@@ -355,65 +453,136 @@ def _run_stub_bid_decision(
     }
 
 
-def _try_llm_analysis(
+def _build_llm_control_payload(result: Any) -> dict[str, Any]:
+    return {
+        "analysis_mode": result.analysis_mode,
+        "resolved_provider": result.resolved_provider,
+        "overall_review_status": result.overall_review_status,
+        "trace_ids": result.trace_ids,
+        "sections": {
+            section_name: {
+                "validation_status": section.get("validation_status"),
+                "review_status": section.get("review_status"),
+                "trace_id": section.get("trace_id"),
+                "input_redaction": section.get("input_redaction"),
+            }
+            for section_name, section in result.sections.items()
+        },
+    }
+
+
+def _materialize_llm_bid_decision(
+    llm_bid_decision: dict[str, Any],
+    tkp_comparison: dict[str, Any] | None,
+    calibrated_risks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    deal_breakers = [r for r in calibrated_risks if r.get("classification") == "deal_breaker_candidate"]
+    material_risks = [r for r in calibrated_risks if r.get("classification") == "commercially_material_risk"]
+    market_standard = [r for r in calibrated_risks if r.get("classification") == "market_standard_harsh_term"]
+    return {
+        "preliminary_recommendation": llm_bid_decision.get("preliminary_recommendation", "NEEDS_REVIEW"),
+        "rationale": llm_bid_decision.get("rationale", "Human review required."),
+        "deal_breaker_count": len(deal_breakers),
+        "material_risk_count": len(material_risks),
+        "market_standard_count": len(market_standard),
+        "suppliers_with_offers": len(tkp_comparison.get("suppliers", [])) if tkp_comparison else 0,
+        "status": "preliminary",
+        "human_review_required": bool(llm_bid_decision.get("human_review_required", True)),
+        "next_actions": llm_bid_decision.get("next_actions", []),
+        "note": "Preliminary recommendation only. Final decision requires human review.",
+    }
+
+
+def _try_llm_workflow_analysis(
+    operator_id: str,
+    operator_profile: dict[str, Any],
     notice_text: str,
     technical_spec_text: str,
     contract_draft_text: str,
+    tkp_files: list[Path],
+    *,
+    provider_mode: str,
+    resolved_provider: str,
 ) -> dict[str, Any] | None:
     try:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import Session
 
-        from src.shared.config.settings import get_settings
+        from src.shared.db.base import Base
+        from src.shared.db import models as _db_models  # noqa: F401
 
         settings = get_settings()
         if not settings.database_url:
             return None
 
         engine = create_engine(settings.database_url)
+        Base.metadata.create_all(engine)
         with Session(engine) as session:
-            from src.modules.controlled_llm_prebid.service import run_controlled_llm_prebid_analysis
+            from src.modules.controlled_llm_prebid.service import run_controlled_tender_operator_workflow
 
+            tkp_inputs = [
+                {
+                    "supplier_label": tkp_file.stem,
+                    "source_file": str(tkp_file),
+                    "quote_text": _clip_text(_read_text_file(tkp_file), max_chars=8000),
+                }
+                for tkp_file in tkp_files
+                if tkp_file.is_file()
+            ]
             llm_context = {
                 "deal_id": f"PP1R-{datetime.now(UTC).strftime('%Y%m%d')}",
-                "title": notice_text[:200],
-                "customer_name": "Tender Operator Customer",
-                "participant_requirements": [
-                    "Valid business registration",
-                    "Relevant SRO approvals",
-                    "Prior similar experience",
-                ],
-                "required_documents": [
-                    "Registration certificate",
-                    "Tax clearance",
-                    "Technical proposal",
-                ],
-                "contract_risks": [
-                    "Review payment terms",
-                    "Check security requirements",
-                    "Verify delivery timeline",
-                ],
+                "operator_id": operator_id,
+                "operator_profile": operator_profile,
+                "documents": {
+                    "notice_text": _clip_text(notice_text),
+                    "technical_spec_text": _clip_text(technical_spec_text),
+                    "contract_draft_text": _clip_text(contract_draft_text),
+                },
+                "workflow_guardrails": {
+                    "manual_only": True,
+                    "no_email_send": True,
+                    "no_platform_submission": True,
+                    "human_review_required": True,
+                },
+                "tkp_inputs": tkp_inputs,
             }
-            result = run_controlled_llm_prebid_analysis(
+            result = run_controlled_tender_operator_workflow(
                 session,
-                provider_mode="llm",
+                provider_mode=provider_mode,
                 context=llm_context,
+                include_quote_normalization=bool(tkp_inputs),
+                include_bid_decision=bool(tkp_inputs),
+                provider_name_override=None if resolved_provider == "stub" else resolved_provider,
             )
             return {
                 "analysis_mode": result.analysis_mode,
+                "resolved_provider": result.resolved_provider,
                 "overall_review_status": result.overall_review_status,
-                "sections": {
-                    k: {
-                        "validation_status": v.get("validation_status"),
-                        "review_status": v.get("review_status"),
-                        "raw_output": v.get("raw_output"),
-                    }
-                    for k, v in result.sections.items()
-                },
-                "trace_ids": result.trace_ids,
+                "requirements": result.requirements,
+                "supplier_questions": result.supplier_questions,
+                "rfq_draft": result.rfq_draft,
+                "contract_risks": result.contract_risks,
+                "quote_normalization": result.quote_normalization,
+                "bid_decision": result.bid_decision,
+                "llm_control": _build_llm_control_payload(result),
             }
     except Exception as exc:
         print(f"WARNING: LLM analysis unavailable, falling back to stub: {exc}")
+        return None
+
+
+def _build_supplier_sourcing_summary(requirements: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        from src.modules.supplier_search.service import get_supplier_sourcing_snapshot
+        from src.shared.db import models as _db_models  # noqa: F401
+        from src.shared.db.base import Base
+        from src.shared.db.session import SessionLocal, engine
+
+        Base.metadata.create_all(engine)
+        with SessionLocal() as session:
+            return get_supplier_sourcing_snapshot(session, requirements, top_n=5)
+    except Exception as exc:
+        print(f"WARNING: Supplier sourcing snapshot unavailable: {exc}")
         return None
 
 
@@ -426,6 +595,8 @@ def _build_internal_operator_analysis(
     calibrated_risks: list[dict[str, Any]],
     supplier_questions: list[dict[str, Any]],
     operator_profile: dict[str, Any],
+    supplier_candidates_notes: dict[str, Any],
+    supplier_sourcing: dict[str, Any] | None,
     tkp_comparison: dict[str, Any] | None,
     economics: dict[str, Any] | None,
     bid_decision: dict[str, Any] | None,
@@ -460,6 +631,36 @@ def _build_internal_operator_analysis(
         f"- Notice: {len(notice_text)} chars",
         f"- Technical Spec: {len(technical_spec_text)} chars",
         f"- Contract Draft: {len(contract_draft_text)} chars",
+        "",
+        "---",
+        "## Supplier Sourcing",
+        "",
+    ]
+
+    if supplier_candidates_notes.get("found"):
+        lines.append(
+            f"- Manual candidates file: {supplier_candidates_notes['path']} ({supplier_candidates_notes['line_count']} lines)"
+        )
+        if supplier_candidates_notes.get("preview"):
+            lines.append(f"- Manual notes preview: {supplier_candidates_notes['preview']}")
+    else:
+        lines.append("- Manual candidates file: not provided")
+
+    if supplier_sourcing:
+        lines.append(f"- Registry suppliers available: {supplier_sourcing.get('registry_supplier_count', 0)}")
+        lines.append(f"- Vendor-list suppliers tagged: {supplier_sourcing.get('vendor_list_supplier_count', 0)}")
+        top_suppliers = supplier_sourcing.get("top_suppliers", [])
+        if top_suppliers:
+            lines += ["", "Top ranked suppliers:"]
+            for supplier in top_suppliers:
+                lines.append(
+                    f"- {supplier.get('display_name') or supplier.get('supplier_id')}: "
+                    f"{supplier.get('inclusion_reason', 'No reason available')}"
+                )
+    else:
+        lines.append("- Structured registry shortlist: unavailable")
+
+    lines += [
         "",
         "---",
         "## Tender Summary",
@@ -590,6 +791,7 @@ def _build_operator_operator_report_sections(
     tkp_comparison: dict[str, Any] | None,
     bid_decision: dict[str, Any] | None,
     has_tkp: bool,
+    analysis_mode: str,
 ) -> dict[str, str]:
     tech = "\n".join(f"- {r}" for r in requirements.get("technical_requirements", []))
     qual = "\n".join(f"- {q}" for q in requirements.get("qualification_requirements", []))
@@ -612,7 +814,7 @@ def _build_operator_operator_report_sections(
             f"*Human review required before any bid decision.*\n"
         )
 
-    customer_report += "\n*Analysis mode: stub | RFQ-first workflow | Manual delivery only*\n"
+    customer_report += f"\n*Analysis mode: {analysis_mode} | RFQ-first workflow | Manual delivery only*\n"
 
     sections: dict[str, str] = {
         "customer_report": customer_report,
@@ -660,11 +862,17 @@ def _write_outputs(
     economics: dict[str, Any] | None,
     bid_decision: dict[str, Any] | None,
     internal_analysis_md: str,
+    rfq_request_draft_md: str,
     package_id: str,
     export_md: str,
     export_json: dict[str, Any],
     delivery_status: str,
     has_tkp: bool,
+    analysis_mode: str,
+    requested_provider: str,
+    resolved_provider: str,
+    supplier_candidates_notes: dict[str, Any],
+    supplier_sourcing: dict[str, Any] | None,
 ) -> None:
     pilot_status = "tkp_received_economics_ready" if has_tkp else "rfq_ready_collect_tkp"
 
@@ -675,7 +883,9 @@ def _write_outputs(
         "export_package_id": package_id,
         "delivery_status": delivery_status,
         "pilot_status": pilot_status,
-        "analysis_mode": "stub",
+        "analysis_mode": analysis_mode,
+        "requested_provider": requested_provider,
+        "resolved_provider": resolved_provider,
         "workflow": "rfq_first",
         "completed_at_utc": datetime.now(UTC).isoformat(),
         "source_files": {
@@ -707,13 +917,21 @@ def _write_outputs(
         "included_sections": export_json.get("included_sections", []),
         "redacted_sections": export_json.get("redacted_sections", []),
         "blocked_sections": export_json.get("blocked_sections", []),
+        "supplier_sourcing": {
+            "manual_candidates_file_found": bool(supplier_candidates_notes.get("found")),
+            "manual_candidates_file": supplier_candidates_notes.get("path"),
+            "manual_candidates_line_count": supplier_candidates_notes.get("line_count", 0),
+            "registry_supplier_count": supplier_sourcing.get("registry_supplier_count", 0) if supplier_sourcing else 0,
+            "vendor_list_supplier_count": supplier_sourcing.get("vendor_list_supplier_count", 0) if supplier_sourcing else 0,
+            "top_suppliers": supplier_sourcing.get("top_suppliers", []) if supplier_sourcing else [],
+        },
     }
 
     (output_dir / "run_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "internal_operator_analysis.md").write_text(internal_analysis_md, encoding="utf-8")
     (output_dir / "requirements.json").write_text(json.dumps(requirements, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "supplier_questions.json").write_text(json.dumps(supplier_questions, ensure_ascii=False, indent=2), encoding="utf-8")
-    (output_dir / "rfq_request_draft.md").write_text(_build_rfq_draft_markdown(supplier_questions), encoding="utf-8")
+    (output_dir / "rfq_request_draft.md").write_text(rfq_request_draft_md, encoding="utf-8")
     (output_dir / "calibrated_contract_risk_memo.md").write_text(
         _build_risk_memo_markdown(calibrated_risks), encoding="utf-8"
     )
@@ -761,6 +979,55 @@ def _build_rfq_draft_markdown(supplier_questions: list[dict[str, Any]]) -> str:
     lines += [
         "",
         "---",
+        "*This draft was generated for manual sending. No automatic email is sent.*",
+        "*Review and customize before sending to suppliers.*",
+    ]
+    return "\n".join(lines)
+
+
+def _build_structured_rfq_draft_markdown(rfq_draft: dict[str, Any]) -> str:
+    lines = [
+        "# RFQ / TKP Request Draft",
+        "",
+        "**Generated**: " + datetime.now(UTC).isoformat(),
+        "",
+        f"**Subject**: {rfq_draft.get('email_subject', 'RFQ / TKP request')}",
+        "",
+        "---",
+        "## Intro",
+        "",
+        rfq_draft.get("intro", "Please confirm your ability to support this tender request."),
+        "",
+        "## Requirements Summary",
+        "",
+    ]
+    for item in rfq_draft.get("requirements_summary", []):
+        lines.append(f"- {item}")
+    lines += [
+        "",
+        "## Supplier Questions",
+        "",
+    ]
+    for i, question in enumerate(rfq_draft.get("supplier_questions", []), 1):
+        lines.append(f"{i}. {question}")
+    lines += [
+        "",
+        "## Requested Response Items",
+        "",
+    ]
+    for item in rfq_draft.get("requested_response_items", []):
+        lines.append(f"- {item}")
+    lines += [
+        "",
+        "## Commercial Terms to Clarify",
+        "",
+    ]
+    for item in rfq_draft.get("commercial_terms", []):
+        lines.append(f"- {item}")
+    lines += [
+        "",
+        "---",
+        rfq_draft.get("closing_note", "Human review is required before any external communication."),
         "*This draft was generated for manual sending. No automatic email is sent.*",
         "*Review and customize before sending to suppliers.*",
     ]
@@ -923,9 +1190,16 @@ def main() -> None:
     )
     parser.add_argument("--operator-id", required=True, help="Operator identifier (e.g., tender_operator_001)")
     parser.add_argument("--tender-dir", required=True, type=Path, help="Path to the tender folder")
-    parser.add_argument("--provider", required=True, choices=["stub", "llm"], help="Analysis provider")
+    parser.add_argument("--provider", required=True, choices=SUPPORTED_PROVIDER_FLAGS, help="Analysis provider")
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory (default: <tender-dir>/05_system_output)")
     args = parser.parse_args()
+    settings = get_settings()
+    requested_provider = _canonical_provider_name(args.provider)
+    execution_provider_mode, configured_resolved_provider = _resolve_provider_request(
+        requested_provider,
+        settings.llm_provider,
+    )
+    resolved_provider = configured_resolved_provider
 
     tender_dir: Path = args.tender_dir.resolve()
     operator_id: str = args.operator_id
@@ -942,7 +1216,8 @@ def main() -> None:
     print("=== Tender Operator Pilot Runner (PP1R) ===")
     print(f"  Operator ID:  {operator_id}")
     print(f"  Tender dir:   {tender_dir}")
-    print(f"  Provider:     {args.provider}")
+    print(f"  Requested provider: {requested_provider}")
+    print(f"  Resolved provider:  {resolved_provider}")
     print(f"  Output dir:   {output_dir}")
     print()
 
@@ -959,6 +1234,12 @@ def main() -> None:
         print(f"  Profile found: {operator_profile['line_count']} lines")
     else:
         print("  No operator profile found (optional)")
+
+    supplier_candidates_notes = _read_supplier_candidates_notes(tender_dir)
+    if supplier_candidates_notes["found"]:
+        print(
+            f"  Supplier candidates notes found: {supplier_candidates_notes['line_count']} lines"
+        )
 
     # Step 3: Read extracted text files
     print("[3] Reading extracted text files...")
@@ -1024,14 +1305,16 @@ def main() -> None:
         print(f"  {filename} record: {record.intake_record_id} (redacted for partner)")
 
     # Step 6: Run analysis
-    print(f"[6] Running analysis (provider={args.provider})...")
+    print(f"[6] Running analysis (provider={requested_provider})...")
     requirements = _run_stub_requirements_extraction(notice_text, technical_spec_text, contract_draft_text)
     requirements["_notice_chars"] = len(notice_text)
     requirements["_spec_chars"] = len(technical_spec_text)
     requirements["_contract_chars"] = len(contract_draft_text)
+    analysis_mode = "stub"
 
     calibrated_risks = _run_stub_calibrated_contract_risk(contract_draft_text)
     supplier_questions = _run_stub_supplier_questions()
+    rfq_request_draft_md = _build_rfq_draft_markdown(supplier_questions)
 
     tkp_files = _detect_tkp_files(tender_dir)
     has_tkp = len(tkp_files) > 0
@@ -1050,13 +1333,57 @@ def main() -> None:
     else:
         print("  No TKP files found. Run will stop at rfq_ready / collect_tkp.")
 
-    if args.provider == "llm":
-        llm_result = _try_llm_analysis(notice_text, technical_spec_text, contract_draft_text)
+    if requested_provider != "stub":
+        llm_result = _try_llm_workflow_analysis(
+            operator_id,
+            operator_profile,
+            notice_text,
+            technical_spec_text,
+            contract_draft_text,
+            tkp_files,
+            provider_mode=execution_provider_mode,
+            resolved_provider=resolved_provider,
+        )
         if llm_result:
-            requirements["llm_analysis"] = llm_result
-            print(f"  LLM analysis mode: {llm_result.get('analysis_mode', 'unknown')}")
+            analysis_mode = llm_result.get("analysis_mode", "llm")
+            resolved_provider = llm_result.get("resolved_provider", resolved_provider)
+            llm_requirements = llm_result.get("requirements") or {}
+            requirements.update(llm_requirements)
+            requirements["llm_control"] = llm_result.get("llm_control", {})
+
+            if llm_result.get("supplier_questions"):
+                supplier_questions = llm_result["supplier_questions"]
+            if llm_result.get("rfq_draft"):
+                rfq_request_draft_md = _build_structured_rfq_draft_markdown(llm_result["rfq_draft"])
+            if llm_result.get("contract_risks"):
+                calibrated_risks = llm_result["contract_risks"]
+            if has_tkp and llm_result.get("quote_normalization"):
+                tkp_comparison = dict(llm_result["quote_normalization"])
+                tkp_comparison["comparison_generated_at"] = datetime.now(UTC).isoformat()
+                tkp_comparison["method"] = "llm_normalized"
+                tkp_comparison["note"] = "Normalized from supplier TKP via controlled LLM workflow. Operator review remains required."
+                economics = _run_stub_economics(tkp_comparison, operator_profile)
+            if has_tkp and llm_result.get("bid_decision"):
+                bid_decision = _materialize_llm_bid_decision(
+                    llm_result["bid_decision"],
+                    tkp_comparison,
+                    calibrated_risks,
+                )
+            elif has_tkp and tkp_comparison and economics:
+                bid_decision = _run_stub_bid_decision(tkp_comparison, economics, calibrated_risks)
+            print(f"  Controlled workflow mode: {analysis_mode}")
         else:
+            resolved_provider = "stub"
             print("  -> Falling back to stub analysis")
+
+    supplier_sourcing = _build_supplier_sourcing_summary(requirements)
+    if supplier_sourcing:
+        print(
+            "  Supplier sourcing snapshot:"
+            f" registry={supplier_sourcing.get('registry_supplier_count', 0)},"
+            f" vendor_list={supplier_sourcing.get('vendor_list_supplier_count', 0)},"
+            f" top={len(supplier_sourcing.get('top_suppliers', []))}"
+        )
 
     records_with_refs = copy.deepcopy(records_info)
     for r, rec in zip(records_with_refs, intake_records):
@@ -1066,14 +1393,15 @@ def main() -> None:
     print("[7] Building internal operator analysis...")
     internal_md = _build_internal_operator_analysis(
         requirements, calibrated_risks, supplier_questions,
-        operator_profile, tkp_comparison, economics, bid_decision,
+        operator_profile, supplier_candidates_notes, supplier_sourcing,
+        tkp_comparison, economics, bid_decision,
         records_with_refs, notice_text, technical_spec_text, contract_draft_text,
     )
 
     # Step 8: Build partner export sections
     print("[8] Building partner export sections...")
     sections = _build_operator_operator_report_sections(
-        requirements, calibrated_risks, tkp_comparison, bid_decision, has_tkp,
+        requirements, calibrated_risks, tkp_comparison, bid_decision, has_tkp, analysis_mode,
     )
 
     # Step 9: Generate export package
@@ -1102,11 +1430,17 @@ def main() -> None:
         economics=economics,
         bid_decision=bid_decision,
         internal_analysis_md=internal_md,
+        rfq_request_draft_md=rfq_request_draft_md,
         package_id=package.export_package_id,
         export_md=export_md,
         export_json=export_json,
         delivery_status=delivered.export_status.value if hasattr(delivered, "export_status") else "unknown",
         has_tkp=has_tkp,
+        analysis_mode=analysis_mode,
+        requested_provider=requested_provider,
+        resolved_provider=resolved_provider,
+        supplier_candidates_notes=supplier_candidates_notes,
+        supplier_sourcing=supplier_sourcing,
     )
 
     # Step 12: Record feedback and outcome
