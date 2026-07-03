@@ -92,6 +92,7 @@ from src.modules.workflow_runs.router import router as workflow_runs_router
 from src.modules.workspace_feed.router import router as workspace_feed_router
 from src.shared.api.errors import register_exception_handlers
 from src.shared.api.middleware import install_runtime_middlewares
+from src.shared.api.site_mount import install_optional_site_mount
 from src.shared.config.settings import get_settings
 
 settings = get_settings()
@@ -195,3 +196,6 @@ app.include_router(supplier_progress_router)
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+install_optional_site_mount(app, settings)

@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,6 +8,7 @@ class Settings(BaseSettings):
     app_name: str = "AI Corporation Sprint 1 API"
     debug: bool = False
     database_url: str = "sqlite:///./ai_corporation.db"
+    site_public_root: str | None = None
     allowed_hosts: str = ""
     cors_allow_origins: str = ""
     tender_pilot_basic_auth_enabled: bool = False
@@ -41,6 +43,11 @@ class Settings(BaseSettings):
 
     def cors_allow_origins_list(self) -> list[str]:
         return _split_csv(self.cors_allow_origins)
+
+    def site_public_root_path(self) -> Path | None:
+        if not self.site_public_root:
+            return None
+        return Path(self.site_public_root).expanduser().resolve()
 
 
 @lru_cache(maxsize=1)

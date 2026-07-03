@@ -86,11 +86,55 @@ docker run --rm -p 8000:8000 --env-file .env.local ai-corporation-tender-pilot
 
 The image includes the required Arvectum brand assets used by the pilot UI.
 
+## Unified Local Preview
+
+To preview the website and the live pilot behind one local entrypoint:
+
+```bash
+docker compose -f docker-compose.site-pilot.yml up --build
+```
+
+Local URLs:
+
+- `http://127.0.0.1:8081/`
+- `http://127.0.0.1:8081/cases/tender-operator-demo.html`
+- `http://127.0.0.1:8081/pilot/tender-agent`
+- `http://127.0.0.1:8081/demo/tender-agent`
+
+This stack serves the Arvectum static site from Nginx and proxies the Tender
+Operator pilot routes into the FastAPI container.
+
+If `8081` is busy, override the port:
+
+```bash
+ARVECTUM_SITE_PORT=8090 docker compose -f docker-compose.site-pilot.yml up --build
+```
+
+## Pure Python Same-Port Preview
+
+If you want the static site and the pilot on one local port without Nginx, set
+`AI_CORP_SITE_PUBLIC_ROOT` and run the main FastAPI app directly:
+
+```bash
+AI_CORP_SITE_PUBLIC_ROOT=/Users/master/Documents/AI-Corporation/arvectum-landing/public \
+./.venv/bin/python -m uvicorn src.main:app --host 127.0.0.1 --port 8090
+```
+
+This mode is useful for local demos and quick operator preview. It serves the
+static site from the filesystem and keeps the pilot routes on the same origin.
+
+Note:
+
+- it serves static files only;
+- it does not execute the PHP handlers from the marketing site;
+- for production on the existing site hosting model, prefer the reverse-proxy shape.
+
 ## Reverse Proxy
 
 An example Nginx config is provided in:
 
 - `ops/nginx/arvectum-tender-pilot.conf.example`
+- `ops/nginx/arvectum-site-pilot.local.conf`
 
 Proxy these route groups to the FastAPI service:
 

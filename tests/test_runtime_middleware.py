@@ -1,9 +1,11 @@
 import base64
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.shared.api.middleware import TenderPilotBasicAuthMiddleware, install_runtime_middlewares
+from src.shared.api.site_mount import install_optional_site_mount
 from src.shared.config.settings import Settings
 
 
@@ -68,3 +70,18 @@ def test_install_runtime_middlewares_accepts_csv_settings() -> None:
         "https://arvectum.com",
         "https://www.arvectum.com",
     ]
+
+
+def test_optional_site_mount_serves_static_site(tmp_path: Path) -> None:
+    index_file = tmp_path / "index.html"
+    index_file.write_text("<html><body>Arvectum Site</body></html>", encoding="utf-8")
+
+    app = FastAPI()
+    settings = Settings(site_public_root=str(tmp_path))
+    install_optional_site_mount(app, settings)
+
+    client = TestClient(app)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Arvectum Site" in response.text

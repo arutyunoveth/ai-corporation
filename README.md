@@ -62,6 +62,33 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Tender_Operator_Site_Deployment.md](docs/product/Tender_Operator_Site_Deployment.md)
 - [docs/product/Calibrated_Contract_Risk_Method.md](docs/product/Calibrated_Contract_Risk_Method.md)
 - [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
+
+## Unified Site + Pilot Preview
+
+To preview the Arvectum site with the live Tender Operator pilot behind one
+entrypoint:
+
+```bash
+docker compose -f docker-compose.site-pilot.yml up --build
+```
+
+Open:
+
+- `http://127.0.0.1:8081/`
+- `http://127.0.0.1:8081/cases/tender-operator-demo.html`
+- `http://127.0.0.1:8081/pilot/tender-agent`
+
+For a pure Python same-port preview without Nginx:
+
+```bash
+AI_CORP_SITE_PUBLIC_ROOT=/Users/master/Documents/AI-Corporation/arvectum-landing/public \
+./.venv/bin/python -m uvicorn src.main:app --host 127.0.0.1 --port 8090
+```
+
+Then open:
+
+- `http://127.0.0.1:8090/cases/tender-operator-demo.html`
+- `http://127.0.0.1:8090/pilot/tender-agent`
 ## Customer Demo Package
 
 - [docs/demo/customer_demo_script_7min.md](docs/demo/customer_demo_script_7min.md) — 7-minute demo script with presenter cues
