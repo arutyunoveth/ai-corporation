@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementAttachment
 
 
-ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip"}
+ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip"}
 DEFAULT_ALLOWED_DOMAINS = {"zakupki.gov.ru", "int44.zakupki.gov.ru"}
 AttachmentTransport = Callable[[str, int], tuple[bytes, str | None]]
 
@@ -160,7 +160,8 @@ def download_procurement_attachments(
 def _default_transport(url: str, max_file_size_bytes: int) -> tuple[bytes, str | None]:
     request = Request(url, headers={"User-Agent": "ai-corporation-tender-demo/1.0"}, method="GET")
     try:
-        with urlopen(request, timeout=30) as response:
+        opener = build_opener(ProxyHandler({}))
+        with opener.open(request, timeout=30) as response:
             content_length = response.headers.get("Content-Length")
             if content_length and int(content_length) > max_file_size_bytes:
                 raise RuntimeError("file exceeds size limit")

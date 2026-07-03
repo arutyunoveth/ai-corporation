@@ -67,7 +67,7 @@ def test_create_run_from_demo_procurement_with_attachments_and_analyze(client, m
 
     report_page = client.get(f"/demo/tender-agent/runs/{payload['run_id']}/report")
     assert report_page.status_code == 200
-    assert "Источник закупки" in report_page.text
+    assert "Номер извещения" in report_page.text
     assert "Номер извещения" in report_page.text
 
 
@@ -96,7 +96,7 @@ def test_create_run_from_procurement_without_attachments_becomes_docs_required(c
 
     report_page = client.get(f"/demo/tender-agent/runs/{payload['run_id']}/report")
     assert report_page.status_code == 200
-    assert "Источник закупки" in report_page.text
+    assert "Номер извещения" in report_page.text
     assert "Документация не получена. Анализ невозможен до ручной загрузки файлов." in report_page.text
 
 

@@ -30,6 +30,21 @@ def test_attachment_downloader_saves_safe_http_attachment(tmp_path: Path):
     assert (tmp_path / result.saved[0].stored_name).read_bytes() == b"pdf-content"
 
 
+def test_attachment_downloader_allows_legacy_doc(tmp_path: Path):
+    result = download_procurement_attachments(
+        [_attachment("Описание объекта закупки.doc", "https://zakupki.gov.ru/docs/spec.doc")],
+        target_dir=tmp_path,
+        max_attachments=5,
+        max_file_size_bytes=1024,
+        max_total_size_bytes=1024,
+        transport=lambda _url, _limit: (b"doc-content", "application/msword"),
+    )
+
+    assert len(result.saved) == 1
+    assert result.saved[0].extension == ".doc"
+    assert (tmp_path / result.saved[0].stored_name).read_bytes() == b"doc-content"
+
+
 def test_attachment_downloader_rejects_unsafe_scheme(tmp_path: Path):
     result = download_procurement_attachments(
         [_attachment("notice.pdf", "file:///etc/passwd")],

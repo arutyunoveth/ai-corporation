@@ -2,7 +2,9 @@ from src.modules.tender_operator_agent_demo.public_44fz_search import (
     ALLOWED_44FZ_HOSTS,
     EIS_44FZ_SEARCH_PATH,
     build_44fz_search_url,
+    build_public_eis_search_url,
     normalize_44fz_search_params,
+    normalize_public_eis_law,
     validate_public_eis_url,
 )
 
@@ -12,6 +14,15 @@ def test_build_search_url_encodes_russian_query():
     assert url.startswith("https://zakupki.gov.ru/epz/order/extendedsearch/results.html?")
     assert "searchString=%D1%8D%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%BE%D1%82%D0%B5%D1%85%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%BE%D0%B5" in url
     assert "morphology=on" in url
+    assert "fz44=on" in url
+
+
+def test_build_search_url_supports_223fz_and_capital_repair():
+    url_223 = build_public_eis_search_url("обучение", law="223fz")
+    url_caprepair = build_public_eis_search_url("ремонт", law="capital_repair")
+
+    assert "fz223=on" in url_223
+    assert "ppRf615=on" in url_caprepair
 
 
 def test_build_search_url_host_is_zakupki_gov_ru():
@@ -44,6 +55,12 @@ def test_build_search_url_rejects_empty_query():
         assert False, "Expected ValueError"
     except ValueError as exc:
         assert "Поисковый запрос не может быть пустым" in str(exc)
+
+
+def test_normalize_public_eis_law_accepts_russian_names():
+    assert normalize_public_eis_law("44-ФЗ") == "44fz"
+    assert normalize_public_eis_law("223-ФЗ") == "223fz"
+    assert normalize_public_eis_law("капремонт") == "capital_repair"
 
 
 def test_validate_public_eis_url_valid():

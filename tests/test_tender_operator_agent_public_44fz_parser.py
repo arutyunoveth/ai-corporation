@@ -9,21 +9,32 @@ from src.modules.tender_operator_agent_demo.public_44fz_parser import (
 SAMPLE_SEARCH_HTML = """<html>
 <body>
 <div class="registry-entry" data-id="123">
-  <div class="registry-entry__header-mid__title">Поставка электротехнического оборудования</div>
+  <div class="registry-entry__header-mid__title">Электронный аукцион</div>
   <div class="registry-entry__header-mid__number">
     <a href="https://zakupki.gov.ru/epz/order/notice/ea44/view.html?regNumber=0888200000224000038">0888200000224000038</a>
   </div>
+  <div class="registry-entry__body-title">Заказчик</div>
   <div class="registry-entry__body-value">ООО \"Примерный заказчик\"</div>
-  <div class="registry-entry__body-price">1 250 000.00 RUB</div>
-  <div class="registry-entry__body-date">24.06.2026</div>
+  <div class="registry-entry__body-title">Объект закупки</div>
+  <div class="registry-entry__body-value">Поставка электротехнического оборудования</div>
+  <div class="price-block__title">Начальная цена</div>
+  <div class="price-block__value">1 250 000.00 RUB</div>
+  <div class="data-block__title">Размещено</div>
+  <div class="data-block__value">24.06.2026</div>
+  <div class="data-block__title">Окончание подачи заявок</div>
+  <div class="data-block__value">03.07.2026 10:00</div>
 </div>
 <div class="registry-entry" data-id="456">
-  <div class="registry-entry__header-mid__title">Поставка кабельной продукции</div>
+  <div class="registry-entry__header-mid__title">Электронный аукцион</div>
   <div class="registry-entry__header-mid__number">
     <a href="https://zakupki.gov.ru/epz/order/notice/ea44/view.html?regNumber=0778200000224000055">0778200000224000055</a>
   </div>
+  <div class="registry-entry__body-title">Заказчик</div>
   <div class="registry-entry__body-value">АО \"Кабельный завод\"</div>
-  <div class="registry-entry__body-value">3 450 000.00 RUB</div>
+  <div class="registry-entry__body-title">Объект закупки</div>
+  <div class="registry-entry__body-value">Поставка кабельной продукции</div>
+  <div class="price-block__title">Начальная цена</div>
+  <div class="price-block__value">3 450 000.00 RUB</div>
 </div>
 </body>
 </html>"""
@@ -58,6 +69,8 @@ def test_parse_extracts_cards():
     assert len(cards) > 0
     assert any("электротехнического" in c["title"].lower() for c in cards)
     assert any(c["notice_number"] == "0888200000224000038" for c in cards)
+    assert any(c["deadline"] == "03.07.2026 10:00" for c in cards)
+    assert any(c["procedure_type"] == "Электронный аукцион" for c in cards)
 
 
 def test_extract_reestr_from_card():

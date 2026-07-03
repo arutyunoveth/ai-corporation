@@ -81,6 +81,7 @@ This directory tracks the product-facing plan for the commercial MVP after recov
 - [First_Restricted_Pilot_Checklist.md](First_Restricted_Pilot_Checklist.md)
 - [PP1R_Tender_Operator_Pilot_Runner_Refinement.md](PP1R_Tender_Operator_Pilot_Runner_Refinement.md)
 - [Tender_Operator_Pilot_Runbook.md](Tender_Operator_Pilot_Runbook.md)
+- [Tender_Operator_Pilot_Live_Walkthrough.md](Tender_Operator_Pilot_Live_Walkthrough.md)
 - [Calibrated_Contract_Risk_Method.md](Calibrated_Contract_Risk_Method.md)
 - [Tender_Operator_RFQ_Workflow.md](Tender_Operator_RFQ_Workflow.md)
 - [tender_app_reuse_audit.md](tender_app_reuse_audit.md)

@@ -259,6 +259,7 @@ class ProcurementRunResponse(APIModel):
 
 class SearchResultHandoffRequest(APIModel):
     source: str = "public_44fz"
+    law: str | None = None
     reestr_number: str
     source_url: str | None = None
     title: str | None = None
@@ -292,6 +293,7 @@ class TenderOperatorUploadedFile(APIModel):
     original_name: str
     display_name: str
     stored_name: str
+    role_hint: str | None = None
     extension: str
     size_bytes: int = Field(ge=0)
     content_type: str

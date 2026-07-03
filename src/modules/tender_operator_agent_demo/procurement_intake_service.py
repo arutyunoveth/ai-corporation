@@ -1,23 +1,27 @@
 from __future__ import annotations
 
+import html
 import json
+import re
 import time
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.request import ProxyHandler, Request, build_opener
 
 from fastapi import HTTPException
 
 from src.modules.tender_operator_agent_demo.attachment_downloader import download_procurement_attachments
+from src.modules.tender_operator_agent_demo.public_44fz_search import normalize_public_eis_law
 from src.modules.tender_operator_agent_demo.procurement_discovery import (
     get_demo_procurement,
     get_procurement_details,
     search_procurements,
 )
 from src.modules.tender_operator_agent_demo.procurement_sources import get_procurement_source_descriptors
-from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult, ProcurementDetails
+from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult, ProcurementAttachment, ProcurementDetails
 from src.modules.tender_operator_agent_demo import schemas as tender_schemas
 from src.modules.tender_operator_agent_demo.schemas import (
     EisDocsArchiveRunRequest,
@@ -50,6 +54,8 @@ from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSo
 
 ARCHIVE_DOWNLOAD_RETRY_ATTEMPTS = 5
 ARCHIVE_DOWNLOAD_RETRY_DELAY_SECONDS = 10
+PUBLIC_EIS_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+PUBLIC_EIS_USER_AGENT = "Mozilla/5.0 (compatible; ArvectumTenderAgent/0.1; read-only)"
 
 
 def _now_iso() -> str:
@@ -61,6 +67,40 @@ def _find_descriptor(code: str):
         if item.code == code:
             return item
     return None
+
+
+def _law_label_for_run(law: str) -> str:
+    normalized = normalize_public_eis_law(law)
+    if normalized == "223fz":
+        return "223-ФЗ"
+    if normalized == "capital_repair":
+        return "Капремонт"
+    return "44-ФЗ"
+
+
+def _source_for_public_law(law: str) -> str:
+    normalized = normalize_public_eis_law(law)
+    if normalized == "223fz":
+        return "public_eis_html_223fz"
+    if normalized == "capital_repair":
+        return "public_eis_html_capital_repair"
+    return "public_eis_html_44fz"
+
+
+def _normalize_search_result_law(request: tender_schemas.SearchResultHandoffRequest) -> str:
+    if request.law:
+        return normalize_public_eis_law(request.law)
+    source = (request.source or "").strip().lower()
+    if "223" in source:
+        return "223fz"
+    if "615" in source or "capital" in source or "капрем" in source:
+        return "capital_repair"
+    source_url = (request.source_url or "").strip().lower()
+    if "/223/" in source_url:
+        return "223fz"
+    if "ea615" in source_url or "615" in source_url:
+        return "capital_repair"
+    return "44fz"
 
 
 def _legacy_result_from_details(details: ProcurementDetails) -> ProcurementSearchResult:
@@ -133,6 +173,123 @@ def _sanitize_archive_url_summary(archive_url: str | None) -> dict[str, Any]:
     }
 
 
+def _create_public_html_run_from_search_result(
+    request: tender_schemas.SearchResultHandoffRequest,
+    *,
+    normalized_law: str,
+) -> tender_schemas.SearchResultHandoffResponse:
+    reestr_number = request.reestr_number.strip()
+    source_url = (request.source_url or "").strip() or "https://zakupki.gov.ru/"
+    page_context = _extract_public_page_context(source_url) if source_url else {}
+    law_label = _law_label_for_run(normalized_law)
+    selected = ProcurementSearchResult(
+        procurement_id=reestr_number,
+        source=_source_for_public_law(normalized_law),
+        title=(request.title or "").strip() or page_context.get("title") or f"Закупка {reestr_number}",
+        procurement_number=reestr_number,
+        customer_name=(request.customer_name or "").strip() or page_context.get("customer_name") or "Не указан",
+        category=law_label,
+        publication_date=page_context.get("publication_date"),
+        deadline=page_context.get("deadline"),
+        initial_price=page_context.get("initial_price"),
+        currency=page_context.get("currency") or "RUB",
+        region=None,
+        source_url=source_url,
+        attachments_status="manual_upload_required",
+        attachments_count=0,
+        available_attachments_count=0,
+        summary=f"Карточка закупки {law_label} получена через публичный интерфейс ЕИС.",
+        attachment_names=[],
+        source_note="Документация будет догружена с публичной вкладки ЕИС, если вложения доступны без авторизации.",
+    )
+
+    run_id = make_demo_run_id()
+    ensure_demo_run_structure(run_id, exist_ok=False)
+    created_at = _now_iso()
+    append_demo_run_event(
+        run_id,
+        "public_search_handoff_started",
+        "Создан run из найденной закупки через публичный интерфейс ЕИС.",
+        {"reestr_number": reestr_number, "law": normalized_law, "source_url": source_url},
+    )
+
+    metadata = {
+        "run_id": run_id,
+        "created_at": created_at,
+        "mode": "procurement_search_intake",
+        "tender_title": selected.title,
+        "tender_category": law_label,
+        "customer_name": selected.customer_name,
+        "notes": None,
+        "status": TenderOperatorUploadedRunStatus.DOCS_REQUIRED.value,
+        "analysis_mode": "not_started",
+        "procurement_source": selected.source,
+        "procurement_id": reestr_number,
+        "procurement_url": source_url,
+        "procurement_query": reestr_number,
+        "publication_date": selected.publication_date,
+        "updated_date": page_context.get("updated_date"),
+        "deadline": selected.deadline,
+        "attachments_status": "manual_upload_required",
+        "downloaded_files_count": 0,
+        "manual_upload_required": True,
+        "source": selected.source,
+        "notice_number": reestr_number,
+        "law": law_label,
+        "files": [],
+        "warnings": [],
+        "limitations": [
+            "Поиск и получение документации выполняются только в read-only режиме через публичный интерфейс ЕИС.",
+            "Без авторизации, без обхода captcha, без подачи заявки, писем и ЭЦП.",
+            "Если часть вложений недоступна публично, их нужно дозагрузить вручную перед анализом.",
+        ],
+        "human_in_the_loop": True,
+        "external_actions": False,
+        "no_platform_submission": True,
+        "no_email_sending": True,
+        "no_digital_signature": True,
+        "procurement": selected.model_dump(mode="json"),
+        "analysis_status": "not_started",
+        "requested_analyze_after_download": request.analyze_after_download,
+    }
+    save_demo_run_metadata(run_id, metadata)
+    _write_procurement_artifacts(run_id, selected=selected, manifest=[])
+    _apply_search_result_context(run_id, request)
+    saved_count = _supplement_run_with_public_notice_attachments(run_id, request.source_url)
+
+    current_metadata = load_demo_run_metadata(run_id)
+    current_status = current_metadata.get("status", TenderOperatorUploadedRunStatus.DOCS_REQUIRED.value)
+    analysis_status = current_metadata.get("analysis_status")
+    warnings = list(current_metadata.get("warnings", []))
+    if request.analyze_after_download and current_status == TenderOperatorUploadedRunStatus.READY_TO_ANALYZE.value:
+        analysis_result = analyze_uploaded_demo_run(run_id)
+        current_status = analysis_result.status.value if hasattr(analysis_result.status, "value") else str(analysis_result.status)
+        analysis_status = current_status
+
+    append_demo_run_event(
+        run_id,
+        "public_documents_checked",
+        (
+            "Публичные документы ЕИС догружены и готовы к анализу."
+            if saved_count > 0
+            else "Публичные документы ЕИС проверены. Для продолжения может потребоваться ручная дозагрузка."
+        ),
+        {"saved_files": saved_count, "status": current_status},
+    )
+
+    return tender_schemas.SearchResultHandoffResponse(
+        run_id=run_id,
+        status=current_status,
+        archive_url_present=False,
+        archive_downloaded=False,
+        documents_extracted_count=int(current_metadata.get("downloaded_files_count") or 0),
+        analysis_status=analysis_status,
+        run_url=f"/demo/tender-agent/runs/{run_id}",
+        report_url=f"/demo/tender-agent/runs/{run_id}/report",
+        warnings=warnings,
+    )
+
+
 def _build_getdocs_result(reestr_number: str, archive_result: DocsArchiveResult) -> ProcurementSearchResult:
     warnings = list(archive_result.warnings)
     if archive_result.status != "completed":
@@ -156,6 +313,365 @@ def _build_getdocs_result(reestr_number: str, archive_result: DocsArchiveResult)
         summary=archive_result.raw_summary or f"Статус getDocsIP: {archive_result.status}",
         attachment_names=["documentation-archive.zip"] if archive_result.archive_url else [],
         source_note="Read-only getDocsIP intake для токена физлица.",
+    )
+
+
+def _strip_html_fragment(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = re.sub(r"<[^>]+>", " ", value)
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text or None
+
+
+def _extract_card_value(page_html: str, label: str, *, title_class: str, content_class: str) -> str | None:
+    pattern = re.compile(
+        rf'<span[^>]*class="[^"]*{re.escape(title_class)}[^"]*"[^>]*>\s*{re.escape(label)}\s*</span>\s*'
+        rf'<span[^>]*class="[^"]*{re.escape(content_class)}[^"]*"[^>]*>(.*?)</span>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(page_html)
+    return _strip_html_fragment(match.group(1)) if match else None
+
+
+def _extract_public_page_context(source_url: str) -> dict[str, Any]:
+    parsed = urlparse(source_url)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"}:
+        return {}
+    if not hostname.endswith("zakupki.gov.ru"):
+        return {}
+
+    opener = build_opener(ProxyHandler({}))
+    request = Request(source_url, headers={"User-Agent": PUBLIC_EIS_USER_AGENT}, method="GET")
+    try:
+        with opener.open(request, timeout=20) as response:
+            page_html = response.read(PUBLIC_EIS_MAX_RESPONSE_BYTES + 1).decode("utf-8", errors="replace")
+    except Exception:
+        return {}
+    if len(page_html) > PUBLIC_EIS_MAX_RESPONSE_BYTES:
+        return {}
+
+    title = _extract_card_value(page_html, "Объект закупки", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
+    if not title:
+        title = _extract_card_value(page_html, "Наименование объекта закупки", title_class="section__title", content_class="section__info")
+    customer_name = _extract_card_value(page_html, "Заказчик", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
+    publication_date = _extract_card_value(page_html, "Размещено", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
+    updated_date = _extract_card_value(page_html, "Обновлено", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
+    deadline = _extract_card_value(
+        page_html,
+        "Дата и время окончания срока подачи заявок",
+        title_class="section__title",
+        content_class="section__info",
+    ) or _extract_card_value(page_html, "Окончание подачи заявок", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
+    initial_price_raw = _extract_card_value(
+        page_html,
+        "Начальная (максимальная) цена контракта",
+        title_class="section__title",
+        content_class="section__info",
+    )
+    currency = _extract_card_value(page_html, "Валюта", title_class="section__title", content_class="section__info")
+
+    initial_price = None
+    if initial_price_raw:
+        cleaned = initial_price_raw.replace("\xa0", "").replace(" ", "").replace(",", ".")
+        match = re.search(r"\d+(?:\.\d+)?", cleaned)
+        if match:
+            try:
+                initial_price = float(match.group(0))
+            except ValueError:
+                initial_price = None
+
+    return {
+        "title": title,
+        "customer_name": customer_name,
+        "publication_date": publication_date,
+        "updated_date": updated_date,
+        "deadline": deadline,
+        "initial_price": initial_price,
+        "currency": currency,
+    }
+
+
+def _infer_public_documents_url(source_url: str) -> str | None:
+    parsed = urlparse(source_url)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    if not hostname.endswith("zakupki.gov.ru"):
+        return None
+    if parsed.path.endswith("/documents.html"):
+        return source_url
+    if parsed.path.endswith("/common-info.html"):
+        return parsed._replace(path=parsed.path[: -len("common-info.html")] + "documents.html").geturl()
+    return None
+
+
+def _parse_public_notice_attachments(page_html: str, *, page_url: str) -> list[ProcurementAttachment]:
+    attachments: list[ProcurementAttachment] = []
+    seen_urls: set[str] = set()
+    pattern = re.compile(
+        r'<a\s+href="([^"]*?/filestore/public/[^"]+)"(?:[^>]*title="([^"]*)")?[^>]*>\s*(.*?)\s*</a>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    for match in pattern.finditer(page_html):
+        href = urljoin(page_url, html.unescape(match.group(1)))
+        if href in seen_urls:
+            continue
+        seen_urls.add(href)
+        title_attr = _strip_html_fragment(match.group(2))
+        link_text = _strip_html_fragment(match.group(3))
+        name = title_attr or link_text
+        if not name:
+            continue
+        parsed_href = urlparse(href)
+        attachment_id = parse_qs(parsed_href.query).get("uid", [Path(parsed_href.path).name or name])[0]
+        extension = Path(name).suffix.lower() or None
+        attachments.append(
+            ProcurementAttachment(
+                attachment_id=attachment_id,
+                name=name,
+                url=href,
+                extension=extension,
+                can_download=True,
+                requires_manual_upload=False,
+            )
+        )
+    return attachments
+
+
+def _fetch_public_notice_attachments(source_url: str) -> list[ProcurementAttachment]:
+    documents_url = _infer_public_documents_url(source_url)
+    if not documents_url:
+        return []
+
+    opener = build_opener(ProxyHandler({}))
+    request = Request(documents_url, headers={"User-Agent": PUBLIC_EIS_USER_AGENT}, method="GET")
+    try:
+        with opener.open(request, timeout=20) as response:
+            page_html = response.read(PUBLIC_EIS_MAX_RESPONSE_BYTES + 1).decode("utf-8", errors="replace")
+    except Exception:
+        return []
+    if len(page_html) > PUBLIC_EIS_MAX_RESPONSE_BYTES:
+        return []
+    return _parse_public_notice_attachments(page_html, page_url=documents_url)
+
+
+def _role_hint_from_procurement_attachment(name: str) -> str | None:
+    lowered = name.lower()
+    if any(token in lowered for token in ("ткп", "кп", "коммерческое предложение", "supplier quote")):
+        return "tkp"
+    if any(
+        token in lowered
+        for token in (
+            "проект контракта",
+            "проект договора",
+            "муниципального контракта",
+            "государственного контракта",
+            "contract",
+            "agreement",
+            "договор",
+        )
+    ):
+        return "contract_draft"
+    if any(
+        token in lowered
+        for token in (
+            "техническое задание",
+            "техзадание",
+            "тз",
+            "technical specification",
+            "спецификац",
+            "описание объекта закупки",
+            "описание товара",
+            "описание работ",
+            "описание услуг",
+        )
+    ):
+        return "technical_spec"
+    if any(token in lowered for token in ("извещение", "notice")):
+        return "notice"
+    return None
+
+
+def _supplement_run_with_public_notice_attachments(run_id: str, source_url: str | None) -> int:
+    if not source_url:
+        return 0
+
+    metadata = load_demo_run_metadata(run_id)
+    existing_files = list(metadata.get("files", []))
+    existing_names = {str(item.get("original_name") or "").strip() for item in existing_files}
+    attachments = [
+        item
+        for item in _fetch_public_notice_attachments(source_url)
+        if str(item.name).strip() not in existing_names
+    ]
+    if not attachments:
+        return 0
+
+    existing_count = len(existing_files)
+    input_dir = get_demo_run_input_dir(run_id)
+    settings = get_zakupki_soap_settings()
+    download_limit = settings.max_download_mb * 1024 * 1024
+
+    download_result = download_procurement_attachments(
+        attachments,
+        target_dir=input_dir,
+        max_attachments=settings.max_attachments,
+        max_file_size_bytes=download_limit,
+        max_total_size_bytes=download_limit,
+    )
+
+    saved_count = 0
+    for offset, item in enumerate(download_result.saved, start=1):
+        if not item.stored_name:
+            continue
+        file_id = f"FILE-{existing_count + offset:02d}"
+        existing_files.append(
+            build_demo_file_descriptor(
+                file_id=file_id,
+                original_name=item.name,
+                stored_name=item.stored_name,
+                role_hint=_role_hint_from_procurement_attachment(item.name),
+                size_bytes=item.size_bytes,
+                content_type="application/octet-stream",
+                source="public_notice_documents",
+            )
+        )
+        append_demo_run_event(
+            run_id,
+            "attachment_saved",
+            f"Документация '{item.name}' скачана с публичной вкладки документов ЕИС.",
+            {"stored_name": item.stored_name, "source": "public_notice_documents"},
+        )
+        saved_count += 1
+
+    manifest_path = get_demo_run_procurement_dir(run_id) / "attachments_manifest.json"
+    manifest_payload = []
+    if manifest_path.is_file():
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = [ProcurementAttachmentManifestItem.model_validate(item) for item in manifest_payload]
+    for item in download_result.manifest:
+        manifest.append(
+            ProcurementAttachmentManifestItem(
+                name=item.name,
+                stored_name=item.stored_name,
+                extension=item.extension,
+                status=item.status,
+                note=item.note,
+            )
+        )
+        if item.status != "saved":
+            append_demo_run_event(
+                run_id,
+                "attachment_skipped",
+                f"Документация '{item.name}' пропущена при публичной догрузке: {item.note or 'причина не указана'}",
+                {"stored_name": item.stored_name, "source": "public_notice_documents", "status": item.status},
+            )
+
+    metadata["files"] = existing_files
+    metadata["downloaded_files_count"] = len(existing_files)
+    if saved_count > 0:
+        metadata["attachments_status"] = "downloaded"
+        metadata["manual_upload_required"] = False
+        if metadata.get("status") == TenderOperatorUploadedRunStatus.DOCS_REQUIRED.value:
+            metadata["status"] = TenderOperatorUploadedRunStatus.READY_TO_ANALYZE.value
+
+    procurement_payload = dict(metadata.get("procurement") or {})
+    attachment_names = list(procurement_payload.get("attachment_names") or [])
+    attachment_names.extend(item.name for item in download_result.saved if item.name not in attachment_names)
+    procurement_payload["attachment_names"] = attachment_names
+    procurement_payload["attachments_count"] = max(int(procurement_payload.get("attachments_count") or 0), len(attachments))
+    procurement_payload["available_attachments_count"] = max(
+        int(procurement_payload.get("available_attachments_count") or 0),
+        len([item for item in attachments if item.can_download]),
+    )
+    procurement_payload["attachments_status"] = "downloaded" if saved_count > 0 else procurement_payload.get("attachments_status")
+    source_note = str(procurement_payload.get("source_note") or "").strip()
+    fallback_note = "Публичная вкладка documents.html использована как fallback для скачивания вложений."
+    if fallback_note not in source_note:
+        procurement_payload["source_note"] = f"{source_note} {fallback_note}".strip()
+    metadata["procurement"] = procurement_payload
+
+    save_demo_run_metadata(run_id, metadata)
+    _write_procurement_artifacts(
+        run_id,
+        selected=ProcurementSearchResult.model_validate(procurement_payload),
+        manifest=manifest,
+    )
+    if attachments:
+        append_demo_run_event(
+            run_id,
+            "public_documents_loaded",
+            "Публичная вкладка документов ЕИС проверена и использована для догрузки вложений.",
+            {"attachments_found": len(attachments), "saved_files": saved_count, "skipped_files": len(download_result.skipped)},
+        )
+    return saved_count
+
+
+def _apply_search_result_context(
+    run_id: str,
+    request: tender_schemas.SearchResultHandoffRequest,
+) -> None:
+    metadata = load_demo_run_metadata(run_id)
+    procurement_payload = dict(metadata.get("procurement") or {})
+    source_url = (
+        (request.source_url or "").strip()
+        or procurement_payload.get("source_url")
+        or metadata.get("procurement_url")
+        or "https://zakupki.gov.ru/"
+    )
+    page_context = (
+        _extract_public_page_context(source_url)
+        if source_url and not (request.title or "").strip() and not (request.customer_name or "").strip()
+        else {}
+    )
+
+    title = (
+        (request.title or "").strip()
+        or page_context.get("title")
+        or procurement_payload.get("title")
+        or metadata.get("tender_title")
+    )
+    customer_name = (
+        (request.customer_name or "").strip()
+        or page_context.get("customer_name")
+        or procurement_payload.get("customer_name")
+        or metadata.get("customer_name")
+    )
+
+    metadata["tender_title"] = title
+    metadata["customer_name"] = customer_name
+    metadata["procurement_url"] = source_url
+    metadata["publication_date"] = page_context.get("publication_date") or metadata.get("publication_date")
+    metadata["updated_date"] = page_context.get("updated_date") or metadata.get("updated_date")
+    metadata["deadline"] = page_context.get("deadline") or metadata.get("deadline")
+
+    procurement_payload["title"] = title
+    procurement_payload["customer_name"] = customer_name
+    procurement_payload["source_url"] = source_url
+    procurement_payload["procurement_number"] = procurement_payload.get("procurement_number") or request.reestr_number.strip()
+    procurement_payload["procurement_id"] = procurement_payload.get("procurement_id") or request.reestr_number.strip()
+    procurement_payload["source"] = procurement_payload.get("source") or "zakupki_gov_ru_getdocs_ip"
+    procurement_payload["publication_date"] = page_context.get("publication_date") or procurement_payload.get("publication_date")
+    procurement_payload["updated_date"] = page_context.get("updated_date") or procurement_payload.get("updated_date")
+    procurement_payload["deadline"] = page_context.get("deadline") or procurement_payload.get("deadline")
+    procurement_payload["initial_price"] = page_context.get("initial_price") or procurement_payload.get("initial_price")
+    procurement_payload["currency"] = page_context.get("currency") or procurement_payload.get("currency")
+    metadata["procurement"] = procurement_payload
+
+    save_demo_run_metadata(run_id, metadata)
+
+    manifest_path = get_demo_run_procurement_dir(run_id) / "attachments_manifest.json"
+    manifest_payload = []
+    if manifest_path.is_file():
+        manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = [ProcurementAttachmentManifestItem.model_validate(item) for item in manifest_payload]
+    _write_procurement_artifacts(
+        run_id,
+        selected=ProcurementSearchResult.model_validate(procurement_payload),
+        manifest=manifest,
     )
 
 
@@ -790,7 +1306,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         "mode": "procurement_search_intake",
         "tender_title": selected.title,
         "tender_category": "44-ФЗ",
-        "customer_name": "Не указан",
+        "customer_name": selected.customer_name or "Не указан",
         "notes": None,
         "status": status.value,
         "analysis_mode": "not_started",
@@ -798,8 +1314,9 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         "procurement_id": request.reestr_number,
         "procurement_url": "https://zakupki.gov.ru/",
         "procurement_query": request.reestr_number,
-        "publication_date": None,
-        "deadline": None,
+        "publication_date": selected.publication_date,
+        "updated_date": None,
+        "deadline": selected.deadline,
         "attachments_status": "downloaded" if files else "manual_upload_required",
         "downloaded_files_count": len(files),
         "manual_upload_required": status == TenderOperatorUploadedRunStatus.DOCS_REQUIRED,
@@ -894,9 +1411,12 @@ def create_run_from_search_result(
 ) -> tender_schemas.SearchResultHandoffResponse:
     if not request.reestr_number or not request.reestr_number.strip():
         raise HTTPException(status_code=400, detail="reestr_number обязателен для запуска getDocsIP.")
+    normalized_law = _normalize_search_result_law(request)
     settings = get_zakupki_soap_settings()
-    if not settings.configured:
-        raise HTTPException(status_code=400, detail="Источник ЕИС не настроен: добавьте токен сервиса ЕИС в .env.local")
+    use_getdocs = normalized_law == "44fz" and settings.configured
+
+    if not use_getdocs:
+        return _create_public_html_run_from_search_result(request, normalized_law=normalized_law)
 
     eis_request = EisDocsArchiveRunRequest(
         reestr_number=request.reestr_number.strip(),
@@ -904,16 +1424,30 @@ def create_run_from_search_result(
         subsystem_type="PRIZ",
         method="getDocsByReestrNumber",
         download_archive=request.download_archive,
-        analyze_after_download=request.analyze_after_download,
+        analyze_after_download=False,
     )
     result = create_run_from_eis_docs_archive(eis_request)
+    _apply_search_result_context(result.run_id, request)
+    _supplement_run_with_public_notice_attachments(result.run_id, request.source_url)
+
+    status = result.status.value if hasattr(result.status, "value") else str(result.status)
+    analysis_status = result.analysis_status
+    current_metadata = load_demo_run_metadata(result.run_id)
+    current_status = current_metadata.get("status", status)
+    if request.analyze_after_download and current_status == TenderOperatorUploadedRunStatus.READY_TO_ANALYZE.value:
+        analysis_result = analyze_eis_archive_run(result.run_id)
+        status = analysis_result.status.value
+        analysis_status = analysis_result.status.value
+    else:
+        status = current_status
+
     return tender_schemas.SearchResultHandoffResponse(
         run_id=result.run_id,
-        status=result.status.value if hasattr(result.status, "value") else str(result.status),
+        status=status,
         archive_url_present=result.archive_url_present,
         archive_downloaded=result.archive_downloaded,
         documents_extracted_count=result.documents_extracted_count,
-        analysis_status=result.analysis_status,
+        analysis_status=analysis_status,
         run_url=result.run_url,
         report_url=result.report_url,
         warnings=result.warnings,

@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from urllib.parse import urlencode, urlparse
+from datetime import date, datetime
+from urllib.parse import urlparse
 
 from src.modules.tender_operator_agent_demo.procurement_sources import (
     DemoProcurementRecord,
@@ -22,11 +23,13 @@ from src.modules.tender_operator_agent_demo.schemas import ProcurementSearchResp
 from src.modules.tender_operator_agent_demo.supplier_profile import SupplierProfile
 from src.modules.tender_operator_agent_demo.public_44fz_parser import (
     Public44FzSearchStatus,
-    classify_public_search_response,
     fetch_public_44fz_search_page,
     parse_44fz_search_results,
 )
-from src.modules.tender_operator_agent_demo.public_44fz_search import build_44fz_search_url
+from src.modules.tender_operator_agent_demo.public_44fz_search import (
+    build_public_eis_search_url,
+    normalize_public_eis_law,
+)
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
 
@@ -85,11 +88,19 @@ def list_procurement_sources() -> list[ProcurementSourceStatus]:
         ),
         ProcurementSourceStatus(
             source="public_eis_html_223fz",
-            label="Публичный поиск ЕИС 223-ФЗ (fallback)",
+            label="Публичный поиск ЕИС 223-ФЗ",
             enabled=True,
             configured=True,
-            reason="Публичный HTML fallback. Для 223-ФЗ требуется отдельный parser path.",
+            reason="Публичный HTML fallback. Документация и карточка закупки берутся напрямую из ЕИС в read-only режиме.",
             safe_diagnostics={"mode": "public_html_fallback", "law": "223fz"},
+        ),
+        ProcurementSourceStatus(
+            source="public_eis_html_capital_repair",
+            label="Публичный поиск ЕИС Капремонт",
+            enabled=True,
+            configured=True,
+            reason="Публичный HTML fallback. Документация и карточка закупки берутся напрямую из ЕИС в read-only режиме.",
+            safe_diagnostics={"mode": "public_html_fallback", "law": "capital_repair"},
         ),
         ProcurementSourceStatus(
             source="zakupki_gov_ru_getdocs_ip",
@@ -198,6 +209,24 @@ def _to_search_result_v2(record: DemoProcurementRecord) -> ProcurementSearchResu
     )
 
 
+def _public_source_from_law(law: str) -> str:
+    normalized = normalize_public_eis_law(law)
+    if normalized == "223fz":
+        return "public_eis_html_223fz"
+    if normalized == "capital_repair":
+        return "public_eis_html_capital_repair"
+    return "public_eis_html_44fz"
+
+
+def _public_law_label(law: str) -> str:
+    normalized = normalize_public_eis_law(law)
+    if normalized == "223fz":
+        return "223-ФЗ"
+    if normalized == "capital_repair":
+        return "Капремонт"
+    return "44-ФЗ"
+
+
 def _search_demo_local_v2(request: ProcurementSearchRequestV2) -> list[ProcurementSearchResultV2]:
     records: list[ProcurementSearchResultV2] = []
     for item in get_demo_local_procurements():
@@ -238,7 +267,12 @@ def search_procurements(
             raise ValueError(f"Unknown procurement source: {request.source}")
         if request.source == "demo_local":
             return _search_demo_local_v2(request)
-        if request.source in {"public_eis_html_44fz", "public_eis_html_223fz", "zakupki_gov_ru_getdocs_ip"}:
+        if request.source in {
+            "public_eis_html_44fz",
+            "public_eis_html_223fz",
+            "public_eis_html_capital_repair",
+            "zakupki_gov_ru_getdocs_ip",
+        }:
             return []
         return []
 
@@ -309,22 +343,31 @@ def set_supplier_profile(profile: SupplierProfile) -> None:
 
 def search_public_44fz(
     query: str,
+    law: str = "44fz",
     region: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     price_from: float | None = None,
     price_to: float | None = None,
+    deadline_from: str | None = None,
+    deadline_to: str | None = None,
+    status_filter: str | None = None,
+    procedure_type: str | None = None,
     max_results: int = 10,
 ) -> dict:
+    normalized_law = normalize_public_eis_law(law)
+    needs_post_filters = any([deadline_from, deadline_to, status_filter, procedure_type])
+    fetch_limit = min(50, max(max_results * 5, 20)) if needs_post_filters else max_results
     try:
-        url = build_44fz_search_url(
+        url = build_public_eis_search_url(
             query=query,
+            law=normalized_law,
             region=region,
             date_from=date_from,
             date_to=date_to,
             price_from=price_from,
             price_to=price_to,
-            max_results=max_results,
+            max_results=fetch_limit,
         )
     except ValueError as exc:
         return {
@@ -348,6 +391,17 @@ def search_public_44fz(
         }
 
     cards = parse_44fz_search_results(fetch_result["html"])
+    cards = _filter_public_44fz_cards(
+        cards,
+        date_from=date_from,
+        date_to=date_to,
+        deadline_from=deadline_from,
+        deadline_to=deadline_to,
+        price_from=price_from,
+        price_to=price_to,
+        status_filter=status_filter,
+        procedure_type=procedure_type,
+    )
     profile = get_supplier_profile()
     scored_cards = []
     for card in cards[:max_results]:
@@ -355,9 +409,13 @@ def search_public_44fz(
             title=card.get("title", ""),
             initial_price=card.get("initial_price"),
             customer_name=card.get("customer_name"),
+            submission_deadline=card.get("deadline"),
             profile=profile,
         )
         card_with_relevance = dict(card)
+        card_with_relevance["law"] = normalized_law
+        card_with_relevance["category"] = _public_law_label(normalized_law)
+        card_with_relevance["source"] = _public_source_from_law(normalized_law)
         card_with_relevance["relevance"] = result.to_dict()
         scored_cards.append(card_with_relevance)
 
@@ -370,6 +428,69 @@ def search_public_44fz(
     }
 
 
+def _parse_public_card_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    cleaned = value.strip()
+    for fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(cleaned, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _matches_public_card_date_range(value: str | None, date_from: str | None, date_to: str | None) -> bool:
+    parsed_value = _parse_public_card_date(value)
+    if parsed_value is None:
+        return True
+    parsed_from = _parse_public_card_date(date_from)
+    parsed_to = _parse_public_card_date(date_to)
+    if parsed_from and parsed_value < parsed_from:
+        return False
+    if parsed_to and parsed_value > parsed_to:
+        return False
+    return True
+
+
+def _matches_public_card_text(value: str | None, expected: str | None) -> bool:
+    if not expected:
+        return True
+    haystack = (value or "").strip().lower()
+    needle = expected.strip().lower()
+    return needle in haystack
+
+
+def _filter_public_44fz_cards(
+    cards: list[dict],
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    deadline_from: str | None = None,
+    deadline_to: str | None = None,
+    price_from: float | None = None,
+    price_to: float | None = None,
+    status_filter: str | None = None,
+    procedure_type: str | None = None,
+) -> list[dict]:
+    filtered: list[dict] = []
+    for card in cards:
+        if not _matches_public_card_date_range(card.get("publication_date"), date_from, date_to):
+            continue
+        if not _matches_public_card_date_range(card.get("deadline"), deadline_from, deadline_to):
+            continue
+        if price_from is not None and card.get("initial_price") is not None and card["initial_price"] < price_from:
+            continue
+        if price_to is not None and card.get("initial_price") is not None and card["initial_price"] > price_to:
+            continue
+        if not _matches_public_card_text(card.get("status"), status_filter):
+            continue
+        if not _matches_public_card_text(card.get("procedure_type"), procedure_type):
+            continue
+        filtered.append(card)
+    return filtered
+
+
 def build_public_search_url(
     *,
     query: str,
@@ -378,30 +499,19 @@ def build_public_search_url(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> PublicSearchUrlResponse:
-    normalized_law = "223fz" if law.lower() == "223fz" else "44fz"
-    base_url = (
-        "https://zakupki.gov.ru/epz/order223/extendedsearch/results.html"
-        if normalized_law == "223fz"
-        else "https://zakupki.gov.ru/epz/order/extendedsearch/results.html"
-    )
-    params = {
-        "searchString": query,
-        "morphology": "on",
-        "sortDirection": "false",
-    }
-    if region:
-        params["regionDeleted"] = "false"
-        params["region"] = region
-    if date_from:
-        params["publishDateFrom"] = date_from
-    if date_to:
-        params["publishDateTo"] = date_to
+    normalized_law = normalize_public_eis_law(law)
     return PublicSearchUrlResponse(
-        source=f"public_eis_html_{normalized_law}",
+        source=_public_source_from_law(normalized_law),
         law=normalized_law,
         query=query,
-        eis_search_url=f"{base_url}?{urlencode(params)}",
-        note="Откройте ЕИС, выберите закупку и вставьте реестровый номер в поле getDocsIP.",
+        eis_search_url=build_public_eis_search_url(
+            query=query,
+            law=normalized_law,
+            region=region,
+            date_from=date_from,
+            date_to=date_to,
+        ),
+        note="Откройте карточку закупки в ЕИС, затем запустите обработку прямо из результата поиска или по ссылке.",
     )
 
 
@@ -420,7 +530,7 @@ def get_procurement_details(source: str, procurement_id: str) -> ProcurementDeta
         raise ValueError(f"Unknown procurement source: {source}")
     if source == "zakupki_gov_ru_getdocs_ip":
         raise ValueError("getDocsIP не используется как поиск карточки. Сначала найдите закупку публично, затем запросите документацию по номеру.")
-    if source in {"public_eis_html_44fz", "public_eis_html_223fz"}:
+    if source in {"public_eis_html_44fz", "public_eis_html_223fz", "public_eis_html_capital_repair"}:
         raise ValueError("Для public HTML fallback карточка закупки открывается вручную в ЕИС.")
     record = get_demo_procurement(source, procurement_id)
     if record is None:

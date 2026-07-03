@@ -355,7 +355,11 @@ def test_getdocs_archive_can_auto_analyze_after_download(client, monkeypatch, tm
     assert payload["analysis_status"] in {"completed", "completed_with_warnings", "needs_review"}
     report_html = (runs_root / payload["run_id"] / "output" / "report.html").read_text(encoding="utf-8")
     assert "Документы получены через ЕИС" in report_html
+    assert "Скачать архив" in report_html
     assert "ticket=secret" not in report_html
+    archive_download = client.get(f"/api/demo/tender-agent/runs/{payload['run_id']}/archive/download")
+    assert archive_download.status_code == 200
+    assert archive_download.headers["content-type"].startswith("application/zip")
     clear_zakupki_soap_settings_cache()
 
 

@@ -165,6 +165,12 @@ def test_analyze_uploaded_run_returns_completed_and_report_endpoints_work(client
     assert "attachment; filename=" in download_response.headers["content-disposition"]
     assert report_page.status_code == 200
     assert "Отчёт по загруженному прогону тендерного агента" in report_page.text
+    assert "Скачано документов" in report_page.text
+    assert "Показать документы" in report_page.text
+
+    first_file_download = client.get(f"/api/demo/tender-agent/runs/{run_id}/files/FILE-01/download")
+    assert first_file_download.status_code == 200
+    assert "attachment; filename=" in first_file_download.headers["content-disposition"]
 
     assert (runs_root / run_id / "output" / "report.html").exists()
 
@@ -243,6 +249,212 @@ def test_xlsx_quotes_are_normalized_and_report_includes_quote_sections(client, m
     assert "Извлечённые ТКП" in report_page.text
     assert "Сравнение ТКП" in report_page.text
     assert "Экономика" in report_page.text
+
+
+def test_technical_spec_xlsx_is_not_misclassified_as_supplier_quote(client, monkeypatch, tmp_path):
+    _set_runs_root(monkeypatch, tmp_path)
+    data, files = _sample_upload_payload(include_quote=False)
+    files.append(
+        (
+            "files",
+            (
+                "technical_spec_price_table.xlsx",
+                _build_quote_xlsx_bytes(supplier_label="ТЗ таблица"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+        )
+    )
+
+    create_response = client.post("/api/demo/tender-agent/runs", data=data, files=files)
+    run_id = create_response.json()["run_id"]
+
+    analyze = client.post(f"/api/demo/tender-agent/runs/{run_id}/analyze")
+    assert analyze.status_code == 200
+
+    run_payload = client.get(f"/api/demo/tender-agent/runs/{run_id}").json()
+    assert run_payload["quote_comparison"]["supplier_quotes_found"] == 0
+    assert run_payload["economics_summary"]["supplier_cost_selected"] is None
+    assert run_payload["final_recommendation"]["recommendation"] == "manual_review_required"
+
+
+def test_report_includes_preliminary_procurement_analysis_from_tz_and_contract(client, monkeypatch, tmp_path):
+    _set_runs_root(monkeypatch, tmp_path)
+    data = {
+        "tender_title": "Обучение по ИБ",
+        "tender_category": "Услуги обучения",
+        "customer_name": "Администрация города",
+    }
+    files = [
+        ("files", ("notice.txt", "Извещение о закупке образовательных услуг.".encode("utf-8"), "text/plain")),
+        (
+            "files",
+            (
+                "technical_spec.txt",
+                (
+                    "1. Наименование и описание услуг: оказание образовательных услуг по повышению квалификации.\n"
+                    "Форма обучения\nОчно-заочная\n"
+                    "216 часов\n"
+                    "2\n"
+                    "3. Место оказания услуг: очное обучение в городе Хабаровске; дистанционная часть на территории Заказчика.\n"
+                    "Услуги должны быть согласованы с Федеральной службой по техническому и экспортному контролю.\n"
+                ).encode("utf-8"),
+                "text/plain",
+            ),
+        ),
+        (
+            "files",
+            (
+                "contract_draft.txt",
+                (
+                    "Цена Контракта является твердой и не подлежит изменению.\n"
+                    "Оплата оказанных Исполнителем Услуг осуществляется Заказчиком в течение 7 рабочих дней после подписания документа о приемке.\n"
+                    "Требуется обеспечение исполнения контракта.\n"
+                ).encode("utf-8"),
+                "text/plain",
+            ),
+        ),
+    ]
+
+    create_response = client.post("/api/demo/tender-agent/runs", data=data, files=files)
+    run_id = create_response.json()["run_id"]
+
+    analyze = client.post(f"/api/demo/tender-agent/runs/{run_id}/analyze")
+    assert analyze.status_code == 200
+
+    report_page = client.get(f"/demo/tender-agent/runs/{run_id}/report")
+    assert report_page.status_code == 200
+    assert "Предварительный анализ закупки" in report_page.text
+    assert "216 часов" in report_page.text
+    assert "Хабаровске" in report_page.text
+    assert "7 рабочих дней" in report_page.text
+    assert "Ключевые условия договора" in report_page.text
+    assert "Услуги должны быть оказаны в полном объеме" in report_page.text
+    assert "Оборудование и товары должны соответствовать заявленной спецификации" not in report_page.text
+    assert "Подтверждаете ли вы оказание услуг в полном объеме" in report_page.text
+    assert "Run ID:" not in report_page.text
+    assert "Что удалось извлечь из ТЗ и договора" not in report_page.text
+    assert report_page.text.count("Программа должна быть согласована с ФСТЭК России.") <= 1
+
+
+def test_goods_tz_is_rendered_as_table_in_report(client, monkeypatch, tmp_path):
+    _set_runs_root(monkeypatch, tmp_path)
+    data = {
+        "tender_title": "Поставка электротехнических товаров",
+        "tender_category": "Электротехническое оборудование",
+        "customer_name": "Промышленный заказчик",
+    }
+    files = [
+        ("files", ("notice.txt", "Извещение о поставке товаров.".encode("utf-8"), "text/plain")),
+        (
+            "files",
+            (
+                "technical_spec.txt",
+                (
+                    "1. Описание объекта закупки:\n"
+                    "№ п/п Наименование Ед. изм. ОКВЭД2 ОКПД2 КТРУ Кол-во\n"
+                    "1 2 3 4 5 6 7 1 Гофра 16 мм шт 27.90 27.90.12.130 - 400\n"
+                    "Характеристики объекта закупки:\n"
+                    "1 Материал: ПВХ 2 Внешний диаметр, мм: 16 3 Тип: труба гибкая гофрированная\n"
+                    "2. Описание объекта закупки:\n"
+                    "№ п/п Наименование Ед. изм. ОКВЭД2 ОКПД2 КТРУ Кол-во\n"
+                    "1 2 3 4 5 6 7 2 Кабель-канал 20х24 мм м 27.33 27.33.13.130 - 200\n"
+                    "Характеристики объекта закупки:\n"
+                    "1 Материал: ПВХ 2 Цвет изделия: белый 3 Ширина короба, мм: 24\n"
+                    "16. Адрес поставки товара\n"
+                    "1 2 1 Московская область, г. Бронницы, Заводской проезд д. 1\n"
+                    "17. Сроки поставки товара\n"
+                    "1 2 1 В течение 10 рабочих дней с момента подписания контракта.\n"
+                ).encode("utf-8"),
+                "text/plain",
+            ),
+        ),
+        (
+            "files",
+            (
+                "contract_draft.txt",
+                "Оплата осуществляется в течение 7 рабочих дней после подписания документа о приемке.".encode("utf-8"),
+                "text/plain",
+            ),
+        ),
+    ]
+
+    create_response = client.post("/api/demo/tender-agent/runs", data=data, files=files)
+    run_id = create_response.json()["run_id"]
+    analyze = client.post(f"/api/demo/tender-agent/runs/{run_id}/analyze")
+    assert analyze.status_code == 200
+
+    report_page = client.get(f"/demo/tender-agent/runs/{run_id}/report")
+    assert report_page.status_code == 200
+    assert "Спецификация ТЗ" in report_page.text
+    assert "<table>" in report_page.text
+    assert "Гофра 16 мм" in report_page.text
+    assert "Кабель-канал 20х24 мм" in report_page.text
+    assert "В ТЗ выделена табличная спецификация по товарам." in report_page.text
+
+
+def test_goods_address_is_not_cut_on_city_abbreviation(client, monkeypatch, tmp_path):
+    _set_runs_root(monkeypatch, tmp_path)
+    data = {
+        "tender_title": "Поставка нефтепродуктов",
+        "tender_category": "Нефтепродукты",
+        "customer_name": "Промышленный заказчик",
+    }
+    files = [
+        ("files", ("notice.txt", "Извещение о поставке товаров.".encode("utf-8"), "text/plain")),
+        (
+            "files",
+            (
+                "technical_spec.txt",
+                (
+                    "Место поставки товаров : Автозаправочные станции г. Екатеринбург . "
+                    "Условия поставки товаров: Заправка осуществляется по электронным картам.\n"
+                ).encode("utf-8"),
+                "text/plain",
+            ),
+        ),
+        ("files", ("contract_draft.txt", "Оплата в течение 20 рабочих дней после приемки.".encode("utf-8"), "text/plain")),
+    ]
+
+    create_response = client.post("/api/demo/tender-agent/runs", data=data, files=files)
+    run_id = create_response.json()["run_id"]
+    analyze = client.post(f"/api/demo/tender-agent/runs/{run_id}/analyze")
+    assert analyze.status_code == 200
+
+    report_page = client.get(f"/demo/tender-agent/runs/{run_id}/report")
+    assert report_page.status_code == 200
+    assert "Адрес поставки: Автозаправочные станции г. Екатеринбург." in report_page.text
+    assert "Адрес поставки: Автозаправочные станции г.</li>" not in report_page.text
+
+
+def test_eis_protocol_xml_is_not_misclassified_as_quote(client, monkeypatch, tmp_path):
+    _set_runs_root(monkeypatch, tmp_path)
+    data = {
+        "tender_title": "Поставка нефтепродуктов",
+        "tender_category": "Нефтепродукты",
+        "customer_name": "Промышленный заказчик",
+    }
+    files = [
+        ("files", ("technical_spec.txt", "Место поставки товаров: АЗС.".encode("utf-8"), "text/plain")),
+        ("files", ("contract_draft.txt", "Оплата после приемки.".encode("utf-8"), "text/plain")),
+        (
+            "files",
+            (
+                "fcsProposalsResult_0162300005326001258_1.xml",
+                "<xml>служебный протокол закупки</xml>".encode("utf-8"),
+                "application/xml",
+            ),
+        ),
+    ]
+
+    create_response = client.post("/api/demo/tender-agent/runs", data=data, files=files)
+    run_id = create_response.json()["run_id"]
+    analyze = client.post(f"/api/demo/tender-agent/runs/{run_id}/analyze")
+    assert analyze.status_code == 200
+
+    run_payload = client.get(f"/api/demo/tender-agent/runs/{run_id}").json()
+    assert run_payload["quote_comparison"]["supplier_quotes_found"] == 0
+    report_page = client.get(f"/demo/tender-agent/runs/{run_id}/report")
+    assert "fcsProposalsResult_0162300005326001258_1.xml" not in report_page.text or "Извлечённые ТКП" in report_page.text
 
 
 def test_zip_with_safe_xlsx_is_processed(client, monkeypatch, tmp_path):

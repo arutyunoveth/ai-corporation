@@ -86,6 +86,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             font-size: 18px;
             line-height: 1.45;
           }}
+          .header-actions {{
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+          }}
           .badge-row {{
             display: flex;
             flex-wrap: wrap;
@@ -430,6 +436,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 </div>
                 <h1>Тендерный агент</h1>
                 <p class="subtitle">Как ИИ-агент разбирает закупку, готовит RFQ, показывает риски и оставляет критичные действия под контролем человека.</p>
+                <div class="header-actions">
+                  <a class="link-button" href="/pilot/tender-agent">Пошаговый мастер</a>
+                </div>
               </div>
               <div class="badge-row">
                 <span class="badge">Демо-режим / подтверждение человеком</span>

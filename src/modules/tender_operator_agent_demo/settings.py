@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
@@ -26,6 +27,30 @@ DEFAULT_CONTENT_TYPE = "text/xml; charset=utf-8"
 DEFAULT_SOAP_ACTION_URI = "http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"
 
 TokenOwner = Literal["individual", "legal_entity"]
+
+
+def _settings_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _seed_env_from_file(path: Path) -> None:
+    if not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        os.environ.setdefault(key, value.strip().strip('"').strip("'"))
+
+
+def _seed_env_from_local_files() -> None:
+    root = _settings_root()
+    _seed_env_from_file(root / ".env")
+    _seed_env_from_file(root / ".env.local")
 
 
 def _read_bool(name: str, default: bool = False) -> bool:
@@ -82,6 +107,7 @@ class ZakupkiSoapSettings:
 
     @classmethod
     def from_env(cls) -> "ZakupkiSoapSettings":
+        _seed_env_from_local_files()
         return cls(
             enabled=_read_bool("ZAKUPKI_GOV_RU_SOAP_ENABLED", False),
             token=os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN", "").strip(),

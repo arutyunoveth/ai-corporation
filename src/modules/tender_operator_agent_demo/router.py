@@ -50,15 +50,18 @@ from src.modules.tender_operator_agent_demo.service import (
     get_tender_operator_demo_steps,
     render_tender_operator_demo_report_html,
 )
+from src.modules.tender_operator_agent_demo.pilot_wizard_ui import render_tender_operator_pilot_wizard_html
 from src.modules.tender_operator_agent_demo.ui import render_tender_operator_console_html
 from src.modules.tender_operator_agent_demo.upload_service import (
     analyze_uploaded_demo_run,
     append_files_to_demo_run,
     create_uploaded_demo_run,
+    get_uploaded_demo_archive_download,
     get_uploaded_demo_report,
     get_uploaded_demo_report_download,
     get_uploaded_demo_report_html,
     get_uploaded_demo_run,
+    get_uploaded_demo_source_file_download,
     get_uploaded_demo_run_steps,
     load_demo_run_events,
     list_uploaded_demo_runs,
@@ -71,6 +74,16 @@ router = APIRouter(tags=["tender-operator-agent-demo"])
 @router.get("/demo/tender-agent", response_class=HTMLResponse)
 def tender_operator_demo_page() -> str:
     return render_tender_operator_console_html()
+
+
+@router.get("/pilot/tender-agent", response_class=HTMLResponse)
+def tender_operator_pilot_wizard_page() -> str:
+    return render_tender_operator_pilot_wizard_html()
+
+
+@router.get("/demo/tender-agent/wizard", response_class=HTMLResponse)
+def tender_operator_pilot_wizard_demo_alias_page() -> str:
+    return render_tender_operator_pilot_wizard_html()
 
 
 @router.get("/demo/tender-agent/runs/{run_id}", response_class=HTMLResponse)
@@ -177,20 +190,30 @@ def get_tender_operator_public_search_url(
 @router.post("/api/demo/tender-agent/procurement/public-44fz-search")
 def search_tender_operator_public_44fz(
     query: str = "",
+    law: str = "44fz",
     region: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     price_from: float | None = None,
     price_to: float | None = None,
+    deadline_from: str | None = None,
+    deadline_to: str | None = None,
+    status_filter: str | None = None,
+    procedure_type: str | None = None,
     max_results: int = 10,
 ):
     return search_public_44fz(
         query=query,
+        law=law,
         region=region,
         date_from=date_from,
         date_to=date_to,
         price_from=price_from,
         price_to=price_to,
+        deadline_from=deadline_from,
+        deadline_to=deadline_to,
+        status_filter=status_filter,
+        procedure_type=procedure_type,
         max_results=max_results,
     )
 
@@ -322,3 +345,13 @@ def get_tender_operator_uploaded_run_report(run_id: str) -> TenderOperatorDemoRe
 @router.get("/api/demo/tender-agent/runs/{run_id}/report/download")
 def download_tender_operator_uploaded_run_report(run_id: str):
     return get_uploaded_demo_report_download(run_id)
+
+
+@router.get("/api/demo/tender-agent/runs/{run_id}/files/{file_id}/download")
+def download_tender_operator_uploaded_run_source_file(run_id: str, file_id: str):
+    return get_uploaded_demo_source_file_download(run_id, file_id)
+
+
+@router.get("/api/demo/tender-agent/runs/{run_id}/archive/download")
+def download_tender_operator_uploaded_run_archive(run_id: str):
+    return get_uploaded_demo_archive_download(run_id)

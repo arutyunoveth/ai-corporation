@@ -34,6 +34,7 @@ def test_acceptance_procurement_sources_enpoint(client):
     sources = {s["source"] for s in data}
     assert "demo_local" in sources
     assert "public_eis_html_44fz" in sources
+    assert "public_eis_html_capital_repair" in sources
     # labels are in Russian
     labels = [s["label"] for s in data if s["source"] != "zakupki_gov_ru_getdocs_ip"]
     for lbl in labels:

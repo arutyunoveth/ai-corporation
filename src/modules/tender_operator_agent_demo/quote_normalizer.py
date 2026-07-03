@@ -53,6 +53,7 @@ class SpreadsheetSource:
     extension: str
     raw_content: bytes
     source: str
+    role_hint: str | None = None
 
 
 @dataclass
@@ -143,11 +144,17 @@ def _detect_supplier_name(file_name: str, sheet_rows: list[list[Any]]) -> str:
     return cleaned or stem
 
 
-def _detect_document_type(file_name: str, rows: list[list[Any]], headers: dict[str, int]) -> str:
+def _detect_document_type(file_name: str, rows: list[list[Any]], headers: dict[str, int], role_hint: str | None = None) -> str:
     lowered_name = file_name.lower()
     visible_text = " ".join(str(cell or "") for row in rows[:12] for cell in row[:8]).lower()
     has_price = any(key in headers for key in ("unit_price", "total_price")) or "цена" in visible_text or "стоимость" in visible_text
     has_qty = "quantity" in headers or "количество" in visible_text or "qty" in visible_text
+    if role_hint == "technical_spec":
+        return "customer_specification"
+    if role_hint == "tkp":
+        return "supplier_quote" if has_price and (has_qty or "name" in headers) else "unknown_table"
+    if role_hint in {"notice", "contract_draft"}:
+        return "unknown_table"
 
     if has_price and (has_qty or "name" in headers):
         if any(token in lowered_name for token in SUPPLIER_QUOTE_HINTS) or "коммерческое предложение" in visible_text:
@@ -320,7 +327,12 @@ def parse_spreadsheet_source(source: SpreadsheetSource) -> ParsedSpreadsheet:
             if delivery:
                 delivery_values.append(delivery)
 
-    document_type = _detect_document_type(source.display_name, collected_rows, _find_header_row(collected_rows)[1] if collected_rows else {})
+    document_type = _detect_document_type(
+        source.display_name,
+        collected_rows,
+        _find_header_row(collected_rows)[1] if collected_rows else {},
+        source.role_hint,
+    )
     supplier_name = _detect_supplier_name(source.display_name, collected_rows) if all_items else None
     currency = currency_values[0] if currency_values else None
     delivery_summary = ", ".join(sorted(set(delivery_values))[:3]) if delivery_values else None
@@ -403,7 +415,7 @@ def build_quote_comparison(spreadsheet_sources: list[SpreadsheetSource], analysi
     supplier_quotes = [
         _build_supplier_quote(parsed, index)
         for index, parsed in enumerate(parsed_results, start=1)
-        if parsed.document_type in {"supplier_quote", "price_table"}
+        if parsed.document_type == "supplier_quote"
     ]
     spec_items = [
         item
