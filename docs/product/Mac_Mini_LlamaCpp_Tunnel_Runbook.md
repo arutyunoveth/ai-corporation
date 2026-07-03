@@ -107,7 +107,60 @@ docker run -d \
     arvectum-pilot:macmini
 ```
 
-## Step 4: Verify backend to llama.cpp
+## Step 4 (Alternative — Recommended): Host uvicorn backend (no Docker)
+
+**Why host mode is recommended for quick tunnel:**
+- Docker/Colima adds a VM networking layer that can cause tunnel instability (`rpc: connection closed`)
+- Host uvicorn runs directly on macOS — fewer network hops for cloudflared
+- Docker/Colima mode remains available as an alternative
+
+### 4.1: Prepare Python venv
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -e .
+```
+
+### 4.2: Create host env file
+
+```bash
+cp .env.macmini.example .env.macmini.host.local
+# Edit password: AI_CORP_TENDER_PILOT_BASIC_AUTH_PASSWORD
+# IMPORTANT: AI_CORP_OPENAI_BASE_URL must be http://127.0.0.1:8088/v1
+# (NOT host.docker.internal — that's only for Docker mode)
+```
+
+### 4.3: Start host backend
+
+```bash
+scripts/local/start_macmini_backend_host.sh
+```
+
+### 4.4: Verify backend calls llama.cpp directly
+
+```bash
+source .env.macmini.host.local
+curl -s "$AI_CORP_OPENAI_BASE_URL/chat/completions" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $AI_CORP_OPENAI_API_KEY" \
+    -d '{"model":"local-model","messages":[{"role":"user","content":"Say OK"}],"temperature":0.1}' | head -c 1000
+```
+
+### 4.5: Stop host backend
+
+```bash
+scripts/local/stop_macmini_backend_host.sh
+```
+
+### Env file summary
+
+| Mode | Env file | LLM base URL |
+|------|----------|-------------|
+| Host (recommended) | `.env.macmini.host.local` | `http://127.0.0.1:8088/v1` |
+| Docker/Colima | `.env.macmini.local` | `http://host.docker.internal:8088/v1` |
+
+## Step 5: Verify backend to llama.cpp (Docker mode only)
 
 ```bash
 docker exec arvectum-pilot python3 -c "
@@ -120,7 +173,7 @@ with urllib.request.urlopen(req, timeout=30) as r:
 "
 ```
 
-## Step 5: Start tunnel (temporary URL)
+## Step 6: Start tunnel (temporary URL)
 
 ```bash
 scripts/local/start_cloudflared_quick_tunnel.sh
@@ -128,7 +181,7 @@ scripts/local/start_cloudflared_quick_tunnel.sh
 
 This produces a URL like `https://random-words.trycloudflare.com`.
 
-## Step 6: Update landing page
+## Step 7: Update landing page
 
 In the landing page configuration, set the backend base URL to the tunnel URL:
 
@@ -136,15 +189,20 @@ In the landing page configuration, set the backend base URL to the tunnel URL:
 window.ARVECTUM_PILOT_API_BASE = "https://random-words.trycloudflare.com";
 ```
 
-## Step 7: Stop everything
+## Step 8: Stop everything
 
+### Stop host mode:
+```bash
+scripts/local/stop_macmini_backend_host.sh
+```
+
+### Stop Docker mode:
 ```bash
 scripts/local/stop_macmini_backend.sh
 ```
 
-Or manually:
+### Stop tunnel and llama.cpp:
 ```bash
-docker rm -f arvectum-pilot
 kill $(cat ~/arvectum-runtime/cloudflared.pid)       # if running
 kill $(cat ~/arvectum-runtime/llama-server.pid)       # if running
 ```
@@ -201,6 +259,20 @@ Some local models produce invalid JSON. Check response in llama.cpp logs. Try a 
 ### Mac mini rebooted
 
 After reboot:
+
+**Recommended (host mode):**
+```bash
+# Start llama.cpp
+scripts/local/start_llamacpp_server.sh
+
+# Start backend (host uvicorn)
+scripts/local/start_macmini_backend_host.sh
+
+# Start tunnel
+scripts/local/start_cloudflared_quick_tunnel.sh
+```
+
+**Alternative (Docker mode):**
 ```bash
 # Start Docker (colima)
 colima start
@@ -208,7 +280,7 @@ colima start
 # Start llama.cpp
 scripts/local/start_llamacpp_server.sh
 
-# Start backend
+# Start backend (Docker)
 scripts/local/start_macmini_backend.sh
 
 # Start tunnel
