@@ -50,9 +50,12 @@ class TenderResearchConfig:
     rag_min_chunk_chars: int = 120
     rag_embeddings_provider: str = "hashing"
     rag_embeddings_model: str = "local-hash-v1"
+    rag_embeddings_base_url: str = "http://127.0.0.1:8090/v1"
+    rag_embeddings_timeout_seconds: int = 60
+    rag_embeddings_batch_size: int = 16
     rag_vector_store: str = "json"
     rag_vector_store_path: str | None = None
-    rag_embedding_dimension: int = 256
+    rag_embedding_dimension: str | int | None = 256
     rag_use_llm: bool = False
     local_llm_base_url: str = "http://127.0.0.1:8088/v1"
     local_llm_model: str = "qwen2.5-14b"
@@ -71,6 +74,10 @@ class TenderResearchConfig:
 
 def load_config() -> TenderResearchConfig:
     s = get_settings()
+    provider_name = (s.rag_embeddings_provider or "hashing").strip().lower()
+    rag_embedding_dimension = s.rag_embeddings_dimension
+    if rag_embedding_dimension is None and provider_name in {"hash", "hashing", "local_hash"}:
+        rag_embedding_dimension = s.rag_embedding_dimension
     return TenderResearchConfig(
         enabled=s.tender_research_enabled,
         batch_limit=s.tender_research_batch_limit,
@@ -110,9 +117,12 @@ def load_config() -> TenderResearchConfig:
         rag_min_chunk_chars=s.rag_min_chunk_chars,
         rag_embeddings_provider=s.rag_embeddings_provider,
         rag_embeddings_model=s.rag_embeddings_model,
+        rag_embeddings_base_url=s.rag_embeddings_base_url,
+        rag_embeddings_timeout_seconds=s.rag_embeddings_timeout_seconds,
+        rag_embeddings_batch_size=s.rag_embeddings_batch_size,
         rag_vector_store=s.rag_vector_store,
         rag_vector_store_path=s.rag_vector_store_path,
-        rag_embedding_dimension=s.rag_embedding_dimension,
+        rag_embedding_dimension=rag_embedding_dimension,
         rag_use_llm=s.rag_use_llm,
         local_llm_base_url=s.local_llm_base_url,
         local_llm_model=s.local_llm_model,

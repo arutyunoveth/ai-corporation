@@ -62,9 +62,13 @@ class Settings(BaseSettings):
     rag_min_chunk_chars: int = 120
     rag_embeddings_provider: str = "hashing"
     rag_embeddings_model: str = "local-hash-v1"
+    rag_embeddings_base_url: str = "http://127.0.0.1:8090/v1"
+    rag_embeddings_timeout_seconds: int = 60
+    rag_embeddings_batch_size: int = 16
+    rag_embeddings_dimension: str | int | None = None
     rag_vector_store: str = "json"
     rag_vector_store_path: str | None = None
-    rag_embedding_dimension: int = 256
+    rag_embedding_dimension: str | int | None = 256
     rag_use_llm: bool = False
     local_llm_base_url: str = "http://127.0.0.1:8088/v1"
     local_llm_model: str = "qwen2.5-14b"

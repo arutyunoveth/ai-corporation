@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 
 from sqlalchemy import select
@@ -99,12 +100,20 @@ class DocumentEmbeddingIndexer:
         self._vector_store = vector_store
 
     def build(self, *, limit: int = 1000) -> dict:
+        started = time.perf_counter()
+        batch_size = max(1, int(self._config.rag_embeddings_batch_size or 16))
         summary = {
             "chunks_seen": 0,
             "embeddings_created": 0,
             "embeddings_skipped_existing": 0,
+            "embeddings_failed": 0,
+            "provider": self._provider.provider_name,
             "model": self._provider.model_name,
             "dimension": self._provider.dimension,
+            "batch_size": batch_size,
+            "elapsed_seconds": 0.0,
+            "avg_chunks_per_second": 0.0,
+            "last_error": None,
         }
         chunks = list(
             self._repo._session.execute(
@@ -122,6 +131,7 @@ class DocumentEmbeddingIndexer:
             chunk_ids=[chunk.id for chunk in chunks],
         )
         existing_by_chunk_id = {embedding.chunk_id: embedding for embedding in embeddings}
+        pending_chunks: list[ProcurementDocumentChunk] = []
 
         for chunk in chunks:
             summary["chunks_seen"] += 1
@@ -129,34 +139,57 @@ class DocumentEmbeddingIndexer:
             if existing and existing.vector_id and self._vector_store.has_vector(existing.vector_id):
                 summary["embeddings_skipped_existing"] += 1
                 continue
+            pending_chunks.append(chunk)
 
-            vector = self._provider.embed_query(chunk.text)
-            vector_id = chunk.id
-            vector_hash = hashlib.sha256(
-                json.dumps(vector, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-            ).hexdigest()
-            self._vector_store.upsert(
-                vector_id,
-                vector,
-                metadata={
-                    "chunk_id": chunk.id,
-                    "document_id": chunk.document_id,
-                    "tender_id": chunk.tender_id,
-                },
-            )
-            self._repo.upsert_document_embedding(
-                {
-                    "chunk_id": chunk.id,
-                    "provider": self._provider.provider_name,
-                    "model": self._provider.model_name,
-                    "dimension": len(vector),
-                    "vector_id": vector_id,
-                    "embedding_path": str(self._vector_store.path),
-                    "embedding_hash": vector_hash,
-                }
-            )
-            summary["embeddings_created"] += 1
+        for start in range(0, len(pending_chunks), batch_size):
+            batch = pending_chunks[start : start + batch_size]
+            try:
+                vectors = self._provider.embed_texts([chunk.text for chunk in batch])
+            except Exception as exc:
+                summary["embeddings_failed"] += len(batch)
+                summary["last_error"] = str(exc)
+                continue
 
+            if len(vectors) != len(batch):
+                summary["embeddings_failed"] += len(batch)
+                summary["last_error"] = (
+                    f"Provider returned {len(vectors)} embeddings for batch of {len(batch)} chunks"
+                )
+                continue
+
+            for chunk, vector in zip(batch, vectors):
+                vector_id = chunk.id
+                vector_hash = hashlib.sha256(
+                    json.dumps(vector, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                ).hexdigest()
+                self._vector_store.upsert(
+                    vector_id,
+                    vector,
+                    metadata={
+                        "chunk_id": chunk.id,
+                        "document_id": chunk.document_id,
+                        "tender_id": chunk.tender_id,
+                        "provider": self._provider.provider_name,
+                        "model": self._provider.model_name,
+                    },
+                )
+                self._repo.upsert_document_embedding(
+                    {
+                        "chunk_id": chunk.id,
+                        "provider": self._provider.provider_name,
+                        "model": self._provider.model_name,
+                        "dimension": len(vector),
+                        "vector_id": vector_id,
+                        "embedding_path": str(self._vector_store.path),
+                        "embedding_hash": vector_hash,
+                    }
+                )
+                summary["embeddings_created"] += 1
+
+        summary["dimension"] = self._provider.dimension
+        elapsed = time.perf_counter() - started
+        summary["elapsed_seconds"] = round(elapsed, 3)
+        summary["avg_chunks_per_second"] = round(summary["chunks_seen"] / elapsed, 3) if elapsed > 0 else 0.0
         self._vector_store.persist()
         self._repo._session.commit()
         return summary

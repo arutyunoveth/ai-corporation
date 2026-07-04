@@ -1,0 +1,22 @@
+[
+  {"id": "application_requirements", "query": "требования к содержанию и составу заявки", "category": "application"},
+  {"id": "participant_documents", "query": "какие документы должен предоставить участник закупки", "category": "application"},
+  {"id": "payment_terms", "query": "условия оплаты по контракту", "category": "contract"},
+  {"id": "delivery_deadline", "query": "срок поставки товара", "category": "delivery"},
+  {"id": "acceptance", "query": "порядок приемки товара", "category": "acceptance"},
+  {"id": "warranty", "query": "гарантийные обязательства поставщика", "category": "contract"},
+  {"id": "penalties", "query": "штрафы и пени за нарушение сроков", "category": "risk"},
+  {"id": "contract_security", "query": "обеспечение исполнения контракта", "category": "risk"},
+  {"id": "nmck", "query": "расчет начальной максимальной цены контракта", "category": "price"},
+  {"id": "technical_specs", "query": "технические характеристики товара", "category": "specification"},
+  {"id": "installation", "query": "требования к установке и вводу в эксплуатацию", "category": "delivery"},
+  {"id": "packaging", "query": "требования к упаковке товара", "category": "delivery"},
+  {"id": "quality_docs", "query": "документы подтверждающие качество товара", "category": "application"},
+  {"id": "origin_restrictions", "query": "ограничения по стране происхождения товара", "category": "risk"},
+  {"id": "training", "query": "обучение персонала заказчика", "category": "service"},
+  {"id": "service_deadline", "query": "срок оказания услуг", "category": "service"},
+  {"id": "bid_security", "query": "обеспечение заявки", "category": "risk"},
+  {"id": "return_rules", "query": "порядок возврата некачественного товара", "category": "acceptance"},
+  {"id": "invoice_docs", "query": "какие документы нужны для оплаты по контракту", "category": "contract"},
+  {"id": "contract_term", "query": "срок действия контракта", "category": "contract"}
+]
