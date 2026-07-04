@@ -63,10 +63,21 @@ class DiscoveryResult:
     selected_source: str
     selected_source_type: str = SourceType.NONE
     is_demo: bool = False
+    requested_limit: int | None = None
+    effective_limit: int | None = None
+    requested_page_size: int = 0
+    effective_page_size: int = 0
+    date_from: datetime | None = None
+    date_to: datetime | None = None
     pages_read: int = 0
     page_size: int = 0
+    source_url: str | None = None
     discovered_count: int = 0
+    items_raw_count: int = 0
+    items_with_registry_number: int = 0
     skipped_without_registry_number: int = 0
+    items_after_dedupe: int = 0
+    items_after_demo_filter: int = 0
     network_status: str | None = None
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -122,6 +133,31 @@ def _search_item_to_discovered(item: PublicTenderSearchItem) -> DiscoveredRegist
     )
 
 
+def _page_item_metrics(pages: list[PublicTenderSearchPage]) -> dict[str, int]:
+    items_raw_count = 0
+    items_with_registry_number = 0
+    skipped_without_registry_number = 0
+    deduped_numbers: set[str] = set()
+    demo_filtered_numbers: set[str] = set()
+    for page_obj in pages:
+        for item in page_obj.items:
+            items_raw_count += 1
+            if item.registry_number:
+                items_with_registry_number += 1
+                deduped_numbers.add(item.registry_number)
+                if not item.is_demo:
+                    demo_filtered_numbers.add(item.registry_number)
+            else:
+                skipped_without_registry_number += 1
+    return {
+        "items_raw_count": items_raw_count,
+        "items_with_registry_number": items_with_registry_number,
+        "skipped_without_registry_number": skipped_without_registry_number,
+        "items_after_dedupe": len(deduped_numbers),
+        "items_after_demo_filter": len(demo_filtered_numbers),
+    }
+
+
 class RegistryNumberDiscovery:
     def __init__(
         self,
@@ -151,6 +187,7 @@ class RegistryNumberDiscovery:
         source = source or self._config.registry_discovery_source
         days_back = days_back if days_back is not None else self._config.registry_discovery_days_back
         limit = limit if limit is not None else self._config.registry_discovery_limit
+        page_size = max(1, page_size)
 
         if source in ("auto", "auto_discover"):
             return self._auto_discover(days_back=days_back, limit=limit, seed_file=seed_file, page_size=page_size)
@@ -210,9 +247,11 @@ class RegistryNumberDiscovery:
         limit: int,
         page_size: int = 30,
     ) -> DiscoveryResult:
+        effective_page_size = min(max(page_size, 1), 100)
+        effective_limit = max(0, limit)
         date_from = datetime.now(timezone.utc).date() - timedelta(days=days_back)
         date_to = datetime.now(timezone.utc).date()
-        max_pages = max(1, (limit + page_size - 1) // page_size)
+        max_pages = max(1, (effective_limit + effective_page_size - 1) // effective_page_size)
         max_pages = min(max_pages, 10)
 
         pages = self._public_provider.search_pages(
@@ -220,8 +259,10 @@ class RegistryNumberDiscovery:
             date_from=date_from,
             date_to=date_to,
             max_pages=max_pages,
-            page_size=page_size,
+            page_size=effective_page_size,
         )
+        metrics = _page_item_metrics(pages)
+        source_url = pages[0].source_url if pages else None
 
         first_status = pages[0].status if pages else PublicSearchStatus.EMPTY
         network_status = first_status
@@ -230,14 +271,26 @@ class RegistryNumberDiscovery:
                 numbers=[],
                 selected_source="external_public_44fz",
                 selected_source_type=SourceType.EXTERNAL_PUBLIC_44FZ,
+                requested_limit=limit,
+                effective_limit=effective_limit,
+                requested_page_size=page_size,
+                effective_page_size=effective_page_size,
+                date_from=datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc),
+                date_to=datetime.combine(date_to, datetime.min.time(), tzinfo=timezone.utc),
                 pages_read=0,
-                page_size=page_size,
+                page_size=effective_page_size,
+                source_url=source_url,
+                items_raw_count=metrics["items_raw_count"],
+                items_with_registry_number=metrics["items_with_registry_number"],
+                skipped_without_registry_number=metrics["skipped_without_registry_number"],
+                items_after_dedupe=metrics["items_after_dedupe"],
+                items_after_demo_filter=metrics["items_after_demo_filter"],
                 network_status=first_status,
                 errors=[pages[0].error or f"Network status: {first_status}"] if pages else [],
                 warnings=[f"external_public_44fz is {first_status}: {pages[0].error}" if pages else f"external_public_44fz is {first_status}"],
             )
 
-        discovered = self._page_items_to_discovered(pages, limit)
+        discovered = self._page_items_to_discovered(pages, effective_limit or None)
         numbers = [item.registry_number for item in discovered]
 
         successes = sum(1 for p in pages if p.status == PublicSearchStatus.SUCCESS)
@@ -245,9 +298,21 @@ class RegistryNumberDiscovery:
             numbers=discovered,
             selected_source="external_public_44fz",
             selected_source_type=SourceType.EXTERNAL_PUBLIC_44FZ,
+            requested_limit=limit,
+            effective_limit=effective_limit,
+            requested_page_size=page_size,
+            effective_page_size=effective_page_size,
+            date_from=datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc),
+            date_to=datetime.combine(date_to, datetime.min.time(), tzinfo=timezone.utc),
             pages_read=len(pages),
-            page_size=page_size,
+            page_size=effective_page_size,
+            source_url=source_url,
             discovered_count=len(discovered),
+            items_raw_count=metrics["items_raw_count"],
+            items_with_registry_number=metrics["items_with_registry_number"],
+            skipped_without_registry_number=metrics["skipped_without_registry_number"],
+            items_after_dedupe=metrics["items_after_dedupe"],
+            items_after_demo_filter=len(numbers),
             network_status=network_status,
             errors=[],
             warnings=[f"external_public_44fz read {len(pages)} pages, found {len(numbers)} numbers, {len(pages) - successes} pages non-success"],
@@ -292,6 +357,8 @@ class RegistryNumberDiscovery:
             numbers=numbers,
             selected_source="seed_file",
             selected_source_type=SourceType.SEED_FILE,
+            requested_limit=limit,
+            effective_limit=len(numbers),
             discovered_count=len(numbers),
         )
 
@@ -347,6 +414,8 @@ class RegistryNumberDiscovery:
             numbers=numbers,
             selected_source="seed_file",
             selected_source_type=SourceType.SEED_FILE,
+            requested_limit=limit,
+            effective_limit=len(numbers),
             discovered_count=len(numbers),
         )
 
@@ -399,6 +468,8 @@ class RegistryNumberDiscovery:
             numbers=numbers,
             selected_source="local_db",
             selected_source_type=SourceType.LOCAL_DB,
+            requested_limit=limit,
+            effective_limit=len(numbers),
             discovered_count=len(numbers),
         )
 
@@ -436,6 +507,8 @@ class RegistryNumberDiscovery:
             selected_source="demo",
             selected_source_type=SourceType.DEMO,
             is_demo=True,
+            requested_limit=limit,
+            effective_limit=len(numbers),
             discovered_count=len(numbers),
             skipped_without_registry_number=skipped,
         )

@@ -47,7 +47,8 @@ class RealEisLoader:
         token = settings.token or ""
         masked = token[:4] + "****" + token[-4:] if len(token) > 8 else "****"
         methods = []
-        if self._client.is_configured():
+        client_configured = self._client.is_configured()
+        if client_configured:
             if self._probe_legacy():
                 methods.append("searchProcurements (legacy)")
             if self._probe_getdocs():
@@ -56,11 +57,11 @@ class RealEisLoader:
             "eis_mode": "real",
             "endpoint": settings.individual_base_url,
             "legacy_endpoint": settings.base_url,
-            "token_present": bool(token),
+            "token_present": bool(token) and client_configured,
             "token_masked": masked,
             "token_owner": settings.token_owner,
             "ssl_verify": False,
-            "configured": settings.configured,
+            "configured": client_configured,
             "available_methods": methods or ["(none confirmed)"],
         }
 

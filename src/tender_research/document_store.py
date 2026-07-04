@@ -46,9 +46,7 @@ def download_tender_documents(
             continue
         local_path = doc_dir / _safe_filename(doc.file_name, doc.id)
         if local_path.exists():
-            doc.local_path = str(local_path)
-            doc.download_status = "downloaded"
-            _update_size_and_hash(doc, local_path)
+            doc = _mark_downloaded(repo, doc, local_path)
             repo._session.flush()
             downloaded += 1
             _try_extract(doc, text_dir, config)
@@ -68,9 +66,7 @@ def download_tender_documents(
                 failed += 1
                 continue
             local_path.write_bytes(content)
-            doc.local_path = str(local_path)
-            doc.download_status = "downloaded"
-            _update_size_and_hash(doc, local_path)
+            doc = _mark_downloaded(repo, doc, local_path)
             repo._session.flush()
             downloaded += 1
             _try_extract(doc, text_dir, config)
@@ -98,9 +94,24 @@ def _try_extract(doc, text_dir: Path, config: TenderResearchConfig) -> None:
         doc.extracted_text_chars = 0
 
 
-def _update_size_and_hash(doc, path: Path) -> None:
-    doc.size_bytes = path.stat().st_size
-    doc.sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+def _mark_downloaded(repo: TenderRepository, doc, path: Path):
+    downloaded_doc = repo.upsert_document({
+        "tender_id": doc.tender_id,
+        "source_document_id": doc.source_document_id,
+        "file_name": doc.file_name,
+        "file_url": doc.file_url,
+        "local_path": str(path),
+        "content_type": doc.content_type,
+        "size_bytes": path.stat().st_size,
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "download_status": "downloaded",
+        "text_extraction_status": doc.text_extraction_status,
+        "extracted_text_path": doc.extracted_text_path,
+        "extracted_text_chars": doc.extracted_text_chars,
+        "raw_meta": doc.raw_meta,
+        "error_message": None,
+    })
+    return downloaded_doc
 
 
 def _tender_doc_dir(base_data_dir: str, source: str, external_id: str) -> Path:

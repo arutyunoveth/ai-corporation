@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re as _re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -139,6 +139,34 @@ class TenderRepository:
             )
         ).scalar() or 0
 
+    def list_placeholder_tenders(
+        self,
+        limit: int = 50,
+        only_placeholders: bool = True,
+        days_back: int | None = None,
+    ) -> list[ProcurementTender]:
+        query = select(ProcurementTender).where(
+            ProcurementTender.source == "eis",
+            ProcurementTender.registry_number.is_not(None),
+        )
+        if only_placeholders:
+            query = query.where(
+                (ProcurementTender.title.is_(None)) | (ProcurementTender.title.like("Закупка %"))
+            )
+        else:
+            query = query.where(
+                (ProcurementTender.title.is_(None))
+                | (ProcurementTender.title.like("Закупка %"))
+                | (ProcurementTender.customer_name.is_(None))
+                | (ProcurementTender.publication_date.is_(None))
+                | (ProcurementTender.nmck_amount.is_(None))
+            )
+        if days_back is not None:
+            threshold = datetime.now(timezone.utc) - timedelta(days=days_back)
+            query = query.where(ProcurementTender.last_seen_at >= threshold)
+        query = query.order_by(ProcurementTender.updated_at.asc()).limit(limit)
+        return list(self._session.execute(query).scalars().all())
+
     # ── ProcurementCustomer ──
 
     def upsert_customer(self, data: dict) -> ProcurementCustomer:
@@ -254,20 +282,33 @@ class TenderRepository:
                     ProcurementTenderDocument.sha256 == sha256,
                 )
             ).scalar_one_or_none()
+        elif existing and sha256:
+            existing_by_sha = self._session.execute(
+                select(ProcurementTenderDocument).where(
+                    ProcurementTenderDocument.tender_id == tender_id,
+                    ProcurementTenderDocument.sha256 == sha256,
+                )
+            ).scalar_one_or_none()
+            if existing_by_sha and existing_by_sha.id != existing.id:
+                existing = self._merge_documents_by_sha(
+                    canonical=existing_by_sha,
+                    duplicate=existing,
+                    data=data,
+                    identity_hash=identity_hash,
+                    identity_source=identity_source,
+                    sha256=sha256,
+                )
+                self._session.flush()
+                return existing
 
         if existing:
-            for key in ("local_path", "download_status", "text_extraction_status",
-                        "extracted_text_path", "extracted_text_chars", "error_message",
-                        "source_document_id", "file_name", "file_url", "content_type",
-                        "size_bytes", "raw_meta"):
-                if key in data:
-                    setattr(existing, key, data[key])
-            if identity_hash:
-                existing.document_identity_hash = identity_hash
-                existing.document_identity_source = identity_source
-            if sha256:
-                existing.sha256 = sha256
-            existing.updated_at = datetime.now(timezone.utc)
+            self._apply_document_update(
+                existing,
+                data,
+                identity_hash=identity_hash,
+                identity_source=identity_source,
+                sha256=sha256,
+            )
             self._session.flush()
             return existing
 
@@ -292,6 +333,92 @@ class TenderRepository:
         self._session.add(doc)
         self._session.flush()
         return doc
+
+    def _apply_document_update(
+        self,
+        doc: ProcurementTenderDocument,
+        data: dict,
+        *,
+        identity_hash: str | None,
+        identity_source: str | None,
+        sha256: str | None,
+    ) -> None:
+        for key in (
+            "local_path",
+            "download_status",
+            "text_extraction_status",
+            "extracted_text_path",
+            "extracted_text_chars",
+            "error_message",
+            "source_document_id",
+            "file_name",
+            "file_url",
+            "content_type",
+            "size_bytes",
+            "raw_meta",
+        ):
+            if key in data:
+                setattr(doc, key, data[key])
+        if identity_hash:
+            doc.document_identity_hash = identity_hash
+            doc.document_identity_source = identity_source
+        if sha256:
+            doc.sha256 = sha256
+        doc.updated_at = datetime.now(timezone.utc)
+
+    def _merge_documents_by_sha(
+        self,
+        *,
+        canonical: ProcurementTenderDocument,
+        duplicate: ProcurementTenderDocument,
+        data: dict,
+        identity_hash: str | None,
+        identity_source: str | None,
+        sha256: str,
+    ) -> ProcurementTenderDocument:
+        if not canonical.source_document_id and duplicate.source_document_id:
+            canonical.source_document_id = duplicate.source_document_id
+        if not canonical.file_name and duplicate.file_name:
+            canonical.file_name = duplicate.file_name
+        if not canonical.file_url and duplicate.file_url:
+            canonical.file_url = duplicate.file_url
+        if not canonical.content_type and duplicate.content_type:
+            canonical.content_type = duplicate.content_type
+        if canonical.size_bytes is None and duplicate.size_bytes is not None:
+            canonical.size_bytes = duplicate.size_bytes
+        if not canonical.local_path and duplicate.local_path:
+            canonical.local_path = duplicate.local_path
+        if not canonical.extracted_text_path and duplicate.extracted_text_path:
+            canonical.extracted_text_path = duplicate.extracted_text_path
+        if canonical.extracted_text_chars is None and duplicate.extracted_text_chars is not None:
+            canonical.extracted_text_chars = duplicate.extracted_text_chars
+        if not canonical.raw_meta and duplicate.raw_meta:
+            canonical.raw_meta = duplicate.raw_meta
+        if (
+            canonical.download_status in {"pending", "skipped", "failed"}
+            and duplicate.download_status == "downloaded"
+        ):
+            canonical.download_status = duplicate.download_status
+        if (
+            canonical.text_extraction_status in {"pending", "failed"}
+            and duplicate.text_extraction_status in {"extracted", "empty", "unsupported"}
+        ):
+            canonical.text_extraction_status = duplicate.text_extraction_status
+        if not canonical.error_message and duplicate.error_message:
+            canonical.error_message = duplicate.error_message
+        if identity_hash and not canonical.document_identity_hash:
+            canonical.document_identity_hash = identity_hash
+            canonical.document_identity_source = identity_source
+        canonical.sha256 = sha256
+        self._session.delete(duplicate)
+        self._apply_document_update(
+            canonical,
+            data,
+            identity_hash=canonical.document_identity_hash or identity_hash,
+            identity_source=canonical.document_identity_source or identity_source,
+            sha256=sha256,
+        )
+        return canonical
 
     def count_documents(self) -> int:
         return self._session.execute(select(func.count(ProcurementTenderDocument.id))).scalar() or 0

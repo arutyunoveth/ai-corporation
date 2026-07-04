@@ -1721,6 +1721,7 @@ def _build_output_payloads(
     economics: dict[str, Any] | None,
     bid_decision: dict[str, Any] | None,
     core_complete: bool,
+    quote_inputs_present: bool,
 ) -> dict[str, dict[str, Any]]:
     technical_spec_text = _collect_role_text(documents, "technical_spec")
     contract_draft_text = _collect_role_text(documents, "contract_draft")
@@ -1732,7 +1733,7 @@ def _build_output_payloads(
         str(metadata.get("tender_title") or ""),
     )
     requirement_rows = _extract_requirement_rows(requirements, core_complete, procurement_kind)
-    quote_files_present = bool(tkp_comparison and tkp_comparison.get("suppliers"))
+    quote_files_present = quote_inputs_present
     output_warnings = list(metadata.get("warnings", []))
     preliminary_analysis = _build_preliminary_procurement_analysis(
         metadata=metadata,
@@ -1809,7 +1810,11 @@ def _build_output_payloads(
     }
 
     quotes_payload = {
-        "status": tkp_comparison.get("status", "blocked") if tkp_comparison else "blocked",
+        "status": (
+            tkp_comparison.get("status", "blocked")
+            if tkp_comparison
+            else ("needs_review" if quote_inputs_present else "blocked")
+        ),
         "analysis_mode": tkp_comparison.get("analysis_mode", analysis_mode) if tkp_comparison else analysis_mode,
         "supplier_quotes_found": tkp_comparison.get("supplier_quotes_found", 0) if tkp_comparison else 0,
         "items_extracted": tkp_comparison.get("items_extracted", 0) if tkp_comparison else 0,
@@ -1823,6 +1828,11 @@ def _build_output_payloads(
                 f"Найдено распознанных ТКП: {tkp_comparison.get('supplier_quotes_found', 0)}.",
                 f"Извлечено сопоставимых позиций: {tkp_comparison.get('items_extracted', 0)}.",
                 "Сравнение выполнено локально, в детерминированном демо-режиме без внешних действий.",
+            ]
+            if tkp_comparison
+            else [
+                "ТКП загружены, но не распознаны как структурированные таблицы для автоматического сравнения.",
+                "Нужна ручная проверка цен, сроков и гарантий по исходным файлам или повторная загрузка ТКП в XLS/XLSX.",
             ]
             if quote_files_present
             else [
@@ -2206,7 +2216,15 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             status=DemoStepStatus.BLOCKED if quote_blocked else (DemoStepStatus.PARTIAL if quote_partial else DemoStepStatus.DONE),
             description="Сопоставление коммерческих предложений, если они были загружены.",
             agent_action="Проверено наличие ТКП и собран локальный снимок сравнения с нормализацией таблиц.",
-            result_summary="ТКП не загружены." if quote_blocked else f"Найдено ТКП: {quotes.get('supplier_quotes_found', 0)}, позиций: {quotes.get('items_extracted', 0)}.",
+            result_summary=(
+                "ТКП не загружены."
+                if quote_blocked
+                else (
+                    "ТКП загружены, но требуют ручной нормализации."
+                    if quotes.get("supplier_quotes_found", 0) == 0
+                    else f"Найдено ТКП: {quotes.get('supplier_quotes_found', 0)}, позиций: {quotes.get('items_extracted', 0)}."
+                )
+            ),
             findings=quotes["highlights"],
             human_review=quotes["manual_checks"],
             trace=trace["quotes"],
@@ -3060,8 +3078,11 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         limitations = list(dict.fromkeys(metadata.get("limitations", [])))
         if not core_complete:
             limitations.append("Full runner integration was partially applied because the uploaded package did not produce all core extracted texts.")
-        if not quote_paths and not spreadsheet_sources:
+        quote_inputs_present = bool(quote_paths or spreadsheet_sources)
+        if not quote_inputs_present:
             limitations.append("TKP not uploaded. Supplier comparison and economics remain blocked or partial.")
+        elif not spreadsheet_sources and quote_paths:
+            limitations.append("Quote files were uploaded in non-spreadsheet format; structured comparison and economics require manual review or XLS/XLSX.")
         if spreadsheet_sources:
             limitations.append("Spreadsheet normalization uses deterministic heuristics and may require manual review for нестандартные таблицы.")
             if tkp_comparison:
@@ -3087,12 +3108,13 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             economics=economics,
             bid_decision=bid_decision,
             core_complete=core_complete,
+            quote_inputs_present=quote_inputs_present,
         )
         steps = _build_steps_from_outputs(metadata, outputs)
         final_recommendation = _build_final_recommendation(outputs)
         status = TenderOperatorUploadedRunStatus.COMPLETED if core_complete and tkp_comparison else TenderOperatorUploadedRunStatus.COMPLETED_WITH_WARNINGS
         if final_recommendation.recommendation == DemoRecommendationCode.MANUAL_REVIEW_REQUIRED:
-            status = TenderOperatorUploadedRunStatus.NEEDS_REVIEW if not tkp_comparison else TenderOperatorUploadedRunStatus.COMPLETED_WITH_WARNINGS
+            status = TenderOperatorUploadedRunStatus.COMPLETED_WITH_WARNINGS if quote_inputs_present else TenderOperatorUploadedRunStatus.NEEDS_REVIEW
 
         metadata["status"] = status.value
         _save_metadata(run_id, metadata)

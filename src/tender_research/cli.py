@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from src.tender_research.registry_discovery import (
     SourceType,
 )
 from src.tender_research.repository import TenderRepository
+from src.tender_research.models import ProcurementTenderDocument
 from src.shared.config.settings import get_settings
 from src.shared.db.base import Base
 
@@ -61,11 +63,28 @@ def _print_discovery_result(result: DiscoveryResult) -> None:
     print(f"selected_source: {result.selected_source}")
     print(f"selected_source_type: {result.selected_source_type}")
     print(f"is_demo: {result.is_demo}")
+    if result.requested_limit is not None:
+        print(f"requested_limit: {result.requested_limit}")
+    if result.effective_limit is not None:
+        print(f"effective_limit: {result.effective_limit}")
+    if result.requested_page_size:
+        print(f"requested_page_size: {result.requested_page_size}")
+    if result.effective_page_size:
+        print(f"effective_page_size: {result.effective_page_size}")
+    if result.date_from:
+        print(f"date_from: {_serialize_dt(result.date_from)}")
+    if result.date_to:
+        print(f"date_to: {_serialize_dt(result.date_to)}")
+    if result.source_url:
+        print(f"source_url: {result.source_url}")
     print(f"discovered_count: {result.discovered_count}")
     print(f"pages_read: {result.pages_read}")
     print(f"page_size: {result.page_size}")
-    if result.skipped_without_registry_number:
-        print(f"skipped_without_registry_number: {result.skipped_without_registry_number}")
+    print(f"items_raw_count: {result.items_raw_count}")
+    print(f"items_with_registry_number: {result.items_with_registry_number}")
+    print(f"items_skipped_without_registry_number: {result.skipped_without_registry_number}")
+    print(f"items_after_dedupe: {result.items_after_dedupe}")
+    print(f"items_after_demo_filter: {result.items_after_demo_filter}")
     if result.network_status:
         print(f"network_status: {result.network_status}")
     if result.warnings:
@@ -194,6 +213,100 @@ def _mask_proxy_url(url: str) -> str:
 
 def _serialize_dt(value):
     return value.isoformat() if hasattr(value, "isoformat") else value
+
+
+def _document_extension(doc: ProcurementTenderDocument) -> str:
+    candidate = doc.file_name or doc.local_path or ""
+    suffix = Path(candidate).suffix.lower()
+    return suffix or "<none>"
+
+
+def _looks_like_html(path: str | None) -> bool:
+    if not path or not Path(path).exists():
+        return False
+    try:
+        head = Path(path).read_bytes()[:2048].lower()
+    except OSError:
+        return False
+    return b"<html" in head or b"<!doctype html" in head
+
+
+def build_document_quality_report(repo: TenderRepository, limit: int = 100) -> dict:
+    docs = list(
+        repo._session.query(ProcurementTenderDocument)
+        .order_by(ProcurementTenderDocument.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+    ext_counter = Counter()
+    content_type_counter = Counter()
+    empty_by_ext = Counter()
+    unsupported_by_ext = Counter()
+    failed_by_error = Counter()
+    suspicious_html = []
+    empty_examples = []
+    unsupported_examples = []
+    largest = []
+    for doc in docs:
+        ext = _document_extension(doc)
+        ext_counter[ext] += 1
+        content_type_counter[doc.content_type or "<none>"] += 1
+        if doc.text_extraction_status == "empty":
+            empty_by_ext[ext] += 1
+            if len(empty_examples) < 10:
+                empty_examples.append({
+                    "file_name": doc.file_name,
+                    "extension": ext,
+                    "content_type": doc.content_type,
+                    "error_message": doc.error_message,
+                })
+        if doc.text_extraction_status == "unsupported":
+            unsupported_by_ext[ext] += 1
+            if len(unsupported_examples) < 10:
+                unsupported_examples.append({
+                    "file_name": doc.file_name,
+                    "extension": ext,
+                    "content_type": doc.content_type,
+                    "error_message": doc.error_message,
+                })
+        if doc.download_status == "failed" and doc.error_message:
+            failed_by_error[doc.error_message] += 1
+        if _looks_like_html(doc.local_path) and ext not in {".html", ".htm"}:
+            suspicious_html.append({
+                "file_name": doc.file_name,
+                "extension": ext,
+                "local_path": doc.local_path,
+            })
+        largest.append({
+            "file_name": doc.file_name,
+            "size_bytes": doc.size_bytes or 0,
+            "extension": ext,
+            "content_type": doc.content_type,
+        })
+    largest.sort(key=lambda item: item["size_bytes"], reverse=True)
+    return {
+        "total_documents": repo.count_documents(),
+        "downloaded": repo.count_documents_by_status("downloaded"),
+        "failed_downloads": repo.count_documents_by_status("failed"),
+        "extracted": repo.count_documents_by_text_status("extracted"),
+        "empty": repo.count_documents_by_text_status("empty"),
+        "unsupported": repo.count_documents_by_text_status("unsupported"),
+        "failed_extraction": repo.count_documents_by_text_status("failed"),
+        "top_extensions": ext_counter.most_common(10),
+        "top_content_types": content_type_counter.most_common(10),
+        "empty_by_extension": empty_by_ext.most_common(10),
+        "unsupported_by_extension": unsupported_by_ext.most_common(10),
+        "failed_by_error_message": failed_by_error.most_common(10),
+        "zip_count": sum(count for ext, count in ext_counter.items() if ext == ".zip"),
+        "pdf_count": sum(count for ext, count in ext_counter.items() if ext == ".pdf"),
+        "docx_count": sum(count for ext, count in ext_counter.items() if ext == ".docx"),
+        "xlsx_count": sum(count for ext, count in ext_counter.items() if ext in {".xlsx", ".xls"}),
+        "html_count": sum(count for ext, count in ext_counter.items() if ext in {".html", ".htm"}),
+        "files_with_suspicious_html_instead_of_document": suspicious_html[:10],
+        "largest_files": largest[:10],
+        "empty_examples": empty_examples,
+        "unsupported_examples": unsupported_examples,
+    }
 
 
 def cmd_stats(args: argparse.Namespace) -> None:
@@ -570,9 +683,24 @@ def cmd_research_discovered(args: argparse.Namespace) -> None:
     summary = pipeline.last_discovered_batch_summary or {}
     if summary:
         for key in (
+            "requested_limit",
+            "effective_limit",
+            "requested_page_size",
+            "effective_page_size",
+            "date_from",
+            "date_to",
+            "source_url",
             "discovered_count",
             "selected_source",
             "pages_read",
+            "items_raw_count",
+            "items_with_registry_number",
+            "items_skipped_without_registry_number",
+            "items_after_dedupe",
+            "items_after_demo_filter",
+            "detail_fetch_attempts",
+            "detail_fetch_success",
+            "ingest_attempts",
             "tenders_created",
             "tenders_updated",
             "tenders_with_title",
@@ -599,6 +727,63 @@ def cmd_research_discovered(args: argparse.Namespace) -> None:
         status = "OK" if "error" not in r else f"FAIL: {r['error']}"
         title = r.get("title", r.get("registry_number", "?"))
         print(f"  [{status}] {title}")
+
+
+def cmd_backfill_public_metadata(args: argparse.Namespace) -> None:
+    pipeline = _build_pipeline(args)
+    summary = pipeline.backfill_public_metadata(
+        limit=args.limit,
+        only_placeholders=args.only_placeholders,
+        days_back=args.days_back,
+        with_documents=args.with_documents,
+        dry_run=args.dry_run,
+    )
+    for key in (
+        "placeholders_found",
+        "processed",
+        "enriched_title_count",
+        "enriched_customer_count",
+        "enriched_publication_date_count",
+        "enriched_nmck_count",
+        "public_document_links_found",
+        "documents_created",
+        "documents_downloaded",
+        "extracted_texts_created",
+        "failed_count",
+    ):
+        print(f"{key}: {summary.get(key, 0)}")
+    for error in summary.get("errors", [])[:10]:
+        print(f"error: {error}")
+
+
+def cmd_document_quality_report(args: argparse.Namespace) -> None:
+    session = _get_session()
+    repo = TenderRepository(session)
+    report = build_document_quality_report(repo, limit=args.limit)
+    for key in (
+        "total_documents",
+        "downloaded",
+        "failed_downloads",
+        "extracted",
+        "empty",
+        "unsupported",
+        "failed_extraction",
+        "zip_count",
+        "pdf_count",
+        "docx_count",
+        "xlsx_count",
+        "html_count",
+    ):
+        print(f"{key}: {report[key]}")
+    print(f"top_extensions: {report['top_extensions']}")
+    print(f"top_content_types: {report['top_content_types']}")
+    print(f"empty_by_extension: {report['empty_by_extension']}")
+    print(f"unsupported_by_extension: {report['unsupported_by_extension']}")
+    print(f"failed_by_error_message: {report['failed_by_error_message']}")
+    print(f"files_with_suspicious_html_instead_of_document: {report['files_with_suspicious_html_instead_of_document']}")
+    print(f"largest_files: {report['largest_files']}")
+    print(f"empty_examples: {report['empty_examples']}")
+    print(f"unsupported_examples: {report['unsupported_examples']}")
 
 
 def main() -> None:
@@ -684,6 +869,17 @@ def main() -> None:
     p_disc_batch.add_argument("--web-search", action="store_true", help="Enable web search")
     p_disc_batch.add_argument("--fetch-pages", action="store_true", help="Fetch web pages")
 
+    p_backfill = sub.add_parser("backfill-public-metadata", parents=[_common],
+                                help="Backfill saved tenders with public search/detail metadata")
+    p_backfill.add_argument("--limit", type=int, default=50)
+    p_backfill.add_argument("--days-back", type=int, default=None)
+    p_backfill.add_argument("--only-placeholders", action=argparse.BooleanOptionalAction, default=True)
+    p_backfill.add_argument("--with-documents", action=argparse.BooleanOptionalAction, default=True)
+    p_backfill.add_argument("--dry-run", action="store_true")
+
+    p_doc_quality = sub.add_parser("document-quality-report", help="Show document extraction quality report")
+    p_doc_quality.add_argument("--limit", type=int, default=100)
+
     args = parser.parse_args()
 
     if args.command == "stats":
@@ -714,6 +910,10 @@ def main() -> None:
         cmd_ingest_collected_registry_numbers(args)
     elif args.command == "research-discovered":
         cmd_research_discovered(args)
+    elif args.command == "backfill-public-metadata":
+        cmd_backfill_public_metadata(args)
+    elif args.command == "document-quality-report":
+        cmd_document_quality_report(args)
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - Tender Operator Pilot Runner Refinement (PP1R) is complete: RFQ-first workflow for tender/operator companies with calibrated contract risk, supplier questions, RFQ draft, TKP comparison/economics, and bid decision recommendation.
 - Current product recommendation: `GO to restricted paid pilot with manual-control boundaries`.
 - A pilot access boundary, partner workspace, redaction workflow, report export package, feedback/outcome loop, and end-to-end dry run are all present.
-- Full `pytest` currently passes: `986 passed, 2 skipped, 1 warning`.
+- Full `pytest` currently passes in local verification.
 - Deterministic commercial pre-bid demo reporting is now available for internal/customer walkthroughs.
 - Supplier Profile Relevance Scoring is now available in the Tender Operator Agent Demo: deterministic rule-based scoring of 44-ФЗ search results and document text against a configurable supplier profile, with a UI panel for profile management.
 - Controlled LLM pre-bid analysis is available only in bounded, schema-validated, traceable, human-reviewed mode.
@@ -81,7 +81,7 @@ Open:
 For a pure Python same-port preview without Nginx:
 
 ```bash
-AI_CORP_SITE_PUBLIC_ROOT=/Users/master/Documents/AI-Corporation/arvectum-landing/public \
+AI_CORP_SITE_PUBLIC_ROOT=./arvectum-landing/public \
 ./.venv/bin/python -m uvicorn src.main:app --host 127.0.0.1 --port 8090
 ```
 

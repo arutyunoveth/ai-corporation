@@ -194,6 +194,7 @@ class TenderResearchPipeline:
         results: list[dict[str, int | str]] = []
         summary = self._build_discovered_batch_summary(disc_result)
         for discovered in disc_result.numbers:
+            summary["ingest_attempts"] += 1
             try:
                 tender, tender_summary = self._ingest_discovered_tender(discovered)
                 for key, value in tender_summary.items():
@@ -228,9 +229,21 @@ class TenderResearchPipeline:
 
     def _build_discovered_batch_summary(self, disc_result: DiscoveryResult) -> dict[str, Any]:
         return {
+            "requested_limit": disc_result.requested_limit,
+            "effective_limit": disc_result.effective_limit,
+            "requested_page_size": disc_result.requested_page_size,
+            "effective_page_size": disc_result.effective_page_size,
+            "date_from": disc_result.date_from.isoformat() if disc_result.date_from else None,
+            "date_to": disc_result.date_to.isoformat() if disc_result.date_to else None,
+            "source_url": disc_result.source_url,
             "discovered_count": disc_result.discovered_count or len(disc_result.numbers),
             "selected_source": disc_result.selected_source,
             "pages_read": disc_result.pages_read,
+            "items_raw_count": disc_result.items_raw_count,
+            "items_with_registry_number": disc_result.items_with_registry_number,
+            "items_skipped_without_registry_number": disc_result.skipped_without_registry_number,
+            "items_after_dedupe": disc_result.items_after_dedupe,
+            "items_after_demo_filter": disc_result.items_after_demo_filter,
             "tenders_created": 0,
             "tenders_updated": 0,
             "tenders_with_title": 0,
@@ -241,6 +254,9 @@ class TenderResearchPipeline:
             "customers_created": 0,
             "public_detail_fetched": 0,
             "public_detail_failed": 0,
+            "detail_fetch_attempts": 0,
+            "detail_fetch_success": 0,
+            "ingest_attempts": 0,
             "public_document_links_found": 0,
             "documents_created_from_public_links": 0,
             "documents_downloaded": 0,
@@ -266,6 +282,8 @@ class TenderResearchPipeline:
             "customers_created": 0,
             "public_detail_fetched": 0,
             "public_detail_failed": 0,
+            "detail_fetch_attempts": 1,
+            "detail_fetch_success": 0,
             "public_document_links_found": 0,
             "documents_created_from_public_links": 0,
         }
@@ -273,6 +291,7 @@ class TenderResearchPipeline:
         detail = self._public_provider.fetch_detail(discovered.card_url, registry_number=discovered.registry_number)
         if detail.network_status == "success":
             summary["public_detail_fetched"] += 1
+            summary["detail_fetch_success"] += 1
         else:
             summary["public_detail_failed"] += 1
 
@@ -280,7 +299,7 @@ class TenderResearchPipeline:
         if detail.document_links:
             summary["public_document_links_found"] += len(detail.document_links)
 
-        upsert_data = self._build_upsert_from_discovery(discovered, detail, soap_raw, soap_status)
+        upsert_data = self._build_upsert_from_discovery(discovered, detail, soap_raw, soap_status, existing_tender=existing_tender)
         tender = self._repo.upsert_tender(upsert_data.tender)
         summary["tenders_created" if existing_tender is None else "tenders_updated"] += 1
         if upsert_data.customer:
@@ -311,6 +330,98 @@ class TenderResearchPipeline:
 
         return tender, summary
 
+    def backfill_public_metadata(
+        self,
+        limit: int = 50,
+        only_placeholders: bool = True,
+        days_back: int | None = None,
+        with_documents: bool = True,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        candidates = self._repo.list_placeholder_tenders(
+            limit=limit,
+            only_placeholders=only_placeholders,
+            days_back=days_back,
+        )
+        summary: dict[str, Any] = {
+            "placeholders_found": len(candidates),
+            "processed": 0,
+            "enriched_title_count": 0,
+            "enriched_customer_count": 0,
+            "enriched_publication_date_count": 0,
+            "enriched_nmck_count": 0,
+            "public_document_links_found": 0,
+            "documents_created": 0,
+            "documents_downloaded": 0,
+            "extracted_texts_created": 0,
+            "failed_count": 0,
+            "errors": [],
+        }
+        for tender in candidates:
+            savepoint = self._session.begin_nested() if dry_run else None
+            try:
+                summary["processed"] += 1
+                discovered = self._lookup_public_discovered_item(tender.registry_number, existing_tender=tender)
+                detail = self._public_provider.fetch_detail(
+                    discovered.card_url or tender.eis_url,
+                    registry_number=tender.registry_number,
+                )
+                if detail.document_links:
+                    summary["public_document_links_found"] += len(detail.document_links)
+                before_title = tender.title
+                before_customer = tender.customer_name
+                before_publication_date = tender.publication_date
+                before_nmck = tender.nmck_amount
+                before_docs = self._repo.count_documents()
+                before_extracted = self._repo.count_documents_by_text_status("extracted")
+
+                upsert_data = self._build_upsert_from_discovery(
+                    discovered,
+                    detail,
+                    soap_raw=None,
+                    soap_status="backfill_public_only",
+                    existing_tender=tender,
+                    include_public_documents=with_documents,
+                )
+                updated_tender = self._repo.upsert_tender(upsert_data.tender)
+                if upsert_data.customer:
+                    self._repo.upsert_customer(upsert_data.customer)
+                for doc_data in upsert_data.documents:
+                    doc_data["tender_id"] = updated_tender.id
+                    self._repo.upsert_document(doc_data)
+                if not dry_run:
+                    self._save_public_detail_artifacts(updated_tender, detail)
+
+                if with_documents and not dry_run:
+                    docs_result = self.download_documents(updated_tender.id)
+                    summary["documents_downloaded"] += docs_result.get("downloaded", 0)
+
+                self._session.flush()
+                self._session.refresh(updated_tender)
+                if _is_placeholder_title(before_title, tender.registry_number) and not _is_placeholder_title(updated_tender.title, tender.registry_number):
+                    summary["enriched_title_count"] += 1
+                if not before_customer and updated_tender.customer_name:
+                    summary["enriched_customer_count"] += 1
+                if not before_publication_date and updated_tender.publication_date:
+                    summary["enriched_publication_date_count"] += 1
+                if before_nmck is None and updated_tender.nmck_amount is not None:
+                    summary["enriched_nmck_count"] += 1
+                summary["documents_created"] += max(0, self._repo.count_documents() - before_docs)
+                summary["extracted_texts_created"] += max(0, self._repo.count_documents_by_text_status("extracted") - before_extracted)
+
+                if dry_run:
+                    savepoint.rollback()
+                else:
+                    self._session.commit()
+            except Exception as exc:
+                if dry_run and savepoint is not None:
+                    savepoint.rollback()
+                else:
+                    self._session.rollback()
+                summary["failed_count"] += 1
+                summary["errors"].append(f"{tender.registry_number}: {exc}")
+        return summary
+
     def _fetch_eis_by_registry_number_safe(
         self,
         registry_number: str,
@@ -330,15 +441,59 @@ class TenderResearchPipeline:
             logger.warning("EIS registry fetch failed for %s: %s", registry_number, exc)
             return None, "error"
 
+    def _lookup_public_discovered_item(self, registry_number: str, existing_tender=None) -> DiscoveredRegistryNumber:
+        page = self._public_provider.search(query=registry_number, page_size=10)
+        for item in page.items:
+            if item.registry_number == registry_number:
+                return DiscoveredRegistryNumber(
+                    registry_number=item.registry_number,
+                    source="external_public_44fz",
+                    source_type="external_public_44fz",
+                    tender_title=item.title,
+                    purchase_number=item.purchase_number,
+                    customer_name=item.customer_name,
+                    customer_inn=item.customer_inn,
+                    customer_kpp=item.customer_kpp,
+                    publication_date=item.publication_date,
+                    application_deadline=item.application_deadline,
+                    nmck_amount=float(item.nmck_amount) if item.nmck_amount is not None else None,
+                    law_type=item.law_type,
+                    source_url=item.source_url,
+                    card_url=item.card_url,
+                    raw=item.raw,
+                )
+        return DiscoveredRegistryNumber(
+            registry_number=registry_number,
+            source="external_public_44fz",
+            source_type="external_public_44fz",
+            tender_title=getattr(existing_tender, "title", None),
+            purchase_number=getattr(existing_tender, "purchase_number", None),
+            customer_name=getattr(existing_tender, "customer_name", None),
+            customer_inn=getattr(existing_tender, "customer_inn", None),
+            customer_kpp=getattr(existing_tender, "customer_kpp", None),
+            publication_date=getattr(existing_tender, "publication_date", None),
+            application_deadline=getattr(existing_tender, "application_deadline", None),
+            nmck_amount=getattr(existing_tender, "nmck_amount", None),
+            law_type=getattr(existing_tender, "law_type", None) or "44fz",
+            source_url=getattr(existing_tender, "platform_url", None),
+            card_url=getattr(existing_tender, "eis_url", None),
+            raw={"lookup_status": page.status, "lookup_error": page.error},
+        )
+
     def _build_upsert_from_discovery(
         self,
         discovered: DiscoveredRegistryNumber,
         detail: PublicTenderDetail,
         soap_raw: EisTenderRaw | None,
         soap_status: str,
+        existing_tender=None,
+        include_public_documents: bool = True,
     ) -> TenderUpsertData:
         soap_documents = self._load_soap_documents(soap_raw)
-        public_documents = [] if soap_documents else self._public_documents_to_rows(detail)
+        public_documents = [] if soap_documents or not include_public_documents else self._public_documents_to_rows(detail)
+        existing_title = None
+        if existing_tender is not None and not _is_placeholder_title(existing_tender.title, discovered.registry_number):
+            existing_title = existing_tender.title
 
         soap_title = None
         if soap_raw and soap_raw.title and not _is_placeholder_title(soap_raw.title, discovered.registry_number):
@@ -348,40 +503,57 @@ class TenderResearchPipeline:
             soap_title,
             detail.title,
             discovered.tender_title,
+            existing_title,
             f"Закупка {discovered.registry_number}",
         )
         customer_name = _first_non_empty(
             getattr(soap_raw, "customer_name", None),
             detail.customer_name,
             discovered.customer_name,
+            getattr(existing_tender, "customer_name", None) if existing_tender is not None else None,
         )
         customer_inn = _first_non_empty(
             getattr(soap_raw, "customer_inn", None),
             detail.customer_inn,
             discovered.customer_inn,
+            getattr(existing_tender, "customer_inn", None) if existing_tender is not None else None,
         )
         customer_kpp = _first_non_empty(
             getattr(soap_raw, "customer_kpp", None),
             detail.customer_kpp,
             discovered.customer_kpp,
+            getattr(existing_tender, "customer_kpp", None) if existing_tender is not None else None,
         )
         publication_date = _first_non_empty(
             getattr(soap_raw, "publication_date", None),
             detail.publication_date,
             discovered.publication_date,
+            getattr(existing_tender, "publication_date", None) if existing_tender is not None else None,
         )
         application_deadline = _first_non_empty(
             getattr(soap_raw, "application_deadline", None),
             detail.application_deadline,
             discovered.application_deadline,
+            getattr(existing_tender, "application_deadline", None) if existing_tender is not None else None,
         )
         nmck_amount = _first_non_empty(
             getattr(soap_raw, "nmck_amount", None),
             detail.nmck_amount,
             discovered.nmck_amount,
+            getattr(existing_tender, "nmck_amount", None) if existing_tender is not None else None,
         )
-        card_url = _first_non_empty(getattr(soap_raw, "eis_url", None), detail.card_url, discovered.card_url)
-        platform_url = _first_non_empty(detail.source_url, discovered.source_url, card_url)
+        card_url = _first_non_empty(
+            getattr(soap_raw, "eis_url", None),
+            detail.card_url,
+            discovered.card_url,
+            getattr(existing_tender, "eis_url", None) if existing_tender is not None else None,
+        )
+        platform_url = _first_non_empty(
+            detail.source_url,
+            discovered.source_url,
+            getattr(existing_tender, "platform_url", None) if existing_tender is not None else None,
+            card_url,
+        )
         law_type = _first_non_empty(getattr(soap_raw, "law_type", None), detail.law_type, discovered.law_type, "44fz")
         raw_payload = self._build_merged_raw_payload(discovered, detail, soap_raw, soap_status)
 
@@ -389,23 +561,43 @@ class TenderResearchPipeline:
             "source": "eis",
             "external_id": discovered.registry_number,
             "registry_number": discovered.registry_number,
-            "purchase_number": _first_non_empty(getattr(soap_raw, "purchase_number", None), discovered.purchase_number),
-            "law_type": law_type,
+            "purchase_number": _first_non_empty(
+                getattr(soap_raw, "purchase_number", None),
+                discovered.purchase_number,
+                getattr(existing_tender, "purchase_number", None) if existing_tender is not None else None,
+            ),
+            "law_type": _first_non_empty(law_type, getattr(existing_tender, "law_type", None) if existing_tender is not None else None),
             "title": title,
-            "description": getattr(soap_raw, "description", None),
+            "description": _first_non_empty(
+                getattr(soap_raw, "description", None),
+                getattr(existing_tender, "description", None) if existing_tender is not None else None,
+            ),
             "customer_name": customer_name,
             "customer_inn": customer_inn,
             "customer_kpp": customer_kpp,
-            "region": getattr(soap_raw, "region", None),
+            "region": _first_non_empty(
+                getattr(soap_raw, "region", None),
+                getattr(existing_tender, "region", None) if existing_tender is not None else None,
+            ),
             "platform_name": "zakupki.gov.ru",
             "platform_url": platform_url,
             "eis_url": card_url,
             "nmck_amount": float(nmck_amount) if nmck_amount is not None else None,
-            "currency": getattr(soap_raw, "currency", None) or "RUB",
+            "currency": _first_non_empty(
+                getattr(soap_raw, "currency", None),
+                getattr(existing_tender, "currency", None) if existing_tender is not None else None,
+                "RUB",
+            ),
             "publication_date": publication_date,
             "application_deadline": application_deadline,
-            "auction_date": getattr(soap_raw, "auction_date", None),
-            "status": getattr(soap_raw, "status", None),
+            "auction_date": _first_non_empty(
+                getattr(soap_raw, "auction_date", None),
+                getattr(existing_tender, "auction_date", None) if existing_tender is not None else None,
+            ),
+            "status": _first_non_empty(
+                getattr(soap_raw, "status", None),
+                getattr(existing_tender, "status", None) if existing_tender is not None else None,
+            ),
             "raw_payload": raw_payload,
             "content_hash": content_hash((title or "") + (customer_name or "") + discovered.registry_number),
         }

@@ -180,3 +180,39 @@ def test_backward_compat_finds_by_sha256():
     })
     assert doc.id == doc2.id
     assert doc2.download_status == "downloaded"
+
+
+def test_second_identity_with_same_sha_merges_without_integrity_error():
+    s, repo = _db()
+    tid = _make_tender(repo)
+    repo.upsert_document({
+        "tender_id": tid,
+        "source_document_id": "doc-001",
+        "file_name": "spec-a.pdf",
+    })
+    repo.upsert_document({
+        "tender_id": tid,
+        "source_document_id": "doc-002",
+        "file_name": "spec-b.pdf",
+    })
+
+    repo.upsert_document({
+        "tender_id": tid,
+        "source_document_id": "doc-001",
+        "file_name": "spec-a.pdf",
+        "sha256": "same-sha",
+        "download_status": "downloaded",
+        "local_path": "data/spec-a.pdf",
+    })
+    merged = repo.upsert_document({
+        "tender_id": tid,
+        "source_document_id": "doc-002",
+        "file_name": "spec-b.pdf",
+        "sha256": "same-sha",
+        "download_status": "downloaded",
+        "local_path": "data/spec-b.pdf",
+    })
+
+    assert repo.count_documents() == 1
+    assert merged.sha256 == "same-sha"
+    assert merged.download_status == "downloaded"

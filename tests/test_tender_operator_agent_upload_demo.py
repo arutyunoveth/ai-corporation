@@ -145,10 +145,11 @@ def test_analyze_uploaded_run_returns_completed_and_report_endpoints_work(client
     assert steps_response.status_code == 200
     steps_payload = steps_response.json()
     assert steps_payload["run_id"] == run_id
-    assert len(steps_payload["steps"]) == 8
+    assert len(steps_payload["steps"]) == 9
     assert {step["key"] for step in steps_payload["steps"]} == {
         "documents",
         "requirements",
+        "supplier_search",
         "questions",
         "rfq",
         "quotes",
