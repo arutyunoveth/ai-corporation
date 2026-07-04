@@ -218,6 +218,15 @@ def cmd_discover_registry_numbers(args: argparse.Namespace) -> None:
         demo_tag = " [DEMO]" if rn.is_demo else ""
         print(f"  {rn.registry_number}{demo_tag}")
 
+    if args.output and result.numbers:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        lines = [f"# discovered via {result.selected_source} (is_demo={result.is_demo})"]
+        lines += [f"# {w}" for w in result.warnings]
+        lines += [rn.registry_number for rn in result.numbers if not rn.is_demo]
+        output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"Saved {len(lines) - len(result.warnings) - 1} numbers to {output_path}")
+
 
 def cmd_research_discovered(args: argparse.Namespace) -> None:
     pipeline = _build_pipeline(args)
@@ -290,6 +299,7 @@ def main() -> None:
     p_disc.add_argument("--days-back", type=int, default=None, help="Days to look back")
     p_disc.add_argument("--limit", type=int, default=10, help="Max numbers to discover")
     p_disc.add_argument("--seed-file", default=None, help="Path to seed file (for seed_file source)")
+    p_disc.add_argument("--output", default=None, help="Save non-demo numbers to file (e.g. data/eis_seed/registry_numbers_auto.txt)")
 
     p_disc_batch = sub.add_parser("research-discovered", parents=[_common],
                                    help="Discover and research tenders in one step")

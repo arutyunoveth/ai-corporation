@@ -18,6 +18,11 @@ alembic.log
 *.token
 ai_corporation.db
 
+# Auto-discovered registry numbers (not committed)
+data/eis_seed/registry_numbers_auto*.txt
+# Local pipeline data
+data/tenders/
+
 # Local pilot data — never commit real partner data
 /local_pilot_runs/
 /pilot_runs/

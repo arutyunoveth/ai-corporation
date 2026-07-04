@@ -172,14 +172,78 @@ AI_CORP_TENDER_RESEARCH_ALLOW_DEMO_DISCOVERY=true
 
 `AI_CORP_TENDER_RESEARCH_PUBLIC_SEARCH_BYPASS_PROXY=true` выставляет `proxies={"http": None, "https": None}` для запросов к zakupki.gov.ru. Если bypass не помогает — `public_html` блокирован на уровне сети.
 
-### Real seed fallback
+### Discovery with --output
 
-Если `auto` не нашёл реальные номера, создайте `data/eis_seed/registry_numbers_real.txt` и используйте:
+`discover-registry-numbers` поддерживает `--output` для сохранения найденных номеров в файл:
 
 ```bash
+python -m src.tender_research.cli discover-registry-numbers \
+  --source auto --days-back 3 --limit 10 \
+  --output data/eis_seed/registry_numbers_auto.txt
+```
+
+Файл сохраняет только `non-demo` номера, с комментариями об источнике.
+
+### Network diagnosis: zakupki.gov.ru accessibility
+
+Текущая сетевая среда (MacBook Air + Mac mini, оба за корпоративным прокси):
+
+| Ресурс | Доступ | Задержка | Причина |
+|--------|--------|----------|---------|
+| `zakupki.gov.ru` (443) | ❌ | 0.03s (RST) | Санкционная/сетевая блокировка |
+| `int.zakupki.gov.ru` (443) | ❌ | 0.06s (RST) | Та же блокировка |
+| `int.zakupki.gov.ru/eis-integration/services/getDocsIP` (SOAP) | ✅ | ~6s | Аутентифицированный доступ через токен |
+| `tunnel-proxy 127.0.0.1:8080` через `196.18.15.245:8000` | ❌ 502 | — | Прокси не может достучаться до zakupki.gov.ru |
+| Bypass proxy (direct) | ❌ timeout | 5-10s | Нет маршрута к РФ |
+
+**Вывод:** `eis_public_html` не работает из этой сети в принципе. Единственный рабочий путь — `seed_file` → `getDocsByReestrNumber`.
+
+### Реальный seed fallback
+
+Если `auto` не нашёл реальные номера, добавьте их вручную в seed-файл:
+
+```bash
+# Посмотреть формат demo seed
+cat data/eis_seed/registry_numbers.txt
+
+# Создать свой seed-файл
+echo "0373100000124000001" > data/eis_seed/registry_numbers_real.txt
+
+# Использовать
 python -m src.tender_research.cli research-discovered \
   --source seed_file \
   --seed-file data/eis_seed/registry_numbers_real.txt \
+  --limit 10 \
+  --web-search \
+  --fetch-pages
+```
+
+Как получить реальные номера закупок:
+1. Открыть https://zakupki.gov.ru в браузере (если есть доступ)
+2. Найти интересующие закупки
+3. Скопировать `regNumber=xxxxxxxxxxxxxxxxxxx` из URL
+4. Положить в seed-файл
+
+### Collector-требования для MacBook (если есть доступ к РФ)
+
+Если MacBook имеет доступ к zakupki.gov.ru (например, через российский VPN), выполнить:
+
+```bash
+# На MacBook (не требует SOAP-токена)
+python -m src.tender_research.cli discover-registry-numbers \
+  --source eis_public_html \
+  --days-back 7 \
+  --limit 50 \
+  --output data/eis_seed/registry_numbers_auto.txt
+
+# Скопировать на Mac mini
+rsync -av data/eis_seed/registry_numbers_auto.txt \
+  <macmini>:/path/to/ai-corporation/data/eis_seed/
+
+# На Mac mini — загрузка и исследование
+python -m src.tender_research.cli research-discovered \
+  --source seed_file \
+  --seed-file data/eis_seed/registry_numbers_auto.txt \
   --limit 10 \
   --web-search \
   --fetch-pages
