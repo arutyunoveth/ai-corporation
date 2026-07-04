@@ -45,6 +45,17 @@ class TenderResearchConfig:
 
     document_download_max_size_mb: int = 100
     document_extract_max_chars: int = 2_000_000
+    rag_chunk_size_chars: int = 1500
+    rag_chunk_overlap_chars: int = 200
+    rag_min_chunk_chars: int = 120
+    rag_embeddings_provider: str = "hashing"
+    rag_embeddings_model: str = "local-hash-v1"
+    rag_vector_store: str = "json"
+    rag_vector_store_path: str | None = None
+    rag_embedding_dimension: int = 256
+    rag_use_llm: bool = False
+    local_llm_base_url: str = "http://127.0.0.1:8088/v1"
+    local_llm_model: str = "qwen2.5-14b"
 
     data_dir: str = "./data"
 
@@ -94,5 +105,16 @@ def load_config() -> TenderResearchConfig:
         web_allow_domains=s.web_allow_domains,
         document_download_max_size_mb=s.document_download_max_size_mb,
         document_extract_max_chars=s.document_extract_max_chars,
+        rag_chunk_size_chars=s.rag_chunk_size_chars,
+        rag_chunk_overlap_chars=s.rag_chunk_overlap_chars,
+        rag_min_chunk_chars=s.rag_min_chunk_chars,
+        rag_embeddings_provider=s.rag_embeddings_provider,
+        rag_embeddings_model=s.rag_embeddings_model,
+        rag_vector_store=s.rag_vector_store,
+        rag_vector_store_path=s.rag_vector_store_path,
+        rag_embedding_dimension=s.rag_embedding_dimension,
+        rag_use_llm=s.rag_use_llm,
+        local_llm_base_url=s.local_llm_base_url,
+        local_llm_model=s.local_llm_model,
         data_dir=s.arvectum_data_dir,
     )

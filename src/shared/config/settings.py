@@ -57,6 +57,17 @@ class Settings(BaseSettings):
     web_allow_domains: str = ""
     document_download_max_size_mb: int = 100
     document_extract_max_chars: int = 2_000_000
+    rag_chunk_size_chars: int = 1500
+    rag_chunk_overlap_chars: int = 200
+    rag_min_chunk_chars: int = 120
+    rag_embeddings_provider: str = "hashing"
+    rag_embeddings_model: str = "local-hash-v1"
+    rag_vector_store: str = "json"
+    rag_vector_store_path: str | None = None
+    rag_embedding_dimension: int = 256
+    rag_use_llm: bool = False
+    local_llm_base_url: str = "http://127.0.0.1:8088/v1"
+    local_llm_model: str = "qwen2.5-14b"
 
     registry_discovery_source: str = "auto"
     registry_discovery_days_back: int = 3

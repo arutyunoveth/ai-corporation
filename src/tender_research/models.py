@@ -94,12 +94,60 @@ class ProcurementTenderDocument(UUIDPrimaryKeyMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     tender: Mapped[ProcurementTender] = relationship(back_populates="documents")
+    chunks: Mapped[list[ProcurementDocumentChunk]] = relationship(back_populates="document", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("tender_id", "sha256"),
         Index("ix_procurement_tender_documents_download_status", "download_status"),
         Index("ix_procurement_tender_documents_text_extraction_status", "text_extraction_status"),
         Index("ix_procurement_tender_documents_identity_hash", "tender_id", "document_identity_hash"),
+    )
+
+
+class ProcurementDocumentChunk(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "procurement_document_chunks"
+
+    tender_id: Mapped[str] = mapped_column(String(36), ForeignKey("procurement_tenders.id"), nullable=False, index=True)
+    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("procurement_tender_documents.id"), nullable=False, index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    text_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    char_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    char_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    token_estimate: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_file_name: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    source_text_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    document: Mapped[ProcurementTenderDocument] = relationship(back_populates="chunks")
+    embeddings: Mapped[list[ProcurementDocumentEmbedding]] = relationship(back_populates="chunk", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("document_id", "chunk_index"),
+        UniqueConstraint("document_id", "text_hash"),
+        Index("ix_procurement_document_chunks_text_hash", "text_hash"),
+    )
+
+
+class ProcurementDocumentEmbedding(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "procurement_document_embeddings"
+
+    chunk_id: Mapped[str] = mapped_column(String(36), ForeignKey("procurement_document_chunks.id"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(256), nullable=False)
+    dimension: Mapped[int] = mapped_column(Integer, nullable=False)
+    vector_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    embedding_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    chunk: Mapped[ProcurementDocumentChunk] = relationship(back_populates="embeddings")
+
+    __table_args__ = (
+        UniqueConstraint("chunk_id", "provider", "model"),
+        Index("ix_procurement_document_embeddings_vector_id", "vector_id"),
     )
 
 

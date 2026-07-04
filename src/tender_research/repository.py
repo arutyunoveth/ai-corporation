@@ -12,6 +12,8 @@ from src.tender_research.dedupe import content_hash
 from src.tender_research.errors import TenderResearchError
 from src.tender_research.models import (
     ProcurementCustomer,
+    ProcurementDocumentChunk,
+    ProcurementDocumentEmbedding,
     ProcurementRawArtifact,
     ProcurementTender,
     ProcurementTenderDocument,
@@ -436,6 +438,236 @@ class TenderRepository:
                 ProcurementTenderDocument.text_extraction_status == status
             )
         ).scalar() or 0
+
+    def list_extracted_documents(self, limit: int = 100, offset: int = 0) -> list[ProcurementTenderDocument]:
+        return list(
+            self._session.execute(
+                select(ProcurementTenderDocument)
+                .where(
+                    ProcurementTenderDocument.text_extraction_status == "extracted",
+                    ProcurementTenderDocument.extracted_text_path.is_not(None),
+                )
+                .order_by(ProcurementTenderDocument.updated_at.asc())
+                .limit(limit)
+                .offset(offset)
+            ).scalars().all()
+        )
+
+    # ── ProcurementDocumentChunk ──
+
+    def upsert_document_chunk(self, data: dict) -> ProcurementDocumentChunk:
+        document_id = data["document_id"]
+        chunk_index = data["chunk_index"]
+        text_hash = data["text_hash"]
+        existing = self._session.execute(
+            select(ProcurementDocumentChunk).where(
+                ProcurementDocumentChunk.document_id == document_id,
+                ProcurementDocumentChunk.chunk_index == chunk_index,
+            )
+        ).scalar_one_or_none()
+        if not existing:
+            existing = self._session.execute(
+                select(ProcurementDocumentChunk).where(
+                    ProcurementDocumentChunk.document_id == document_id,
+                    ProcurementDocumentChunk.text_hash == text_hash,
+                )
+            ).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if existing:
+            for key in (
+                "tender_id",
+                "text",
+                "text_hash",
+                "char_start",
+                "char_end",
+                "token_estimate",
+                "source_file_name",
+                "source_text_path",
+                "raw_meta",
+            ):
+                if key in data:
+                    setattr(existing, key, data[key])
+            existing.updated_at = now
+            self._session.flush()
+            return existing
+        chunk = ProcurementDocumentChunk(
+            tender_id=data["tender_id"],
+            document_id=document_id,
+            chunk_index=chunk_index,
+            text=data["text"],
+            text_hash=text_hash,
+            char_start=data["char_start"],
+            char_end=data["char_end"],
+            token_estimate=data.get("token_estimate", 0),
+            source_file_name=data.get("source_file_name"),
+            source_text_path=data.get("source_text_path"),
+            raw_meta=data.get("raw_meta"),
+            created_at=now,
+            updated_at=now,
+        )
+        self._session.add(chunk)
+        self._session.flush()
+        return chunk
+
+    def count_document_chunks(self) -> int:
+        return self._session.execute(select(func.count(ProcurementDocumentChunk.id))).scalar() or 0
+
+    def list_document_chunks(self, document_id: str) -> list[ProcurementDocumentChunk]:
+        return list(
+            self._session.execute(
+                select(ProcurementDocumentChunk)
+                .where(ProcurementDocumentChunk.document_id == document_id)
+                .order_by(ProcurementDocumentChunk.chunk_index.asc())
+            ).scalars().all()
+        )
+
+    def list_chunks_without_embeddings(
+        self,
+        *,
+        provider: str,
+        model: str,
+        limit: int = 1000,
+    ) -> list[ProcurementDocumentChunk]:
+        emb_exists = (
+            select(ProcurementDocumentEmbedding.id)
+            .where(
+                ProcurementDocumentEmbedding.chunk_id == ProcurementDocumentChunk.id,
+                ProcurementDocumentEmbedding.provider == provider,
+                ProcurementDocumentEmbedding.model == model,
+            )
+            .exists()
+        )
+        return list(
+            self._session.execute(
+                select(ProcurementDocumentChunk)
+                .where(~emb_exists)
+                .order_by(ProcurementDocumentChunk.created_at.asc())
+                .limit(limit)
+            ).scalars().all()
+        )
+
+    def get_document_chunk(self, chunk_id: str) -> ProcurementDocumentChunk | None:
+        return self._session.get(ProcurementDocumentChunk, chunk_id)
+
+    # ── ProcurementDocumentEmbedding ──
+
+    def upsert_document_embedding(self, data: dict) -> ProcurementDocumentEmbedding:
+        chunk_id = data["chunk_id"]
+        provider = data["provider"]
+        model = data["model"]
+        existing = self._session.execute(
+            select(ProcurementDocumentEmbedding).where(
+                ProcurementDocumentEmbedding.chunk_id == chunk_id,
+                ProcurementDocumentEmbedding.provider == provider,
+                ProcurementDocumentEmbedding.model == model,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            for key in ("dimension", "vector_id", "embedding_path", "embedding_hash"):
+                if key in data:
+                    setattr(existing, key, data[key])
+            self._session.flush()
+            return existing
+        embedding = ProcurementDocumentEmbedding(
+            chunk_id=chunk_id,
+            provider=provider,
+            model=model,
+            dimension=data["dimension"],
+            vector_id=data.get("vector_id"),
+            embedding_path=data.get("embedding_path"),
+            embedding_hash=data.get("embedding_hash"),
+        )
+        self._session.add(embedding)
+        self._session.flush()
+        return embedding
+
+    def count_document_embeddings(self, provider: str | None = None, model: str | None = None) -> int:
+        stmt = select(func.count(ProcurementDocumentEmbedding.id))
+        if provider is not None:
+            stmt = stmt.where(ProcurementDocumentEmbedding.provider == provider)
+        if model is not None:
+            stmt = stmt.where(ProcurementDocumentEmbedding.model == model)
+        return self._session.execute(stmt).scalar() or 0
+
+    def list_document_embeddings(
+        self,
+        *,
+        provider: str,
+        model: str,
+        chunk_ids: list[str] | None = None,
+    ) -> list[ProcurementDocumentEmbedding]:
+        stmt = select(ProcurementDocumentEmbedding).where(
+            ProcurementDocumentEmbedding.provider == provider,
+            ProcurementDocumentEmbedding.model == model,
+        )
+        if chunk_ids is not None:
+            if not chunk_ids:
+                return []
+            stmt = stmt.where(ProcurementDocumentEmbedding.chunk_id.in_(chunk_ids))
+        return list(self._session.execute(stmt).scalars().all())
+
+    def get_tender_by_registry_number(self, registry_number: str) -> ProcurementTender | None:
+        return self._session.execute(
+            select(ProcurementTender).where(ProcurementTender.registry_number == registry_number)
+        ).scalar_one_or_none()
+
+    def list_chunk_ids_for_filters(
+        self,
+        *,
+        tender_id: str | None = None,
+        registry_number: str | None = None,
+        customer_name: str | None = None,
+    ) -> list[str]:
+        stmt = (
+            select(ProcurementDocumentChunk.id)
+            .join(ProcurementTenderDocument, ProcurementTenderDocument.id == ProcurementDocumentChunk.document_id)
+            .join(ProcurementTender, ProcurementTender.id == ProcurementDocumentChunk.tender_id)
+        )
+        if tender_id is not None:
+            stmt = stmt.where(ProcurementDocumentChunk.tender_id == tender_id)
+        if registry_number is not None:
+            stmt = stmt.where(ProcurementTender.registry_number == registry_number)
+        if customer_name is not None:
+            stmt = stmt.where(
+                ProcurementTender.customer_name.is_not(None),
+                func.lower(ProcurementTender.customer_name).like(f"%{customer_name.lower()}%"),
+            )
+        return list(self._session.execute(stmt).scalars().all())
+
+    def get_chunk_context(self, chunk_id: str) -> dict | None:
+        row = self._session.execute(
+            select(
+                ProcurementDocumentChunk.id,
+                ProcurementDocumentChunk.text,
+                ProcurementDocumentChunk.chunk_index,
+                ProcurementDocumentChunk.char_start,
+                ProcurementDocumentChunk.char_end,
+                ProcurementTenderDocument.file_name,
+                ProcurementTenderDocument.id,
+                ProcurementTender.id,
+                ProcurementTender.registry_number,
+                ProcurementTender.title,
+                ProcurementTender.customer_name,
+            )
+            .join(ProcurementTenderDocument, ProcurementTenderDocument.id == ProcurementDocumentChunk.document_id)
+            .join(ProcurementTender, ProcurementTender.id == ProcurementDocumentChunk.tender_id)
+            .where(ProcurementDocumentChunk.id == chunk_id)
+        ).first()
+        if row is None:
+            return None
+        return {
+            "chunk_id": row[0],
+            "text": row[1],
+            "chunk_index": row[2],
+            "char_start": row[3],
+            "char_end": row[4],
+            "file_name": row[5],
+            "document_id": row[6],
+            "tender_id": row[7],
+            "registry_number": row[8],
+            "tender_title": row[9],
+            "customer_name": row[10],
+        }
 
     def list_top_customers(self, limit: int = 10) -> list[tuple[str, int]]:
         rows = self._session.execute(
