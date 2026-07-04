@@ -3,13 +3,20 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import ssl
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import HTTPSHandler, ProxyHandler, build_opener
 
 from src.tender_research.config import TenderResearchConfig
 from src.tender_research.document_text_extractor import extract_text
 from src.tender_research.errors import DocumentStoreError
 from src.tender_research.models import ProcurementTender
+from src.tender_research.providers.public_44fz_search import (
+    _hostname_matches_no_proxy,
+    _resolve_no_proxy_domains,
+)
 from src.tender_research.repository import TenderRepository
 
 
@@ -51,7 +58,8 @@ def download_tender_documents(
                 doc.file_url,
                 headers={"User-Agent": "ArvectumTenderResearch/0.1"},
             )
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            opener = _build_url_opener(doc.file_url, config)
+            with opener.open(req, timeout=30) as resp:
                 content = resp.read()
             if len(content) > max_bytes:
                 doc.download_status = "skipped"
@@ -97,6 +105,25 @@ def _update_size_and_hash(doc, path: Path) -> None:
 
 def _tender_doc_dir(base_data_dir: str, source: str, external_id: str) -> Path:
     return Path(base_data_dir) / "tenders" / source / _safe_dirname(external_id)
+
+
+def _build_url_opener(url: str, config: TenderResearchConfig):
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    should_bypass = (
+        config.public_search_bypass_proxy
+        and hostname
+        and _hostname_matches_no_proxy(
+            hostname,
+            _resolve_no_proxy_domains(config.public_search_no_proxy_domains),
+        )
+    )
+    if should_bypass:
+        return build_opener(HTTPSHandler(context=ssl_ctx), ProxyHandler({}))
+    return build_opener(HTTPSHandler(context=ssl_ctx))
 
 
 def _safe_filename(name: str, fallback_id: str) -> str:

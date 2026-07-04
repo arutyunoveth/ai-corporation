@@ -16,6 +16,8 @@ from src.tender_research.providers.public_44fz_search import (
     Public44FzSearchProvider,
     PublicSearchStatus,
     PublicTenderSearchPage,
+    PublicTenderSearchItem,
+    _parse_public_datetime,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,17 @@ class DiscoveredRegistryNumber:
     source: str = ""
     source_type: str = SourceType.NONE
     tender_title: str | None = None
+    purchase_number: str | None = None
+    customer_name: str | None = None
+    customer_inn: str | None = None
+    customer_kpp: str | None = None
+    publication_date: datetime | None = None
+    application_deadline: datetime | None = None
+    nmck_amount: float | None = None
+    law_type: str | None = "44fz"
+    source_url: str | None = None
+    card_url: str | None = None
+    raw: dict | None = None
     external_id: str | None = None
     is_demo: bool = False
 
@@ -74,6 +87,39 @@ def _parse_registry_numbers_from_html(html: str) -> list[str]:
                 seen.add(rn)
                 numbers.append(rn)
     return numbers
+
+
+def _coerce_float(value: object) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _search_item_to_discovered(item: PublicTenderSearchItem) -> DiscoveredRegistryNumber | None:
+    if not item.registry_number:
+        return None
+    return DiscoveredRegistryNumber(
+        registry_number=item.registry_number,
+        source="external_public_44fz",
+        source_type=SourceType.EXTERNAL_PUBLIC_44FZ,
+        tender_title=item.title,
+        purchase_number=item.purchase_number,
+        customer_name=item.customer_name,
+        customer_inn=item.customer_inn,
+        customer_kpp=item.customer_kpp,
+        publication_date=item.publication_date,
+        application_deadline=item.application_deadline,
+        nmck_amount=_coerce_float(item.nmck_amount),
+        law_type=item.law_type,
+        source_url=item.source_url,
+        card_url=item.card_url,
+        raw=item.raw,
+        external_id=item.purchase_number or item.registry_number,
+        is_demo=item.is_demo,
+    )
 
 
 class RegistryNumberDiscovery:
@@ -191,11 +237,8 @@ class RegistryNumberDiscovery:
                 warnings=[f"external_public_44fz is {first_status}: {pages[0].error}" if pages else f"external_public_44fz is {first_status}"],
             )
 
-        numbers = self._public_provider.extract_registry_numbers(pages)
-        discovered = [
-            DiscoveredRegistryNumber(registry_number=rn, source="external_public_44fz", source_type=SourceType.EXTERNAL_PUBLIC_44FZ)
-            for rn in numbers[:limit]
-        ]
+        discovered = self._page_items_to_discovered(pages, limit)
+        numbers = [item.registry_number for item in discovered]
 
         successes = sum(1 for p in pages if p.status == PublicSearchStatus.SUCCESS)
         return DiscoveryResult(
@@ -287,6 +330,17 @@ class RegistryNumberDiscovery:
                         source="seed_file",
                         source_type=SourceType.SEED_FILE,
                         tender_title=item.get("title"),
+                        purchase_number=item.get("purchase_number"),
+                        customer_name=item.get("customer_name"),
+                        customer_inn=item.get("customer_inn"),
+                        customer_kpp=item.get("customer_kpp"),
+                        publication_date=_parse_public_datetime(item.get("publication_date")) if item.get("publication_date") else None,
+                        application_deadline=_parse_public_datetime(item.get("application_deadline") or item.get("deadline")) if item.get("application_deadline") or item.get("deadline") else None,
+                        nmck_amount=_coerce_float(item.get("nmck_amount") or item.get("initial_price")),
+                        law_type=item.get("law_type") or item.get("law") or "44fz",
+                        source_url=item.get("source_url"),
+                        card_url=item.get("card_url") or item.get("source_url"),
+                        raw=item,
                         external_id=item.get("purchase_number"),
                     ))
         return DiscoveryResult(
@@ -295,6 +349,24 @@ class RegistryNumberDiscovery:
             selected_source_type=SourceType.SEED_FILE,
             discovered_count=len(numbers),
         )
+
+    @staticmethod
+    def _page_items_to_discovered(
+        pages: list[PublicTenderSearchPage],
+        limit: int | None,
+    ) -> list[DiscoveredRegistryNumber]:
+        discovered: list[DiscoveredRegistryNumber] = []
+        seen: set[str] = set()
+        for page_obj in pages:
+            for item in page_obj.items:
+                discovered_item = _search_item_to_discovered(item)
+                if not discovered_item or discovered_item.registry_number in seen:
+                    continue
+                seen.add(discovered_item.registry_number)
+                discovered.append(discovered_item)
+                if limit and len(discovered) >= limit:
+                    return discovered
+        return discovered
 
     def _local_db(
         self,

@@ -5,15 +5,17 @@
 `src/tender_research/` — бесплатный/локальный слой накопления базы закупок и внешних сырых данных без платных API и без LLM-анализа.
 
 Pipeline:
-1. Получает закупки из ЕИС (через существующую SOAP-интеграцию или демо-данные)
-2. Сохраняет закупки в локальную БД (SQLite/PostgreSQL)
-3. Копит историю заказчиков
-4. Скачивает документы закупки (PDF, DOCX, XLSX, TXT, HTML, ZIP)
-5. Извлекает текст из документов
-6. Генерирует поисковые запросы (без LLM, по шаблонам)
-7. Выполняет бесплатный HTML-поиск (DuckDuckGo)
-8. Открывает найденные страницы через requests или Playwright
-9. Сохраняет сырые HTML, извлечённый текст, артефакты
+1. Находит реальные номера закупок через public discovery (`external_public_44fz`)
+2. Забирает metadata из public search card: title, customer, даты, НМЦК, card URL
+3. При необходимости обогащает карточку через public detail page и SOAP
+4. Сохраняет закупки и заказчиков в локальную БД (SQLite/PostgreSQL)
+5. Сохраняет документы из SOAP или public detail fallback
+6. Скачивает документы закупки (PDF, DOCX, XLSX, TXT, HTML, XML, ZIP)
+7. Извлекает текст из документов
+8. Генерирует поисковые запросы (без LLM, по шаблонам)
+9. Выполняет бесплатный HTML-поиск (DuckDuckGo)
+10. Открывает найденные страницы через requests или Playwright
+11. Сохраняет сырые HTML, извлечённый текст, артефакты
 
 ## What It Does NOT Do
 
@@ -167,12 +169,31 @@ pages = provider.search_pages(query=None, max_pages=5, page_size=30)
 numbers = provider.extract_registry_numbers(pages)
 ```
 
+### Что теперь извлекается из public search
+
+`PublicTenderSearchItem` больше не содержит только номер. Provider пытается вытащить максимум первичной карточки:
+
+- `registry_number`
+- `purchase_number`
+- `title`
+- `customer_name`
+- `customer_inn` / `customer_kpp` (если есть в HTML)
+- `publication_date`
+- `application_deadline`
+- `nmck_amount`
+- `source_url`
+- `card_url`
+- `raw`
+
+Если title не найден, provider не подставляет fake title на уровне search parser. Placeholder `Закупка <номер>` разрешён только как самый последний fallback в ingest.
+
 ### Поведение пустого query
 
 - `query=None` или `query=""` — без ключевых слов, все закупки за период
 - Используется фильтр даты
 - Если даты не переданы — default последние 3 дня
 - `page_size` по умолчанию 30, максимум 100
+- При пустом query `searchString` вообще не добавляется в URL
 
 ### Network status
 
@@ -186,6 +207,40 @@ numbers = provider.extract_registry_numbers(pages)
 | `bad_gateway` | 502/503 от прокси |
 | `parse_error` | HTML получен, но не распарсен |
 | `empty` | Нет карточек на странице (пустой результат) |
+
+### Public detail fetch
+
+Provider умеет делать `fetch_detail(...)` для публичной карточки:
+
+- читает `common-info.html` тем же `no_proxy` / `bypass_proxy` механизмом, что и search;
+- сохраняет metadata из detail page, если search card неполная;
+- строит `documents.html` из `card_url`, если это очевидно;
+- извлекает `document_links` из вкладки "Документы";
+- не стирает metadata из search item, если detail fetch не удался;
+- не логинится и не обходит captcha.
+
+### Merge priority в ingest
+
+В `research-discovered` действует жёсткий приоритет источников:
+
+1. SOAP structured fields, если поле реально заполнено.
+2. Public detail metadata.
+3. Public search metadata.
+4. Last resort fallback: `Закупка <registry_number>`.
+
+Важно: placeholder title из SOAP (`Закупка <номер>`) не считается real metadata и не должен перетирать title из public search/detail.
+
+### Public document links fallback
+
+Если `getDocsByReestrNumber` не дал документов, pipeline использует `document_links` из public detail:
+
+- создаёт `procurement_tender_documents`;
+- dedupe идёт по `document_identity_hash`;
+- tracking params в URL не создают дубли;
+- после скачивания `sha256` обновляется в той же строке;
+- поддерживаемые extractor-форматы: PDF, DOCX, XLSX, TXT, HTML, XML.
+
+Это важно, потому что `getDocsIP/getDocsByReestrNumber` по номеру закупки не всегда возвращает полноценный список файлов, а public detail page часто содержит вложения прямо в HTML.
 
 ## CLI Commands
 
@@ -233,12 +288,46 @@ total_numbers: 15
 
 ```bash
 python -m src.tender_research.cli research-discovered \
-  --source seed_file \
-  --seed-file data/eis_seed/registry_numbers.txt \
-  --limit 10 \
-  --web-search \
-  --fetch-pages
+  --source external_public_44fz \
+  --days-back 7 \
+  --limit 30 \
+  --page-size 30
 ```
+
+CLI summary теперь показывает не только итог по batch, но и quality metrics:
+
+- `tenders_with_title`
+- `tenders_with_customer`
+- `tenders_with_publication_date`
+- `tenders_with_nmck`
+- `placeholder_title_count`
+- `public_detail_fetched`
+- `public_document_links_found`
+- `documents_created_from_public_links`
+- `documents_downloaded`
+- `extracted_texts_total`
+
+### Smoke-run для текущего спринта
+
+```bash
+python -m src.tender_research.cli check-network-config
+python -m src.tender_research.cli stats
+python -m src.tender_research.cli research-discovered \
+  --source external_public_44fz \
+  --days-back 7 \
+  --limit 30 \
+  --page-size 30
+python -m src.tender_research.cli stats
+```
+
+Повторный запуск теми же аргументами должен быть idempotent по `tenders`, `customers`, `documents`, `search_queries`.
+
+## Known Limitations
+
+- DuckDuckGo HTML intentionally не трогаем в этом спринте.
+- Для некоторых карточек customer INN/KPP может не быть в public HTML.
+- `documents.html` строится только для очевидных URL-patterns публичной карточки.
+- Если public site изменит HTML-структуру, parser может потребовать новую fixture и обновление regex/селекторов.
 
 ### collect-registry-numbers (external collector)
 

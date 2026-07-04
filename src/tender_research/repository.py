@@ -109,11 +109,42 @@ class TenderRepository:
     def count_tenders(self) -> int:
         return self._session.execute(select(func.count(ProcurementTender.id))).scalar() or 0
 
+    def count_tenders_with_customer(self) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTender.id)).where(ProcurementTender.customer_name.is_not(None))
+        ).scalar() or 0
+
+    def count_tenders_with_publication_date(self) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTender.id)).where(ProcurementTender.publication_date.is_not(None))
+        ).scalar() or 0
+
+    def count_tenders_with_nmck(self) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTender.id)).where(ProcurementTender.nmck_amount.is_not(None))
+        ).scalar() or 0
+
+    def count_tenders_with_real_title(self) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTender.id)).where(
+                ProcurementTender.title.is_not(None),
+                ~ProcurementTender.title.like("Закупка %"),
+            )
+        ).scalar() or 0
+
+    def count_placeholder_titles(self) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTender.id)).where(
+                ProcurementTender.title.like("Закупка %")
+            )
+        ).scalar() or 0
+
     # ── ProcurementCustomer ──
 
     def upsert_customer(self, data: dict) -> ProcurementCustomer:
         inn = data.get("inn")
         kpp = data.get("kpp")
+        normalized_name = _normalize_customer_name(data.get("name", ""))
         existing = None
         if inn and kpp:
             existing = self._session.execute(
@@ -122,12 +153,23 @@ class TenderRepository:
                     ProcurementCustomer.kpp == kpp,
                 )
             ).scalar_one_or_none()
+        elif normalized_name:
+            query = select(ProcurementCustomer).where(
+                ProcurementCustomer.normalized_name == normalized_name,
+            )
+            region = data.get("region")
+            if region:
+                query = query.where(
+                    (ProcurementCustomer.region == region) | (ProcurementCustomer.region.is_(None))
+                )
+            existing = self._session.execute(query).scalars().first()
         now = datetime.now(timezone.utc)
         if existing:
             existing.last_seen_at = now
             existing.tenders_count += 1
             if "name" in data:
                 existing.name = data["name"]
+                existing.normalized_name = normalized_name
             if "region" in data:
                 existing.region = data["region"]
             if "raw_last_payload" in data:
@@ -141,7 +183,7 @@ class TenderRepository:
             inn=inn,
             kpp=kpp,
             region=data.get("region"),
-            normalized_name=_normalize_customer_name(data.get("name", "")),
+            normalized_name=normalized_name,
             first_seen_at=now,
             last_seen_at=now,
             tenders_count=1,
@@ -260,6 +302,21 @@ class TenderRepository:
                 ProcurementTenderDocument.download_status == status
             )
         ).scalar() or 0
+
+    def count_documents_by_text_status(self, status: str) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTenderDocument.id)).where(
+                ProcurementTenderDocument.text_extraction_status == status
+            )
+        ).scalar() or 0
+
+    def list_top_customers(self, limit: int = 10) -> list[tuple[str, int]]:
+        rows = self._session.execute(
+            select(ProcurementCustomer.name, ProcurementCustomer.tenders_count)
+            .order_by(ProcurementCustomer.tenders_count.desc(), ProcurementCustomer.name.asc())
+            .limit(limit)
+        ).all()
+        return [(row[0], row[1]) for row in rows]
 
     # ── ProcurementTenderSearchQuery ──
 

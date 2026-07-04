@@ -28,9 +28,22 @@ Public44FzSearchStatus = PublicSearchStatus
 PublicTenderSearchItem = PublicTenderSearchItem
 PublicTenderSearchPage = PublicTenderSearchPage
 Public44FzSearchProvider = Public44FzSearchProvider
+extract_reestr_number_from_44fz_card = _extract_reestr_from_card
 
-# Backward-compatible classifier
-classify_public_search_response = _classify_search_html
+def classify_public_search_response(html_content: str) -> str:
+    if not html_content or not html_content.strip():
+        return PublicSearchStatus.EMPTY_RESULTS
+    lower = html_content.lower()
+    if any(marker in lower for marker in ("your browser does not support javascript", "ваш браузер не поддерживает javascript", "<noscript>", "включите javascript")):
+        return PublicSearchStatus.JS_HEAVY
+    classified = _classify_search_html(html_content)
+    if classified == "parsed":
+        return PublicSearchStatus.PARSED
+    if classified == "empty_results":
+        return PublicSearchStatus.EMPTY_RESULTS
+    if classified == "captcha_or_blocked":
+        return PublicSearchStatus.CAPTCHA_OR_BLOCKED
+    return PublicSearchStatus.UNSUPPORTED_LAYOUT
 
 # Backward-compatible fetcher (uses shared provider under the hood)
 _default_provider: Public44FzSearchProvider | None = None
@@ -49,14 +62,14 @@ def fetch_public_44fz_search_page(url: str) -> dict:
     status = result.get("status")
     if status == PublicSearchStatus.SUCCESS:
         html_content = result.get("html")
-        classification = _classify_search_html(html_content) if html_content else "empty_results"
+        classification = classify_public_search_response(html_content or "")
         return {
             "status": classification,
-            "html": html_content if classification == "parsed" else None,
+            "html": html_content if classification == PublicSearchStatus.PARSED else None,
             "error": None,
         }
     return {
-        "status": PublicSearchStatus.NETWORK_ERROR,
+        "status": status or PublicSearchStatus.NETWORK_ERROR,
         "html": None,
         "error": result.get("error"),
     }

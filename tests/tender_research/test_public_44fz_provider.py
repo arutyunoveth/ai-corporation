@@ -121,7 +121,7 @@ class TestPublic44FzProvider:
             page=2,
             page_size=30,
         )
-        assert "searchString=" in url or "searchString" in url
+        assert "searchString" not in url
         assert "publishDateFrom=" in url
         assert "publishDateTo=" in url
         assert "pageNumber=2" in url

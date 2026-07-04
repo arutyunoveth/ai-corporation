@@ -7,10 +7,11 @@ import re
 import ssl
 import time
 from dataclasses import dataclass, field
+from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urljoin, urlparse
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,12 @@ class PublicSearchStatus:
     PARSE_ERROR = "parse_error"
     EMPTY = "empty"
     NETWORK_ERROR = "network_error"
+    PARSED = "parsed"
+    MANUAL_OPEN_REQUIRED = "manual_open_required"
+    UNSUPPORTED_LAYOUT = "unsupported_layout"
+    EMPTY_RESULTS = "empty_results"
+    CAPTCHA_OR_BLOCKED = "captcha_or_blocked"
+    JS_HEAVY = "js_heavy"
 
 
 @dataclass
@@ -48,11 +55,48 @@ class PublicTenderSearchItem:
     title: str | None = None
     customer_name: str | None = None
     customer_inn: str | None = None
-    publication_date: str | None = None
-    application_deadline: str | None = None
-    nmck_amount: float | None = None
+    customer_kpp: str | None = None
+    publication_date: datetime | None = None
+    application_deadline: datetime | None = None
+    nmck_amount: Decimal | float | None = None
+    law_type: str = "44fz"
     source_url: str | None = None
-    raw: dict[str, Any] | None = None
+    card_url: str | None = None
+    is_demo: bool = False
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PublicDocumentLink:
+    title: str | None = None
+    file_name: str | None = None
+    url: str = ""
+    content_type: str | None = None
+    size_bytes: int | None = None
+    size_text: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PublicTenderDetail:
+    registry_number: str | None = None
+    title: str | None = None
+    customer_name: str | None = None
+    customer_inn: str | None = None
+    customer_kpp: str | None = None
+    publication_date: datetime | None = None
+    application_deadline: datetime | None = None
+    nmck_amount: Decimal | float | None = None
+    law_type: str = "44fz"
+    card_url: str | None = None
+    source_url: str | None = None
+    document_links: list[PublicDocumentLink] = field(default_factory=list)
+    raw_html_path: str | None = None
+    raw: dict[str, Any] = field(default_factory=dict)
+    network_status: str = PublicSearchStatus.SUCCESS
+    error_message: str | None = None
+    common_info_html: str | None = None
+    documents_html: str | None = None
 
 
 @dataclass
@@ -152,7 +196,7 @@ class Public44FzSearchProvider:
             )
 
         cards = parse_44fz_search_results(fetch_result["html"])
-        items = [self._card_to_item(c) for c in cards]
+        items = [self._card_to_item(c, search_url=url) for c in cards]
         has_next = len(cards) >= page_size
 
         return PublicTenderSearchPage(
@@ -208,7 +252,6 @@ class Public44FzSearchProvider:
         if date_to is None:
             date_to = date.today()
         params = {
-            "searchString": query or "",
             "morphology": "on",
             "sortDirection": "false",
             flag: "on",
@@ -217,6 +260,8 @@ class Public44FzSearchProvider:
             "pageNumber": str(page),
             "recordsPerPage": str(min(max(page_size, 1), MAX_PAGE_SIZE)),
         }
+        if query:
+            params["searchString"] = query
         return f"https://{EIS_44FZ_HOST}{EIS_44FZ_SEARCH_PATH}?{urlencode(params)}"
 
     def _fetch_page(self, url: str) -> dict[str, Any]:
@@ -274,8 +319,68 @@ class Public44FzSearchProvider:
 
         return {"status": PublicSearchStatus.SUCCESS, "html": html_content, "error": None}
 
+    def fetch_detail(
+        self,
+        item_or_url: PublicTenderSearchItem | str | None = None,
+        registry_number: str | None = None,
+        card_url: str | None = None,
+    ) -> PublicTenderDetail:
+        item = item_or_url if isinstance(item_or_url, PublicTenderSearchItem) else None
+        if isinstance(item_or_url, str) and not card_url:
+            card_url = item_or_url
+        resolved_registry = registry_number or (item.registry_number if item else None)
+        resolved_card_url = card_url or (item.card_url if item else None) or (item.source_url if item else None)
+        if not resolved_card_url and resolved_registry:
+            resolved_card_url = _build_default_card_url(resolved_registry)
+
+        detail = PublicTenderDetail(
+            registry_number=resolved_registry,
+            card_url=resolved_card_url,
+            source_url=(item.source_url if item else None) or resolved_card_url,
+            law_type=(item.law_type if item else "44fz") or "44fz",
+            title=item.title if item else None,
+            customer_name=item.customer_name if item else None,
+            customer_inn=item.customer_inn if item else None,
+            customer_kpp=item.customer_kpp if item else None,
+            publication_date=item.publication_date if item else None,
+            application_deadline=item.application_deadline if item else None,
+            nmck_amount=item.nmck_amount if item else None,
+            network_status=PublicSearchStatus.SUCCESS,
+            raw={"search_item": _search_item_to_json_dict(item) if item else None},
+        )
+        if not resolved_card_url:
+            detail.network_status = PublicSearchStatus.NETWORK_ERROR
+            detail.error_message = "No card_url or registry_number available for detail fetch"
+            return detail
+
+        common_result = self._fetch_page(resolved_card_url)
+        common_status = common_result.get("status") or PublicSearchStatus.NETWORK_ERROR
+        detail.network_status = common_status
+        if common_status != PublicSearchStatus.SUCCESS or not common_result.get("html"):
+            detail.error_message = common_result.get("error")
+            return detail
+
+        common_html = common_result["html"]
+        detail.common_info_html = common_html
+        detail.raw["common_info_url"] = resolved_card_url
+        _merge_detail_metadata(detail, _parse_detail_metadata(common_html, resolved_card_url))
+
+        documents_url = _build_documents_url(resolved_card_url, detail.registry_number)
+        detail.raw["documents_url"] = documents_url
+        if documents_url:
+            docs_result = self._fetch_page(documents_url)
+            detail.raw["documents_fetch_status"] = docs_result.get("status")
+            if docs_result.get("status") == PublicSearchStatus.SUCCESS and docs_result.get("html"):
+                documents_html = docs_result["html"]
+                detail.documents_html = documents_html
+                detail.document_links = _parse_document_links(documents_html, documents_url)
+            else:
+                detail.raw["documents_fetch_error"] = docs_result.get("error")
+
+        return detail
+
     @staticmethod
-    def _card_to_item(card: dict[str, Any]) -> PublicTenderSearchItem:
+    def _card_to_item(card: dict[str, Any], search_url: str | None = None) -> PublicTenderSearchItem:
         nmck = None
         raw_price = card.get("initial_price")
         if raw_price is not None:
@@ -283,16 +388,21 @@ class Public44FzSearchProvider:
                 nmck = float(raw_price)
             except (ValueError, TypeError):
                 nmck = None
+        card_url = card.get("card_url") or card.get("source_url")
         return PublicTenderSearchItem(
             registry_number=card.get("reestr_number"),
             purchase_number=card.get("notice_number"),
             title=card.get("title"),
             customer_name=card.get("customer_name"),
-            publication_date=card.get("publication_date"),
-            application_deadline=card.get("deadline"),
+            customer_inn=card.get("customer_inn"),
+            customer_kpp=card.get("customer_kpp"),
+            publication_date=_parse_public_datetime(card.get("publication_date")),
+            application_deadline=_parse_public_datetime(card.get("deadline")),
             nmck_amount=nmck,
-            source_url=card.get("source_url"),
-            raw=card,
+            law_type=card.get("law") or "44fz",
+            source_url=search_url or card_url,
+            card_url=card_url,
+            raw={**card, "search_url": search_url},
         )
 
     @staticmethod
@@ -465,6 +575,8 @@ def _parse_single_entry(entry_html: str, full_html: str) -> dict[str, Any] | Non
             "организация",
         ),
     )
+    customer_inn = _first_matching_value(pairs, ("инн", "инн заказчика"))
+    customer_kpp = _first_matching_value(pairs, ("кпп", "кпп заказчика"))
     if not customer_name:
         org_match = re.search(r'Заказчик[^:]*:\s*([^<]+)', entry_html, re.IGNORECASE)
         if org_match:
@@ -499,32 +611,35 @@ def _parse_single_entry(entry_html: str, full_html: str) -> dict[str, Any] | Non
         _first_matching_value(pairs, ("окончание подачи заявок", "дата окончания срока подачи заявок", "срок подачи заявок"))
     )
 
-    source_url = None
+    card_url = None
     href_match = re.search(r'href="(https://[^"]*(?:zakupki\.gov\.ru)[^"]*)"', entry_html)
     if href_match:
-        source_url = href_match.group(1)
-    if not source_url:
+        card_url = href_match.group(1)
+    if not card_url:
         href_match = re.search(r'href="([^"]*(?:view|common-info)[^"]*)"', entry_html)
         if href_match:
-            source_url = urljoin("https://zakupki.gov.ru", href_match.group(1))
+            card_url = urljoin("https://zakupki.gov.ru", href_match.group(1))
 
     procedure_status = _strip_html(
         _extract_between(entry_html, '<div class="registry-entry__header-mid__title text-normal">', "</div>")
         or _extract_between(entry_html, '<div class="registry-entry__header-mid__title">', "</div>")
     )
-    procedure_type = _extract_procedure_type(source_url)
+    procedure_type = _extract_procedure_type(card_url)
 
     return {
         "title": title,
         "notice_number": notice_number,
         "reestr_number": reestr_number or notice_number,
         "customer_name": customer_name,
+        "customer_inn": customer_inn,
+        "customer_kpp": customer_kpp,
         "initial_price": initial_price,
         "publication_date": publication_date,
         "deadline": deadline,
         "procedure_type": procedure_type,
         "status": procedure_status or None,
-        "source_url": source_url,
+        "source_url": card_url,
+        "card_url": card_url,
         "law": "44fz",
     }
 
@@ -650,19 +765,249 @@ def _fallback_extract_by_number_patterns(html_str: str) -> list[dict[str, Any]]:
         match = number_pattern.search(href)
         if match and match.group(1) not in seen_numbers:
             seen_numbers.add(match.group(1))
+            card_url = href if href.startswith("http") else urljoin("https://zakupki.gov.ru", href)
             cards.append({
-                "title": f"Закупка № {match.group(1)}",
+                "title": None,
                 "notice_number": match.group(1),
                 "reestr_number": match.group(1),
                 "customer_name": None,
+                "customer_inn": None,
+                "customer_kpp": None,
                 "initial_price": None,
                 "publication_date": None,
                 "deadline": None,
                 "procedure_type": _extract_procedure_type(
-                    href if href.startswith("http") else urljoin("https://zakupki.gov.ru", href)
+                    card_url
                 ),
                 "status": None,
-                "source_url": href if href.startswith("http") else urljoin("https://zakupki.gov.ru", href),
+                "source_url": card_url,
+                "card_url": card_url,
                 "law": "44fz",
             })
     return cards
+
+
+def _parse_public_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    cleaned = _strip_html(value).replace("(МСК)", "").strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    for fmt in ("%d.%m.%Y %H:%M", "%d.%m.%Y %H:%M:%S", "%d.%m.%Y", "%Y-%m-%d"):
+        try:
+            parsed = datetime.strptime(cleaned, fmt)
+            return parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _build_default_card_url(registry_number: str) -> str:
+    return f"https://{EIS_44FZ_HOST}/epz/order/notice/ea44/view/common-info.html?regNumber={registry_number}"
+
+
+def _build_documents_url(card_url: str | None, registry_number: str | None) -> str | None:
+    if card_url:
+        if "documents.html" in card_url:
+            return card_url
+        if "common-info.html" in card_url:
+            return card_url.replace("common-info.html", "documents.html")
+        if re.search(r"/view(?:\.html)?", card_url):
+            return re.sub(r"/view(?:\.html)?", "/view/documents.html", card_url, count=1)
+    if registry_number:
+        return f"https://{EIS_44FZ_HOST}/epz/order/notice/ea44/view/documents.html?regNumber={registry_number}"
+    return None
+
+
+def _merge_detail_metadata(detail: PublicTenderDetail, parsed: dict[str, Any]) -> None:
+    for field_name in (
+        "registry_number",
+        "title",
+        "customer_name",
+        "customer_inn",
+        "customer_kpp",
+        "publication_date",
+        "application_deadline",
+        "nmck_amount",
+        "law_type",
+        "card_url",
+    ):
+        value = parsed.get(field_name)
+        if value not in (None, "", []):
+            setattr(detail, field_name, value)
+    if parsed:
+        detail.raw["detail_metadata"] = _json_safe_mapping(parsed)
+
+
+def _parse_detail_metadata(html_str: str, card_url: str | None) -> dict[str, Any]:
+    title = _extract_card_main_info_value(html_str, "Объект закупки")
+    customer_name = _extract_card_main_info_value(html_str, "Заказчик")
+    if not customer_name:
+        customer_name = _extract_section_info_value(
+            html_str,
+            ("Организация, осуществляющая размещение", "Заказчик"),
+        )
+    publication_date = _parse_public_datetime(_extract_card_main_info_value(html_str, "Размещено"))
+    application_deadline = _parse_public_datetime(_extract_card_main_info_value(html_str, "Окончание подачи заявок"))
+    nmck_text = _extract_card_main_info_value(html_str, "Начальная цена")
+    nmck_amount = _extract_price(nmck_text)
+    customer_inn, customer_kpp = _extract_inn_kpp(html_str)
+    registry_number = _extract_registry_from_url_or_html(card_url, html_str)
+    return {
+        "registry_number": registry_number,
+        "title": title,
+        "customer_name": customer_name,
+        "customer_inn": customer_inn,
+        "customer_kpp": customer_kpp,
+        "publication_date": publication_date,
+        "application_deadline": application_deadline,
+        "nmck_amount": nmck_amount,
+        "law_type": "44fz",
+        "card_url": card_url,
+    }
+
+
+def _extract_card_main_info_value(html_str: str, label: str) -> str | None:
+    pattern = re.compile(
+        rf'<span[^>]*class="[^"]*\bcardMainInfo__title\b[^"]*"[^>]*>\s*{re.escape(label)}\s*</span>\s*'
+        rf'<span[^>]*class="[^"]*\bcardMainInfo__content\b[^"]*"[^>]*>(.*?)</span>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(html_str)
+    if match:
+        return _strip_html(match.group(1))
+    return None
+
+
+def _extract_section_info_value(html_str: str, labels: tuple[str, ...]) -> str | None:
+    for label in labels:
+        pattern = re.compile(
+            rf'<span[^>]*class="[^"]*\bsection__title\b[^"]*"[^>]*>\s*{re.escape(label)}\s*</span>\s*'
+            rf'<span[^>]*class="[^"]*\bsection__info\b[^"]*"[^>]*>(.*?)</span>',
+            re.IGNORECASE | re.DOTALL,
+        )
+        match = pattern.search(html_str)
+        if match:
+            return _strip_html(match.group(1))
+    return None
+
+
+def _extract_inn_kpp(html_str: str) -> tuple[str | None, str | None]:
+    inn_match = re.search(r'ИНН:\s*</span>\s*<span>(\d{10,12})</span>', html_str, re.IGNORECASE)
+    kpp_match = re.search(r'КПП:\s*</span>\s*<span>(\d{9})</span>', html_str, re.IGNORECASE)
+    return (
+        inn_match.group(1) if inn_match else None,
+        kpp_match.group(1) if kpp_match else None,
+    )
+
+
+def _extract_registry_from_url_or_html(card_url: str | None, html_str: str) -> str | None:
+    if card_url:
+        parsed = urlparse(card_url)
+        reg_number = parse_qs(parsed.query).get("regNumber")
+        if reg_number:
+            return reg_number[0]
+    return _extract_reestr_from_text(html_str)
+
+
+def _parse_document_links(html_str: str, page_url: str) -> list[PublicDocumentLink]:
+    document_links: list[PublicDocumentLink] = []
+    attachment_blocks = re.finditer(
+        r'<div[^>]*class="[^"]*\battachment\b[^"]*"[^>]*>(.*?)</div>\s*</div>',
+        html_str,
+        re.IGNORECASE | re.DOTALL,
+    )
+    for block_match in attachment_blocks:
+        block = block_match.group(1)
+        link_match = None
+        for candidate in re.finditer(
+            r'<a[^>]*href="([^"]+)"[^>]*(?:title="([^"]*)")?[^>]*>(.*?)</a>',
+            block,
+            re.IGNORECASE | re.DOTALL,
+        ):
+            candidate_url = urljoin(page_url, candidate.group(1))
+            if "download" in candidate_url.lower():
+                link_match = candidate
+                break
+        if not link_match:
+            continue
+        url = urljoin(page_url, link_match.group(1))
+        anchor_tag = link_match.group(0)
+        title_match = re.search(r'title="([^"]*)"', anchor_tag, re.IGNORECASE)
+        file_name = _strip_html(title_match.group(1) if title_match else link_match.group(2))
+        title = _strip_html(link_match.group(3))
+        uid_match = re.search(r"[?&]uid=([^&]+)", url, re.IGNORECASE)
+        icon_match = re.search(r'<img[^>]*alt="([^"]+)"', block, re.IGNORECASE)
+        document_links.append(
+            PublicDocumentLink(
+                title=title or file_name or None,
+                file_name=file_name or _derive_file_name_from_url(url),
+                url=url,
+                content_type=_guess_content_type(file_name or url, icon_match.group(1) if icon_match else None),
+                size_bytes=None,
+                size_text=None,
+                raw={
+                    "uid": uid_match.group(1) if uid_match else None,
+                    "icon_alt": icon_match.group(1) if icon_match else None,
+                },
+            )
+        )
+    return document_links
+
+
+def _derive_file_name_from_url(url: str) -> str | None:
+    parsed = urlparse(url)
+    qs_file_name = parse_qs(parsed.query).get("fileName")
+    if qs_file_name:
+        return qs_file_name[0]
+    match = re.search(r"/([^/?#]+)$", parsed.path)
+    return match.group(1) if match else None
+
+
+def _guess_content_type(name_or_url: str, icon_alt: str | None = None) -> str | None:
+    lower = (name_or_url or "").lower()
+    if lower.endswith(".pdf") or (icon_alt and "acrobat" in icon_alt.lower()):
+        return "application/pdf"
+    if lower.endswith(".docx") or (icon_alt and "word" in icon_alt.lower()):
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if lower.endswith(".xlsx") or lower.endswith(".xls") or (icon_alt and "excel" in icon_alt.lower()):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if lower.endswith(".txt"):
+        return "text/plain"
+    if lower.endswith(".html") or lower.endswith(".htm"):
+        return "text/html"
+    if lower.endswith(".xml"):
+        return "application/xml"
+    return None
+
+
+def _search_item_to_json_dict(item: PublicTenderSearchItem | None) -> dict[str, Any] | None:
+    if item is None:
+        return None
+    return {
+        "registry_number": item.registry_number,
+        "purchase_number": item.purchase_number,
+        "title": item.title,
+        "customer_name": item.customer_name,
+        "customer_inn": item.customer_inn,
+        "customer_kpp": item.customer_kpp,
+        "publication_date": item.publication_date.isoformat() if item.publication_date else None,
+        "application_deadline": item.application_deadline.isoformat() if item.application_deadline else None,
+        "nmck_amount": float(item.nmck_amount) if item.nmck_amount is not None else None,
+        "law_type": item.law_type,
+        "source_url": item.source_url,
+        "card_url": item.card_url,
+        "is_demo": item.is_demo,
+        "raw": item.raw,
+    }
+
+
+def _json_safe_mapping(data: dict[str, Any]) -> dict[str, Any]:
+    safe: dict[str, Any] = {}
+    for key, value in data.items():
+        if isinstance(value, datetime):
+            safe[key] = value.isoformat()
+        elif isinstance(value, Decimal):
+            safe[key] = float(value)
+        else:
+            safe[key] = value
+    return safe

@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -20,13 +22,22 @@ from src.tender_research.errors import (
     EisNoDataError,
     classify_eis_error,
 )
+from src.tender_research.providers.public_44fz_search import (
+    Public44FzSearchProvider,
+    PublicTenderDetail,
+)
 from src.tender_research.providers.duckduckgo_html import DuckDuckGoHtmlSearchProvider
 from src.tender_research.providers.manual_urls import ManualUrlsSearchProvider
 from src.tender_research.query_builder import build_search_queries
 from src.tender_research.rate_limit import RateLimiter
-from src.tender_research.registry_discovery import DiscoveryResult, RegistryNumberDiscovery
+from src.tender_research.registry_discovery import (
+    DiscoveredRegistryNumber,
+    DiscoveryResult,
+    RegistryNumberDiscovery,
+)
 from src.tender_research.repository import TenderRepository
 from src.tender_research.search_provider import SearchProvider
+from src.tender_research.schemas import EisDocumentRaw, EisTenderRaw, TenderUpsertData
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +61,13 @@ class TenderResearchPipeline:
         self._web_fetcher = web_fetcher or RequestsFetcher()
         self._search_limiter = RateLimiter(delay_seconds=self._config.web_search_delay_seconds)
         self._fetch_limiter = RateLimiter(delay_seconds=self._config.web_fetch_delay_seconds)
+        self._public_provider = Public44FzSearchProvider(
+            timeout_seconds=self._config.public_search_timeout_seconds,
+            delay_seconds=self._config.public_search_delay_seconds,
+            bypass_proxy=self._config.public_search_bypass_proxy,
+            no_proxy_domains=self._config.public_search_no_proxy_domains,
+        )
+        self._last_discovered_batch_summary: dict[str, Any] | None = None
 
     # ── Step 1: Ingest tenders from EIS ──
 
@@ -168,31 +186,329 @@ class TenderResearchPipeline:
             seed_file=seed_file,
             page_size=page_size,
         )
-        registry_numbers = [d.registry_number for d in disc_result.numbers]
-        if not registry_numbers:
+        if not disc_result.numbers:
             logger.warning("No registry numbers discovered, nothing to do")
+            self._last_discovered_batch_summary = self._build_discovered_batch_summary(disc_result)
             return []
 
-        result = self.ingest_eis_by_registry_numbers(
-            registry_numbers=registry_numbers,
-            limit=None,
-        )
-        logger.info(
-            "Registry ingest: saved=%d skipped=%d errors=%d",
-            result["saved"], result["skipped"], len(result["errors"]),
-        )
-
         results: list[dict[str, int | str]] = []
-        for rn in registry_numbers:
-            tender = self._repo.get_tender_by_external("eis", rn)
-            if not tender:
-                continue
-            r = self.run_full(tender.id)
-            r["registry_number"] = rn
-            r["title"] = tender.title
-            results.append(r)
+        summary = self._build_discovered_batch_summary(disc_result)
+        for discovered in disc_result.numbers:
+            try:
+                tender, tender_summary = self._ingest_discovered_tender(discovered)
+                for key, value in tender_summary.items():
+                    if isinstance(value, int):
+                        summary[key] = summary.get(key, 0) + value
+                self._session.commit()
+                run_result = self.run_full(tender.id)
+                summary["documents_downloaded"] += int(run_result.get("documents_downloaded", 0) or 0)
+                summary["failed_document_downloads"] += int(run_result.get("documents_failed", 0) or 0)
+                run_result["registry_number"] = discovered.registry_number
+                run_result["title"] = tender.title
+                results.append(run_result)
+            except Exception as exc:
+                self._session.rollback()
+                logger.exception("Failed to ingest discovered tender %s", discovered.registry_number)
+                summary["errors"].append(f"{discovered.registry_number}: {exc}")
+                results.append({
+                    "registry_number": discovered.registry_number,
+                    "error": str(exc),
+                })
+
+        self._last_discovered_batch_summary = summary
+        summary["extracted_texts_total"] = self._repo.count_documents_by_text_status("extracted")
+        summary["unsupported_documents"] = self._repo.count_documents_by_text_status("unsupported")
+        summary["empty_text_documents"] = self._repo.count_documents_by_text_status("empty")
 
         return results
+
+    @property
+    def last_discovered_batch_summary(self) -> dict[str, Any] | None:
+        return self._last_discovered_batch_summary
+
+    def _build_discovered_batch_summary(self, disc_result: DiscoveryResult) -> dict[str, Any]:
+        return {
+            "discovered_count": disc_result.discovered_count or len(disc_result.numbers),
+            "selected_source": disc_result.selected_source,
+            "pages_read": disc_result.pages_read,
+            "tenders_created": 0,
+            "tenders_updated": 0,
+            "tenders_with_title": 0,
+            "tenders_with_customer": 0,
+            "tenders_with_publication_date": 0,
+            "tenders_with_nmck": 0,
+            "placeholder_title_count": 0,
+            "customers_created": 0,
+            "public_detail_fetched": 0,
+            "public_detail_failed": 0,
+            "public_document_links_found": 0,
+            "documents_created_from_public_links": 0,
+            "documents_downloaded": 0,
+            "extracted_texts_total": 0,
+            "unsupported_documents": 0,
+            "empty_text_documents": 0,
+            "failed_document_downloads": 0,
+            "errors": [],
+        }
+
+    def _ingest_discovered_tender(
+        self,
+        discovered: DiscoveredRegistryNumber,
+    ) -> tuple[Any, dict[str, int]]:
+        summary = {
+            "tenders_created": 0,
+            "tenders_updated": 0,
+            "tenders_with_title": 0,
+            "tenders_with_customer": 0,
+            "tenders_with_publication_date": 0,
+            "tenders_with_nmck": 0,
+            "placeholder_title_count": 0,
+            "customers_created": 0,
+            "public_detail_fetched": 0,
+            "public_detail_failed": 0,
+            "public_document_links_found": 0,
+            "documents_created_from_public_links": 0,
+        }
+        existing_tender = self._repo.get_tender_by_external("eis", discovered.registry_number)
+        detail = self._public_provider.fetch_detail(discovered.card_url, registry_number=discovered.registry_number)
+        if detail.network_status == "success":
+            summary["public_detail_fetched"] += 1
+        else:
+            summary["public_detail_failed"] += 1
+
+        soap_raw, soap_status = self._fetch_eis_by_registry_number_safe(discovered.registry_number)
+        if detail.document_links:
+            summary["public_document_links_found"] += len(detail.document_links)
+
+        upsert_data = self._build_upsert_from_discovery(discovered, detail, soap_raw, soap_status)
+        tender = self._repo.upsert_tender(upsert_data.tender)
+        summary["tenders_created" if existing_tender is None else "tenders_updated"] += 1
+        if upsert_data.customer:
+            before_customers = self._repo.count_customers()
+            self._repo.upsert_customer(upsert_data.customer)
+            if self._repo.count_customers() > before_customers:
+                summary["customers_created"] += 1
+        before_docs = self._repo.count_documents()
+        for doc_data in upsert_data.documents:
+            doc_data["tender_id"] = tender.id
+            self._repo.upsert_document(doc_data)
+        summary["documents_created_from_public_links"] += max(0, self._repo.count_documents() - before_docs)
+
+        if soap_raw:
+            self._save_raw_payload(tender, soap_raw)
+        self._save_public_detail_artifacts(tender, detail)
+
+        if tender.title:
+            summary["tenders_with_title"] += 1
+            if _is_placeholder_title(tender.title, discovered.registry_number):
+                summary["placeholder_title_count"] += 1
+        if tender.customer_name:
+            summary["tenders_with_customer"] += 1
+        if tender.publication_date:
+            summary["tenders_with_publication_date"] += 1
+        if tender.nmck_amount is not None:
+            summary["tenders_with_nmck"] += 1
+
+        return tender, summary
+
+    def _fetch_eis_by_registry_number_safe(
+        self,
+        registry_number: str,
+    ) -> tuple[EisTenderRaw | None, str]:
+        try:
+            raw = self._eis.fetch_by_registry_number(registry_number)
+            if raw is None:
+                return None, "not_found"
+            return raw, "success"
+        except EisNoDataError:
+            return None, "no_data"
+        except EisMissingTokenError:
+            return None, "missing_token"
+        except EisConnectionResetError:
+            return None, "connection_reset"
+        except Exception as exc:
+            logger.warning("EIS registry fetch failed for %s: %s", registry_number, exc)
+            return None, "error"
+
+    def _build_upsert_from_discovery(
+        self,
+        discovered: DiscoveredRegistryNumber,
+        detail: PublicTenderDetail,
+        soap_raw: EisTenderRaw | None,
+        soap_status: str,
+    ) -> TenderUpsertData:
+        soap_documents = self._load_soap_documents(soap_raw)
+        public_documents = [] if soap_documents else self._public_documents_to_rows(detail)
+
+        soap_title = None
+        if soap_raw and soap_raw.title and not _is_placeholder_title(soap_raw.title, discovered.registry_number):
+            soap_title = soap_raw.title
+
+        title = _first_non_empty(
+            soap_title,
+            detail.title,
+            discovered.tender_title,
+            f"Закупка {discovered.registry_number}",
+        )
+        customer_name = _first_non_empty(
+            getattr(soap_raw, "customer_name", None),
+            detail.customer_name,
+            discovered.customer_name,
+        )
+        customer_inn = _first_non_empty(
+            getattr(soap_raw, "customer_inn", None),
+            detail.customer_inn,
+            discovered.customer_inn,
+        )
+        customer_kpp = _first_non_empty(
+            getattr(soap_raw, "customer_kpp", None),
+            detail.customer_kpp,
+            discovered.customer_kpp,
+        )
+        publication_date = _first_non_empty(
+            getattr(soap_raw, "publication_date", None),
+            detail.publication_date,
+            discovered.publication_date,
+        )
+        application_deadline = _first_non_empty(
+            getattr(soap_raw, "application_deadline", None),
+            detail.application_deadline,
+            discovered.application_deadline,
+        )
+        nmck_amount = _first_non_empty(
+            getattr(soap_raw, "nmck_amount", None),
+            detail.nmck_amount,
+            discovered.nmck_amount,
+        )
+        card_url = _first_non_empty(getattr(soap_raw, "eis_url", None), detail.card_url, discovered.card_url)
+        platform_url = _first_non_empty(detail.source_url, discovered.source_url, card_url)
+        law_type = _first_non_empty(getattr(soap_raw, "law_type", None), detail.law_type, discovered.law_type, "44fz")
+        raw_payload = self._build_merged_raw_payload(discovered, detail, soap_raw, soap_status)
+
+        tender_data = {
+            "source": "eis",
+            "external_id": discovered.registry_number,
+            "registry_number": discovered.registry_number,
+            "purchase_number": _first_non_empty(getattr(soap_raw, "purchase_number", None), discovered.purchase_number),
+            "law_type": law_type,
+            "title": title,
+            "description": getattr(soap_raw, "description", None),
+            "customer_name": customer_name,
+            "customer_inn": customer_inn,
+            "customer_kpp": customer_kpp,
+            "region": getattr(soap_raw, "region", None),
+            "platform_name": "zakupki.gov.ru",
+            "platform_url": platform_url,
+            "eis_url": card_url,
+            "nmck_amount": float(nmck_amount) if nmck_amount is not None else None,
+            "currency": getattr(soap_raw, "currency", None) or "RUB",
+            "publication_date": publication_date,
+            "application_deadline": application_deadline,
+            "auction_date": getattr(soap_raw, "auction_date", None),
+            "status": getattr(soap_raw, "status", None),
+            "raw_payload": raw_payload,
+            "content_hash": content_hash((title or "") + (customer_name or "") + discovered.registry_number),
+        }
+        customer_data = None
+        if customer_name:
+            customer_data = {
+                "name": customer_name,
+                "inn": customer_inn,
+                "kpp": customer_kpp,
+                "region": getattr(soap_raw, "region", None),
+                "raw_last_payload": raw_payload,
+            }
+        return TenderUpsertData(
+            tender=tender_data,
+            customer=customer_data,
+            documents=soap_documents or public_documents,
+        )
+
+    def _load_soap_documents(self, soap_raw: EisTenderRaw | None) -> list[dict[str, Any]]:
+        if soap_raw is None:
+            return []
+        documents = []
+        for doc in soap_raw.documents or self._eis.fetch_tender_documents(soap_raw):
+            documents.append({
+                "source_document_id": doc.source_document_id,
+                "file_name": doc.file_name,
+                "file_url": doc.file_url,
+                "content_type": doc.content_type,
+                "size_bytes": doc.size_bytes,
+                "raw_meta": doc.raw_meta,
+            })
+        return documents
+
+    def _public_documents_to_rows(self, detail: PublicTenderDetail) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for link in detail.document_links:
+            source_document_id = (link.raw or {}).get("uid")
+            rows.append({
+                "source_document_id": source_document_id or link.url,
+                "file_name": link.file_name or link.title or _derive_doc_name_from_url(link.url),
+                "file_url": link.url,
+                "content_type": link.content_type,
+                "size_bytes": link.size_bytes,
+                "download_status": "pending",
+                "text_extraction_status": "pending",
+                "raw_meta": {
+                    "source": "external_public_44fz_detail",
+                    "title": link.title,
+                    "card_url": detail.card_url,
+                    "raw": link.raw,
+                },
+            })
+        return rows
+
+    def _build_merged_raw_payload(
+        self,
+        discovered: DiscoveredRegistryNumber,
+        detail: PublicTenderDetail,
+        soap_raw: EisTenderRaw | None,
+        soap_status: str,
+    ) -> dict[str, Any]:
+        payload = {
+            "merge_priority": ["soap", "public_detail", "public_search", "fallback"],
+            "soap_status": soap_status,
+            "discovery": _json_safe_discovered(discovered),
+            "public_detail": _json_safe_detail(detail),
+        }
+        if soap_raw and soap_raw.raw_payload is not None:
+            payload["soap_raw_payload"] = soap_raw.raw_payload
+        return payload
+
+    def _save_public_detail_artifacts(self, tender, detail: PublicTenderDetail) -> None:
+        raw_dir = (
+            Path(self._config.data_dir)
+            / "tenders"
+            / "eis"
+            / _safe_dirname(tender.external_id)
+            / "raw"
+        )
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        artifacts = [
+            ("public_detail_common_info", detail.common_info_html, "public_detail_common_info.html"),
+            ("public_detail_documents", detail.documents_html, "public_detail_documents.html"),
+        ]
+        for artifact_type, html_content, file_name in artifacts:
+            if not html_content:
+                continue
+            local_path = raw_dir / file_name
+            local_path.write_text(html_content, encoding="utf-8")
+            self._repo.upsert_artifact({
+                "tender_id": tender.id,
+                "artifact_type": artifact_type,
+                "source": "external_public_44fz",
+                "local_path": str(local_path),
+                "sha256": hashlib.sha256(html_content.encode("utf-8")).hexdigest(),
+                "size_bytes": local_path.stat().st_size,
+                "content_type": "text/html",
+                "raw_meta": {
+                    "registry_number": detail.registry_number,
+                    "card_url": detail.card_url,
+                    "source_url": detail.source_url,
+                },
+            })
 
     # ── Step 2: Download documents ──
 
@@ -519,3 +835,74 @@ class TenderResearchPipeline:
 
 def _safe_dirname(name: str) -> str:
     return "".join(c for c in name if c.isalnum() or c in "_-")[:100] or "unknown"
+
+
+def _first_non_empty(*values):
+    for value in values:
+        if value not in (None, "", [], {}):
+            return value
+    return None
+
+
+def _is_placeholder_title(title: str | None, registry_number: str | None) -> bool:
+    if not title:
+        return False
+    cleaned = title.strip()
+    if registry_number and cleaned == f"Закупка {registry_number}":
+        return True
+    return bool(re.fullmatch(r"Закупка\s+\d{11,25}", cleaned))
+
+
+def _json_safe_discovered(discovered: DiscoveredRegistryNumber) -> dict[str, Any]:
+    return {
+        "registry_number": discovered.registry_number,
+        "purchase_number": discovered.purchase_number,
+        "title": discovered.tender_title,
+        "customer_name": discovered.customer_name,
+        "customer_inn": discovered.customer_inn,
+        "customer_kpp": discovered.customer_kpp,
+        "publication_date": discovered.publication_date.isoformat() if discovered.publication_date else None,
+        "application_deadline": discovered.application_deadline.isoformat() if discovered.application_deadline else None,
+        "nmck_amount": discovered.nmck_amount,
+        "law_type": discovered.law_type,
+        "source_url": discovered.source_url,
+        "card_url": discovered.card_url,
+        "raw": discovered.raw,
+    }
+
+
+def _json_safe_detail(detail: PublicTenderDetail) -> dict[str, Any]:
+    return {
+        "registry_number": detail.registry_number,
+        "title": detail.title,
+        "customer_name": detail.customer_name,
+        "customer_inn": detail.customer_inn,
+        "customer_kpp": detail.customer_kpp,
+        "publication_date": detail.publication_date.isoformat() if detail.publication_date else None,
+        "application_deadline": detail.application_deadline.isoformat() if detail.application_deadline else None,
+        "nmck_amount": float(detail.nmck_amount) if detail.nmck_amount is not None else None,
+        "law_type": detail.law_type,
+        "card_url": detail.card_url,
+        "source_url": detail.source_url,
+        "document_links": [
+            {
+                "title": link.title,
+                "file_name": link.file_name,
+                "url": link.url,
+                "content_type": link.content_type,
+                "size_bytes": link.size_bytes,
+                "size_text": link.size_text,
+                "raw": link.raw,
+            }
+            for link in detail.document_links
+        ],
+        "network_status": detail.network_status,
+        "error_message": detail.error_message,
+    }
+
+
+def _derive_doc_name_from_url(url: str) -> str:
+    match = re.search(r"/([^/?#]+)(?:\?|$)", url)
+    if match:
+        return match.group(1)
+    return "document"

@@ -192,6 +192,10 @@ def _mask_proxy_url(url: str) -> str:
     return url
 
 
+def _serialize_dt(value):
+    return value.isoformat() if hasattr(value, "isoformat") else value
+
+
 def cmd_stats(args: argparse.Namespace) -> None:
     session = _get_session()
     repo = TenderRepository(session)
@@ -203,9 +207,18 @@ def cmd_stats(args: argparse.Namespace) -> None:
             if f.is_file():
                 data_size += f.stat().st_size
     print(f"tenders_total: {repo.count_tenders()}")
+    print(f"tenders_with_real_title: {repo.count_tenders_with_real_title()}")
+    print(f"tenders_with_customer: {repo.count_tenders_with_customer()}")
+    print(f"tenders_with_publication_date: {repo.count_tenders_with_publication_date()}")
+    print(f"tenders_with_nmck: {repo.count_tenders_with_nmck()}")
+    print(f"placeholder_title_count: {repo.count_placeholder_titles()}")
     print(f"customers_total: {repo.count_customers()}")
     print(f"documents_total: {repo.count_documents()}")
     print(f"documents_downloaded: {repo.count_documents_by_status('downloaded')}")
+    print(f"failed_document_downloads: {repo.count_documents_by_status('failed')}")
+    print(f"extracted_texts_total: {repo.count_documents_by_text_status('extracted')}")
+    print(f"unsupported_documents: {repo.count_documents_by_text_status('unsupported')}")
+    print(f"empty_text_documents: {repo.count_documents_by_text_status('empty')}")
     print(f"search_queries_total: {repo.count_search_queries()}")
     print(f"search_results_total: {repo.count_search_results()}")
     print(f"web_pages_fetched: {repo.count_web_pages_by_status('fetched')}")
@@ -378,6 +391,16 @@ def cmd_discover_registry_numbers(args: argparse.Namespace) -> None:
                 {
                     "registry_number": rn.registry_number,
                     "title": rn.tender_title,
+                    "purchase_number": rn.purchase_number,
+                    "customer_name": rn.customer_name,
+                    "customer_inn": rn.customer_inn,
+                    "customer_kpp": rn.customer_kpp,
+                    "publication_date": _serialize_dt(rn.publication_date),
+                    "application_deadline": _serialize_dt(rn.application_deadline),
+                    "nmck_amount": rn.nmck_amount,
+                    "law_type": rn.law_type,
+                    "source_url": rn.source_url,
+                    "card_url": rn.card_url,
                     "source": rn.source,
                     "is_demo": rn.is_demo,
                 }
@@ -444,8 +467,14 @@ def cmd_collect_registry_numbers(args: argparse.Namespace) -> None:
                     "purchase_number": item.purchase_number,
                     "title": item.title,
                     "customer_name": item.customer_name,
-                    "publication_date": item.publication_date,
+                    "customer_inn": item.customer_inn,
+                    "customer_kpp": item.customer_kpp,
+                    "publication_date": _serialize_dt(item.publication_date),
+                    "application_deadline": _serialize_dt(item.application_deadline),
+                    "nmck_amount": float(item.nmck_amount) if item.nmck_amount is not None else None,
+                    "law_type": item.law_type,
                     "source_url": item.source_url,
+                    "card_url": item.card_url,
                     "raw": item.raw,
                 })
                 if args.limit and len(items) >= args.limit:
@@ -538,6 +567,34 @@ def cmd_research_discovered(args: argparse.Namespace) -> None:
     ok = sum(1 for r in result if "error" not in r)
     failed = sum(1 for r in result if "error" in r)
     print(f"Discovered batch complete: {ok} ok, {failed} failed")
+    summary = pipeline.last_discovered_batch_summary or {}
+    if summary:
+        for key in (
+            "discovered_count",
+            "selected_source",
+            "pages_read",
+            "tenders_created",
+            "tenders_updated",
+            "tenders_with_title",
+            "tenders_with_customer",
+            "tenders_with_publication_date",
+            "tenders_with_nmck",
+            "placeholder_title_count",
+            "customers_created",
+            "public_detail_fetched",
+            "public_detail_failed",
+            "public_document_links_found",
+            "documents_created_from_public_links",
+            "documents_downloaded",
+            "extracted_texts_total",
+            "unsupported_documents",
+            "empty_text_documents",
+            "failed_document_downloads",
+        ):
+            if key in summary:
+                print(f"{key}: {summary[key]}")
+        for error in summary.get("errors", [])[:10]:
+            print(f"error: {error}")
     for r in result:
         status = "OK" if "error" not in r else f"FAIL: {r['error']}"
         title = r.get("title", r.get("registry_number", "?"))
