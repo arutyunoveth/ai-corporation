@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     public_search_delay_seconds: float = 3.0
     public_search_timeout_seconds: int = 30
     public_search_bypass_proxy: bool = False
+    public_search_page_size: int = 30
+    public_search_no_proxy_domains: str = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru"
     allow_demo_discovery: bool = True
 
     model_config = SettingsConfigDict(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -18,6 +19,15 @@ _load_dotenv_local_result = load_dotenv(".env.local", override=False)
 
 from src.tender_research.config import load_config
 from src.tender_research.pipeline import TenderResearchPipeline
+from src.tender_research.providers.public_44fz_search import (
+    Public44FzSearchProvider,
+    PublicSearchStatus,
+)
+from src.tender_research.registry_discovery import (
+    DiscoveryResult,
+    RegistryNumberDiscovery,
+    SourceType,
+)
 from src.tender_research.repository import TenderRepository
 from src.shared.config.settings import get_settings
 from src.shared.db.base import Base
@@ -29,12 +39,47 @@ logging.basicConfig(
 logger = logging.getLogger("tender_research.cli")
 
 
+SOURCE_CHOICES = [
+    "auto",
+    "external_public_44fz",
+    "local_db",
+    "seed_file",
+    "demo",
+    "backend_search_real",
+]
+
+
 def _get_session() -> Session:
     settings = get_settings()
     engine = create_engine(settings.database_url)
     Base.metadata.create_all(engine)
     from sqlalchemy.orm import sessionmaker
     return sessionmaker(bind=engine)()
+
+
+def _print_discovery_result(result: DiscoveryResult) -> None:
+    print(f"selected_source: {result.selected_source}")
+    print(f"selected_source_type: {result.selected_source_type}")
+    print(f"is_demo: {result.is_demo}")
+    print(f"discovered_count: {result.discovered_count}")
+    print(f"pages_read: {result.pages_read}")
+    print(f"page_size: {result.page_size}")
+    if result.skipped_without_registry_number:
+        print(f"skipped_without_registry_number: {result.skipped_without_registry_number}")
+    if result.network_status:
+        print(f"network_status: {result.network_status}")
+    if result.warnings:
+        for w in result.warnings:
+            print(f"  warning: {w}")
+    if result.errors:
+        for e in result.errors:
+            print(f"  error: {e}")
+    print(f"total_numbers: {len(result.numbers)}")
+    for rn in result.numbers[:10]:
+        demo_tag = " [DEMO]" if rn.is_demo else ""
+        print(f"  {rn.registry_number}{demo_tag}")
+    if len(result.numbers) > 10:
+        print(f"  ... and {len(result.numbers) - 10} more")
 
 
 def cmd_check_eis_config(args: argparse.Namespace) -> None:
@@ -58,6 +103,93 @@ def cmd_check_eis_config(args: argparse.Namespace) -> None:
     print()
     print("dotenv loaded .env:", _load_dotenv_result)
     print("dotenv loaded .env.local:", _load_dotenv_local_result)
+
+
+def cmd_check_network_config(args: argparse.Namespace) -> None:
+    import platform
+    import subprocess
+
+    from src.tender_research.providers.public_44fz_search import (
+        _hostname_matches_no_proxy,
+        _resolve_no_proxy_domains,
+    )
+
+    config = load_config()
+    eis_hosts = ["zakupki.gov.ru", "int.zakupki.gov.ru", "int44.zakupki.gov.ru", "www.zakupki.gov.ru"]
+
+    print(f"platform: {platform.platform()}")
+    print(f"hostname: {platform.node()}")
+    print()
+    print("=== Env proxy variables ===")
+    for var in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"):
+        val = os.environ.get(var, "")
+        if val:
+            masked = _mask_proxy_url(val)
+            print(f"  {var}: {masked}")
+        else:
+            print(f"  {var}: (not set)")
+    print()
+    print("=== Config ===")
+    print(f"  AI_CORP_PUBLIC_SEARCH_BYPASS_PROXY: {config.public_search_bypass_proxy}")
+    print(f"  AI_CORP_PUBLIC_SEARCH_NO_PROXY_DOMAINS: {config.public_search_no_proxy_domains}")
+    no_proxy_resolved = _resolve_no_proxy_domains(config.public_search_no_proxy_domains)
+    print(f"  resolved no_proxy domains: {', '.join(no_proxy_resolved)}")
+    print()
+    print("=== macOS system proxy ===")
+    for svc in ("Wi-Fi", "Ethernet", "Thunderbolt Ethernet"):
+        for cmd in (
+            ["networksetup", "-getwebproxy", svc],
+            ["networksetup", "-getsecurewebproxy", svc],
+            ["networksetup", "-getautoproxyurl", svc],
+        ):
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    out = result.stdout.strip()
+                    if out and "Error" not in out and "not present" not in out.lower():
+                        print(f"  {' '.join(cmd)}:")
+                        for line in out.splitlines():
+                            print(f"    {line}")
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+    print()
+    print("=== Effective decision ===")
+    for host in eis_hosts:
+        bypass = config.public_search_bypass_proxy and _hostname_matches_no_proxy(host, no_proxy_resolved)
+        print(f"  {host}:")
+        print(f"    bypass_proxy: {bypass}")
+        print(f"    matches no_proxy: {_hostname_matches_no_proxy(host, no_proxy_resolved)}")
+        if bypass:
+            print(f"    → Will connect DIRECT (no proxy)")
+        elif os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy"):
+            masked = _mask_proxy_url(os.environ.get("HTTPS_PROXY", os.environ.get("https_proxy", "")))
+            print(f"    → Will use HTTPS_PROXY: {masked}")
+        elif os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy"):
+            masked = _mask_proxy_url(os.environ.get("HTTP_PROXY", os.environ.get("http_proxy", "")))
+            print(f"    → Will use HTTP_PROXY: {masked}")
+        else:
+            print(f"    → Will follow urllib default (env proxy if set)")
+    print()
+    print("=== curl diagnostics (run manually) ===")
+    print("  # Direct (no proxy)")
+    print("  curl --noproxy '*' -I https://zakupki.gov.ru")
+    print()
+    print("  # Via system proxy (if set)")
+    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    if proxy_url:
+        print(f"  curl --proxy {_mask_proxy_url(proxy_url)} -I https://zakupki.gov.ru")
+
+
+def _mask_proxy_url(url: str) -> str:
+    if not url:
+        return ""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.password:
+        return url.replace(parsed.password, "****")
+    if parsed.username:
+        return url.replace(parsed.username + ":", "****:")
+    return url
 
 
 def cmd_stats(args: argparse.Namespace) -> None:
@@ -95,10 +227,13 @@ def cmd_ingest_eis_registry_list(args: argparse.Namespace) -> None:
     if not file_path.exists():
         print(f"Seed file not found: {file_path}")
         return
-    numbers = [
-        line.strip() for line in file_path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.strip().startswith("#")
-    ]
+    if file_path.suffix.lower() == ".json":
+        numbers = _load_json_seed(file_path)
+    else:
+        numbers = [
+            line.strip() for line in file_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
     if not numbers:
         print("No registry numbers found in seed file.")
         return
@@ -120,6 +255,30 @@ def cmd_ingest_eis_registry_list(args: argparse.Namespace) -> None:
         print(f"  errors ({len(result['errors'])}):")
         for e in result["errors"][:5]:
             print(f"    - {e}")
+
+
+def _load_json_seed(file_path: Path) -> list[str]:
+    try:
+        raw = json.loads(file_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"Failed to parse JSON seed: {exc}")
+        return []
+    if isinstance(raw, dict):
+        items = raw.get("items", raw.get("numbers", []))
+    elif isinstance(raw, list):
+        items = raw
+    else:
+        print("Unexpected JSON format")
+        return []
+    numbers = []
+    for item in items:
+        if isinstance(item, str):
+            numbers.append(item)
+        elif isinstance(item, dict):
+            rn = item.get("registry_number") or item.get("reestr_number") or item.get("number")
+            if rn:
+                numbers.append(str(rn))
+    return numbers
 
 
 def cmd_ingest_eis(args: argparse.Namespace) -> None:
@@ -162,7 +321,6 @@ def cmd_research_one(args: argparse.Namespace) -> None:
     repo = pipeline._repo
     tender = repo.get_tender_by_external("eis", args.external_id)
     if not tender:
-        # Try to fetch from EIS first
         from src.tender_research.eis_loader import EisTenderLoader
         loader = EisTenderLoader()
         raw = loader.fetch_tender_details(args.external_id)
@@ -207,25 +365,161 @@ def cmd_discover_registry_numbers(args: argparse.Namespace) -> None:
         days_back=args.days_back,
         limit=args.limit,
         seed_file=args.seed_file,
+        page_size=args.page_size,
     )
-    print(f"selected_source: {result.selected_source}")
-    print(f"is_demo: {result.is_demo}")
-    if result.warnings:
-        for w in result.warnings:
-            print(f"  warning: {w}")
-    print(f"Discovered {len(result.numbers)} registry numbers:")
-    for rn in result.numbers:
-        demo_tag = " [DEMO]" if rn.is_demo else ""
-        print(f"  {rn.registry_number}{demo_tag}")
+    _print_discovery_result(result)
 
     if args.output and result.numbers:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        lines = [f"# discovered via {result.selected_source} (is_demo={result.is_demo})"]
-        lines += [f"# {w}" for w in result.warnings]
-        lines += [rn.registry_number for rn in result.numbers if not rn.is_demo]
+
+        if output_path.suffix.lower() == ".json":
+            items = [
+                {
+                    "registry_number": rn.registry_number,
+                    "title": rn.tender_title,
+                    "source": rn.source,
+                    "is_demo": rn.is_demo,
+                }
+                for rn in result.numbers if not rn.is_demo
+            ]
+            output_path.write_text(
+                json.dumps({"source": result.selected_source, "items": items}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        else:
+            lines = [f"# discovered via {result.selected_source} (is_demo={result.is_demo})"]
+            lines += [f"# {w}" for w in result.warnings]
+            lines += [rn.registry_number for rn in result.numbers if not rn.is_demo]
+            output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        print(f"Saved {sum(1 for rn in result.numbers if not rn.is_demo)} numbers to {output_path}")
+
+
+def cmd_collect_registry_numbers(args: argparse.Namespace) -> None:
+    provider = Public44FzSearchProvider(
+        timeout_seconds=args.timeout or 30,
+        delay_seconds=args.delay or 3.0,
+        bypass_proxy=not args.use_proxy,
+    )
+    date_from = datetime.now().date()
+    date_to = datetime.now().date()
+    if args.days_back:
+        from datetime import timedelta
+        date_from = date_from - timedelta(days=args.days_back)
+
+    if not args.output:
+        print("--output is required for collect-registry-numbers")
+        return
+
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    pages = provider.search_pages(
+        query=None,
+        date_from=date_from,
+        date_to=date_to,
+        max_pages=max(1, (args.limit + args.page_size - 1) // args.page_size) if args.limit else 10,
+        page_size=args.page_size,
+        law_type=args.law_type or "44fz",
+    )
+
+    first_status = pages[0].status if pages else PublicSearchStatus.EMPTY
+    if first_status not in (PublicSearchStatus.SUCCESS, PublicSearchStatus.EMPTY):
+        print(f"collect-registry-numbers failed: {first_status}")
+        if pages[0].error:
+            print(f"  error: {pages[0].error}")
+        return
+
+    numbers = provider.extract_registry_numbers(pages)
+    if args.limit:
+        numbers = numbers[:args.limit]
+
+    items = []
+    for page_obj in pages:
+        for item in page_obj.items:
+            if item.registry_number and item.registry_number in numbers[:args.limit] if args.limit else True:
+                items.append({
+                    "registry_number": item.registry_number,
+                    "purchase_number": item.purchase_number,
+                    "title": item.title,
+                    "customer_name": item.customer_name,
+                    "publication_date": item.publication_date,
+                    "source_url": item.source_url,
+                    "raw": item.raw,
+                })
+                if args.limit and len(items) >= args.limit:
+                    break
+        if args.limit and len(items) >= args.limit:
+            break
+
+    success_pages = sum(1 for p in pages if p.status == PublicSearchStatus.SUCCESS)
+
+    if output_path.suffix.lower() == ".json":
+        output_path.write_text(
+            json.dumps({
+                "source": "external_public_44fz",
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "pages_read": len(pages),
+                "success_pages": success_pages,
+                "items": items,
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    else:
+        lines = [f"# collected via external_public_44fz, date_from={date_from}, date_to={date_to}"]
+        lines += [item["registry_number"] for item in items]
         output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"Saved {len(lines) - len(result.warnings) - 1} numbers to {output_path}")
+
+    print(f"collect-registry-numbers complete:")
+    print(f"  pages_read: {len(pages)}")
+    print(f"  success_pages: {success_pages}")
+    print(f"  discovered: {len(items)}")
+    print(f"  output: {output_path}")
+    print()
+    if items:
+        print("First 10 registry numbers:")
+        for item in items[:10]:
+            print(f"  {item['registry_number']}  {item.get('title', '')[:60] or ''}")
+    if len(items) > 10:
+        print(f"  ... and {len(items) - 10} more")
+    for p in pages:
+        if p.status == PublicSearchStatus.BLOCKED:
+            print(f"  [BLOCKED] external_public_44fz blocked by network (captcha or connection reset)")
+        elif p.status == PublicSearchStatus.TIMEOUT:
+            print(f"  [TIMEOUT] external_public_44fz timed out")
+        elif p.status == PublicSearchStatus.BAD_GATEWAY:
+            print(f"  [BAD_GATEWAY] external_public_44fz returned 502 from proxy")
+
+
+def cmd_ingest_collected_registry_numbers(args: argparse.Namespace) -> None:
+    file_path = Path(args.file)
+    if not file_path.exists():
+        print(f"File not found: {file_path}")
+        return
+
+    numbers = _load_json_seed(file_path)
+    if not numbers:
+        print("No registry numbers found in collected file.")
+        return
+
+    pipeline = _build_pipeline(args)
+    result = pipeline.ingest_eis_by_registry_numbers(
+        registry_numbers=numbers,
+        limit=args.limit,
+    )
+    print(f"Registry ingest complete:")
+    print(f"  total: {result['total']}")
+    print(f"  saved: {result['saved']}")
+    print(f"  skipped: {result['skipped']}")
+    print(f"  no_data: {result['no_data']}")
+    print(f"  connection_resets: {result['connection_resets']}")
+    print(f"  missing_token: {result['missing_token']}")
+    if result["errors"]:
+        print(f"  errors ({len(result['errors'])}):")
+        for e in result["errors"][:5]:
+            print(f"    - {e}")
 
 
 def cmd_research_discovered(args: argparse.Namespace) -> None:
@@ -239,6 +533,7 @@ def cmd_research_discovered(args: argparse.Namespace) -> None:
         days_back=args.days_back,
         limit=args.limit,
         seed_file=args.seed_file,
+        page_size=args.page_size,
     )
     ok = sum(1 for r in result if "error" not in r)
     failed = sum(1 for r in result if "error" in r)
@@ -257,6 +552,8 @@ def main() -> None:
     p_stats = sub.add_parser("stats", help="Show pipeline statistics")
 
     p_check = sub.add_parser("check-eis-config", help="Check EIS SOAP configuration and available methods")
+
+    p_net = sub.add_parser("check-network-config", help="Diagnose proxy/PAC/NO_PROXY configuration for EIS hosts")
 
     _common = argparse.ArgumentParser(add_help=False)
     _common.add_argument("--eis-mode", default=None, choices=["demo", "real"], help="EIS loader mode")
@@ -293,19 +590,39 @@ def main() -> None:
     p_fp.add_argument("tender_id", help="Tender UUID")
     p_fp.add_argument("--limit", type=int, default=10, help="Max pages to fetch")
 
-    p_disc = sub.add_parser("discover-registry-numbers", parents=[_common], help="Discover registry numbers from EIS sources")
-    p_disc.add_argument("--source", default="auto", choices=["auto", "backend_search", "eis_public_html", "seed_file"],
+    p_disc = sub.add_parser("discover-registry-numbers", parents=[_common],
+                            help="Discover registry numbers from EIS sources")
+    p_disc.add_argument("--source", default="auto", choices=SOURCE_CHOICES,
                         help="Discovery source (default: auto)")
     p_disc.add_argument("--days-back", type=int, default=None, help="Days to look back")
     p_disc.add_argument("--limit", type=int, default=10, help="Max numbers to discover")
+    p_disc.add_argument("--page-size", type=int, default=30, help="Results per page (default: 30, max: 100)")
     p_disc.add_argument("--seed-file", default=None, help="Path to seed file (for seed_file source)")
-    p_disc.add_argument("--output", default=None, help="Save non-demo numbers to file (e.g. data/eis_seed/registry_numbers_auto.txt)")
+    p_disc.add_argument("--output", default=None,
+                        help="Save non-demo numbers to file (.txt or .json)")
+
+    p_collect = sub.add_parser("collect-registry-numbers",
+                               help="Collect registry numbers from external machine with EIS access")
+    p_collect.add_argument("--days-back", type=int, default=3, help="Days to look back")
+    p_collect.add_argument("--limit", type=int, default=300, help="Max numbers to collect")
+    p_collect.add_argument("--page-size", type=int, default=30, help="Results per page (default: 30, max: 100)")
+    p_collect.add_argument("--law-type", default="44fz", help="44fz / 223fz")
+    p_collect.add_argument("--timeout", type=int, default=30, help="HTTP timeout in seconds")
+    p_collect.add_argument("--delay", type=float, default=3.0, help="Delay between pages in seconds")
+    p_collect.add_argument("--use-proxy", action="store_true", help="Use system proxy (default: bypass)")
+    p_collect.add_argument("--output", required=True, help="Output file (.txt or .json)")
+
+    p_ingest_collected = sub.add_parser("ingest-collected-registry-numbers", parents=[_common],
+                                        help="Ingest collected registry numbers from JSON file")
+    p_ingest_collected.add_argument("--file", required=True, help="Path to collected JSON file")
+    p_ingest_collected.add_argument("--limit", type=int, default=None, help="Max tenders to process")
 
     p_disc_batch = sub.add_parser("research-discovered", parents=[_common],
-                                   help="Discover and research tenders in one step")
-    p_disc_batch.add_argument("--source", default="auto", choices=["auto", "backend_search", "eis_public_html", "seed_file"])
+                                  help="Discover and research tenders in one step")
+    p_disc_batch.add_argument("--source", default="auto", choices=SOURCE_CHOICES)
     p_disc_batch.add_argument("--days-back", type=int, default=None)
     p_disc_batch.add_argument("--limit", type=int, default=10)
+    p_disc_batch.add_argument("--page-size", type=int, default=30, help="Results per page for external_public_44fz")
     p_disc_batch.add_argument("--seed-file", default=None, help="Path to seed file (for seed_file source)")
     p_disc_batch.add_argument("--web-search", action="store_true", help="Enable web search")
     p_disc_batch.add_argument("--fetch-pages", action="store_true", help="Fetch web pages")
@@ -316,6 +633,8 @@ def main() -> None:
         cmd_stats(args)
     elif args.command == "check-eis-config":
         cmd_check_eis_config(args)
+    elif args.command == "check-network-config":
+        cmd_check_network_config(args)
     elif args.command == "ingest-eis":
         cmd_ingest_eis(args)
     elif args.command == "ingest-eis-registry-list":
@@ -332,6 +651,10 @@ def main() -> None:
         cmd_fetch_pages(args)
     elif args.command == "discover-registry-numbers":
         cmd_discover_registry_numbers(args)
+    elif args.command == "collect-registry-numbers":
+        cmd_collect_registry_numbers(args)
+    elif args.command == "ingest-collected-registry-numbers":
+        cmd_ingest_collected_registry_numbers(args)
     elif args.command == "research-discovered":
         cmd_research_discovered(args)
 

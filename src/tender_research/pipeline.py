@@ -134,6 +134,7 @@ class TenderResearchPipeline:
         days_back: int | None = None,
         limit: int | None = None,
         seed_file: str | None = None,
+        page_size: int | None = None,
     ) -> DiscoveryResult:
         discovery = RegistryNumberDiscovery(
             config=self._config,
@@ -144,6 +145,7 @@ class TenderResearchPipeline:
             days_back=days_back,
             limit=limit,
             seed_file=seed_file,
+            page_size=page_size or self._config.public_search_page_size,
         )
         logger.info(
             "Discovered %d registry numbers from source=%s (is_demo=%s)",
@@ -157,12 +159,14 @@ class TenderResearchPipeline:
         days_back: int | None = None,
         limit: int | None = None,
         seed_file: str | None = None,
+        page_size: int | None = None,
     ) -> list[dict[str, int | str]]:
         disc_result = self.discover_registry_numbers(
             source=source,
             days_back=days_back,
             limit=limit,
             seed_file=seed_file,
+            page_size=page_size,
         )
         registry_numbers = [d.registry_number for d in disc_result.numbers]
         if not registry_numbers:

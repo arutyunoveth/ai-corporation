@@ -21,6 +21,8 @@ class TenderResearchConfig:
     public_search_delay_seconds: float = 3.0
     public_search_timeout_seconds: int = 30
     public_search_bypass_proxy: bool = False
+    public_search_page_size: int = 30
+    public_search_no_proxy_domains: str = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru"
     allow_demo_discovery: bool = True
 
     web_search_enabled: bool = False
@@ -72,6 +74,8 @@ def load_config() -> TenderResearchConfig:
         public_search_delay_seconds=s.public_search_delay_seconds,
         public_search_timeout_seconds=s.public_search_timeout_seconds,
         public_search_bypass_proxy=s.public_search_bypass_proxy,
+        public_search_page_size=s.public_search_page_size,
+        public_search_no_proxy_domains=s.public_search_no_proxy_domains,
         allow_demo_discovery=s.allow_demo_discovery,
         web_search_enabled=s.web_search_enabled,
         web_search_provider=s.web_search_provider,

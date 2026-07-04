@@ -1,31 +1,23 @@
 from __future__ import annotations
 
-from urllib.parse import urlencode, urlparse
-
+from src.tender_research.providers.public_44fz_search import (
+    EIS_44FZ_HOST,
+    EIS_44FZ_SEARCH_PATH,
+    LAW_FLAGS,
+    Public44FzSearchProvider,
+    _normalize_law,
+)
 
 ALLOWED_44FZ_HOSTS = (
     "zakupki.gov.ru",
     "www.zakupki.gov.ru",
 )
 
-EIS_44FZ_SEARCH_PATH = "/epz/order/extendedsearch/results.html"
+EIS_44FZ_SEARCH_PATH = EIS_44FZ_SEARCH_PATH
+PUBLIC_EIS_LAW_FLAGS = dict(LAW_FLAGS)
 
-PUBLIC_EIS_LAW_FLAGS = {
-    "44fz": "fz44",
-    "223fz": "fz223",
-    "capital_repair": "ppRf615",
-}
-
-
-def normalize_public_eis_law(law: str | None) -> str:
-    normalized = (law or "44fz").strip().lower().replace("-", "").replace("_", "")
-    if normalized in {"44фз", "44fz", "44"}:
-        return "44fz"
-    if normalized in {"223фз", "223fz", "223"}:
-        return "223fz"
-    if normalized in {"капремонт", "капрем", "capitalrepair", "615", "pp615", "pprf615", "615pp"}:
-        return "capital_repair"
-    raise ValueError("Поддерживаются только категории 44-ФЗ, 223-ФЗ и капремонт.")
+Public44FzSearchProvider = Public44FzSearchProvider
+normalize_public_eis_law = _normalize_law
 
 
 def _build_public_eis_search_params(
@@ -39,14 +31,14 @@ def _build_public_eis_search_params(
     price_to: float | None = None,
     max_results: int | None = None,
 ) -> dict[str, str]:
-    normalized_law = normalize_public_eis_law(law)
+    normalized_law = _normalize_law(law)
     if not query or not query.strip():
         raise ValueError("Поисковый запрос не может быть пустым.")
     params = {
         "searchString": query.strip(),
         "morphology": "on",
         "sortDirection": "false",
-        PUBLIC_EIS_LAW_FLAGS[normalized_law]: "on",
+        LAW_FLAGS[normalized_law]: "on",
     }
     if region and region.strip():
         params["regionDeleted"] = "false"
@@ -133,6 +125,7 @@ def normalize_44fz_search_params(
 def validate_public_eis_url(url: str) -> bool:
     if not url:
         return False
+    from urllib.parse import urlparse
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         return False
@@ -142,3 +135,6 @@ def validate_public_eis_url(url: str) -> bool:
     if not parsed.path.startswith(EIS_44FZ_SEARCH_PATH):
         return False
     return True
+
+
+from urllib.parse import urlencode
