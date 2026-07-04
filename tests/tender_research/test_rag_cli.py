@@ -80,7 +80,19 @@ def test_rag_cli_build_chunks_and_search_smoke(tmp_path, monkeypatch, capsys):
     build_chunks_out = capsys.readouterr().out
     assert "chunks_created:" in build_chunks_out
 
-    monkeypatch.setattr("sys.argv", ["rag", "build-embeddings", "--limit", "10"])
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rag",
+            "build-embeddings",
+            "--provider",
+            "local_hash",
+            "--model",
+            "local-hash-v1",
+            "--limit",
+            "10",
+        ],
+    )
     main()
     build_embeddings_out = capsys.readouterr().out
     assert "embeddings_created:" in build_embeddings_out
@@ -93,3 +105,49 @@ def test_rag_cli_build_chunks_and_search_smoke(tmp_path, monkeypatch, capsys):
     search_out = capsys.readouterr().out
     assert "hits:" in search_out
     assert "registry_number: 123" in search_out
+
+
+def test_rag_cli_embedding_flags_override_config(tmp_path, monkeypatch, capsys):
+    db_path = tmp_path / "rag.sqlite"
+    db_url = f"sqlite:///{db_path}"
+    text_path = tmp_path / "spec.txt"
+    text_path.write_text("Требования к составу заявки.", encoding="utf-8")
+    _seed_db(db_url, text_path)
+
+    monkeypatch.setenv("AI_CORP_DATABASE_URL", db_url)
+    monkeypatch.setenv("AI_CORP_ARVECTUM_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("AI_CORP_RAG_VECTOR_STORE_PATH", str(tmp_path / "vectors.json"))
+    monkeypatch.setenv("AI_CORP_RAG_EMBEDDINGS_PROVIDER", "hashing")
+    monkeypatch.setenv("AI_CORP_RAG_EMBEDDINGS_MODEL", "env-default-model")
+    get_settings.cache_clear()
+
+    observed: dict[str, str] = {}
+
+    def fake_build_embedding_provider(config):
+        observed["provider"] = config.rag_embeddings_provider
+        observed["model"] = config.rag_embeddings_model
+        return FakeEmbeddingProvider()
+
+    monkeypatch.setattr("src.tender_research.rag.cli.build_embedding_provider", fake_build_embedding_provider)
+
+    monkeypatch.setattr("sys.argv", ["rag", "build-chunks", "--limit", "10"])
+    main()
+    capsys.readouterr()
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "rag",
+            "build-embeddings",
+            "--provider",
+            "local_hash",
+            "--model",
+            "local-hash-v1",
+            "--limit",
+            "10",
+        ],
+    )
+    main()
+    capsys.readouterr()
+
+    assert observed == {"provider": "local_hash", "model": "local-hash-v1"}

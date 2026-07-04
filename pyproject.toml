@@ -34,3 +34,6 @@ include = ["src*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+  "postgres: optional integration tests that require a PostgreSQL database with pgvector extension",
+]

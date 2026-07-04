@@ -3,7 +3,9 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from alembic import context
+from alembic.ddl.impl import DefaultImpl
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy import Column, MetaData, PrimaryKeyConstraint, String, Table
 
 from src.shared.config.settings import get_settings
 from src.shared.db.base import Base
@@ -16,6 +18,28 @@ if config.config_file_name is not None:
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = Base.metadata
+
+
+def _version_table_impl(
+    self,
+    *,
+    version_table: str,
+    version_table_schema: str | None,
+    version_table_pk: bool,
+    **kw,
+) -> Table:
+    vt = Table(
+        version_table,
+        MetaData(),
+        Column("version_num", String(255), nullable=False),
+        schema=version_table_schema,
+    )
+    if version_table_pk:
+        vt.append_constraint(PrimaryKeyConstraint("version_num", name=f"{version_table}_pkc"))
+    return vt
+
+
+DefaultImpl.version_table_impl = _version_table_impl
 
 
 def run_migrations_offline() -> None:
@@ -43,4 +67,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

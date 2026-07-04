@@ -22,6 +22,8 @@ from src.tender_research.rag.retriever import RagRetriever
 from src.tender_research.rag.vector_store import JsonVectorStore
 from src.tender_research.repository import TenderRepository
 
+_RUNTIME_ARGS: argparse.Namespace | None = None
+
 
 def _get_session() -> Session:
     settings = get_settings()
@@ -42,6 +44,10 @@ def _build_runtime():
     session = _get_session()
     repo = TenderRepository(session)
     config = load_config()
+    if _RUNTIME_ARGS and getattr(_RUNTIME_ARGS, "provider", None):
+        object.__setattr__(config, "rag_embeddings_provider", _RUNTIME_ARGS.provider)
+    if _RUNTIME_ARGS and getattr(_RUNTIME_ARGS, "model", None):
+        object.__setattr__(config, "rag_embeddings_model", _RUNTIME_ARGS.model)
     provider = build_embedding_provider(config)
     vector_store = JsonVectorStore(
         _vector_store_path(config),
@@ -182,6 +188,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_embeddings = sub.add_parser("build-embeddings", help="Build local embeddings for document chunks")
     p_embeddings.add_argument("--limit", type=int, default=1000)
+    p_embeddings.add_argument("--provider", default=None, help="Embedding provider override, e.g. local_hash")
+    p_embeddings.add_argument("--model", default=None, help="Embedding model override, e.g. local-hash-v1")
 
     p_search = sub.add_parser("search", help="Search indexed document chunks")
     p_search.add_argument("--query", required=True)
@@ -200,16 +208,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    global _RUNTIME_ARGS
     parser = build_parser()
     args = parser.parse_args()
-    if args.command == "build-chunks":
-        cmd_build_chunks(args)
-    elif args.command == "build-embeddings":
-        cmd_build_embeddings(args)
-    elif args.command == "search":
-        cmd_search(args)
-    elif args.command == "ask":
-        cmd_ask(args)
+    _RUNTIME_ARGS = args
+    try:
+        if args.command == "build-chunks":
+            cmd_build_chunks(args)
+        elif args.command == "build-embeddings":
+            cmd_build_embeddings(args)
+        elif args.command == "search":
+            cmd_search(args)
+        elif args.command == "ask":
+            cmd_ask(args)
+    finally:
+        _RUNTIME_ARGS = None
 
 
 if __name__ == "__main__":

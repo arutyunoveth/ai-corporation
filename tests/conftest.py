@@ -7,6 +7,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+_original_database_url = os.environ.get("AI_CORP_DATABASE_URL")
+if _original_database_url:
+    os.environ.setdefault("AI_CORP_ORIGINAL_DATABASE_URL", _original_database_url)
 os.environ["AI_CORP_DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
 from src.main import app
@@ -39,4 +42,3 @@ def client(session: Session) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-

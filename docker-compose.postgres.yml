@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: arvectum-postgres
+    env_file:
+      - .env.local
+    environment:
+      POSTGRES_DB: ${ARVECTUM_POSTGRES_DB:-arvectum}
+      POSTGRES_USER: ${ARVECTUM_POSTGRES_USER:-arvectum}
+      POSTGRES_PASSWORD: ${ARVECTUM_POSTGRES_PASSWORD:-change_me_local_only}
+    ports:
+      - "5432:5432"
+    volumes:
+      - arvectum_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ARVECTUM_POSTGRES_USER:-arvectum} -d ${ARVECTUM_POSTGRES_DB:-arvectum}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  arvectum_postgres_data:

@@ -33,6 +33,7 @@ from src.tender_research.repository import TenderRepository
 from src.tender_research.models import ProcurementTenderDocument
 from src.shared.config.settings import get_settings
 from src.shared.db.base import Base
+from src.shared.db.diagnostics import get_database_diagnostics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -197,6 +198,24 @@ def cmd_check_network_config(args: argparse.Namespace) -> None:
     proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
     if proxy_url:
         print(f"  curl --proxy {_mask_proxy_url(proxy_url)} -I https://zakupki.gov.ru")
+
+
+def cmd_check_db(args: argparse.Namespace) -> None:
+    settings = get_settings()
+    engine = create_engine(settings.database_url, future=True)
+    info = get_database_diagnostics(engine)
+    for key in (
+        "database_dialect",
+        "database_url_masked",
+        "can_connect",
+        "current_migration",
+        "migration_head",
+        "pgvector_extension_available",
+        "tables_count",
+    ):
+        print(f"{key}: {info.get(key)}")
+    if info.get("error"):
+        print(f"error: {info['error']}")
 
 
 def _mask_proxy_url(url: str) -> str:
@@ -794,6 +813,7 @@ def main() -> None:
     p_stats = sub.add_parser("stats", help="Show pipeline statistics")
 
     p_check = sub.add_parser("check-eis-config", help="Check EIS SOAP configuration and available methods")
+    sub.add_parser("check-db", help="Show database dialect, connectivity, migration state, and pgvector status")
 
     p_net = sub.add_parser("check-network-config", help="Diagnose proxy/PAC/NO_PROXY configuration for EIS hosts")
 
@@ -884,6 +904,8 @@ def main() -> None:
 
     if args.command == "stats":
         cmd_stats(args)
+    elif args.command == "check-db":
+        cmd_check_db(args)
     elif args.command == "check-eis-config":
         cmd_check_eis_config(args)
     elif args.command == "check-network-config":
