@@ -82,6 +82,8 @@ class ProcurementTenderDocument(UUIDPrimaryKeyMixin, Base):
     content_type: Mapped[str | None] = mapped_column(String(256), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    document_identity_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    document_identity_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     download_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     text_extraction_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     extracted_text_path: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -97,6 +99,7 @@ class ProcurementTenderDocument(UUIDPrimaryKeyMixin, Base):
         UniqueConstraint("tender_id", "sha256"),
         Index("ix_procurement_tender_documents_download_status", "download_status"),
         Index("ix_procurement_tender_documents_text_extraction_status", "text_extraction_status"),
+        Index("ix_procurement_tender_documents_identity_hash", "tender_id", "document_identity_hash"),
     )
 
 

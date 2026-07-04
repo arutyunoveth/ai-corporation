@@ -25,6 +25,7 @@ class EisTenderRaw:
     description: str | None = None
     raw_payload: dict | None = None
     documents: list[EisDocumentRaw] | None = None
+    is_demo: bool = False
 
 
 @dataclass

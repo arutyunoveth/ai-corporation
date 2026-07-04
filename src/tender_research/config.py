@@ -13,6 +13,16 @@ class TenderResearchConfig:
     eis_discovery_mode: str = "registry_numbers"
     eis_seed_file: str = "data/eis_seed/registry_numbers.txt"
 
+    registry_discovery_source: str = "auto"
+    registry_discovery_days_back: int = 3
+    registry_discovery_limit: int = 10
+    public_search_enabled: bool = True
+    public_search_use_playwright: bool = False
+    public_search_delay_seconds: float = 3.0
+    public_search_timeout_seconds: int = 30
+    public_search_bypass_proxy: bool = False
+    allow_demo_discovery: bool = True
+
     web_search_enabled: bool = False
     web_search_provider: str = "duckduckgo_html"
     web_search_max_queries_per_tender: int = 8
@@ -53,6 +63,16 @@ def load_config() -> TenderResearchConfig:
         batch_limit=s.tender_research_batch_limit,
         eis_mode=s.tender_research_eis_mode,
         eis_discovery_mode=s.tender_research_eis_discovery_mode,
+        eis_seed_file=s.tender_research_eis_seed_file,
+        registry_discovery_source=s.registry_discovery_source,
+        registry_discovery_days_back=s.registry_discovery_days_back,
+        registry_discovery_limit=s.registry_discovery_limit,
+        public_search_enabled=s.public_search_enabled,
+        public_search_use_playwright=s.public_search_use_playwright,
+        public_search_delay_seconds=s.public_search_delay_seconds,
+        public_search_timeout_seconds=s.public_search_timeout_seconds,
+        public_search_bypass_proxy=s.public_search_bypass_proxy,
+        allow_demo_discovery=s.allow_demo_discovery,
         web_search_enabled=s.web_search_enabled,
         web_search_provider=s.web_search_provider,
         web_search_max_queries_per_tender=s.web_search_max_queries_per_tender,

@@ -62,3 +62,11 @@ class FetchError(TenderResearchError):
 
 class RateLimitError(TenderResearchError):
     pass
+
+
+class DiscoveryError(TenderResearchError):
+    pass
+
+
+class DiscoveryEmptyError(DiscoveryError):
+    pass

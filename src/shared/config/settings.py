@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     tender_research_batch_limit: int = 10
     tender_research_eis_mode: str = "demo"
     tender_research_eis_discovery_mode: str = "registry_numbers"
+    tender_research_eis_seed_file: str = "data/eis_seed/registry_numbers.txt"
     web_search_enabled: bool = False
     web_search_provider: str = "duckduckgo_html"
     web_search_max_queries_per_tender: int = 8
@@ -56,6 +57,16 @@ class Settings(BaseSettings):
     web_allow_domains: str = ""
     document_download_max_size_mb: int = 100
     document_extract_max_chars: int = 2_000_000
+
+    registry_discovery_source: str = "auto"
+    registry_discovery_days_back: int = 3
+    registry_discovery_limit: int = 10
+    public_search_enabled: bool = True
+    public_search_use_playwright: bool = False
+    public_search_delay_seconds: float = 3.0
+    public_search_timeout_seconds: int = 30
+    public_search_bypass_proxy: bool = False
+    allow_demo_discovery: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="AI_CORP_",

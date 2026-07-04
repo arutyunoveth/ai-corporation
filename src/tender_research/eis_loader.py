@@ -130,17 +130,25 @@ def _get_demo_tenders(
     law_type: str | None = None,
     query: str | None = None,
 ) -> list[EisTenderRaw]:
+    def _strip_tz(dt: datetime | None) -> datetime | None:
+        if dt is not None and dt.tzinfo is not None:
+            return dt.replace(tzinfo=None)
+        return dt
+    date_from_naive = _strip_tz(date_from)
+    date_to_naive = _strip_tz(date_to)
+
     results = []
     for item in _DEMO_TENDERS:
-        if date_from and item.get("publication_date") and item["publication_date"] < date_from:
+        pub = item.get("publication_date")
+        if date_from_naive and pub and pub < date_from_naive:
             continue
-        if date_to and item.get("publication_date") and item["publication_date"] > date_to:
+        if date_to_naive and pub and pub > date_to_naive:
             continue
         if law_type and item.get("law_type") != law_type:
             continue
         if query and query.lower() not in (item.get("title", "") + (item.get("customer_name") or "")).lower():
             continue
-        results.append(EisTenderRaw(**item))
+        results.append(EisTenderRaw(**item, is_demo=True))
     if limit:
         results = results[:limit]
     return results

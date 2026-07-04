@@ -24,6 +24,7 @@ from src.tender_research.providers.duckduckgo_html import DuckDuckGoHtmlSearchPr
 from src.tender_research.providers.manual_urls import ManualUrlsSearchProvider
 from src.tender_research.query_builder import build_search_queries
 from src.tender_research.rate_limit import RateLimiter
+from src.tender_research.registry_discovery import DiscoveryResult, RegistryNumberDiscovery
 from src.tender_research.repository import TenderRepository
 from src.tender_research.search_provider import SearchProvider
 
@@ -124,6 +125,70 @@ class TenderResearchPipeline:
             self._repo.upsert_document(doc_data)
         self._save_raw_payload(tender, raw)
         return 1
+
+    # ── Discovery ──
+
+    def discover_registry_numbers(
+        self,
+        source: str = "auto",
+        days_back: int | None = None,
+        limit: int | None = None,
+        seed_file: str | None = None,
+    ) -> DiscoveryResult:
+        discovery = RegistryNumberDiscovery(
+            config=self._config,
+            eis_loader=self._eis,
+        )
+        result = discovery.discover(
+            source=source,
+            days_back=days_back,
+            limit=limit,
+            seed_file=seed_file,
+        )
+        logger.info(
+            "Discovered %d registry numbers from source=%s (is_demo=%s)",
+            len(result.numbers), result.selected_source, result.is_demo,
+        )
+        return result
+
+    def run_discovered_batch(
+        self,
+        source: str = "auto",
+        days_back: int | None = None,
+        limit: int | None = None,
+        seed_file: str | None = None,
+    ) -> list[dict[str, int | str]]:
+        disc_result = self.discover_registry_numbers(
+            source=source,
+            days_back=days_back,
+            limit=limit,
+            seed_file=seed_file,
+        )
+        registry_numbers = [d.registry_number for d in disc_result.numbers]
+        if not registry_numbers:
+            logger.warning("No registry numbers discovered, nothing to do")
+            return []
+
+        result = self.ingest_eis_by_registry_numbers(
+            registry_numbers=registry_numbers,
+            limit=None,
+        )
+        logger.info(
+            "Registry ingest: saved=%d skipped=%d errors=%d",
+            result["saved"], result["skipped"], len(result["errors"]),
+        )
+
+        results: list[dict[str, int | str]] = []
+        for rn in registry_numbers:
+            tender = self._repo.get_tender_by_external("eis", rn)
+            if not tender:
+                continue
+            r = self.run_full(tender.id)
+            r["registry_number"] = rn
+            r["title"] = tender.title
+            results.append(r)
+
+        return results
 
     # ── Step 2: Download documents ──
 

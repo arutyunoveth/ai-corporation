@@ -200,6 +200,46 @@ def cmd_fetch_pages(args: argparse.Namespace) -> None:
     print(f"Fetched {result.get('fetched', 0)} pages, {result.get('failed', 0)} failed")
 
 
+def cmd_discover_registry_numbers(args: argparse.Namespace) -> None:
+    pipeline = _build_pipeline(args)
+    result = pipeline.discover_registry_numbers(
+        source=args.source,
+        days_back=args.days_back,
+        limit=args.limit,
+        seed_file=args.seed_file,
+    )
+    print(f"selected_source: {result.selected_source}")
+    print(f"is_demo: {result.is_demo}")
+    if result.warnings:
+        for w in result.warnings:
+            print(f"  warning: {w}")
+    print(f"Discovered {len(result.numbers)} registry numbers:")
+    for rn in result.numbers:
+        demo_tag = " [DEMO]" if rn.is_demo else ""
+        print(f"  {rn.registry_number}{demo_tag}")
+
+
+def cmd_research_discovered(args: argparse.Namespace) -> None:
+    pipeline = _build_pipeline(args)
+    if args.web_search:
+        object.__setattr__(pipeline._config, "web_search_enabled", True)
+    if args.fetch_pages:
+        object.__setattr__(pipeline._config, "web_fetch_enabled", True)
+    result = pipeline.run_discovered_batch(
+        source=args.source,
+        days_back=args.days_back,
+        limit=args.limit,
+        seed_file=args.seed_file,
+    )
+    ok = sum(1 for r in result if "error" not in r)
+    failed = sum(1 for r in result if "error" in r)
+    print(f"Discovered batch complete: {ok} ok, {failed} failed")
+    for r in result:
+        status = "OK" if "error" not in r else f"FAIL: {r['error']}"
+        title = r.get("title", r.get("registry_number", "?"))
+        print(f"  [{status}] {title}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Tender Research Pipeline CLI")
     parser.add_argument("--data-dir", default=None, help="Data directory override")
@@ -244,6 +284,22 @@ def main() -> None:
     p_fp.add_argument("tender_id", help="Tender UUID")
     p_fp.add_argument("--limit", type=int, default=10, help="Max pages to fetch")
 
+    p_disc = sub.add_parser("discover-registry-numbers", parents=[_common], help="Discover registry numbers from EIS sources")
+    p_disc.add_argument("--source", default="auto", choices=["auto", "backend_search", "eis_public_html", "seed_file"],
+                        help="Discovery source (default: auto)")
+    p_disc.add_argument("--days-back", type=int, default=None, help="Days to look back")
+    p_disc.add_argument("--limit", type=int, default=10, help="Max numbers to discover")
+    p_disc.add_argument("--seed-file", default=None, help="Path to seed file (for seed_file source)")
+
+    p_disc_batch = sub.add_parser("research-discovered", parents=[_common],
+                                   help="Discover and research tenders in one step")
+    p_disc_batch.add_argument("--source", default="auto", choices=["auto", "backend_search", "eis_public_html", "seed_file"])
+    p_disc_batch.add_argument("--days-back", type=int, default=None)
+    p_disc_batch.add_argument("--limit", type=int, default=10)
+    p_disc_batch.add_argument("--seed-file", default=None, help="Path to seed file (for seed_file source)")
+    p_disc_batch.add_argument("--web-search", action="store_true", help="Enable web search")
+    p_disc_batch.add_argument("--fetch-pages", action="store_true", help="Fetch web pages")
+
     args = parser.parse_args()
 
     if args.command == "stats":
@@ -264,6 +320,10 @@ def main() -> None:
         cmd_web_search(args)
     elif args.command == "fetch-pages":
         cmd_fetch_pages(args)
+    elif args.command == "discover-registry-numbers":
+        cmd_discover_registry_numbers(args)
+    elif args.command == "research-discovered":
+        cmd_research_discovered(args)
 
 
 if __name__ == "__main__":

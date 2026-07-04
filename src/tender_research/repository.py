@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import re as _re
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select, update
@@ -153,25 +156,79 @@ class TenderRepository:
 
     # ── ProcurementTenderDocument ──
 
+    def _compute_identity_hash(self, tender_id: str, data: dict) -> tuple[str | None, str | None]:
+        source_document_id = data.get("source_document_id")
+        file_url = data.get("file_url")
+        file_name = data.get("file_name")
+        size_bytes = data.get("size_bytes")
+        content_type = data.get("content_type")
+        raw_meta = data.get("raw_meta")
+
+        if source_document_id:
+            identity_source = "source_document_id"
+            identity_value = source_document_id.strip().lower()
+        elif file_url:
+            identity_source = "file_url"
+            identity_value = _normalize_url_for_dedup(file_url)
+        elif file_name:
+            identity_source = "file_name"
+            parts = [file_name.strip().lower()]
+            if size_bytes is not None:
+                parts.append(str(size_bytes))
+            if content_type:
+                parts.append(content_type.strip().lower())
+            identity_value = "|".join(parts)
+        elif raw_meta:
+            identity_source = "raw_meta"
+            identity_value = hashlib.sha256(
+                json.dumps(raw_meta, sort_keys=True, ensure_ascii=False).encode()
+            ).hexdigest()
+        else:
+            return None, None
+
+        raw = f"{tender_id}|{identity_source}|{identity_value}"
+        identity_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        return identity_hash, identity_source
+
     def upsert_document(self, data: dict) -> ProcurementTenderDocument:
         tender_id = data["tender_id"]
         sha256 = data.get("sha256")
+        identity_hash, identity_source = self._compute_identity_hash(tender_id, data)
+
         existing = None
-        if sha256:
+
+        if identity_hash:
+            existing = self._session.execute(
+                select(ProcurementTenderDocument).where(
+                    ProcurementTenderDocument.tender_id == tender_id,
+                    ProcurementTenderDocument.document_identity_hash == identity_hash,
+                )
+            ).scalar_one_or_none()
+
+        if not existing and sha256:
             existing = self._session.execute(
                 select(ProcurementTenderDocument).where(
                     ProcurementTenderDocument.tender_id == tender_id,
                     ProcurementTenderDocument.sha256 == sha256,
                 )
             ).scalar_one_or_none()
+
         if existing:
             for key in ("local_path", "download_status", "text_extraction_status",
-                        "extracted_text_path", "extracted_text_chars", "error_message"):
+                        "extracted_text_path", "extracted_text_chars", "error_message",
+                        "source_document_id", "file_name", "file_url", "content_type",
+                        "size_bytes", "raw_meta"):
                 if key in data:
                     setattr(existing, key, data[key])
+            if identity_hash:
+                existing.document_identity_hash = identity_hash
+                existing.document_identity_source = identity_source
+            if sha256:
+                existing.sha256 = sha256
             existing.updated_at = datetime.now(timezone.utc)
             self._session.flush()
             return existing
+
         doc = ProcurementTenderDocument(
             tender_id=tender_id,
             source_document_id=data.get("source_document_id"),
@@ -181,6 +238,8 @@ class TenderRepository:
             content_type=data.get("content_type"),
             size_bytes=data.get("size_bytes"),
             sha256=sha256,
+            document_identity_hash=identity_hash,
+            document_identity_source=identity_source,
             download_status=data.get("download_status", "pending"),
             text_extraction_status=data.get("text_extraction_status", "pending"),
             extracted_text_path=data.get("extracted_text_path"),
@@ -381,8 +440,34 @@ class TenderRepository:
         ).scalars().all())
 
 
+_URL_TRACKING_PARAMS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+                        "ref", "referrer", "source", "mc_cid", "mc_eid", "fbclid", "gclid",
+                        "yclid", "igshid"}
+
+
+def _normalize_url_for_dedup(url: str) -> str:
+    url = url.strip().lower()
+    url = _re.sub(r"#.*$", "", url)
+    if "?" in url:
+        base, qs = url.split("?", 1)
+        params = []
+        for part in qs.split("&"):
+            if "=" in part:
+                key = part.split("=", 1)[0]
+                if key not in _URL_TRACKING_PARAMS:
+                    params.append(part)
+            else:
+                params.append(part)
+        params.sort()
+        url = f"{base}?{'&'.join(params)}" if params else base
+    url = url.rstrip("/")
+    while "//" in url.replace("://", "::"):
+        url = url.replace("//", "/")
+    url = url.replace("::", "://")
+    return url
+
+
 def _normalize_customer_name(name: str) -> str:
-    import re as _re
     cleaned = _re.sub(r"\s+", " ", name.strip().lower())
     for prefix in (
         'ооо', 'оао', 'зао', 'пао', 'ао', 'гоу', 'моу', 'фгуп', 'гуп',
