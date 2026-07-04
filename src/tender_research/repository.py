@@ -1,0 +1,393 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session
+
+from src.tender_research.dedupe import content_hash
+from src.tender_research.errors import TenderResearchError
+from src.tender_research.models import (
+    ProcurementCustomer,
+    ProcurementRawArtifact,
+    ProcurementTender,
+    ProcurementTenderDocument,
+    ProcurementTenderSearchQuery,
+    ProcurementWebPage,
+    ProcurementWebSearchResult,
+)
+
+
+class TenderRepository:
+    def __init__(self, session: Session):
+        self._session = session
+
+    # ── ProcurementTender ──
+
+    def upsert_tender(self, data: dict) -> ProcurementTender:
+        source = data["source"]
+        external_id = data["external_id"]
+        existing = self._session.execute(
+            select(ProcurementTender).where(
+                ProcurementTender.source == source,
+                ProcurementTender.external_id == external_id,
+            )
+        ).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if existing:
+            update_data = {}
+            for key in ("title", "description", "customer_name", "customer_inn", "customer_kpp",
+                        "region", "platform_name", "platform_url", "eis_url", "nmck_amount",
+                        "currency", "publication_date", "application_deadline", "auction_date",
+                        "status", "law_type", "registry_number", "purchase_number"):
+                if key in data:
+                    update_data[key] = data[key]
+            if "raw_payload" in data:
+                update_data["raw_payload"] = data["raw_payload"]
+            if "content_hash" in data:
+                update_data["content_hash"] = data["content_hash"]
+            update_data["last_seen_at"] = now
+            update_data["updated_at"] = now
+            self._session.execute(
+                update(ProcurementTender).where(
+                    ProcurementTender.source == source,
+                    ProcurementTender.external_id == external_id,
+                ).values(**update_data)
+            )
+            self._session.flush()
+            self._session.refresh(existing)
+            return existing
+        tender = ProcurementTender(
+            source=source,
+            external_id=external_id,
+            registry_number=data.get("registry_number"),
+            purchase_number=data.get("purchase_number"),
+            law_type=data.get("law_type"),
+            title=data["title"],
+            description=data.get("description"),
+            customer_name=data.get("customer_name"),
+            customer_inn=data.get("customer_inn"),
+            customer_kpp=data.get("customer_kpp"),
+            region=data.get("region"),
+            platform_name=data.get("platform_name"),
+            platform_url=data.get("platform_url"),
+            eis_url=data.get("eis_url"),
+            nmck_amount=data.get("nmck_amount"),
+            currency=data.get("currency"),
+            publication_date=data.get("publication_date"),
+            application_deadline=data.get("application_deadline"),
+            auction_date=data.get("auction_date"),
+            status=data.get("status"),
+            raw_payload=data.get("raw_payload"),
+            content_hash=data.get("content_hash"),
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+        self._session.add(tender)
+        self._session.flush()
+        return tender
+
+    def get_tender_by_id(self, tender_id: str) -> ProcurementTender | None:
+        return self._session.get(ProcurementTender, tender_id)
+
+    def get_tender_by_external(self, source: str, external_id: str) -> ProcurementTender | None:
+        return self._session.execute(
+            select(ProcurementTender).where(
+                ProcurementTender.source == source,
+                ProcurementTender.external_id == external_id,
+            )
+        ).scalar_one_or_none()
+
+    def list_tenders(self, limit: int = 100, offset: int = 0) -> list[ProcurementTender]:
+        return list(self._session.execute(
+            select(ProcurementTender).order_by(ProcurementTender.created_at.desc()).limit(limit).offset(offset)
+        ).scalars().all())
+
+    def count_tenders(self) -> int:
+        return self._session.execute(select(func.count(ProcurementTender.id))).scalar() or 0
+
+    # ── ProcurementCustomer ──
+
+    def upsert_customer(self, data: dict) -> ProcurementCustomer:
+        inn = data.get("inn")
+        kpp = data.get("kpp")
+        existing = None
+        if inn and kpp:
+            existing = self._session.execute(
+                select(ProcurementCustomer).where(
+                    ProcurementCustomer.inn == inn,
+                    ProcurementCustomer.kpp == kpp,
+                )
+            ).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if existing:
+            existing.last_seen_at = now
+            existing.tenders_count += 1
+            if "name" in data:
+                existing.name = data["name"]
+            if "region" in data:
+                existing.region = data["region"]
+            if "raw_last_payload" in data:
+                existing.raw_last_payload = data["raw_last_payload"]
+            existing.updated_at = now
+            self._session.flush()
+            self._session.refresh(existing)
+            return existing
+        customer = ProcurementCustomer(
+            name=data.get("name", ""),
+            inn=inn,
+            kpp=kpp,
+            region=data.get("region"),
+            normalized_name=_normalize_customer_name(data.get("name", "")),
+            first_seen_at=now,
+            last_seen_at=now,
+            tenders_count=1,
+            raw_last_payload=data.get("raw_last_payload"),
+        )
+        self._session.add(customer)
+        self._session.flush()
+        return customer
+
+    def count_customers(self) -> int:
+        return self._session.execute(select(func.count(ProcurementCustomer.id))).scalar() or 0
+
+    # ── ProcurementTenderDocument ──
+
+    def upsert_document(self, data: dict) -> ProcurementTenderDocument:
+        tender_id = data["tender_id"]
+        sha256 = data.get("sha256")
+        existing = None
+        if sha256:
+            existing = self._session.execute(
+                select(ProcurementTenderDocument).where(
+                    ProcurementTenderDocument.tender_id == tender_id,
+                    ProcurementTenderDocument.sha256 == sha256,
+                )
+            ).scalar_one_or_none()
+        if existing:
+            for key in ("local_path", "download_status", "text_extraction_status",
+                        "extracted_text_path", "extracted_text_chars", "error_message"):
+                if key in data:
+                    setattr(existing, key, data[key])
+            existing.updated_at = datetime.now(timezone.utc)
+            self._session.flush()
+            return existing
+        doc = ProcurementTenderDocument(
+            tender_id=tender_id,
+            source_document_id=data.get("source_document_id"),
+            file_name=data["file_name"],
+            file_url=data.get("file_url"),
+            local_path=data.get("local_path"),
+            content_type=data.get("content_type"),
+            size_bytes=data.get("size_bytes"),
+            sha256=sha256,
+            download_status=data.get("download_status", "pending"),
+            text_extraction_status=data.get("text_extraction_status", "pending"),
+            extracted_text_path=data.get("extracted_text_path"),
+            extracted_text_chars=data.get("extracted_text_chars"),
+            raw_meta=data.get("raw_meta"),
+            error_message=data.get("error_message"),
+        )
+        self._session.add(doc)
+        self._session.flush()
+        return doc
+
+    def count_documents(self) -> int:
+        return self._session.execute(select(func.count(ProcurementTenderDocument.id))).scalar() or 0
+
+    def count_documents_by_status(self, status: str) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTenderDocument.id)).where(
+                ProcurementTenderDocument.download_status == status
+            )
+        ).scalar() or 0
+
+    # ── ProcurementTenderSearchQuery ──
+
+    def upsert_search_query(self, data: dict) -> ProcurementTenderSearchQuery:
+        tender_id = data["tender_id"]
+        query = data["query"]
+        provider = data["provider"]
+        existing = self._session.execute(
+            select(ProcurementTenderSearchQuery).where(
+                ProcurementTenderSearchQuery.tender_id == tender_id,
+                ProcurementTenderSearchQuery.provider == provider,
+                ProcurementTenderSearchQuery.query == query,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            if "status" in data:
+                existing.status = data["status"]
+            existing.results_count = data.get("results_count", existing.results_count)
+            existing.error_message = data.get("error_message")
+            if data.get("status") == "done":
+                existing.executed_at = datetime.now(timezone.utc)
+            self._session.flush()
+            return existing
+        sq = ProcurementTenderSearchQuery(
+            tender_id=tender_id,
+            query=query,
+            query_type=data["query_type"],
+            provider=provider,
+            status=data.get("status", "pending"),
+            results_count=data.get("results_count"),
+            error_message=data.get("error_message"),
+        )
+        self._session.add(sq)
+        self._session.flush()
+        return sq
+
+    def count_search_queries(self) -> int:
+        return self._session.execute(select(func.count(ProcurementTenderSearchQuery.id))).scalar() or 0
+
+    # ── ProcurementWebSearchResult ──
+
+    def upsert_search_result(self, data: dict) -> ProcurementWebSearchResult:
+        query_id = data["query_id"]
+        url_hash_val = data["url_hash"]
+        existing = self._session.execute(
+            select(ProcurementWebSearchResult).where(
+                ProcurementWebSearchResult.query_id == query_id,
+                ProcurementWebSearchResult.url_hash == url_hash_val,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            return existing
+        sr = ProcurementWebSearchResult(
+            tender_id=data["tender_id"],
+            query_id=query_id,
+            provider=data["provider"],
+            rank=data["rank"],
+            title=data["title"],
+            url=data["url"],
+            normalized_url=data["normalized_url"],
+            snippet=data["snippet"],
+            display_url=data.get("display_url"),
+            raw_result=data.get("raw_result"),
+            url_hash=url_hash_val,
+        )
+        self._session.add(sr)
+        self._session.flush()
+        return sr
+
+    def count_search_results(self) -> int:
+        return self._session.execute(select(func.count(ProcurementWebSearchResult.id))).scalar() or 0
+
+    # ── ProcurementWebPage ──
+
+    def upsert_web_page(self, data: dict) -> ProcurementWebPage:
+        url_hash_val = data["url_hash"]
+        existing = self._session.execute(
+            select(ProcurementWebPage).where(ProcurementWebPage.url_hash == url_hash_val)
+        ).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if existing:
+            for key in ("fetch_status", "http_status", "content_type", "final_url",
+                        "html_path", "text_path", "extracted_title", "extracted_text_chars",
+                        "raw_meta", "error_message", "fetched_at", "fetcher"):
+                if key in data:
+                    setattr(existing, key, data[key])
+            existing.updated_at = now
+            self._session.flush()
+            return existing
+        wp = ProcurementWebPage(
+            tender_id=data.get("tender_id"),
+            search_result_id=data.get("search_result_id"),
+            url=data["url"],
+            normalized_url=data["normalized_url"],
+            url_hash=url_hash_val,
+            fetcher=data.get("fetcher", "requests"),
+            fetch_status=data.get("fetch_status", "pending"),
+            http_status=data.get("http_status"),
+            content_type=data.get("content_type"),
+            final_url=data.get("final_url"),
+            html_path=data.get("html_path"),
+            text_path=data.get("text_path"),
+            extracted_title=data.get("extracted_title"),
+            extracted_text_chars=data.get("extracted_text_chars"),
+            raw_meta=data.get("raw_meta", {}),
+            error_message=data.get("error_message"),
+            fetched_at=data.get("fetched_at"),
+        )
+        self._session.add(wp)
+        self._session.flush()
+        return wp
+
+    def count_web_pages(self) -> int:
+        return self._session.execute(select(func.count(ProcurementWebPage.id))).scalar() or 0
+
+    def count_web_pages_by_status(self, status: str) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementWebPage.id)).where(
+                ProcurementWebPage.fetch_status == status
+            )
+        ).scalar() or 0
+
+    # ── ProcurementRawArtifact ──
+
+    def upsert_artifact(self, data: dict) -> ProcurementRawArtifact:
+        sha256_val = data["sha256"]
+        existing = self._session.execute(
+            select(ProcurementRawArtifact).where(ProcurementRawArtifact.sha256 == sha256_val)
+        ).scalar_one_or_none()
+        if existing:
+            return existing
+        artifact = ProcurementRawArtifact(
+            tender_id=data.get("tender_id"),
+            artifact_type=data["artifact_type"],
+            source=data["source"],
+            local_path=data["local_path"],
+            sha256=sha256_val,
+            size_bytes=data["size_bytes"],
+            content_type=data.get("content_type"),
+            raw_meta=data.get("raw_meta"),
+        )
+        self._session.add(artifact)
+        self._session.flush()
+        return artifact
+
+    def count_artifacts(self) -> int:
+        return self._session.execute(select(func.count(ProcurementRawArtifact.id))).scalar() or 0
+
+    # ── Search query listing ──
+
+    def list_pending_search_queries(self, tender_id: str, provider: str) -> list[ProcurementTenderSearchQuery]:
+        return list(self._session.execute(
+            select(ProcurementTenderSearchQuery).where(
+                ProcurementTenderSearchQuery.tender_id == tender_id,
+                ProcurementTenderSearchQuery.provider == provider,
+                ProcurementTenderSearchQuery.status == "pending",
+            ).order_by(ProcurementTenderSearchQuery.created_at.asc())
+        ).scalars().all())
+
+    def list_search_results_for_tender(self, tender_id: str) -> list[ProcurementWebSearchResult]:
+        return list(self._session.execute(
+            select(ProcurementWebSearchResult).where(
+                ProcurementWebSearchResult.tender_id == tender_id,
+            ).order_by(ProcurementWebSearchResult.rank.asc())
+        ).scalars().all())
+
+    def list_unfetched_results(self, tender_id: str, max_results: int = 20) -> list[ProcurementWebSearchResult]:
+        return list(self._session.execute(
+            select(ProcurementWebSearchResult).where(
+                ProcurementWebSearchResult.tender_id == tender_id,
+                ~ProcurementWebSearchResult.id.in_(
+                    select(ProcurementWebPage.search_result_id).where(
+                        ProcurementWebPage.tender_id == tender_id,
+                        ProcurementWebPage.search_result_id.isnot(None),
+                    )
+                ),
+            ).limit(max_results)
+        ).scalars().all())
+
+
+def _normalize_customer_name(name: str) -> str:
+    import re as _re
+    cleaned = _re.sub(r"\s+", " ", name.strip().lower())
+    for prefix in (
+        'ооо', 'оао', 'зао', 'пао', 'ао', 'гоу', 'моу', 'фгуп', 'гуп',
+        'гбу', 'гау', 'фгбоу', 'гбдоу', 'мадоу', 'мбдоу',
+        '"', '«', '»',
+    ):
+        cleaned = cleaned.replace(prefix, "").strip()
+    return _re.sub(r"\s+", " ", cleaned).strip()

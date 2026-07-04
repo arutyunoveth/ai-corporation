@@ -1,5 +1,14 @@
 from src.modules.action_queue.models import ActionQueueApproval, ActionQueueRecord, ActionQueueSet
 from src.modules.agent_registry.models import AgentRegistryRecord, AgentRegistrySet
+from src.tender_research.models import (
+    ProcurementCustomer,
+    ProcurementRawArtifact,
+    ProcurementTender,
+    ProcurementTenderDocument,
+    ProcurementTenderSearchQuery,
+    ProcurementWebPage,
+    ProcurementWebSearchResult,
+)
 from src.modules.action_console.models import ActionConsoleItem, ActionConsoleRecord, ActionConsoleSet
 from src.modules.acceptance_control.models import (
     AcceptanceControlRecord,
@@ -499,6 +508,13 @@ __all__ = [
     "VendorConnectorCapability",
     "VendorConnectorRecord",
     "VendorConnectorSet",
+    "ProcurementCustomer",
+    "ProcurementRawArtifact",
+    "ProcurementTender",
+    "ProcurementTenderDocument",
+    "ProcurementTenderSearchQuery",
+    "ProcurementWebPage",
+    "ProcurementWebSearchResult",
     "WorkflowRunRecord",
     "WorkflowRunSet",
     "WorkflowStepRecord",

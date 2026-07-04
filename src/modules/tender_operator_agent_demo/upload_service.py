@@ -24,6 +24,9 @@ from src.modules.tender_operator_agent_demo.event_log import (
 )
 from src.modules.tender_operator_agent_demo.procurement_discovery import get_supplier_profile
 from src.modules.tender_operator_agent_demo.relevance_scoring import score_procurement_document_text
+from src.modules.supplier_search.internet_supplier_search import search_suppliers
+from src.modules.supplier_search.yandex_search_client import YandexSearchClient
+from src.shared.config.settings import get_settings
 from src.modules.tender_operator_agent_demo.quote_normalizer import (
     SpreadsheetSource,
     build_economics_summary,
@@ -883,6 +886,94 @@ def _import_runner_module():
     from scripts import run_tender_operator_pilot as pilot_runner
 
     return pilot_runner
+
+
+def _try_run_llm_workflow(
+    run_id: str,
+    notice_text: str | None,
+    technical_spec_text: str | None,
+    contract_draft_text: str | None,
+    quote_paths: list[Path],
+    provider_mode: str = "llm",
+) -> dict[str, Any] | None:
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from src.modules.controlled_llm_prebid.service import run_controlled_tender_operator_workflow
+        from src.shared.db.base import Base
+
+        settings = get_settings()
+        if not settings.database_url:
+            return None
+
+        engine = create_engine(settings.database_url)
+        Base.metadata.create_all(engine)
+
+        context = {
+            "deal_id": f"DEMO-{run_id}",
+            "operator_id": "tender_operator_demo",
+            "operator_profile": {},
+            "documents": {
+                "notice_text": notice_text or "",
+                "technical_spec_text": technical_spec_text or "",
+                "contract_draft_text": contract_draft_text or "",
+            },
+            "workflow_guardrails": {
+                "manual_only": True,
+                "no_email_send": True,
+                "no_platform_submission": True,
+                "human_review_required": True,
+            },
+            "tkp_inputs": [],
+        }
+        with Session(engine) as session:
+            result = run_controlled_tender_operator_workflow(
+                session,
+                provider_mode=provider_mode,
+                context=context,
+                include_quote_normalization=False,
+                include_bid_decision=False,
+                simulate_invalid_output=False,
+                provider_name_override=None,
+            )
+            return {
+                "analysis_mode": result.analysis_mode,
+                "resolved_provider": result.resolved_provider,
+                "requirements": result.requirements,
+                "supplier_questions": result.supplier_questions,
+                "rfq_draft": result.rfq_draft,
+                "contract_risks": result.contract_risks,
+                "bid_decision": result.bid_decision,
+            }
+    except Exception:
+        return None
+
+
+def _run_supplier_internet_search(
+    tender_title: str,
+    notice_text: str | None = None,
+    technical_spec_text: str | None = None,
+) -> SupplierSearchOutcome:
+    from src.modules.supplier_search.internet_supplier_search import SupplierSearchOutcome, search_suppliers
+    from src.modules.supplier_search.yandex_search_client import YandexSearchClient
+
+    settings = get_settings()
+    api_key = settings.yandex_search_api_key
+    folder_id = settings.yandex_search_folder_id
+    if not api_key or not folder_id:
+        return SupplierSearchOutcome(error="Yandex Search API не настроен. Добавьте AI_CORP_YANDEX_SEARCH_API_KEY и AI_CORP_YANDEX_SEARCH_FOLDER_ID.")
+    try:
+        client = YandexSearchClient(api_key=api_key, folder_id=folder_id, timeout=30)
+        return search_suppliers(
+            client=client,
+            tender_title=tender_title,
+            notice_text=notice_text,
+            technical_spec_text=technical_spec_text,
+            max_results=10,
+        )
+    except Exception:
+        return SupplierSearchOutcome(error="Не удалось выполнить поиск поставщиков через Yandex Search API.")
 
 
 def _infer_procurement_kind(*texts: str | None) -> str:
@@ -2049,8 +2140,37 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             ],
         ),
         DemoStep(
-            key="questions",
+            key="supplier_search",
             order=3,
+            title="Поиск поставщиков",
+            short_title="Поставщики",
+            status=DemoStepStatus.DONE if metadata.get("supplier_search", {}).get("suppliers") else DemoStepStatus.PARTIAL,
+            description="Интернет-поиск потенциальных поставщиков через Yandex Search API.",
+            agent_action="Выполнен поиск поставщиков на основе требований закупки.",
+            result_summary=f"Найдено поставщиков: {metadata.get('supplier_search', {}).get('total_found', 0)}." if metadata.get("supplier_search", {}).get("suppliers") else "Поиск поставщиков не выполнялся или не настроен.",
+            findings=[f"{s['name']} — {s['site']}" for s in metadata.get("supplier_search", {}).get("suppliers", [])[:5]],
+            human_review=["Проверить найденных поставщиков вручную перед отправкой RFQ."],
+            trace=trace.get("supplier_search", "Поиск поставщиков выполнен через Yandex Search API без внешних изменений."),
+            result_sections=[
+                DemoDetailSection(
+                    title="Найденные поставщики",
+                    kind="table",
+                    columns=["Поставщик", "Сайт", "Сигналы"],
+                    rows=[
+                        {"Поставщик": s["name"], "Сайт": s["site"], "Сигналы": ", ".join(s.get("signals", []) or ["—"])}
+                        for s in metadata.get("supplier_search", {}).get("suppliers", [])[:10]
+                    ],
+                )
+                if metadata.get("supplier_search", {}).get("suppliers")
+                else DemoDetailSection(title="Статус поиска", kind="bullets", items=[
+                    metadata.get("supplier_search", {}).get("query", "Поиск не выполнялся"),
+                    f"Поставщиков не найдено или API не настроено.",
+                ]),
+            ],
+        ),
+        DemoStep(
+            key="questions",
+            order=4,
             title="Вопросы",
             short_title="Вопросы",
             status=DemoStepStatus.NEEDS_REVIEW,
@@ -2066,7 +2186,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="rfq",
-            order=4,
+            order=5,
             title="RFQ",
             short_title="RFQ",
             status=DemoStepStatus.DONE if requirements["requirements"] else DemoStepStatus.PARTIAL,
@@ -2080,7 +2200,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="quotes",
-            order=5,
+            order=6,
             title="ТКП",
             short_title="ТКП",
             status=DemoStepStatus.BLOCKED if quote_blocked else (DemoStepStatus.PARTIAL if quote_partial else DemoStepStatus.DONE),
@@ -2129,7 +2249,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="economics",
-            order=6,
+            order=7,
             title="Экономика",
             short_title="Экономика",
             status=DemoStepStatus.BLOCKED if economics_blocked else (DemoStepStatus.PARTIAL if economics_partial else DemoStepStatus.NEEDS_REVIEW),
@@ -2153,7 +2273,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="risks",
-            order=7,
+            order=9,
             title="Риски",
             short_title="Риски",
             status=DemoStepStatus.WARNING,
@@ -2182,7 +2302,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="decision",
-            order=8 if not metadata.get("procurement_source") else 8,
+            order=9,
             title="Решение",
             short_title="Решение",
             status=DemoStepStatus.NEEDS_REVIEW,
@@ -2864,12 +2984,41 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         if not contract_draft_text:
             warnings.append("Contract draft text was not fully extracted; contract risks are partially inferred.")
 
-        pilot_runner = _import_runner_module()
-        requirements = pilot_runner._run_stub_requirements_extraction(notice_text, technical_spec_text, contract_draft_text)
-        calibrated_risks = pilot_runner._run_stub_calibrated_contract_risk(contract_draft_text or combined_text)
-        supplier_questions = pilot_runner._run_stub_supplier_questions()
+        provider_mode = "llm"
+        llm_result = _try_run_llm_workflow(
+            run_id=run_id,
+            notice_text=notice_text,
+            technical_spec_text=technical_spec_text,
+            contract_draft_text=contract_draft_text,
+            quote_paths=quote_paths,
+            provider_mode=provider_mode,
+        )
+        if llm_result is not None:
+            requirements = llm_result.get("requirements", {})
+            calibrated_risks = llm_result.get("contract_risks", [])
+            supplier_questions = llm_result.get("supplier_questions", [])
+            rfq_draft = llm_result.get("rfq_draft", {})
+            analysis_mode = llm_result.get("analysis_mode", "llm_tender_operator_provider")
+            append_demo_run_event(
+                run_id,
+                "llm_analysis_completed",
+                f"LLM-анализ выполнен через {llm_result.get('resolved_provider', 'llm')}.",
+                {"analysis_mode": analysis_mode, "resolved_provider": llm_result.get("resolved_provider")},
+            )
+        else:
+            pilot_runner = _import_runner_module()
+            requirements = pilot_runner._run_stub_requirements_extraction(notice_text, technical_spec_text, contract_draft_text)
+            calibrated_risks = pilot_runner._run_stub_calibrated_contract_risk(contract_draft_text or combined_text)
+            supplier_questions = pilot_runner._run_stub_supplier_questions()
+            rfq_draft = {}
+            analysis_mode = "controlled_runner_adapter" if core_complete else "fallback_deterministic_adapter"
+            append_demo_run_event(
+                run_id,
+                "stub_analysis_fallback",
+                "LLM-анализ недоступен, используется детерминированный fallback.",
+                {"core_complete": core_complete},
+            )
 
-        analysis_mode = "controlled_runner_adapter" if core_complete else "fallback_deterministic_adapter"
         spreadsheet_comparison = build_quote_comparison(spreadsheet_sources, analysis_mode)
         if spreadsheet_comparison.supplier_quotes_found:
             tkp_comparison = _serialize_quote_comparison(spreadsheet_comparison)
@@ -2883,9 +3032,30 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             )
             economics = _serialize_economics_summary(economics_summary)
         else:
-            tkp_comparison = pilot_runner._run_stub_tkp_comparison(quote_paths) if quote_paths else None
-            economics = pilot_runner._run_stub_economics(tkp_comparison, {"found": False}) if tkp_comparison else None
-        bid_decision = pilot_runner._run_stub_bid_decision(tkp_comparison, economics, calibrated_risks) if tkp_comparison and economics else None
+            tkp_comparison = None
+            economics = None
+        bid_decision = llm_result.get("bid_decision") if llm_result else None
+
+        supplier_search_outcome = _run_supplier_internet_search(
+            tender_title=metadata.get("tender_title", ""),
+            notice_text=notice_text,
+            technical_spec_text=technical_spec_text,
+        )
+        metadata["supplier_search"] = {
+            "query": supplier_search_outcome.query_used,
+            "total_found": supplier_search_outcome.total_found,
+            "suppliers": [
+                {"name": s.name, "site": s.site, "snippet": s.snippet[:200], "signals": s.relevance_signals}
+                for s in supplier_search_outcome.suppliers
+            ],
+        }
+        if supplier_search_outcome.error:
+            append_demo_run_event(run_id, "supplier_search_warning", f"Поиск поставщиков недоступен: {supplier_search_outcome.error}", {})
+        elif supplier_search_outcome.total_found:
+            append_demo_run_event(
+                run_id, "supplier_search_completed", f"Найдено {supplier_search_outcome.total_found} потенциальных поставщиков.",
+                {"query": supplier_search_outcome.query_used, "count": supplier_search_outcome.total_found},
+            )
 
         limitations = list(dict.fromkeys(metadata.get("limitations", [])))
         if not core_complete:
@@ -2972,7 +3142,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             },
             "trace": {
                 "overall_explanation": "Система не выполнила внешних действий и остановила анализ в безопасном режиме после внутренней ошибки.",
-                "per_step": {step: "Анализ остановлен в safe mode." for step in ("documents", "requirements", "questions", "rfq", "quotes", "economics", "risks", "decision")},
+                "per_step": {step: "Анализ остановлен в safe mode." for step in ("documents", "requirements", "supplier_search", "questions", "rfq", "quotes", "economics", "risks", "decision")},
                 "limitations": metadata["limitations"],
             },
         }

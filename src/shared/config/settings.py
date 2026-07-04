@@ -25,12 +25,36 @@ class Settings(BaseSettings):
     yandex_api_key: str | None = None
     yandex_iam_token: str | None = None
     yandex_base_url: str = "https://ai.api.cloud.yandex.net/v1"
+    yandex_search_api_key: str | None = None
+    yandex_search_folder_id: str | None = None
     cloudru_api_key: str | None = None
     cloudru_base_url: str = "https://foundation-models.api.cloud.ru/v1"
     gigachat_auth_key: str | None = None
     gigachat_scope: str = "GIGACHAT_API_PERS"
     gigachat_oauth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
     gigachat_base_url: str = "https://gigachat.devices.sberbank.ru/api/v1"
+
+    arvectum_data_dir: str = "./data"
+    tender_research_enabled: bool = True
+    tender_research_batch_limit: int = 10
+    tender_research_eis_mode: str = "demo"
+    web_search_enabled: bool = False
+    web_search_provider: str = "duckduckgo_html"
+    web_search_max_queries_per_tender: int = 8
+    web_search_max_results_per_query: int = 10
+    web_search_delay_seconds: float = 3.0
+    web_search_timeout_seconds: int = 20
+    web_fetch_enabled: bool = True
+    web_fetch_max_pages_per_tender: int = 20
+    web_fetch_delay_seconds: float = 2.0
+    web_fetch_timeout_seconds: int = 30
+    web_fetch_max_file_size_mb: int = 25
+    web_use_playwright: bool = False
+    web_save_screenshots: bool = False
+    web_deny_domains: str = ""
+    web_allow_domains: str = ""
+    document_download_max_size_mb: int = 100
+    document_extract_max_chars: int = 2_000_000
 
     model_config = SettingsConfigDict(
         env_prefix="AI_CORP_",

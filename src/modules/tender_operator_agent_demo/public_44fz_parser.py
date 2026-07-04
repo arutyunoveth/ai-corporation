@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import html
 import re
+import ssl
 from typing import Any
 from urllib.error import URLError
 from urllib.parse import urljoin, urlparse
-from urllib.request import ProxyHandler, Request, build_opener
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -87,8 +88,11 @@ def fetch_public_44fz_search_page(url: str) -> dict[str, Any]:
             "error": "Only http/https URLs are allowed.",
         }
     request = Request(url, headers={"User-Agent": USER_AGENT}, method="GET")
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
     try:
-        opener = build_opener(ProxyHandler({}))
+        opener = build_opener(HTTPSHandler(context=ssl_ctx), ProxyHandler({}))
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
             html = response.read(MAX_RESPONSE_BYTES + 1).decode("utf-8", errors="replace")
     except URLError as exc:
