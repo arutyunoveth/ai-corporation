@@ -14,6 +14,12 @@ from src.tender_research.config import TenderResearchConfig, load_config
 from src.tender_research.dedupe import content_hash, normalize_url, url_hash
 from src.tender_research.document_store import download_tender_documents
 from src.tender_research.eis_loader import EisTenderLoader
+from src.tender_research.errors import (
+    EisConnectionResetError,
+    EisMissingTokenError,
+    EisNoDataError,
+    classify_eis_error,
+)
 from src.tender_research.providers.duckduckgo_html import DuckDuckGoHtmlSearchProvider
 from src.tender_research.providers.manual_urls import ManualUrlsSearchProvider
 from src.tender_research.query_builder import build_search_queries
@@ -36,7 +42,7 @@ class TenderResearchPipeline:
         self._session = session
         self._config = config or load_config()
         self._repo = TenderRepository(session)
-        self._eis = eis_loader or EisTenderLoader(mode=self._config.eis_mode)
+        self._eis = eis_loader or EisTenderLoader(mode=self._config.eis_mode, discovery_mode=self._config.eis_discovery_mode)
         self._search_provider = search_provider or DuckDuckGoHtmlSearchProvider(
             timeout=int(self._config.web_search_timeout_seconds),
         )
@@ -65,19 +71,59 @@ class TenderResearchPipeline:
         saved = 0
         for raw in raw_tenders:
             try:
-                upsert_data = self._normalize_tender(raw)
-                tender = self._repo.upsert_tender(upsert_data.tender)
-                if upsert_data.customer:
-                    self._repo.upsert_customer(upsert_data.customer)
-                for doc_data in upsert_data.documents:
-                    doc_data["tender_id"] = tender.id
-                    self._repo.upsert_document(doc_data)
-                self._save_raw_payload(tender, raw)
-                saved += 1
+                saved += self._save_one_tender(raw)
             except Exception as e:
                 logger.error("Failed to ingest tender %s: %s", raw.external_id, e)
         self._session.commit()
         return saved
+
+    def ingest_eis_by_registry_numbers(
+        self,
+        registry_numbers: list[str],
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "total": len(registry_numbers),
+            "saved": 0,
+            "skipped": 0,
+            "errors": [],
+            "connection_resets": 0,
+            "no_data": 0,
+            "missing_token": False,
+        }
+        numbers = registry_numbers[:limit] if limit else registry_numbers
+        for rn in numbers:
+            try:
+                raw = self._eis.fetch_by_registry_number(rn)
+                if raw is None:
+                    result["skipped"] += 1
+                    continue
+                self._save_one_tender(raw)
+                result["saved"] += 1
+            except EisMissingTokenError:
+                result["missing_token"] = True
+                result["errors"].append(f"{rn}: token missing")
+                break
+            except EisConnectionResetError:
+                result["connection_resets"] += 1
+                result["errors"].append(f"{rn}: connection reset")
+            except EisNoDataError:
+                result["no_data"] += 1
+            except Exception as e:
+                result["errors"].append(f"{rn}: {e}")
+        self._session.commit()
+        return result
+
+    def _save_one_tender(self, raw: EisTenderRaw) -> int:
+        upsert_data = self._normalize_tender(raw)
+        tender = self._repo.upsert_tender(upsert_data.tender)
+        if upsert_data.customer:
+            self._repo.upsert_customer(upsert_data.customer)
+        for doc_data in upsert_data.documents:
+            doc_data["tender_id"] = tender.id
+            self._repo.upsert_document(doc_data)
+        self._save_raw_payload(tender, raw)
+        return 1
 
     # ── Step 2: Download documents ──
 

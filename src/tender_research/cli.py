@@ -7,8 +7,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+
+# Load .env and .env.local early so ZakupkiSoapSettings (which reads os.environ)
+# can find ZAKUPKI_GOV_RU_SOAP_TOKEN and other env vars.
+_load_dotenv_result = load_dotenv(".env", override=False)
+_load_dotenv_local_result = load_dotenv(".env.local", override=False)
 
 from src.tender_research.config import load_config
 from src.tender_research.pipeline import TenderResearchPipeline
@@ -29,6 +35,29 @@ def _get_session() -> Session:
     Base.metadata.create_all(engine)
     from sqlalchemy.orm import sessionmaker
     return sessionmaker(bind=engine)()
+
+
+def cmd_check_eis_config(args: argparse.Namespace) -> None:
+    config = load_config()
+    print(f"eis_mode: {config.eis_mode}")
+    print(f"eis_discovery_mode: {config.eis_discovery_mode}")
+    if config.eis_mode != "real":
+        print("(switching to real mode for diagnostics)")
+    try:
+        from src.tender_research.eis_real_loader import RealEisLoader
+        loader = RealEisLoader()
+        info = loader.check_config()
+    except Exception as e:
+        print(f"check_config error: {e}")
+        return
+    for k, v in info.items():
+        if isinstance(v, list):
+            print(f"  {k}: {', '.join(v)}")
+        else:
+            print(f"  {k}: {v}")
+    print()
+    print("dotenv loaded .env:", _load_dotenv_result)
+    print("dotenv loaded .env.local:", _load_dotenv_local_result)
 
 
 def cmd_stats(args: argparse.Namespace) -> None:
@@ -59,6 +88,38 @@ def _build_pipeline(args: argparse.Namespace) -> TenderResearchPipeline:
         object.__setattr__(config, "eis_mode", args.eis_mode)
     session = _get_session()
     return TenderResearchPipeline(session, config=config)
+
+
+def cmd_ingest_eis_registry_list(args: argparse.Namespace) -> None:
+    file_path = Path(args.file)
+    if not file_path.exists():
+        print(f"Seed file not found: {file_path}")
+        return
+    numbers = [
+        line.strip() for line in file_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not numbers:
+        print("No registry numbers found in seed file.")
+        return
+    print(f"Loaded {len(numbers)} registry numbers from {file_path}")
+
+    pipeline = _build_pipeline(args)
+    result = pipeline.ingest_eis_by_registry_numbers(
+        registry_numbers=numbers,
+        limit=args.limit,
+    )
+    print(f"Registry ingest complete:")
+    print(f"  total: {result['total']}")
+    print(f"  saved: {result['saved']}")
+    print(f"  skipped: {result['skipped']}")
+    print(f"  no_data: {result['no_data']}")
+    print(f"  connection_resets: {result['connection_resets']}")
+    print(f"  missing_token: {result['missing_token']}")
+    if result["errors"]:
+        print(f"  errors ({len(result['errors'])}):")
+        for e in result["errors"][:5]:
+            print(f"    - {e}")
 
 
 def cmd_ingest_eis(args: argparse.Namespace) -> None:
@@ -146,6 +207,8 @@ def main() -> None:
 
     p_stats = sub.add_parser("stats", help="Show pipeline statistics")
 
+    p_check = sub.add_parser("check-eis-config", help="Check EIS SOAP configuration and available methods")
+
     _common = argparse.ArgumentParser(add_help=False)
     _common.add_argument("--eis-mode", default=None, choices=["demo", "real"], help="EIS loader mode")
 
@@ -164,6 +227,10 @@ def main() -> None:
     p_batch.add_argument("--query", default=None)
     p_batch.add_argument("--web-search", action="store_true", help="Enable web search")
 
+    p_reg = sub.add_parser("ingest-eis-registry-list", parents=[_common], help="Ingest tenders by registry number list")
+    p_reg.add_argument("--file", default="data/eis_seed/registry_numbers.txt", help="Path to seed file")
+    p_reg.add_argument("--limit", type=int, default=None, help="Max tenders to process")
+
     p_one = sub.add_parser("research-one", parents=[_common], help="Full cycle for one tender")
     p_one.add_argument("external_id", help="EIS external ID")
 
@@ -181,8 +248,12 @@ def main() -> None:
 
     if args.command == "stats":
         cmd_stats(args)
+    elif args.command == "check-eis-config":
+        cmd_check_eis_config(args)
     elif args.command == "ingest-eis":
         cmd_ingest_eis(args)
+    elif args.command == "ingest-eis-registry-list":
+        cmd_ingest_eis_registry_list(args)
     elif args.command == "research-batch":
         cmd_research_batch(args)
     elif args.command == "research-one":

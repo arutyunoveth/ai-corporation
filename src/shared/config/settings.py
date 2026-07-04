@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     tender_research_enabled: bool = True
     tender_research_batch_limit: int = 10
     tender_research_eis_mode: str = "demo"
+    tender_research_eis_discovery_mode: str = "registry_numbers"
     web_search_enabled: bool = False
     web_search_provider: str = "duckduckgo_html"
     web_search_max_queries_per_tender: int = 8
@@ -58,7 +59,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="AI_CORP_",
-        env_file=".env",
+        env_file=[".env", ".env.local"],
         extra="ignore",
     )
 

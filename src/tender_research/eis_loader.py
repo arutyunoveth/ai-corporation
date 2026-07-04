@@ -11,9 +11,17 @@ logger = logging.getLogger(__name__)
 
 
 class EisTenderLoader:
-    def __init__(self, mode: str = "demo", real_loader=None):
+    def __init__(self, mode: str = "demo", discovery_mode: str = "registry_numbers", real_loader=None):
         self._mode = mode
+        self._discovery_mode = discovery_mode
         self._real = real_loader
+
+    @property
+    def _real_loader(self):
+        if self._real is None:
+            from src.tender_research.eis_real_loader import RealEisLoader
+            self._real = RealEisLoader()
+        return self._real
 
     def fetch_tenders(
         self,
@@ -24,18 +32,23 @@ class EisTenderLoader:
         query: str | None = None,
     ) -> list[EisTenderRaw]:
         if self._mode == "real":
-            if self._real is None:
-                from src.tender_research.eis_real_loader import RealEisLoader
-                self._real = RealEisLoader()
-            return self._real.fetch_tenders(date_from, date_to, limit, law_type, query)
+            if self._discovery_mode == "search":
+                return self._real_loader.fetch_tenders(date_from, date_to, limit, law_type, query)
+            logger.warning(
+                "fetch_tenders() called in real mode but discovery_mode=%s "
+                "does not support search. Use fetch_by_registry_numbers or switch to "
+                "discovery_mode=search. Returning demo data as fallback.",
+                self._discovery_mode,
+            )
+            return _get_demo_tenders(date_from, date_to, limit, law_type, query)
         return _get_demo_tenders(date_from, date_to, limit, law_type, query)
 
     def fetch_tender_details(self, external_id: str) -> EisTenderRaw | None:
         if self._mode == "real":
-            if self._real is None:
-                from src.tender_research.eis_real_loader import RealEisLoader
-                self._real = RealEisLoader()
-            return self._real.fetch_tender_details(external_id)
+            try:
+                return self._real_loader.fetch_tender_details(external_id)
+            except Exception:
+                return None
         for t in _get_demo_tenders():
             if t.external_id == external_id:
                 return t
@@ -43,11 +56,19 @@ class EisTenderLoader:
 
     def fetch_tender_documents(self, tender: EisTenderRaw) -> list[EisDocumentRaw]:
         if self._mode == "real":
-            if self._real is None:
-                from src.tender_research.eis_real_loader import RealEisLoader
-                self._real = RealEisLoader()
-            return self._real.fetch_tender_documents(tender)
+            try:
+                return self._real_loader.fetch_tender_documents(tender)
+            except Exception:
+                return []
         return _get_demo_documents(tender.external_id)
+
+    def fetch_by_registry_number(self, registry_number: str) -> EisTenderRaw | None:
+        if self._mode != "real":
+            for t in _get_demo_tenders():
+                if t.registry_number == registry_number:
+                    return t
+            return None
+        return self._real_loader.fetch_by_registry_number(registry_number)
 
 
 # ── Demo / fallback data for smoke testing ──

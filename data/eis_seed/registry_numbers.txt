@@ -1,0 +1,5 @@
+# EIS registry numbers for seed loading
+# One per line. Lines starting with # are ignored.
+0373100000124000001
+0373100000124000002
+0373100000124000003

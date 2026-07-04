@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from src.tender_research.eis_loader import EisTenderLoader
@@ -192,16 +193,24 @@ class TestEisTenderLoaderMode:
         docs = loader.fetch_tender_documents(tender)
         assert len(docs) == 2
 
-    def test_real_mode_with_mock(self):
+    def test_real_mode_with_mock_search(self):
         mock_real = MagicMock()
         mock_real.fetch_tenders.return_value = [
             EisTenderRaw(external_id="real-001", title="Real tender"),
         ]
-        loader = EisTenderLoader(mode="real", real_loader=mock_real)
+        loader = EisTenderLoader(mode="real", discovery_mode="search", real_loader=mock_real)
         tenders = loader.fetch_tenders()
         assert len(tenders) == 1
         assert tenders[0].external_id == "real-001"
         mock_real.fetch_tenders.assert_called_once()
+
+    def test_real_mode_registry_numbers_fallback_to_demo(self):
+        mock_real = MagicMock()
+        loader = EisTenderLoader(mode="real", discovery_mode="registry_numbers", real_loader=mock_real)
+        tenders = loader.fetch_tenders()
+        assert len(tenders) == 3
+        assert tenders[0].external_id == "0373100000124000001"
+        mock_real.fetch_tenders.assert_not_called()
 
     def test_real_mode_delegates_details(self):
         mock_real = MagicMock()
@@ -222,6 +231,117 @@ class TestEisTenderLoaderMode:
         docs = loader.fetch_tender_documents(EisTenderRaw(external_id="x", title="x"))
         assert len(docs) == 1
         assert docs[0].file_name == "doc.pdf"
+
+
+# ── Error classification ──
+
+class TestEisErrorClassification:
+    def test_connection_reset_not_missing_token(self):
+        from src.tender_research.errors import classify_eis_error, EisConnectionResetError, EisMissingTokenError
+        err = classify_eis_error(RuntimeError("[Errno 54] Connection reset by peer"))
+        assert isinstance(err, EisConnectionResetError)
+        assert not isinstance(err, EisMissingTokenError)
+
+    def test_missing_token_classified(self):
+        from src.tender_research.errors import classify_eis_error, EisMissingTokenError
+        err = classify_eis_error(RuntimeError("token not configured"))
+        assert isinstance(err, EisMissingTokenError)
+
+    def test_auth_failed_classified(self):
+        from src.tender_research.errors import classify_eis_error, EisAuthFailedError
+        err = classify_eis_error(RuntimeError("HTTP 403 Forbidden"))
+        assert isinstance(err, EisAuthFailedError)
+
+
+# ── Check config diagnostics ──
+
+class TestRealEisLoaderCheckConfig:
+    def test_check_config_unconfigured(self):
+        from unittest.mock import MagicMock
+        from src.tender_research.eis_real_loader import RealEisLoader
+        mock_client = MagicMock()
+        mock_client.is_configured.return_value = False
+        loader = RealEisLoader(soap_client=mock_client)
+        info = loader.check_config()
+        assert info["configured"] is False
+        assert info["token_present"] is False
+        assert "token_masked" in info
+        assert info["available_methods"] == ["(none confirmed)"]
+
+    def test_check_config_masks_token(self):
+        from unittest.mock import MagicMock, patch
+        import os
+        with patch("src.tender_research.eis_real_loader.get_zakupki_soap_settings") as mock_settings:
+            settings = MagicMock()
+            settings.token = "abcdefghijklmnop"
+            settings.configured = True
+            settings.token_owner = "individual"
+            settings.individual_base_url = "https://int.zakupki.gov.ru/"
+            settings.base_url = "https://int44.zakupki.gov.ru/"
+            mock_settings.return_value = settings
+            mock_client = MagicMock()
+            mock_client.is_configured.return_value = True
+            loader = RealEisLoader(soap_client=mock_client)
+            info = loader.check_config()
+            assert info["token_masked"] == "abcd****mnop"
+
+
+# ── Fetch by registry number ──
+
+class TestRealEisLoaderFetchByRegistry:
+    def test_fetch_by_registry_no_data(self):
+        from unittest.mock import MagicMock
+        from src.tender_research.errors import EisNoDataError
+        from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult
+        mock_client = MagicMock()
+        mock_client.is_configured.return_value = True
+        mock_client.get_docs_by_reestr_number.return_value = DocsArchiveResult(
+            request_id="test", status="no_data", warnings=["no data"],
+        )
+        loader = RealEisLoader(soap_client=mock_client)
+        import pytest
+        with pytest.raises(EisNoDataError):
+            loader.fetch_by_registry_number("0000000000000000")
+
+    def test_fetch_by_registry_not_configured(self):
+        from unittest.mock import MagicMock
+        from src.tender_research.errors import EisMissingTokenError
+        mock_client = MagicMock()
+        mock_client.is_configured.return_value = False
+        loader = RealEisLoader(soap_client=mock_client)
+        import pytest
+        with pytest.raises(EisMissingTokenError):
+            loader.fetch_by_registry_number("0000000000000000")
+
+
+# ── Registry numbers loader ──
+
+class TestRegistryNumbersLoader:
+    def test_reads_file(self):
+        path = Path("data/eis_seed/registry_numbers.txt")
+        if not path.exists():
+            path = Path("/Users/master/Documents/AI-Corporation/data/eis_seed/registry_numbers.txt")
+        lines = [l.strip() for l in path.read_text(encoding="utf-8").splitlines()
+                 if l.strip() and not l.strip().startswith("#")]
+        assert len(lines) >= 1
+        assert lines[0].isdigit()
+
+    def test_dedupes_numbers(self):
+        numbers = ["0373100000124000001", "0373100000124000001", "0373100000124000002"]
+        seen = set()
+        deduped = [n for n in numbers if not (n in seen or seen.add(n))]
+        assert len(deduped) == 2
+
+    def test_fetch_by_registry_number_demo_mode(self):
+        loader = EisTenderLoader(mode="demo")
+        t = loader.fetch_by_registry_number("0373100000124000001")
+        assert t is not None
+        assert t.external_id == "0373100000124000001"
+
+    def test_fetch_by_registry_number_demo_unknown(self):
+        loader = EisTenderLoader(mode="demo")
+        t = loader.fetch_by_registry_number("0000000000000000")
+        assert t is None
 
 
 # ── Helper ──

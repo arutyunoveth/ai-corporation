@@ -41,7 +41,62 @@ Pipeline:
 | Mode | Description |
 |------|-------------|
 | `demo` (default) | Returns 3 hardcoded demo tenders. No SOAP calls. Used for testing and CI. |
-| `real` | Wraps `ZakupkiSoapClient` from the existing EIS SOAP integration. Makes real SOAP calls to `zakupki.gov.ru`. |
+| `real` | Wraps `ZakupkiSoapClient` from the existing EIS SOAP integration. |
+
+### Discovery Mode
+
+В `real`-режиме доступны три стратегии обнаружения закупок, управляемые `AI_CORP_TENDER_RESEARCH_EIS_DISCOVERY_MODE`:
+
+| Strategy | Env value | Endpoint | Status |
+|----------|-----------|----------|--------|
+| Search | `search` | `int44.zakupki.gov.ru` (legacy `searchProcurements`) | ❌ `Connection reset by peer` — сервер блокирует |
+| Registry numbers | `registry_numbers` (default) | `int.zakupki.gov.ru` (getDocsIP) | ✅ Работает, но требует seed-файла |
+| GetDocsIP | `get_docs_ip` | `int.zakupki.gov.ru` (getDocsIP) | ✅ То же, что registry_numbers |
+
+**Основной production-safe путь:** `registry_numbers` — загрузка по списку реестровых номеров через `getDocsByReestrNumber`.
+
+### Проверка конфигурации
+
+```bash
+python -m src.tender_research.cli check-eis-config
+```
+
+Вывод:
+- `eis_mode` — текущий режим
+- `eis_discovery_mode` — текущая стратегия
+- `endpoint` — URL getDocsIP
+- `legacy_endpoint` — URL legacy search
+- `token_present: true/false`
+- `token_masked` — первые 4 + последние 4 символа токена
+- `available_methods` — какие методы реально работают
+
+### Загрузка по списку реестровых номеров
+
+Seed-файл: `data/eis_seed/registry_numbers.txt` — один номер на строку, `#` для комментариев.
+
+```bash
+python -m src.tender_research.cli ingest-eis-registry-list \
+  --file data/eis_seed/registry_numbers.txt \
+  --limit 3
+```
+
+Для каждого номера вызывается `getDocsByReestrNumber`. Результаты:
+- `saved` — успешно сохранено
+- `no_data` — номер есть, но документов нет
+- `connection_resets` — ошибка соединения
+- `missing_token` — токен не настроен
+
+### Ошибки EIS — классификация
+
+Ошибки разделены по типам, чтобы connection reset не путать с missing token:
+
+| Тип | Причина |
+|-----|---------|
+| `EisMissingTokenError` | Токен не найден или SOAP не настроен |
+| `EisAuthFailedError` | 401/403/SOAP Fault |
+| `EisConnectionResetError` | `[Errno 54] Connection reset by peer` — сервер сбросил соединение |
+| `EisNoDataError` | getDocsIP вернул `no_data` — документов нет |
+| `EisParseError` | Ошибка парсинга XML/SOAP-ответа |
 
 ### Prerequisites for `real` mode
 
@@ -52,27 +107,19 @@ export AI_CORP_ZAKUPKI_GOV_RU_SOAP_ENABLED=true
 export AI_CORP_ZAKUPKI_GOV_RU_SOAP_TOKEN=<your-44fz-individual-person-token>
 ```
 
-Then run with `--eis-mode real`:
-
-```bash
-python -m src.tender_research.cli research-batch --limit 3 --eis-mode real
-```
-
-Without a valid token, `real` mode returns empty results and logs warnings.
+CLI автоматически загружает `.env` и `.env.local` через `python-dotenv`. Если токен лежит в `.env.local`, он будет найден.
 
 ### Architecture
 
 ```
-EisTenderLoader (mode="demo"|"real")
+EisTenderLoader (mode="demo"|"real", discovery_mode="registry_numbers")
 ├── demo  →  _get_demo_tenders() / _get_demo_documents()
 └── real  →  RealEisLoader (src/tender_research/eis_real_loader.py)
-              └── ZakupkiSoapClient (src/modules/tender_operator_agent_demo/)
+              ├── fetch_by_registry_number()  →  getDocsByReestrNumber  (работает)
+              ├── fetch_tenders()             →  searchProcurements     (legacy, connection reset)
+              ├── fetch_tender_details()      →  getProcurementDetails  (legacy, connection reset)
+              └── fetch_tender_documents()    →  listAttachments        (legacy, connection reset)
 ```
-
-`RealEisLoader` maps:
-- `fetch_tenders()` → `ZakupkiSoapClient.search_procurements()` → `EisTenderRaw`
-- `fetch_tender_details()` → `ZakupkiSoapClient.get_procurement_details()` → `EisTenderRaw` + `EisDocumentRaw`
-- `fetch_tender_documents()` → `ZakupkiSoapClient.list_attachments()` → `EisDocumentRaw`
 
 ## How to Enable Web Search
 
@@ -115,6 +162,8 @@ python -m src.tender_research.cli fetch-pages <tender-uuid> --limit 10
 AI_CORP_ARVECTUM_DATA_DIR=./data
 AI_CORP_TENDER_RESEARCH_ENABLED=true
 AI_CORP_TENDER_RESEARCH_BATCH_LIMIT=10
+AI_CORP_TENDER_RESEARCH_EIS_MODE=demo
+AI_CORP_TENDER_RESEARCH_EIS_DISCOVERY_MODE=registry_numbers
 AI_CORP_WEB_SEARCH_ENABLED=false
 AI_CORP_WEB_SEARCH_PROVIDER=duckduckgo_html
 AI_CORP_WEB_SEARCH_MAX_QUERIES_PER_TENDER=8

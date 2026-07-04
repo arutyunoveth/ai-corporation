@@ -10,6 +10,8 @@ class TenderResearchConfig:
     enabled: bool = True
     batch_limit: int = 10
     eis_mode: str = "demo"
+    eis_discovery_mode: str = "registry_numbers"
+    eis_seed_file: str = "data/eis_seed/registry_numbers.txt"
 
     web_search_enabled: bool = False
     web_search_provider: str = "duckduckgo_html"
@@ -50,6 +52,7 @@ def load_config() -> TenderResearchConfig:
         enabled=s.tender_research_enabled,
         batch_limit=s.tender_research_batch_limit,
         eis_mode=s.tender_research_eis_mode,
+        eis_discovery_mode=s.tender_research_eis_discovery_mode,
         web_search_enabled=s.web_search_enabled,
         web_search_provider=s.web_search_provider,
         web_search_max_queries_per_tender=s.web_search_max_queries_per_tender,

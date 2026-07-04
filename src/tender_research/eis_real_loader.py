@@ -13,7 +13,14 @@ from src.modules.tender_operator_agent_demo.settings import (
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import (
     ZakupkiSoapClient,
 )
-from src.tender_research.errors import EisLoaderError
+from src.tender_research.errors import (
+    EisAuthFailedError,
+    EisConnectionResetError,
+    EisLoaderError,
+    EisMissingTokenError,
+    EisNoDataError,
+    classify_eis_error,
+)
 from src.tender_research.schemas import EisDocumentRaw, EisTenderRaw
 
 logger = logging.getLogger(__name__)
@@ -32,6 +39,53 @@ class RealEisLoader:
                 "EIS SOAP calls will fail."
             )
         return ZakupkiSoapClient(settings)
+
+    # ── Configuration check (for CLI) ──
+
+    def check_config(self) -> dict[str, Any]:
+        settings = get_zakupki_soap_settings()
+        token = settings.token or ""
+        masked = token[:4] + "****" + token[-4:] if len(token) > 8 else "****"
+        methods = []
+        if self._client.is_configured():
+            if self._probe_legacy():
+                methods.append("searchProcurements (legacy)")
+            if self._probe_getdocs():
+                methods.append("getDocsByReestrNumber")
+        return {
+            "eis_mode": "real",
+            "endpoint": settings.individual_base_url,
+            "legacy_endpoint": settings.base_url,
+            "token_present": bool(token),
+            "token_masked": masked,
+            "token_owner": settings.token_owner,
+            "ssl_verify": False,
+            "configured": settings.configured,
+            "available_methods": methods or ["(none confirmed)"],
+        }
+
+    def _probe_legacy(self) -> bool:
+        try:
+            from src.modules.tender_operator_agent_demo.procurement_schemas import (
+                ProcurementSearchRequest,
+            )
+            self._client.search_procurements(
+                ProcurementSearchRequest(query="тест", max_results=1)
+            )
+            return True
+        except EisConnectionResetError:
+            return False
+        except Exception:
+            return False
+
+    def _probe_getdocs(self) -> bool:
+        try:
+            result = self._client.get_docs_by_reestr_number("0000000000000000")
+            return result.status in ("no_data", "completed")
+        except EisConnectionResetError:
+            return False
+        except Exception:
+            return False
 
     # ── Public API (matches EisTenderLoader interface) ──
 
@@ -68,6 +122,9 @@ class RealEisLoader:
             docs = self._attachments_to_raw(details.attachments)
             raw.documents = docs
             return raw
+        except EisConnectionResetError:
+            logger.warning("Legacy endpoint connection reset for details %s", external_id)
+            return None
         except Exception as e:
             logger.error("Failed to fetch details for %s: %s", external_id, e)
             return None
@@ -78,9 +135,55 @@ class RealEisLoader:
         try:
             attachments = self._client.list_attachments(tender.external_id)
             return self._attachments_to_raw(attachments)
+        except EisConnectionResetError:
+            logger.warning("Legacy endpoint connection reset for documents %s", tender.external_id)
+            return []
         except Exception as e:
             logger.error("Failed to fetch documents for %s: %s", tender.external_id, e)
             return []
+
+    # ── Registry number based fetch (getDocsIP path) ──
+
+    def fetch_by_registry_number(self, registry_number: str) -> EisTenderRaw | None:
+        if not self._client.is_configured():
+            raise EisMissingTokenError("EIS SOAP not configured")
+        try:
+            result = self._client.get_docs_by_reestr_number(registry_number)
+        except EisConnectionResetError as e:
+            raise EisConnectionResetError(
+                f"getDocsIP connection reset for {registry_number}: {e}"
+            ) from e
+        except Exception as e:
+            raise classify_eis_error(e) from e
+
+        if result.status == "soap_fault":
+            raise EisAuthFailedError(
+                f"SOAP fault for {registry_number}: {result.warnings}"
+            )
+        if result.status in ("validation_error", "processing_error"):
+            raise EisLoaderError(
+                f"getDocsIP error for {registry_number}: {result.status} — {result.warnings}"
+            )
+        if result.status == "no_data":
+            raise EisNoDataError(
+                f"No documents found for registry number {registry_number}"
+            )
+        if result.status == "no_archive_url":
+            raise EisNoDataError(
+                f"No archive URL for {registry_number}"
+            )
+        return EisTenderRaw(
+            external_id=registry_number,
+            registry_number=registry_number,
+            title=f"Закупка {registry_number}",
+            status="completed",
+            raw_payload={
+                "get_docs_ip_status": result.status,
+                "archive_url": result.archive_url,
+                "archive_urls": result.archive_urls,
+                "warnings": result.warnings,
+            },
+        )
 
     # ── Internal helpers ──
 
@@ -105,6 +208,8 @@ class RealEisLoader:
         )
         try:
             return self._client.search_procurements(req)
+        except EisConnectionResetError as e:
+            raise
         except Exception as e:
             logger.error("EIS SOAP search failed: %s", e)
             return []
