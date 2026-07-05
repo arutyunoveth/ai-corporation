@@ -57,6 +57,102 @@ Why `batch-size/ubatch-size=2048`:
 - the earlier `1024` physical batch caused live failures;
 - `2048` cleared the smoke run and kept the embedding server stable.
 
+## Successful API Smoke
+
+All smoke checks passed with `registry_number=0323100010326000013` using
+the canonical runtime configuration.
+
+### Canonical Database
+
+- **Docker Postgres**: `pgvector/pgvector:pg17` on `127.0.0.1:55432`
+- **Backend and CLI** must use the same `AI_CORP_DATABASE_URL`:
+
+```bash
+AI_CORP_DATABASE_URL=postgresql+psycopg://arvectum:<PASSWORD>@127.0.0.1:55432/arvectum
+```
+
+- **Health endpoint** (`GET /api/tender-research/health`) returns masked URL,
+  migration head, pgvector status, and table counts. Use it to verify DB/runtime
+  alignment after restart.
+
+### Embedding and LLM Servers
+
+- Embedding server: `http://127.0.0.1:8090/v1`, model `Qwen3-Embedding-4B`
+- Chat LLM server: `http://127.0.0.1:8088/v1`
+- Mac mini LLM model id: `/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf`
+
+### CLI Result
+
+```bash
+python -m src.tender_research.rag.cli analyze-tender \
+  --registry-number 0323100010326000013 \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1 \
+  --use-llm \
+  --llm-base-url http://127.0.0.1:8088/v1 \
+  --llm-model /Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf \
+  --limit 8 \
+  --save-report
+```
+
+Output:
+
+| Field | Value |
+|-------|-------|
+| status | completed |
+| sections_count | 10 |
+| sources_count | 30 |
+| used_llm | true |
+| llm_model | /Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf |
+| retrieval_provider | llama_cpp |
+| retrieval_model | Qwen3-Embedding-4B |
+| report_path | data/rag/reports/analyze_tender_0323100010326000013.md |
+
+### API POST Result
+
+```bash
+curl -X POST http://127.0.0.1:8001/api/tender-research/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "registry_number": "0323100010326000013",
+    "provider": "llama_cpp",
+    "model": "Qwen3-Embedding-4B",
+    "base_url": "http://127.0.0.1:8090/v1",
+    "use_llm": true,
+    "llm_base_url": "http://127.0.0.1:8088/v1",
+    "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+    "limit": 8,
+    "save_report": true
+  }'
+```
+
+- HTTP 200
+- status: completed
+- sections_count: 10
+- sources_count: 30
+- report_markdown: not empty
+
+### Latest Report Endpoint
+
+```
+GET /api/tender-research/analyze/0323100010326000013/latest
+```
+
+- report_markdown: returned (27091 chars)
+- registry_number: correct
+- Path traversal: blocked
+
+### Health Endpoint
+
+```
+GET /api/tender-research/health
+```
+
+- database_url_masked: `postgresql+psycopg://arvectum:***@127.0.0.1:55432/arvectum`
+- No secrets leaked
+- Table counts returned for all procurement tables
+
 ## Verification Commands
 
 Check PostgreSQL and pgvector:

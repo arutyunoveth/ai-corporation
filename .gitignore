@@ -27,6 +27,12 @@ data/rag/
 # Temporary files
 tmp/
 
+# Local generated documentation
+docs/project_visualization.html
+
+# Local runtime seed files (not committed)
+data/eis_seed/registry_numbers_real.txt
+
 # Local pilot data — never commit real partner data
 /local_pilot_runs/
 /pilot_runs/

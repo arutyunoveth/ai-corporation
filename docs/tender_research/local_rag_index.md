@@ -204,6 +204,121 @@ best matching local fragments per section. With `--use-llm` it calls the local
 chat endpoint section by section and preserves structured citations for every
 answer.
 
+## REST API
+
+The analysis service is also exposed via REST on the backend (`port 8001`).
+
+### Health
+
+```
+GET /api/tender-research/health
+```
+
+Returns database dialect, masked URL, connectivity, migration head, pgvector
+availability, and per-table row counts. No secrets are leaked.
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "database_dialect": "postgresql",
+  "database_url_masked": "postgresql+psycopg://arvectum:***@127.0.0.1:55432/arvectum",
+  "can_connect": true,
+  "current_migration": "090_enable_pgvector_and_add_rag_tables",
+  "migration_head": "088_create_tender_research_tables",
+  "pgvector_extension_available": true,
+  "table_counts": {
+    "procurement_tenders": 7,
+    "procurement_tender_documents": 35,
+    "procurement_document_chunks": 280,
+    "procurement_document_embeddings": 560
+  }
+}
+```
+
+### Analyze
+
+```
+POST /api/tender-research/analyze
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "registry_number": "0323100010326000013",
+  "provider": "llama_cpp",
+  "model": "Qwen3-Embedding-4B",
+  "base_url": "http://127.0.0.1:8090/v1",
+  "use_llm": true,
+  "llm_base_url": "http://127.0.0.1:8088/v1",
+  "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+  "limit": 8,
+  "save_report": true
+}
+```
+
+Expected response fields:
+
+| Field | Description |
+|-------|-------------|
+| `status` | `completed`, `completed_with_warnings`, `no_context`, or `failed` |
+| `registry_number` | Input registry number |
+| `sections_count` | Number of analysis sections (always 10) |
+| `sources_count` | Total unique document chunks used |
+| `report_markdown` | Full structured report in markdown |
+| `report_path` | Path to saved report file (if `save_report=true`) |
+| `used_llm` | Whether LLM was used for answer generation |
+| `warnings` | Non-fatal warnings (e.g. LLM fallback) |
+| `errors` | Fatal errors (e.g. tender not found) |
+
+**`no_context` behavior**: If the tender is not found in the database, or no
+embeddings exist for the chosen provider/model, the endpoint returns
+`status=no_context` with an empty sections list and a descriptive error.
+
+**`completed` behavior**: All 10 sections are generated. Each section contains
+an answer (LLM-generated if `use_llm=true` and the LLM is reachable, otherwise
+retrieval-only) and a list of source citations. The report markdown includes
+section headers, answers, and source details.
+
+**Report saving**: When `save_report=true`, the markdown is written to
+`data/rag/reports/analyze_tender_{registry_number}.md`. The file is also
+returned in `report_path`.
+
+**Citations/sources**: Every section lists the document chunks used. Each
+citation includes: document file name, chunk UUID, registry number, tender
+title, and cosine similarity score. Sources are deduplicated for the
+`sources_count` total.
+
+### Latest Report
+
+```
+GET /api/tender-research/analyze/{registry_number}/latest
+```
+
+Returns the most recently saved report for a registry number. Example:
+
+```bash
+curl http://127.0.0.1:8001/api/tender-research/analyze/0323100010326000013/latest
+```
+
+Response:
+
+```json
+{
+  "registry_number": "0323100010326000013",
+  "report_markdown": "# Анализ закупки ...",
+  "report_path": "data/rag/reports/analyze_tender_0323100010326000013.md",
+  "created_at": null
+}
+```
+
+- `registry_number` is validated as an 11-25 digit string.
+- Path traversal is blocked; only files under `data/rag/reports/` are served.
+- Returns 404 if no report exists for the given registry number.
+
 ## Known Limitations
 
 - `local_hash` is not semantic and should only be treated as a smoke provider.
