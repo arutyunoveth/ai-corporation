@@ -638,6 +638,26 @@ Troubleshooting:
 ./.venv/bin/python -m pytest -q
 ```
 
+Default `pytest` now stays offline-first and skips optional profiles unless you
+opt in explicitly:
+
+```bash
+# local integration workflow tests
+./.venv/bin/python -m pytest -q --run-integration
+
+# PostgreSQL + pgvector checks
+./.venv/bin/python -m pytest -q --run-postgres
+
+# llama.cpp-specific tests
+./.venv/bin/python -m pytest -q --run-llama-cpp
+
+# live network tests
+./.venv/bin/python -m pytest -q --run-network
+
+# live Mac mini / runtime smoke tests
+./.venv/bin/python -m pytest -q --run-network --run-live-smoke
+```
+
 ## Implemented Endpoints
 
 - `POST /deals`
