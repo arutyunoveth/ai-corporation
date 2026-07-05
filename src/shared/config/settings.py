@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     rag_use_llm: bool = False
     local_llm_base_url: str = "http://127.0.0.1:8088/v1"
     local_llm_model: str = "qwen2.5-14b"
+    local_llm_timeout_seconds: int = 120
 
     registry_discovery_source: str = "auto"
     registry_discovery_days_back: int = 3

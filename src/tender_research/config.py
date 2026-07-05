@@ -59,6 +59,7 @@ class TenderResearchConfig:
     rag_use_llm: bool = False
     local_llm_base_url: str = "http://127.0.0.1:8088/v1"
     local_llm_model: str = "qwen2.5-14b"
+    local_llm_timeout_seconds: int = 120
 
     data_dir: str = "./data"
 
@@ -126,5 +127,6 @@ def load_config() -> TenderResearchConfig:
         rag_use_llm=s.rag_use_llm,
         local_llm_base_url=s.local_llm_base_url,
         local_llm_model=s.local_llm_model,
+        local_llm_timeout_seconds=s.local_llm_timeout_seconds,
         data_dir=s.arvectum_data_dir,
     )

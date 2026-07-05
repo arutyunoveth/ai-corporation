@@ -4,8 +4,6 @@ import argparse
 import json
 import re
 import time
-import urllib.error
-import urllib.request
 from collections import Counter
 from pathlib import Path
 
@@ -21,6 +19,7 @@ from src.shared.db.base import Base
 from src.tender_research.config import load_config
 from src.tender_research.rag.embeddings import build_embedding_provider, probe_embedding_provider
 from src.tender_research.rag.indexer import DocumentChunkIndexer, DocumentEmbeddingIndexer
+from src.tender_research.rag.llm import LocalChatLlmClient, SourceCitation, build_source_citations
 from src.tender_research.rag.retriever import RagRetriever
 from src.tender_research.rag.vector_store import JsonVectorStore
 from src.tender_research.repository import TenderRepository
@@ -42,6 +41,7 @@ def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", value).strip("_").lower()
     return slug or "default"
 
+
 def _apply_runtime_overrides(config, args: argparse.Namespace | None) -> None:
     if not args:
         return
@@ -58,6 +58,12 @@ def _apply_runtime_overrides(config, args: argparse.Namespace | None) -> None:
         object.__setattr__(config, "rag_embeddings_batch_size", args.batch_size)
     if getattr(args, "timeout_seconds", None):
         object.__setattr__(config, "rag_embeddings_timeout_seconds", args.timeout_seconds)
+    if getattr(args, "llm_base_url", None):
+        object.__setattr__(config, "local_llm_base_url", args.llm_base_url)
+    if getattr(args, "llm_model", None):
+        object.__setattr__(config, "local_llm_model", args.llm_model)
+    if getattr(args, "llm_timeout_seconds", None):
+        object.__setattr__(config, "local_llm_timeout_seconds", args.llm_timeout_seconds)
 
 
 def _vector_store_path(config, *, provider_name: str, model_name: str) -> str:
@@ -99,6 +105,12 @@ def _add_provider_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default=None, help="Embedding model override")
     parser.add_argument("--base-url", default=None, help="Embedding server base URL override")
     parser.add_argument("--timeout-seconds", type=int, default=None, help="Embedding server timeout override")
+
+
+def _add_llm_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--llm-base-url", default=None, help="Local chat LLM base URL override")
+    parser.add_argument("--llm-model", default=None, help="Local chat LLM model override")
+    parser.add_argument("--llm-timeout-seconds", type=int, default=None, help="Local chat LLM timeout override")
 
 
 def cmd_build_chunks(args: argparse.Namespace) -> None:
@@ -170,32 +182,78 @@ def cmd_search(args: argparse.Namespace) -> None:
 
 
 def cmd_ask(args: argparse.Namespace) -> None:
-    session, _repo, config, _provider, _vector_store, retriever = _build_runtime()
+    session, _repo, config, provider, _vector_store, retriever = _build_runtime()
     hits = retriever.search_documents(
         args.question,
         registry_number=args.registry_number,
         limit=args.limit,
     )
+    llm_enabled = bool(args.use_llm or config.rag_use_llm)
+    sources = build_source_citations(hits)
+
     print(f"registry_number: {args.registry_number}")
     print(f"question: {args.question}")
+    print(f"retrieval_provider: {args.provider or provider.provider_name}")
+    print(f"retrieval_model: {args.model or provider.model_name}")
     print(f"context_hits: {len(hits)}")
+    if llm_enabled:
+        print(f"llm_model: {config.local_llm_model}")
+        print(f"llm_base_url: {config.local_llm_base_url}")
+
     if not hits:
         print("answer_mode: retrieval_only")
-        print("answer: Недостаточно контекста в локальном индексе.")
+        print("answer:")
+        print("Контекст не найден в локальном индексе.")
+        print("sources: 0")
         session.close()
         return
 
-    if args.use_llm or config.rag_use_llm:
-        answer = _ask_local_llm(config, args.question, hits)
-        print("answer_mode: local_llm")
-        print(f"answer: {answer}")
+    if llm_enabled:
+        answer = _build_local_llm_client(config).generate_answer(
+            args.question,
+            hits,
+            registry_number=args.registry_number,
+        )
+        if answer.error:
+            print("answer_mode: retrieval_fallback")
+            print(f"llm_error: {answer.error}")
+            print("answer:")
+            print("LLM недоступна или не вернула корректный ответ. Ниже релевантные фрагменты.")
+            _print_sources(answer.sources or sources)
+        else:
+            print("answer_mode: local_llm")
+            print("answer:")
+            print(answer.answer)
+            _print_sources(answer.sources)
     else:
         print("answer_mode: retrieval_only")
-        for index, hit in enumerate(hits, start=1):
-            print(f"[{index}] score={hit.score:.4f} document={hit.file_name} chunk_id={hit.chunk_id}")
-            print(hit.text)
-            print()
+        print("answer:")
+        print("LLM не использовалась. Ниже релевантные фрагменты.")
+        _print_sources(sources)
     session.close()
+
+
+def _build_local_llm_client(config) -> LocalChatLlmClient:
+    return LocalChatLlmClient(
+        base_url=config.local_llm_base_url,
+        model_name=config.local_llm_model,
+        timeout_seconds=int(config.local_llm_timeout_seconds or 120),
+    )
+
+
+def _print_sources(sources: list[SourceCitation]) -> None:
+    print(f"sources: {len(sources)}")
+    for index, source in enumerate(sources, start=1):
+        print(f"[source {index}]")
+        print(f"registry_number: {source.registry_number}")
+        print(f"tender_title: {source.tender_title}")
+        print(f"customer: {source.customer_name}")
+        print(f"document_file_name: {source.document_file_name}")
+        print(f"document_id: {source.document_id}")
+        print(f"chunk_id: {source.chunk_id}")
+        print(f"score: {source.score:.4f}")
+        print(f"preview: {source.quote_preview}")
+        print()
 
 
 def cmd_check_embedding_server(args: argparse.Namespace) -> None:
@@ -289,49 +347,6 @@ def cmd_eval(args: argparse.Namespace) -> None:
         print(f"{key}: {summary[key]}")
     session.close()
 
-
-def _ask_local_llm(config, question: str, hits) -> str:
-    context = "\n\n".join(
-        f"[Источник {index}] {hit.file_name} / {hit.registry_number}\n{hit.text}"
-        for index, hit in enumerate(hits, start=1)
-    )
-    system_prompt = (
-        "Отвечай только по предоставленному контексту. "
-        "Если контекста недостаточно, так и скажи. "
-        "Не придумывай факты и не используй внешние знания."
-    )
-    payload = {
-        "model": config.local_llm_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    f"Контекст:\n{context}\n\n"
-                    f"Вопрос: {question}\n\n"
-                    "Дай короткий ответ строго по контексту."
-                ),
-            },
-        ],
-        "temperature": 0,
-    }
-    body = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        f"{config.local_llm_base_url.rstrip('/')}/chat/completions",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            raw = json.loads(response.read().decode("utf-8"))
-        return raw["choices"][0]["message"]["content"].strip()
-    except urllib.error.URLError as exc:
-        return f"Не удалось обратиться к локальной LLM: {exc}"
-    except Exception as exc:  # pragma: no cover - safety path
-        return f"Ошибка локальной LLM: {exc}"
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Tender Research local RAG CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -357,6 +372,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument("--question", required=True)
     p_ask.add_argument("--limit", type=int, default=6)
     p_ask.add_argument("--use-llm", action="store_true")
+    _add_provider_args(p_ask)
+    _add_llm_args(p_ask)
 
     p_check = sub.add_parser("check-embedding-server", help="Check embedding provider reachability and sample dimension")
     _add_provider_args(p_check)

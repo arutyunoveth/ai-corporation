@@ -1,0 +1,123 @@
+# Mac mini RAG Runtime
+
+Mac mini is the server-side source of truth for the Arvectum tender research
+runtime.
+
+## Server Checkout
+
+- Main working checkout for the live smoke run:
+  `/Users/master/Documents/AI-Corporation-live`
+- The primary repository checkout on Mac mini may be dirty. Use the clean
+  runtime checkout above for repeatable smoke runs.
+
+## Database Runtime
+
+- Docker PostgreSQL for Arvectum runs on host port `55432`
+- Homebrew PostgreSQL already occupies `5432`, so Arvectum must point to `55432`
+- Required runtime env var:
+
+```bash
+AI_CORP_DATABASE_URL=postgresql+psycopg://arvectum:<PASSWORD>@127.0.0.1:55432/arvectum
+```
+
+Do not commit real passwords or `.env*` files.
+
+## Llama.cpp Services
+
+- Chat LLM endpoint: `http://127.0.0.1:8088/v1`
+- Embedding endpoint: `http://127.0.0.1:8090/v1`
+
+Embedding model used in the validated smoke run:
+
+- repo: `Qwen/Qwen3-Embedding-4B-GGUF`
+- file:
+  `/Users/master/models/embeddings/Qwen3-Embedding-4B-GGUF/Qwen3-Embedding-4B-Q8_0.gguf`
+
+Validated embedding server command:
+
+```bash
+/opt/homebrew/bin/llama-server \
+  --model /Users/master/models/embeddings/Qwen3-Embedding-4B-GGUF/Qwen3-Embedding-4B-Q8_0.gguf \
+  --alias Qwen3-Embedding-4B \
+  --embedding \
+  --pooling last \
+  --ctx-size 8192 \
+  --parallel 1 \
+  --batch-size 2048 \
+  --ubatch-size 2048 \
+  --threads 8 \
+  --threads-batch 8 \
+  --no-cont-batching \
+  --port 8090
+```
+
+Why `batch-size/ubatch-size=2048`:
+
+- one real production chunk tokenized to `1044` tokens;
+- the earlier `1024` physical batch caused live failures;
+- `2048` cleared the smoke run and kept the embedding server stable.
+
+## Verification Commands
+
+Check PostgreSQL and pgvector:
+
+```bash
+./.venv/bin/python -m src.tender_research.cli check-db
+```
+
+Check embedding server reachability:
+
+```bash
+./.venv/bin/python -m src.tender_research.rag.cli check-embedding-server \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1
+```
+
+Build embeddings:
+
+```bash
+./.venv/bin/python -m src.tender_research.rag.cli build-embeddings \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1 \
+  --limit 5000 \
+  --batch-size 1
+```
+
+Search:
+
+```bash
+./.venv/bin/python -m src.tender_research.rag.cli search \
+  --query "требования к содержанию и составу заявки" \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1 \
+  --limit 5
+```
+
+Eval:
+
+```bash
+./.venv/bin/python -m src.tender_research.rag.cli eval \
+  --questions tests/fixtures/tender_research/rag_eval_questions.json \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1 \
+  --limit 5
+```
+
+Ask with local chat LLM:
+
+```bash
+./.venv/bin/python -m src.tender_research.rag.cli ask \
+  --registry-number 0323100010326000013 \
+  --question "Какие требования к составу заявки?" \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1 \
+  --use-llm \
+  --llm-base-url http://127.0.0.1:8088/v1 \
+  --llm-model qwen2.5-14b \
+  --limit 8
+```

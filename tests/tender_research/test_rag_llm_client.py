@@ -1,0 +1,138 @@
+from __future__ import annotations
+
+import io
+import json
+from urllib.error import URLError
+
+from src.tender_research.rag.llm import LocalChatLlmClient
+from src.tender_research.rag.retriever import RagSearchHit
+
+
+class _FakeResponse:
+    def __init__(self, body: str):
+        self._body = body.encode("utf-8")
+
+    def read(self) -> bytes:
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
+def _hits() -> list[RagSearchHit]:
+    return [
+        RagSearchHit(
+            chunk_id="chunk-1",
+            score=0.91,
+            registry_number="123",
+            tender_id="tender-1",
+            tender_title="Тестовая закупка",
+            customer_name="Тестовый заказчик",
+            document_id="doc-1",
+            file_name="spec.docx",
+            chunk_index=0,
+            preview="Требования к составу заявки...",
+            text="Требования к составу заявки и инструкция по заполнению.",
+        )
+    ]
+
+
+def test_local_chat_llm_client_success(monkeypatch):
+    client = LocalChatLlmClient(
+        base_url="http://127.0.0.1:8088/v1",
+        model_name="qwen-local",
+    )
+
+    monkeypatch.setattr(
+        "src.tender_research.rag.llm.urllib.request.urlopen",
+        lambda request, timeout: _FakeResponse(
+            json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "Краткий ответ:\nДа.\n\nПодробности:\nПо найденному фрагменту требования указаны.\n\nИсточники:\n1. spec.docx, chunk_id=chunk-1, registry_number=123"
+                            }
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        ),
+    )
+
+    answer = client.generate_answer("Какие требования к составу заявки?", _hits(), registry_number="123")
+
+    assert answer.error is None
+    assert answer.model == "qwen-local"
+    assert answer.used_chunks_count == 1
+    assert "Краткий ответ" in answer.answer
+    assert answer.sources[0].document_file_name == "spec.docx"
+
+
+def test_local_chat_llm_client_server_unavailable(monkeypatch):
+    client = LocalChatLlmClient(
+        base_url="http://127.0.0.1:8088/v1",
+        model_name="qwen-local",
+    )
+
+    monkeypatch.setattr(
+        "src.tender_research.rag.llm.urllib.request.urlopen",
+        lambda request, timeout: (_ for _ in ()).throw(URLError("refused")),
+    )
+
+    answer = client.generate_answer("Вопрос", _hits())
+
+    assert answer.error == "Local LLM server is unavailable: refused"
+    assert answer.sources
+
+
+def test_local_chat_llm_client_timeout(monkeypatch):
+    client = LocalChatLlmClient(
+        base_url="http://127.0.0.1:8088/v1",
+        model_name="qwen-local",
+    )
+
+    monkeypatch.setattr(
+        "src.tender_research.rag.llm.urllib.request.urlopen",
+        lambda request, timeout: (_ for _ in ()).throw(TimeoutError("slow")),
+    )
+
+    answer = client.generate_answer("Вопрос", _hits())
+
+    assert answer.error == "Local LLM request timed out."
+
+
+def test_local_chat_llm_client_non_json_response(monkeypatch):
+    client = LocalChatLlmClient(
+        base_url="http://127.0.0.1:8088/v1",
+        model_name="qwen-local",
+    )
+
+    monkeypatch.setattr(
+        "src.tender_research.rag.llm.urllib.request.urlopen",
+        lambda request, timeout: _FakeResponse("not-json"),
+    )
+
+    answer = client.generate_answer("Вопрос", _hits())
+
+    assert answer.error == "Local LLM returned a non-JSON response."
+
+
+def test_local_chat_llm_client_empty_response(monkeypatch):
+    client = LocalChatLlmClient(
+        base_url="http://127.0.0.1:8088/v1",
+        model_name="qwen-local",
+    )
+
+    monkeypatch.setattr(
+        "src.tender_research.rag.llm.urllib.request.urlopen",
+        lambda request, timeout: _FakeResponse(json.dumps({"choices": [{"message": {"content": ""}}]})),
+    )
+
+    answer = client.generate_answer("Вопрос", _hits())
+
+    assert answer.error == "Local LLM returned an empty response."

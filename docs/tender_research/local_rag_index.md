@@ -6,6 +6,9 @@ dev and tests. The local RAG layer sits on top of already downloaded and
 extracted tender documents and keeps vectors in provider/model-specific JSON
 stores under `data/rag/`.
 
+For the validated Mac mini runtime layout and exact live server commands, see
+[macmini_rag_runtime.md](/Users/master/Documents/AI-Corporation/docs/tender_research/macmini_rag_runtime.md).
+
 ## Scope
 
 - No cloud LLM dependency is required.
@@ -148,6 +151,7 @@ AI_CORP_RAG_VECTOR_STORE_PATH=./data/rag/vector_store.json
 AI_CORP_RAG_USE_LLM=false
 AI_CORP_LOCAL_LLM_BASE_URL=http://127.0.0.1:8088/v1
 AI_CORP_LOCAL_LLM_MODEL=qwen2.5-14b
+AI_CORP_LOCAL_LLM_TIMEOUT_SECONDS=120
 ```
 
 ### Optional sentence-transformers mode
