@@ -116,6 +116,7 @@ class TestAnalyzeTender:
             "src.tender_research.rag.analysis_service._get_session"
         ) as mock_session:
             mock_repo = MagicMock()
+            mock_repo.get_tender_by_registry_number.return_value = None
             mock_repo.get_tender_by_external.return_value = None
             with patch(
                 "src.tender_research.rag.analysis_service.TenderRepository",
@@ -133,6 +134,7 @@ class TestAnalyzeTender:
             "src.tender_research.rag.analysis_service._get_session"
         ) as mock_session:
             mock_repo = MagicMock()
+            mock_repo.get_tender_by_registry_number.return_value = MagicMock()
             mock_repo.get_tender_by_external.return_value = MagicMock()
             mock_repo.count_document_embeddings.return_value = 0
             with patch(
@@ -153,6 +155,7 @@ class TestAnalyzeTender:
         mock_tender.title = "Test Tender"
 
         mock_repo = MagicMock()
+        mock_repo.get_tender_by_registry_number.return_value = mock_tender
         mock_repo.get_tender_by_external.return_value = mock_tender
         mock_repo.count_document_embeddings.return_value = 10
 
@@ -202,6 +205,7 @@ class TestAnalyzeTender:
     def test_with_search_hits_retrieval_only(self):
         mock_tender = MagicMock()
         mock_repo = MagicMock()
+        mock_repo.get_tender_by_registry_number.return_value = mock_tender
         mock_repo.get_tender_by_external.return_value = mock_tender
         mock_repo.count_document_embeddings.return_value = 10
 
@@ -267,6 +271,7 @@ class TestAnalyzeTender:
     def test_report_saving(self):
         mock_tender = MagicMock()
         mock_repo = MagicMock()
+        mock_repo.get_tender_by_registry_number.return_value = mock_tender
         mock_repo.get_tender_by_external.return_value = mock_tender
         mock_repo.count_document_embeddings.return_value = 10
 

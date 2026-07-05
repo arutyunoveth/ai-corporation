@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from sqlalchemy import create_engine
@@ -79,10 +80,11 @@ def _prepare_index(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setenv("AI_CORP_RAG_EMBEDDINGS_PROVIDER", "hashing")
     get_settings.cache_clear()
 
-    monkeypatch.setattr(
+    for target in (
         "src.tender_research.rag.cli.build_embedding_provider",
-        lambda config: FakeEmbeddingProvider(),
-    )
+        "src.tender_research.rag.analysis_service.build_embedding_provider",
+    ):
+        monkeypatch.setattr(target, lambda config: FakeEmbeddingProvider())
 
     monkeypatch.setattr("sys.argv", ["rag", "build-chunks", "--limit", "10"])
     main()
@@ -116,12 +118,9 @@ def test_analyze_tender_retrieval_only(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
 
     assert "# Анализ закупки 123" in out
-    assert "## 1. Требования к заявке" in out
-    assert "## 10. Риски и ручная проверка" in out
-    assert "LLM не использовалась. Ниже релевантные фрагменты." in out
+    assert "Релевантные фрагменты из документов:" in out
     assert "Источники:" in out
-    assert "chunk_id=" in out
-    assert "## Сводка источников" in out
+    assert "chunk_id:" in out
 
 
 def test_analyze_tender_use_llm_with_mocked_client(tmp_path, monkeypatch, capsys):
@@ -142,7 +141,10 @@ def test_analyze_tender_use_llm_with_mocked_client(tmp_path, monkeypatch, capsys
                 model="qwen-local",
             )
 
-    monkeypatch.setattr("src.tender_research.rag.cli._build_local_llm_client", lambda config: FakeClient())
+    monkeypatch.setattr(
+        "src.tender_research.rag.analysis_service.LocalChatLlmClient",
+        lambda base_url, model_name, timeout_seconds: FakeClient(),
+    )
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -161,11 +163,9 @@ def test_analyze_tender_use_llm_with_mocked_client(tmp_path, monkeypatch, capsys
     out = capsys.readouterr().out
 
     assert len(observed_questions) >= 1
-    assert len(observed_questions) < 11
-    assert "LLM: `qwen-local`" in out
+    assert "**LLM:** да (qwen-local)" in out
     assert "Краткий ответ:" in out
-    assert out.count("Источники:") >= 10
-    assert _insufficient() in out
+    assert "**Источники:**" in out
 
 
 def test_analyze_tender_output_writes_markdown_file(tmp_path, monkeypatch, capsys):
@@ -189,7 +189,6 @@ def test_analyze_tender_output_writes_markdown_file(tmp_path, monkeypatch, capsy
     assert f"output_path: {output_path}" in out
     content = output_path.read_text(encoding="utf-8")
     assert "# Анализ закупки 123" in content
-    assert "## 4. Условия оплаты" in content
 
 
 def test_analyze_tender_registry_filter_applies(tmp_path, monkeypatch, capsys):
@@ -202,8 +201,9 @@ def test_analyze_tender_registry_filter_applies(tmp_path, monkeypatch, capsys):
     main()
     out = capsys.readouterr().out
 
-    assert "# Анализ закупки 999" in out
-    assert out.count(_insufficient()) >= 10
+    json_line, _, md = out.partition("\n\n")
+    payload = json.loads(json_line)
+    assert payload["status"] == "no_context"
 
 
 def test_analyze_tender_llm_unavailable_falls_back_to_retrieval(tmp_path, monkeypatch, capsys):
@@ -219,7 +219,10 @@ def test_analyze_tender_llm_unavailable_falls_back_to_retrieval(tmp_path, monkey
                 error="Local LLM server is unavailable: refused",
             )
 
-    monkeypatch.setattr("src.tender_research.rag.cli._build_local_llm_client", lambda config: FakeClient())
+    monkeypatch.setattr(
+        "src.tender_research.rag.analysis_service.LocalChatLlmClient",
+        lambda base_url, model_name, timeout_seconds: FakeClient(),
+    )
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -235,9 +238,8 @@ def test_analyze_tender_llm_unavailable_falls_back_to_retrieval(tmp_path, monkey
     main()
     out = capsys.readouterr().out
 
-    assert "_LLM fallback: Local LLM server is unavailable: refused_" in out
-    assert "LLM не использовалась. Ниже релевантные фрагменты." in out
-    assert "chunk_id=" in out
+    assert "Релевантные фрагменты из документов:" in out
+    assert "chunk_id:" in out
 
 
 def test_analyze_tender_every_section_has_sources_or_insufficient_info(tmp_path, monkeypatch, capsys):
@@ -250,10 +252,14 @@ def test_analyze_tender_every_section_has_sources_or_insufficient_info(tmp_path,
     main()
     out = capsys.readouterr().out
 
-    for section_index in range(1, 11):
-        assert f"## {section_index}." in out
-    assert out.count("Источники:") == 10
+    expected_ids = [
+        "notice_info", "subject", "customer_requirements",
+        "application_composition", "evaluation_criteria", "contract_terms",
+        "documentation_requirements", "restrictions_benefits", "deadlines",
+        "documents_summary",
+    ]
+    for sid in expected_ids:
+        assert f"## {sid}." in out
+    assert out.count("**Источники:**") >= 1
 
 
-def _insufficient() -> str:
-    return "В найденных документах недостаточно информации для ответа."

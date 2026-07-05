@@ -5,7 +5,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import create_engine, text
 
+from src.shared.config.settings import get_settings
+from src.shared.db.diagnostics import get_database_diagnostics, masked_database_url
 from src.tender_research.config import load_config
 from src.tender_research.rag.analysis_service import analyze_tender
 from src.tender_research.rag.schemas import TenderAnalysisResult
@@ -75,6 +78,51 @@ def _to_analyze_response(result: TenderAnalysisResult) -> AnalyzeResponse:
         used_llm=result.used_llm,
         warnings=result.warnings,
         errors=result.errors,
+    )
+
+
+_TABLE_COUNTS = [
+    "procurement_tenders",
+    "procurement_tender_documents",
+    "procurement_document_chunks",
+    "procurement_document_embeddings",
+]
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    database_dialect: str | None = None
+    database_url_masked: str | None = None
+    can_connect: bool = False
+    current_migration: str | None = None
+    migration_head: str | None = None
+    pgvector_extension_available: bool = False
+    table_counts: dict[str, int] = {}
+
+
+@router.get("/health", response_model=HealthResponse)
+def tender_research_health() -> HealthResponse:
+    settings = get_settings()
+    engine = create_engine(settings.database_url, future=True)
+    diag = get_database_diagnostics(engine)
+    table_counts: dict[str, int] = {}
+    if diag.get("can_connect"):
+        for table in _TABLE_COUNTS:
+            try:
+                with engine.connect() as conn:
+                    row = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
+                    table_counts[table] = row
+            except Exception:
+                table_counts[table] = -1
+    return HealthResponse(
+        status="ok",
+        database_dialect=diag.get("database_dialect"),
+        database_url_masked=diag.get("database_url_masked"),
+        can_connect=diag.get("can_connect", False),
+        current_migration=diag.get("current_migration"),
+        migration_head=diag.get("migration_head"),
+        pgvector_extension_available=diag.get("pgvector_extension_available", False),
+        table_counts=table_counts,
     )
 
 

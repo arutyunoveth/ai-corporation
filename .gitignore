@@ -22,6 +22,10 @@ ai_corporation.db
 data/eis_seed/registry_numbers_auto*.txt
 # Local pipeline data
 data/tenders/
+data/rag/
+
+# Temporary files
+tmp/
 
 # Local pilot data — never commit real partner data
 /local_pilot_runs/

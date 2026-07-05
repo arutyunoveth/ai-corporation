@@ -166,7 +166,9 @@ def analyze_tender(
             object.__setattr__(config, "local_llm_timeout_seconds", llm_timeout_seconds)
 
         repo = TenderRepository(session)
-        tender = repo.get_tender_by_external("eis", registry_number)
+        tender = repo.get_tender_by_registry_number(registry_number)
+        if not tender:
+            tender = repo.get_tender_by_external("eis", registry_number)
         if not tender:
             tender = repo.get_tender_by_external("external_public_44fz", registry_number)
         if not tender:
