@@ -153,6 +153,27 @@ GET /api/tender-research/health
 - No secrets leaked
 - Table counts returned for all procurement tables
 
+### Demo UI Smoke
+
+**No code changes were required.** The tab was already fully wired.
+
+| Check | Result |
+|-------|--------|
+| Demo URL | `http://127.0.0.1:8001/demo/tender-agent` |
+| Tab "Анализ закупки" present | PASS (data-tab & section both present) |
+| Form with registry_number input | PASS |
+| Checkboxes (use_llm, save_report) | PASS |
+| JS handler `handleAnalysisForm` defined | PASS |
+| API endpoint in fetch JSON call | PASS (`/api/tender-research/analyze`) |
+| API POST precheck (same params) | HTTP 200, status=completed, sections=10, sources=30, used_llm=true |
+| Report link `GET /latest` | HTTP 200, 38841 bytes |
+| UI HTML all 9/9 checks | PASS |
+
+The demo UI lives on the same FastAPI backend (port 8001), uses relative URLs,
+and needs no CORS setup. Default limit=6 sent by the form is accepted by the
+API (query param default). The full flow — tab display → form → API call →
+result display → report link — works without any integration fixes.
+
 ## Verification Commands
 
 Check PostgreSQL and pgvector:
