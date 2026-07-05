@@ -253,3 +253,99 @@ Analyze one tender into a markdown report:
   --limit 8 \
   --output data/rag/reports/analyze_tender_0323100010326000013.md
 ```
+
+## Prepare API
+
+Added `POST /api/tender-research/prepare` and
+`GET /api/tender-research/prepare/{registry_number}/status`
+for the demo preparation flow (MVP, synchronous).
+
+### POST /api/tender-research/prepare
+
+Request:
+
+```json
+{
+  "registry_number": "0323100010326000013",
+  "provider": "llama_cpp",
+  "model": "Qwen3-Embedding-4B",
+  "base_url": "http://127.0.0.1:8090/v1",
+  "rebuild_chunks": false,
+  "rebuild_embeddings": false
+}
+```
+
+Response (tender already prepared):
+
+```json
+{
+  "status": "completed",
+  "ready_for_analysis": true,
+  "steps": [
+    {"name": "check_tender_exists", "status": "completed", "message": "Tender found in database"},
+    {"name": "download_documents", "status": "skipped", "message": "Documents already downloaded"},
+    {"name": "build_chunks", "status": "skipped", "message": "Chunks already exist (50)"},
+    {"name": "build_embeddings", "status": "skipped", "message": "Embeddings already exist (50)"},
+    {"name": "readiness_check", "status": "completed", "message": "Ready for analysis..."}
+  ],
+  "chunks_total": 50,
+  "embeddings_total": 50
+}
+```
+
+Response (no tender found):
+
+```json
+{
+  "status": "no_tender",
+  "ready_for_analysis": false,
+  "errors": ["Tender 0000000000000000 not found in database and could not be ingested from EIS"]
+}
+```
+
+**Idempotency:** Repeated calls with `rebuild_chunks=false, rebuild_embeddings=false`
+skip existing data. No duplicates created.
+
+### GET /api/tender-research/prepare/{registry_number}/status
+
+Fast readiness check without triggering heavy operations.
+
+Response (ready):
+
+```json
+{
+  "ready_for_analysis": true,
+  "chunks_total": 50,
+  "embeddings_total": 50,
+  "missing": []
+}
+```
+
+Response (not ready):
+
+```json
+{
+  "ready_for_analysis": false,
+  "missing": ["chunks", "embeddings"]
+}
+```
+
+### Demo UI flow
+
+The "Анализ закупки" tab now supports a three-step flow:
+
+1. **Проверить готовность** — calls `GET /prepare/{rn}/status`, shows metrics
+2. **Подготовить закупку к анализу** — calls `POST /prepare`, shows per-step status
+3. **Проанализировать закупку** — calls `POST /analyze` (unchanged)
+
+Buttons are wired in `src/modules/tender_operator_agent_demo/ui.py`.
+
+### Known limitations
+
+- **MVP synchronous endpoint:** Prepare runs synchronously on the request thread.
+  First-time preparation (ingest + download + chunk + embed) may take several minutes.
+- **No OCR:** Unsupported document formats (scanned PDFs, images) are skipped.
+- **EIS availability:** Ingest depends on external EIS SOAP service availability.
+- **No background job queue:** Celery/RQ/Redis are out of scope.
+- **Build embeddings requires llama.cpp embedding server** on port 8090.
+- **Build chunks requires extracted text** — documents that fail text extraction produce no chunks.

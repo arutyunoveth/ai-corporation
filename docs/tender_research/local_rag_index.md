@@ -319,6 +319,93 @@ Response:
 - Path traversal is blocked; only files under `data/rag/reports/` are served.
 - Returns 404 if no report exists for the given registry number.
 
+### Prepare
+
+```
+POST /api/tender-research/prepare
+Content-Type: application/json
+```
+
+Prepares a tender for RAG analysis: ingest → download → extract → chunk → embed.
+
+Request body:
+
+```json
+{
+  "registry_number": "0323100010326000013",
+  "provider": "llama_cpp",
+  "model": "Qwen3-Embedding-4B",
+  "base_url": "http://127.0.0.1:8090/v1",
+  "rebuild_chunks": false,
+  "rebuild_embeddings": false
+}
+```
+
+Response fields:
+
+| Field | Description |
+|-------|-------------|
+| `status` | `completed`, `completed_with_warnings`, `no_tender`, or `failed` |
+| `ready_for_analysis` | `true` if chunks and embeddings exist |
+| `steps` | List of preparation steps with status/message/detail |
+| `documents_total` | Total documents for the tender |
+| `documents_downloaded` | Documents successfully downloaded |
+| `extracted_texts_total` | Documents with extracted text |
+| `chunks_total` | Total chunks in DB for this tender |
+| `embeddings_total` | Total embeddings in DB for this tender |
+
+Example response (ready):
+
+```json
+{
+  "status": "completed",
+  "ready_for_analysis": true,
+  "steps": [
+    {"name": "check_tender_exists", "status": "completed", "message": "Tender found in database"},
+    {"name": "download_documents", "status": "skipped", "message": "Documents already downloaded"},
+    {"name": "build_chunks", "status": "skipped", "message": "Chunks already exist (50)"},
+    {"name": "build_embeddings", "status": "skipped", "message": "Embeddings already exist (50)"},
+    {"name": "readiness_check", "status": "completed", "message": "Ready for analysis..."}
+  ],
+  "chunks_total": 50,
+  "embeddings_total": 50
+}
+```
+
+**Idempotent:** Existing chunks and embeddings are skipped unless
+`rebuild_chunks=true` or `rebuild_embeddings=true`.
+
+### Prepare Status
+
+```
+GET /api/tender-research/prepare/{registry_number}/status
+```
+
+Fast readiness check (no heavy operations). Returns:
+
+```json
+{
+  "registry_number": "0323100010326000013",
+  "tender_found": true,
+  "documents_total": 35,
+  "documents_downloaded": 35,
+  "extracted_texts_total": 14,
+  "chunks_total": 280,
+  "embeddings_total": 280,
+  "ready_for_analysis": true,
+  "missing": []
+}
+```
+
+If not ready:
+
+```json
+{
+  "ready_for_analysis": false,
+  "missing": ["chunks", "embeddings"]
+}
+```
+
 ## Known Limitations
 
 - `local_hash` is not semantic and should only be treated as a smoke provider.
@@ -329,3 +416,9 @@ Response:
   behavior rather than a fixed CLI flag.
 - Eval currently reports retrieval outputs and simple summary stats only; it
   does not run an automatic judge.
+- **Prepare endpoint is synchronous MVP** — first-time preparation (ingest +
+  download + chunk + embed) may take several minutes. No background job queue.
+- **OCR not implemented** — scanned PDFs and images produce no text.
+- **Unsupported document formats** are silently skipped during extraction.
+- **EIS SOAP availability** affects ingest of new tenders.
+- **Embedding server (port 8090)** must be running for `build_embeddings` step.

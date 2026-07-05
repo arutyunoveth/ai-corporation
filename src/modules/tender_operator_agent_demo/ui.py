@@ -795,22 +795,29 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                         </label>
                         <label class="checkbox">
                           <input name="use_llm" type="checkbox" />
-                          <span>Использовать локальную LLM для генерации ответов</span>
+                          <span>Использовать локальную LLM (может работать долго)</span>
                         </label>
                         <label class="checkbox">
                           <input name="save_report" type="checkbox" checked />
                           <span>Сохранить отчёт на диск</span>
                         </label>
-                        <div class="form-actions">
-                          <button class="button primary" type="submit">Запустить анализ</button>
+                        <div class="form-actions" style="display:flex;flex-wrap:wrap;gap:8px;">
+                          <button type="button" class="button" id="check-readiness-btn">Проверить готовность</button>
+                          <button type="button" class="button" id="prepare-tender-btn" disabled>Подготовить закупку к анализу</button>
+                          <button type="submit" class="button primary" id="run-analysis-btn">Проанализировать закупку</button>
                         </div>
                       </form>
+                    </div>
+                    <div class="card" id="analysis-preparation-card">
+                      <h2>Состояние готовности</h2>
+                      <div id="analysis-readiness-status" class="empty">Нажмите «Проверить готовность».</div>
+                      <div id="analysis-preparation-steps" class="hidden" style="margin-top:12px;"></div>
                     </div>
                   </aside>
                   <main class="stack">
                     <div class="card" id="analysis-result-card">
                       <h2>Результат анализа</h2>
-                      <div id="analysis-result" class="empty">Введите реестровый номер и нажмите «Запустить анализ».</div>
+                      <div id="analysis-result" class="empty">Введите реестровый номер и нажмите «Проанализировать закупку».</div>
                     </div>
                     <div class="card" id="analysis-report-card" class="hidden">
                       <h2>Отчёт</h2>
@@ -1978,6 +1985,97 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
           }}
 
+          async function handleCheckReadiness() {{
+            clearFlash('analysis-flash');
+            const rn = document.querySelector('#analysis-form [name="registry_number"]').value.trim();
+            if (!rn) {{ setFlash('analysis-flash', 'Введите реестровый номер.', true); return; }}
+            const statusNode = document.getElementById('analysis-readiness-status');
+            const stepsNode = document.getElementById('analysis-preparation-steps');
+            stepsNode.classList.add('hidden');
+            stepsNode.innerHTML = '';
+            statusNode.innerHTML = '<div class="note">Проверяем готовность…</div>';
+            try {{
+              const data = await fetchJson('/api/tender-research/prepare/' + encodeURIComponent(rn) + '/status');
+              if (!data.tender_found) {{
+                statusNode.innerHTML = '<div class="note" style="color:var(--warning)">⚠ Закупка не найдена в БД. Нажмите «Подготовить закупку к анализу» для загрузки.</div>';
+                document.getElementById('prepare-tender-btn').disabled = false;
+                return;
+              }}
+              const ready = data.ready_for_analysis;
+              let html = '<div class="grid-2" style="margin-bottom:8px">';
+              html += '<div class="metric"><span class="metric-label">Документов</span><span class="metric-value">' + data.documents_total + '</span></div>';
+              html += '<div class="metric"><span class="metric-label">Загружено</span><span class="metric-value">' + data.documents_downloaded + '</span></div>';
+              html += '<div class="metric"><span class="metric-label">Текстов</span><span class="metric-value">' + data.extracted_texts_total + '</span></div>';
+              html += '<div class="metric"><span class="metric-label">Чанков</span><span class="metric-value">' + data.chunks_total + '</span></div>';
+              html += '<div class="metric"><span class="metric-label">Эмбеддингов</span><span class="metric-value">' + data.embeddings_total + '</span></div>';
+              html += '</div>';
+              if (ready) {{
+                html += '<div class="note" style="color:var(--success)">✓ Закупка готова к анализу</div>';
+              }} else {{
+                const missing = (data.missing || []).join(', ');
+                html += '<div class="note" style="color:var(--warning)">⚠ Закупка не полностью подготовлена. Отсутствует: ' + escapeHtml(missing || 'неизвестно') + '.</div>';
+              }}
+              statusNode.innerHTML = html;
+              document.getElementById('prepare-tender-btn').disabled = ready || data.missing.length === 0;
+              statusNode.className = '';
+            }} catch (error) {{
+              statusNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ Ошибка проверки: ' + escapeHtml(error.message) + '</div>';
+            }}
+          }}
+
+          async function handlePrepareTender() {{
+            clearFlash('analysis-flash');
+            const rn = document.querySelector('#analysis-form [name="registry_number"]').value.trim();
+            if (!rn) {{ setFlash('analysis-flash', 'Введите реестровый номер.', true); return; }}
+            const stepsNode = document.getElementById('analysis-preparation-steps');
+            const statusNode = document.getElementById('analysis-readiness-status');
+            stepsNode.classList.remove('hidden');
+            stepsNode.innerHTML = '<div class="note">Подготовка может занять несколько минут…</div>';
+            statusNode.innerHTML = '<div class="note">Запускаем подготовку…</div>';
+            document.getElementById('prepare-tender-btn').disabled = true;
+            try {{
+              const result = await fetchJson('/api/tender-research/prepare', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                  registry_number: rn,
+                  rebuild_chunks: false,
+                  rebuild_embeddings: false,
+                }}),
+              }});
+              let stepsHtml = '<div style="margin-top:8px">';
+              for (const step of (result.steps || [])) {{
+                const icon = step.status === 'completed' ? '✓' : step.status === 'skipped' ? '–' : step.status === 'warning' ? '⚠' : step.status === 'failed' ? '✗' : '…';
+                const color = step.status === 'completed' || step.status === 'skipped' ? 'var(--success)' : step.status === 'warning' ? 'var(--warning)' : step.status === 'failed' ? 'var(--danger)' : 'inherit';
+                stepsHtml += '<div style="padding:4px 0;color:' + color + '">' + icon + ' <strong>' + escapeHtml(step.name) + '</strong>';
+                if (step.message) stepsHtml += ' — ' + escapeHtml(step.message);
+                if (step.details) stepsHtml += ' <span style="opacity:0.7">(' + escapeHtml(step.details) + ')</span>';
+                stepsHtml += '</div>';
+              }}
+              stepsHtml += '</div>';
+              stepsNode.innerHTML = stepsHtml;
+
+              if (result.ready_for_analysis) {{
+                statusNode.innerHTML = '<div class="note" style="color:var(--success)">✓ Закупка готова к анализу (чанков: ' + result.chunks_total + ', эмбеддингов: ' + result.embeddings_total + ')</div>';
+              }} else {{
+                let msg = '<div class="note" style="color:var(--warning)">⚠ Подготовка завершена с предупреждениями';
+                if (result.warnings && result.warnings.length) {{
+                  msg += '<ul>' + result.warnings.map(function(w) {{ return '<li>' + escapeHtml(w) + '</li>'; }}).join('') + '</ul>';
+                }}
+                msg += '</div>';
+                if (result.errors && result.errors.length) {{
+                  msg += '<div class="note" style="color:var(--danger)">✗ Ошибки:<ul>' + result.errors.map(function(e) {{ return '<li>' + escapeHtml(e) + '</li>'; }}).join('') + '</ul></div>';
+                }}
+                statusNode.innerHTML = msg;
+              }}
+              statusNode.className = '';
+              await handleCheckReadiness();
+            }} catch (error) {{
+              stepsNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ Ошибка подготовки: ' + escapeHtml(error.message) + '</div>';
+              document.getElementById('prepare-tender-btn').disabled = false;
+            }}
+          }}
+
           async function handleAnalysisForm(event) {{
             event.preventDefault();
             clearFlash('analysis-flash');
@@ -2025,6 +2123,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           async function bootstrap() {{
             wireTabs();
+            document.getElementById('check-readiness-btn').addEventListener('click', handleCheckReadiness);
+            document.getElementById('prepare-tender-btn').addEventListener('click', handlePrepareTender);
             document.getElementById('analysis-form').addEventListener('submit', handleAnalysisForm);
             document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
             document.getElementById('eis-docs-form').addEventListener('submit', handleEisDocsArchive);

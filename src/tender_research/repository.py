@@ -453,6 +453,27 @@ class TenderRepository:
             ).scalars().all()
         )
 
+    def list_extracted_documents_by_tender(self, tender_id: str) -> list[ProcurementTenderDocument]:
+        return list(
+            self._session.execute(
+                select(ProcurementTenderDocument)
+                .where(
+                    ProcurementTenderDocument.tender_id == tender_id,
+                    ProcurementTenderDocument.text_extraction_status == "extracted",
+                    ProcurementTenderDocument.extracted_text_path.is_not(None),
+                )
+                .order_by(ProcurementTenderDocument.file_name.asc())
+            ).scalars().all()
+        )
+
+    def count_extracted_documents_by_tender(self, tender_id: str) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTenderDocument.id)).where(
+                ProcurementTenderDocument.tender_id == tender_id,
+                ProcurementTenderDocument.text_extraction_status == "extracted",
+            )
+        ).scalar() or 0
+
     # ── ProcurementDocumentChunk ──
 
     def upsert_document_chunk(self, data: dict) -> ProcurementDocumentChunk:
@@ -549,6 +570,22 @@ class TenderRepository:
     def get_document_chunk(self, chunk_id: str) -> ProcurementDocumentChunk | None:
         return self._session.get(ProcurementDocumentChunk, chunk_id)
 
+    def list_chunks_by_tender(self, tender_id: str) -> list[ProcurementDocumentChunk]:
+        return list(
+            self._session.execute(
+                select(ProcurementDocumentChunk)
+                .where(ProcurementDocumentChunk.tender_id == tender_id)
+                .order_by(ProcurementDocumentChunk.created_at.asc())
+            ).scalars().all()
+        )
+
+    def count_chunks_by_tender(self, tender_id: str) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementDocumentChunk.id)).where(
+                ProcurementDocumentChunk.tender_id == tender_id
+            )
+        ).scalar() or 0
+
     # ── ProcurementDocumentEmbedding ──
 
     def upsert_document_embedding(self, data: dict) -> ProcurementDocumentEmbedding:
@@ -588,6 +625,17 @@ class TenderRepository:
         if model is not None:
             stmt = stmt.where(ProcurementDocumentEmbedding.model == model)
         return self._session.execute(stmt).scalar() or 0
+
+    def count_embeddings_by_tender(self, provider: str, model: str, tender_id: str) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementDocumentEmbedding.id))
+            .join(ProcurementDocumentChunk, ProcurementDocumentChunk.id == ProcurementDocumentEmbedding.chunk_id)
+            .where(
+                ProcurementDocumentChunk.tender_id == tender_id,
+                ProcurementDocumentEmbedding.provider == provider,
+                ProcurementDocumentEmbedding.model == model,
+            )
+        ).scalar() or 0
 
     def list_document_embeddings(
         self,

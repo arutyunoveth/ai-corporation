@@ -56,7 +56,7 @@ class LocalChatLlmClient:
         base_url: str,
         model_name: str,
         timeout_seconds: int = 120,
-        max_context_chars: int = 24_000,
+        max_context_chars: int = 10_000,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model_name = model_name
@@ -133,7 +133,7 @@ class LocalChatLlmClient:
                 raw_body = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             details = _read_http_error_body(exc)
-            if exc.code == 400 and _is_context_limit_error(details) and len(selected_contexts) > 1:
+            if exc.code in (400, 500) and _is_context_limit_error(details) and len(selected_contexts) > 1:
                 return self._generate_with_retry(
                     question,
                     selected_contexts[:-1],

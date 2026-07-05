@@ -11,6 +11,7 @@ from src.shared.config.settings import get_settings
 from src.shared.db.diagnostics import get_database_diagnostics, masked_database_url
 from src.tender_research.config import load_config
 from src.tender_research.rag.analysis_service import analyze_tender
+from src.tender_research.rag.prepare_service import check_preparation_status, prepare_tender_for_analysis
 from src.tender_research.rag.schemas import TenderAnalysisResult
 
 router = APIRouter(prefix="/api/tender-research", tags=["tender-research"])
@@ -48,6 +49,52 @@ class SourceSchema(BaseModel):
     quote_preview: str
 
 
+class PrepareRequest(BaseModel):
+    registry_number: str = Field(..., description="Registry number of the tender")
+    provider: str | None = Field(default=None, description="Embedding provider override")
+    model: str | None = Field(default=None, description="Embedding model override")
+    base_url: str | None = Field(default=None, description="Embedding server base URL override")
+    limit_documents: int | None = Field(default=None, description="Limit documents to process")
+    rebuild_chunks: bool = Field(default=False, description="Rebuild chunks even if they exist")
+    rebuild_embeddings: bool = Field(default=False, description="Rebuild embeddings even if they exist")
+
+
+class PreparationStepSchema(BaseModel):
+    name: str
+    status: str
+    message: str = ""
+    details: str = ""
+
+
+class PrepareResponse(BaseModel):
+    status: str
+    registry_number: str
+    ready_for_analysis: bool
+    steps: list[PreparationStepSchema] = []
+    tender_found: bool = False
+    documents_total: int = 0
+    documents_downloaded: int = 0
+    extracted_texts_total: int = 0
+    chunks_total: int = 0
+    chunks_created: int = 0
+    embeddings_total: int = 0
+    embeddings_created: int = 0
+    warnings: list[str] = []
+    errors: list[str] = []
+
+
+class PreparationStatusResponse(BaseModel):
+    registry_number: str
+    tender_found: bool = False
+    documents_total: int = 0
+    documents_downloaded: int = 0
+    extracted_texts_total: int = 0
+    chunks_total: int = 0
+    embeddings_total: int = 0
+    ready_for_analysis: bool = False
+    missing: list[str] = []
+
+
 class AnalyzeResponse(BaseModel):
     status: str
     registry_number: str
@@ -65,6 +112,29 @@ class LatestReportResponse(BaseModel):
     report_markdown: str
     report_path: str
     created_at: str | None = None
+
+
+def _to_prepare_response(result) -> PrepareResponse:
+    steps = [
+        PreparationStepSchema(name=s.name, status=s.status, message=s.message, details=s.details)
+        for s in result.steps
+    ]
+    return PrepareResponse(
+        status=result.status,
+        registry_number=result.registry_number,
+        ready_for_analysis=result.ready_for_analysis,
+        steps=steps,
+        tender_found=result.tender_found,
+        documents_total=result.documents_total,
+        documents_downloaded=result.documents_downloaded,
+        extracted_texts_total=result.extracted_texts_total,
+        chunks_total=result.chunks_total,
+        chunks_created=result.chunks_created,
+        embeddings_total=result.embeddings_total,
+        embeddings_created=result.embeddings_created,
+        warnings=result.warnings,
+        errors=result.errors,
+    )
 
 
 def _to_analyze_response(result: TenderAnalysisResult) -> AnalyzeResponse:
@@ -124,6 +194,39 @@ def tender_research_health() -> HealthResponse:
         pgvector_extension_available=diag.get("pgvector_extension_available", False),
         table_counts=table_counts,
     )
+
+
+@router.post("/prepare", response_model=PrepareResponse)
+def prepare_tender_endpoint(payload: PrepareRequest) -> PrepareResponse:
+    try:
+        result = prepare_tender_for_analysis(
+            registry_number=payload.registry_number,
+            provider=payload.provider,
+            model=payload.model,
+            base_url=payload.base_url,
+            limit_documents=payload.limit_documents,
+            rebuild_chunks=payload.rebuild_chunks,
+            rebuild_embeddings=payload.rebuild_embeddings,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return _to_prepare_response(result)
+
+
+@router.get("/prepare/{registry_number}/status", response_model=PreparationStatusResponse)
+def get_preparation_status(registry_number: str) -> PreparationStatusResponse:
+    try:
+        safe_name = _safe_filename(registry_number)
+        if safe_name != registry_number:
+            raise HTTPException(status_code=400, detail="Invalid registry number")
+
+        status = check_preparation_status(registry_number=registry_number)
+        return PreparationStatusResponse(**status)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
