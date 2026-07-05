@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,6 +17,21 @@ from src.shared.enums import DealClosureStatus, EventSeverity, KPIStatus
 from src.shared.errors import NotFoundError, ValidationError
 from src.shared.ids import next_kpi_learning_id, next_kpi_learning_set_id, next_learning_note_id
 from src.shared.validation import require_non_empty, require_same_reference
+
+UTC = timezone.utc
+
+
+def _ensure_aware_utc(value: datetime) -> datetime:
+    """Normalize DB datetimes to aware UTC before arithmetic.
+
+    SQLite may deserialize `DateTime(timezone=True)` values without tzinfo; in that
+    case we preserve the existing timestamp and treat it as UTC, which matches the
+    project's `utcnow()` default and keeps KPI duration math stable across runtimes.
+    """
+
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _get_set(session: Session, kpi_learning_set_id: str) -> KPILearningSet:
@@ -70,7 +87,9 @@ def build_kpi_learning(session: Session, payload: BuildKPILearningRequest) -> KP
     if not deal:
         raise NotFoundError(f"Deal '{payload.deal_id}' was not found")
 
-    cycle_time_days = (closure_record.closed_at - deal.created_at).total_seconds() / 86400
+    cycle_time_days = (
+        _ensure_aware_utc(closure_record.closed_at) - _ensure_aware_utc(deal.created_at)
+    ).total_seconds() / 86400
     supplier_count = int(
         session.scalar(
             select(func.count(func.distinct(QuoteRecord.supplier_id)))
@@ -100,7 +119,8 @@ def build_kpi_learning(session: Session, payload: BuildKPILearningRequest) -> KP
         )
         if latest_collection_event:
             payment_collection_days = (
-                latest_collection_event.event_timestamp - package.latest_payment_collection_set.created_at
+                _ensure_aware_utc(latest_collection_event.event_timestamp)
+                - _ensure_aware_utc(package.latest_payment_collection_set.created_at)
             ).total_seconds() / 86400
 
     kpi_set = KPILearningSet(
