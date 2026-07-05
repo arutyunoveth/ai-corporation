@@ -9,6 +9,9 @@ stores under `data/rag/`.
 For the validated Mac mini runtime layout and exact live server commands, see
 [macmini_rag_runtime.md](/Users/master/Documents/AI-Corporation/docs/tender_research/macmini_rag_runtime.md).
 
+Demo runbook for tender RAG analysis:
+[docs/demo/tender_rag_analysis/README.md](../demo/tender_rag_analysis/README.md)
+
 ## Scope
 
 - No cloud LLM dependency is required.

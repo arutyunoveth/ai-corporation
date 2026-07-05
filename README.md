@@ -62,6 +62,7 @@ The project is now in a separate launch-readiness phase. Recovery is closed, but
 - [docs/product/Tender_Operator_Site_Deployment.md](docs/product/Tender_Operator_Site_Deployment.md)
 - [docs/product/Calibrated_Contract_Risk_Method.md](docs/product/Calibrated_Contract_Risk_Method.md)
 - [docs/product/Tender_Operator_RFQ_Workflow.md](docs/product/Tender_Operator_RFQ_Workflow.md)
+- [docs/demo/tender_rag_analysis/README.md](docs/demo/tender_rag_analysis/README.md) — Demo runbook for tender RAG analysis
 
 ## Unified Site + Pilot Preview
 

@@ -3,6 +3,9 @@
 Mac mini is the server-side source of truth for the Arvectum tender research
 runtime.
 
+Demo runbook for tender RAG analysis:
+[docs/demo/tender_rag_analysis/README.md](../demo/tender_rag_analysis/README.md)
+
 ## Server Checkout
 
 - Main working checkout for the live smoke run:
