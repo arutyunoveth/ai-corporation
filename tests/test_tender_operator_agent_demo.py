@@ -30,6 +30,7 @@ def test_tender_operator_demo_page_and_report_render(client):
     assert "Найти закупку" in page.text
     assert "Загрузка и анализ" in page.text
     assert "История анализов" in page.text
+    assert "Статус фоновой задачи" in page.text
 
     assert report_page.status_code == 200
     assert "Отчёт тендерного агента" in report_page.text
@@ -109,3 +110,12 @@ def test_tender_operator_console_history_report_button_avoids_broken_inline_js()
     assert "history-open-report" in page
     assert "data-run-id=" in page
     assert "handleOpenHistoryReport(''" not in page
+
+
+def test_tender_operator_console_contains_background_job_polling():
+    page = render_tender_operator_console_html()
+
+    assert "/api/tender-research/jobs/prepare" in page
+    assert "/api/tender-research/jobs/analyze" in page
+    assert "/api/tender-research/jobs/" in page
+    assert "analysis-job-status" in page

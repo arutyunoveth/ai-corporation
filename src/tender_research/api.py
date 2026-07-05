@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
@@ -12,6 +13,9 @@ from src.shared.config.settings import get_settings
 from src.shared.db.diagnostics import get_database_diagnostics, masked_database_url
 from src.shared.db.base import Base
 from src.tender_research.config import load_config
+from src.tender_research.rag.job_runner import submit_analyze_job, submit_prepare_job
+from src.tender_research.rag.job_schemas import JobListResponse, JobStatusResponse, StartJobResponse
+from src.tender_research.rag.job_service import create_job, get_job, list_jobs
 from src.tender_research.rag.analysis_service import analyze_tender
 from src.tender_research.rag.history_service import (
     get_analysis_run,
@@ -23,6 +27,7 @@ from src.tender_research.rag.prepare_service import check_preparation_status, pr
 from src.tender_research.rag.schemas import TenderAnalysisResult
 
 router = APIRouter(prefix="/api/tender-research", tags=["tender-research"])
+logger = logging.getLogger(__name__)
 
 
 class AnalyzeRequest(BaseModel):
@@ -227,9 +232,14 @@ def _to_analyze_response(result: TenderAnalysisResult) -> AnalyzeResponse:
         report_markdown=result.report_markdown,
         report_path=result.report_path,
         used_llm=result.used_llm,
+        run_id=result.run_id,
         warnings=result.warnings,
         errors=result.errors,
     )
+
+
+def _job_to_status_response(record) -> JobStatusResponse:
+    return JobStatusResponse(**record.to_dict())
 
 
 @router.get("/health", response_model=dict)
@@ -276,6 +286,36 @@ def prepare_tender_endpoint(payload: PrepareRequest) -> PrepareResponse:
     return _to_prepare_response(result)
 
 
+@router.post("/jobs/prepare", response_model=StartJobResponse)
+def start_prepare_job_endpoint(payload: PrepareRequest) -> StartJobResponse:
+    request = payload.model_dump()
+    session = _get_session()
+    try:
+        record = create_job(
+            session,
+            job_type="prepare",
+            registry_number=payload.registry_number,
+            request=request,
+            source="api",
+        )
+    finally:
+        session.close()
+
+    try:
+        submit_prepare_job(record.id, {**request, "source": "api"})
+    except Exception as exc:
+        logger.exception("Failed to submit prepare job %s", record.id)
+        raise HTTPException(status_code=500, detail=f"Failed to submit background job: {exc}") from exc
+
+    return StartJobResponse(
+        job_id=record.id,
+        job_type=record.job_type,
+        registry_number=record.registry_number,
+        status=record.status,
+        status_url=f"/api/tender-research/jobs/{record.id}",
+    )
+
+
 @router.get("/prepare/{registry_number}/status", response_model=PreparationStatusResponse)
 def get_preparation_status(registry_number: str) -> PreparationStatusResponse:
     try:
@@ -311,6 +351,76 @@ def analyze_tender_endpoint(payload: AnalyzeRequest) -> AnalyzeResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
     return _to_analyze_response(result)
+
+
+@router.post("/jobs/analyze", response_model=StartJobResponse)
+def start_analyze_job_endpoint(payload: AnalyzeRequest) -> StartJobResponse:
+    request = payload.model_dump()
+    session = _get_session()
+    try:
+        record = create_job(
+            session,
+            job_type="analyze",
+            registry_number=payload.registry_number,
+            request=request,
+            source="api",
+        )
+    finally:
+        session.close()
+
+    try:
+        submit_analyze_job(record.id, {**request, "source": "api"})
+    except Exception as exc:
+        logger.exception("Failed to submit analyze job %s", record.id)
+        raise HTTPException(status_code=500, detail=f"Failed to submit background job: {exc}") from exc
+
+    return StartJobResponse(
+        job_id=record.id,
+        job_type=record.job_type,
+        registry_number=record.registry_number,
+        status=record.status,
+        status_url=f"/api/tender-research/jobs/{record.id}",
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+def get_tender_analysis_job(job_id: str) -> JobStatusResponse:
+    session = _get_session()
+    try:
+        record = get_job(session, job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Analysis job not found")
+        return _job_to_status_response(record)
+    finally:
+        session.close()
+
+
+@router.get("/jobs", response_model=JobListResponse)
+def list_tender_analysis_jobs(
+    registry_number: str | None = Query(default=None),
+    job_type: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> JobListResponse:
+    session = _get_session()
+    try:
+        items, total = list_jobs(
+            session,
+            registry_number=registry_number,
+            job_type=job_type,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
+        return JobListResponse(
+            items=[_job_to_status_response(item) for item in items],
+            limit=limit,
+            offset=offset,
+            total=total,
+        )
+    finally:
+        session.close()
 
 
 @router.get("/analyze/{registry_number}/latest", response_model=LatestReportResponse)

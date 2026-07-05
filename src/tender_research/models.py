@@ -252,6 +252,36 @@ class TenderAnalysisRun(UUIDPrimaryKeyMixin, Base):
     )
 
 
+class TenderAnalysisJob(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "tender_analysis_jobs"
+
+    job_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    registry_number: Mapped[str] = mapped_column(String(256), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    progress_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    current_step: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    steps_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    warnings_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    errors_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    report_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    analysis_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    request_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        Index("ix_tender_analysis_jobs_registry_number", "registry_number"),
+        Index("ix_tender_analysis_jobs_job_type", "job_type"),
+        Index("ix_tender_analysis_jobs_status", "status"),
+        Index("ix_tender_analysis_jobs_created_at", "created_at"),
+    )
+
+
 class ProcurementRawArtifact(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "procurement_raw_artifacts"
 

@@ -38,6 +38,7 @@ class TenderAnalysisResult:
     llm_model: str | None = None
     retrieval_provider: str | None = None
     retrieval_model: str | None = None
+    run_id: str | None = None
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 

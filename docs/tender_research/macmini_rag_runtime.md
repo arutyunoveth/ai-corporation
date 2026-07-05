@@ -167,15 +167,42 @@ GET /api/tender-research/health
 | Form with registry_number input | PASS |
 | Checkboxes (use_llm, save_report) | PASS |
 | JS handler `handleAnalysisForm` defined | PASS |
-| API endpoint in fetch JSON call | PASS (`/api/tender-research/analyze`) |
-| API POST precheck (same params) | HTTP 200, status=completed, sections=10, sources=30, used_llm=true |
-| Report link `GET /latest` | HTTP 200, 38841 bytes |
+| Background jobs endpoints in fetch JSON calls | PASS (`/api/tender-research/jobs/prepare`, `/api/tender-research/jobs/analyze`) |
+| Job status polling endpoint | PASS (`/api/tender-research/jobs/{job_id}`) |
+| Report link `GET /latest` or `/history/{run_id}/report` | PASS |
 | UI HTML all 9/9 checks | PASS |
 
 The demo UI lives on the same FastAPI backend (port 8001), uses relative URLs,
 and needs no CORS setup. Default limit=6 sent by the form is accepted by the
-API (query param default). The full flow — tab display → form → API call →
-result display → report link — works without any integration fixes.
+API (query param default). The full flow — tab display → background job start
+→ polling → result display → history/report link — works without any
+integration fixes.
+
+### Background Jobs MVP
+
+Long-running prepare/analyze operations are now available through:
+
+```text
+POST /api/tender-research/jobs/prepare
+POST /api/tender-research/jobs/analyze
+GET  /api/tender-research/jobs/{job_id}
+GET  /api/tender-research/jobs
+```
+
+Status values:
+
+- `queued`
+- `running`
+- `completed`
+- `completed_with_warnings`
+- `failed`
+- `cancelled`
+
+Known limitation:
+
+- the runner is in-process;
+- active `running` jobs do not survive backend restart as executing tasks;
+- job metadata remains queryable from the database.
 
 ## Verification Commands
 

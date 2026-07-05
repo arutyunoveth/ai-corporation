@@ -64,7 +64,7 @@ http://127.0.0.1:8001/demo/tender-agent
 ## F. Быстрый API precheck
 
 ```bash
-curl -X POST http://127.0.0.1:8001/api/tender-research/analyze \
+curl -X POST http://127.0.0.1:8001/api/tender-research/jobs/analyze \
   -H "Content-Type: application/json" \
   -d '{
     "registry_number": "0323100010326000013",
@@ -81,11 +81,27 @@ curl -X POST http://127.0.0.1:8001/api/tender-research/analyze \
 
 Ожидаем:
 - HTTP 200
-- `status=completed`
-- `sections_count=10`
-- `sources_count>0`
-- `report_path` не пуст
+- `job_id` не пуст
+- `status=queued`
 
-## G. Если что-то не работает
+После этого:
+
+```bash
+curl http://127.0.0.1:8001/api/tender-research/jobs/<job_id>
+```
+
+Ожидаем:
+- `status` доходит до `completed`
+- `progress_percent=100`
+- `result.sections_count=10`
+- `result.sources_count>0`
+- `report_path` или `analysis_run_id` присутствуют
+
+## G. Ограничение MVP
+
+- Background jobs выполняются in-process.
+- Активные `running` jobs не переживают restart backend как выполняющиеся задачи.
+
+## H. Если что-то не работает
 
 Перейти к [troubleshooting.md](troubleshooting.md).

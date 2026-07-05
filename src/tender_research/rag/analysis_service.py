@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import logging
 from pathlib import Path
 from uuid import uuid4
@@ -175,6 +176,7 @@ def analyze_tender(
     save_report: bool = False,
     record_history: bool = True,
     history_source: str | None = None,
+    progress_callback=None,
 ) -> TenderAnalysisResult:
     own_session = False
     if session is None:
@@ -189,6 +191,17 @@ def analyze_tender(
         if record_history:
             import time
             _start_time = time.time()
+
+        def emit_progress(progress_percent: int, current_step: str, message: str = "") -> None:
+            if progress_callback is None:
+                return
+            progress_callback(
+                {
+                    "progress_percent": progress_percent,
+                    "current_step": current_step,
+                    "message": message,
+                }
+            )
 
         if provider:
             object.__setattr__(config, "rag_embeddings_provider", provider)
@@ -234,6 +247,7 @@ def analyze_tender(
             dimension=emb_provider.dimension or None,
         )
         retriever = RagRetriever(repo, emb_provider, vector_store)
+        emit_progress(20, "retrieval", "Подготавливаем поиск по документам…")
 
         embeddings_count = repo.count_document_embeddings(
             provider=emb_provider.provider_name,
@@ -269,7 +283,10 @@ def analyze_tender(
         sections: list[TenderAnalysisSection] = []
         all_sources: list[SourceCitation] = []
 
-        for sec_def in ANALYSIS_SECTIONS:
+        total_sections = max(len(ANALYSIS_SECTIONS), 1)
+        for index, sec_def in enumerate(ANALYSIS_SECTIONS, start=1):
+            section_progress = 30 + round((index - 1) * 60 / total_sections)
+            emit_progress(section_progress, "section_analysis", f"Анализируем раздел «{sec_def['title']}»…")
             hits = retriever.search_documents(
                 sec_def["question"],
                 registry_number=registry_number,
@@ -315,6 +332,7 @@ def analyze_tender(
                 sources=sources,
                 status=status,
             ))
+        emit_progress(90, "section_analysis", "Анализ разделов завершён.")
 
         overall_status = "completed"
         if errors:
@@ -336,6 +354,7 @@ def analyze_tender(
 
         report_path = None
         if save_report:
+            emit_progress(95, "save_report", "Сохраняем отчёт…")
             report_path = _save_report(report_markdown, registry_number, config.data_dir)
 
         result = TenderAnalysisResult(
@@ -354,11 +373,14 @@ def analyze_tender(
             errors=errors,
         )
         if record_history:
+            emit_progress(98, "record_history", "Сохраняем run в history…")
             duration = None
             if _start_time is not None:
                 import time
                 duration = time.time() - _start_time
-            _record_history(result, session, duration_seconds=duration, source=history_source)
+            run_id = _record_history(result, session, duration_seconds=duration, source=history_source)
+            result = replace(result, run_id=run_id)
+        emit_progress(100, "completed", "Анализ завершён.")
         return result
     finally:
         if own_session:

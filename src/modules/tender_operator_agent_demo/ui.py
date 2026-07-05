@@ -813,6 +813,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                       <div id="analysis-readiness-status" class="empty">Нажмите «Проверить готовность».</div>
                       <div id="analysis-preparation-steps" class="hidden" style="margin-top:12px;"></div>
                     </div>
+                    <div class="card" id="analysis-job-card">
+                      <h2>Статус фоновой задачи</h2>
+                      <div id="analysis-job-status" class="empty">Запустите подготовку или анализ, чтобы увидеть progress и статус.</div>
+                    </div>
                   </aside>
                   <main class="stack">
                     <div class="card" id="analysis-result-card">
@@ -852,6 +856,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             uploadedRuns: [],
             selectedRunId: {initial_run_id},
             eventsPollTimer: null,
+            analysisJobPollTimer: null,
+            activeAnalysisJobId: null,
+            activeAnalysisJobStartedAt: null,
           }};
 
           const STEP_STATUS_LABELS = {{
@@ -1125,6 +1132,119 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const node = document.getElementById(nodeId);
             node.className = 'hidden';
             node.textContent = '';
+          }}
+
+          function stopAnalysisJobPolling() {{
+            if (state.analysisJobPollTimer) {{
+              window.clearInterval(state.analysisJobPollTimer);
+              state.analysisJobPollTimer = null;
+            }}
+            state.activeAnalysisJobId = null;
+            state.activeAnalysisJobStartedAt = null;
+          }}
+
+          function renderAnalysisResultPayload(payload, registryNumber) {{
+            const node = document.getElementById('analysis-result');
+            const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
+            const errorsHtml = (payload.errors || []).map(function(e) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(e) + '</div>'; }}).join('');
+            const analysisRunId = payload.analysis_run_id || payload.run_id || '';
+            const reportLink = analysisRunId
+              ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/report'
+              : (payload.report_path ? '/api/tender-research/analyze/' + encodeURIComponent(registryNumber) + '/latest' : '');
+            node.innerHTML = `
+              <div class="grid-2">
+                <div class="metric"><span class="metric-label">Статус</span><span class="metric-value">${{escapeHtml(payload.status || 'unknown')}}</span></div>
+                <div class="metric"><span class="metric-label">Разделов</span><span class="metric-value">${{payload.sections_count ?? 0}}</span></div>
+                <div class="metric"><span class="metric-label">Источников</span><span class="metric-value">${{payload.sources_count ?? 0}}</span></div>
+                <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{payload.used_llm ? 'да' : 'нет'}}</span></div>
+              </div>
+              ${{payload.preview ? '<div class="note" style="margin-top:12px;white-space:pre-wrap">' + escapeHtml(payload.preview) + '</div>' : ''}}
+              ${{warningsHtml}}
+              ${{errorsHtml}}
+              ${{reportLink ? `<div class="form-actions" style="margin-top:14px"><a class="link-button" href="${{reportLink}}" target="_blank" rel="noreferrer">Открыть отчёт</a></div>` : ''}}
+            `;
+            node.className = '';
+          }}
+
+          function renderAnalysisJobStatus(job) {{
+            const node = document.getElementById('analysis-job-status');
+            if (!job) {{
+              node.innerHTML = '<div class="empty">Нет активной фоновой задачи.</div>';
+              node.className = 'empty';
+              return;
+            }}
+            const statusColor = job.status === 'completed' ? 'var(--success)' : job.status === 'completed_with_warnings' ? 'var(--warning)' : job.status === 'failed' ? 'var(--danger)' : 'var(--text)';
+            const stepsHtml = (job.steps || []).map(function(step) {{
+              const icon = step.status === 'completed' ? '✓' : step.status === 'skipped' ? '–' : step.status === 'warning' ? '⚠' : step.status === 'failed' ? '✗' : step.status === 'running' ? '…' : '·';
+              const color = step.status === 'completed' || step.status === 'skipped' ? 'var(--success)' : step.status === 'warning' ? 'var(--warning)' : step.status === 'failed' ? 'var(--danger)' : 'inherit';
+              return '<div style="padding:4px 0;color:' + color + '">' + icon + ' <strong>' + escapeHtml(step.title || step.name) + '</strong>' +
+                (step.message ? ' — ' + escapeHtml(step.message) : '') + '</div>';
+            }}).join('');
+            const warningsHtml = (job.warnings || []).map(function(item) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(item) + '</div>'; }}).join('');
+            const errorsHtml = (job.errors || []).map(function(item) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(item) + '</div>'; }}).join('');
+            node.innerHTML = `
+              <div class="grid-2">
+                <div class="metric"><span class="metric-label">Job ID</span><span class="metric-value" style="font-size:12px">${{escapeHtml(job.id)}}</span></div>
+                <div class="metric"><span class="metric-label">Тип</span><span class="metric-value">${{escapeHtml(job.job_type)}}</span></div>
+                <div class="metric"><span class="metric-label">Статус</span><span class="metric-value" style="color:${{statusColor}}">${{escapeHtml(job.status)}}</span></div>
+                <div class="metric"><span class="metric-label">Прогресс</span><span class="metric-value">${{job.progress_percent ?? 0}}%</span></div>
+                <div class="metric"><span class="metric-label">Шаг</span><span class="metric-value">${{escapeHtml(job.current_step || 'queued')}}</span></div>
+                <div class="metric"><span class="metric-label">Источник</span><span class="metric-value">${{escapeHtml(job.source || 'api')}}</span></div>
+              </div>
+              <div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="height:10px;background:var(--panel)">
+                  <div style="height:100%;width:${{Math.max(0, Math.min(100, job.progress_percent || 0))}}%;background:linear-gradient(90deg, var(--accent), var(--success))"></div>
+                </div>
+              </div>
+              <div style="margin-top:10px">${{stepsHtml || '<div class="empty">Шаги ещё не доступны.</div>'}}</div>
+              ${{warningsHtml}}
+              ${{errorsHtml}}
+            `;
+            node.className = '';
+          }}
+
+          async function pollAnalysisJobOnce(jobId, registryNumber) {{
+            const job = await fetchJson('/api/tender-research/jobs/' + encodeURIComponent(jobId));
+            renderAnalysisJobStatus(job);
+            if (job.status === 'completed' || job.status === 'completed_with_warnings') {{
+              stopAnalysisJobPolling();
+              if (job.job_type === 'prepare') {{
+                setFlash('analysis-flash', `Подготовка завершена: статус «${{job.status}}».`);
+                await handleCheckReadiness();
+              }} else if (job.job_type === 'analyze') {{
+                renderAnalysisResultPayload(job.result || {{}}, registryNumber);
+                setFlash('analysis-flash', `Анализ завершён: статус «${{job.status}}», разделов: ${{job.result?.sections_count ?? 0}}, источников: ${{job.result?.sources_count ?? 0}}.`);
+                await handleRefreshHistory(registryNumber);
+              }}
+              return;
+            }}
+            if (job.status === 'failed' || job.status === 'cancelled') {{
+              stopAnalysisJobPolling();
+              setFlash('analysis-flash', 'Фоновая задача завершилась ошибкой: ' + escapeHtml((job.errors || []).join('; ') || job.status), true);
+              document.getElementById('prepare-tender-btn').disabled = false;
+            }}
+          }}
+
+          function startAnalysisJobPolling(jobId, registryNumber) {{
+            stopAnalysisJobPolling();
+            state.activeAnalysisJobId = jobId;
+            state.activeAnalysisJobStartedAt = Date.now();
+            pollAnalysisJobOnce(jobId, registryNumber).catch(function(error) {{
+              setFlash('analysis-flash', 'Ошибка получения статуса фоновой задачи: ' + escapeHtml(error.message), true);
+            }});
+            state.analysisJobPollTimer = window.setInterval(async function() {{
+              if (!state.activeAnalysisJobStartedAt || (Date.now() - state.activeAnalysisJobStartedAt) > 10 * 60 * 1000) {{
+                stopAnalysisJobPolling();
+                setFlash('analysis-flash', 'Задача выполняется дольше обычного. Можно продолжить проверку статуса позже.', true);
+                return;
+              }}
+              try {{
+                await pollAnalysisJobOnce(jobId, registryNumber);
+              }} catch (error) {{
+                stopAnalysisJobPolling();
+                setFlash('analysis-flash', 'Ошибка получения статуса фоновой задачи: ' + escapeHtml(error.message), true);
+              }}
+            }}, 1500);
           }}
 
           function wireTabs() {{
@@ -2041,11 +2161,11 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const stepsNode = document.getElementById('analysis-preparation-steps');
             const statusNode = document.getElementById('analysis-readiness-status');
             stepsNode.classList.remove('hidden');
-            stepsNode.innerHTML = '<div class="note">Подготовка может занять несколько минут…</div>';
-            statusNode.innerHTML = '<div class="note">Запускаем подготовку…</div>';
+            stepsNode.innerHTML = '<div class="note">Подготовка будет выполнена в фоне…</div>';
+            statusNode.innerHTML = '<div class="note">Создаём background job…</div>';
             document.getElementById('prepare-tender-btn').disabled = true;
             try {{
-              const result = await fetchJson('/api/tender-research/prepare', {{
+              const job = await fetchJson('/api/tender-research/jobs/prepare', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
                 body: JSON.stringify({{
@@ -2054,33 +2174,20 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   rebuild_embeddings: false,
                 }}),
               }});
-              let stepsHtml = '<div style="margin-top:8px">';
-              for (const step of (result.steps || [])) {{
-                const icon = step.status === 'completed' ? '✓' : step.status === 'skipped' ? '–' : step.status === 'warning' ? '⚠' : step.status === 'failed' ? '✗' : '…';
-                const color = step.status === 'completed' || step.status === 'skipped' ? 'var(--success)' : step.status === 'warning' ? 'var(--warning)' : step.status === 'failed' ? 'var(--danger)' : 'inherit';
-                stepsHtml += '<div style="padding:4px 0;color:' + color + '">' + icon + ' <strong>' + escapeHtml(step.name) + '</strong>';
-                if (step.message) stepsHtml += ' — ' + escapeHtml(step.message);
-                if (step.details) stepsHtml += ' <span style="opacity:0.7">(' + escapeHtml(step.details) + ')</span>';
-                stepsHtml += '</div>';
-              }}
-              stepsHtml += '</div>';
-              stepsNode.innerHTML = stepsHtml;
-
-              if (result.ready_for_analysis) {{
-                statusNode.innerHTML = '<div class="note" style="color:var(--success)">✓ Закупка готова к анализу (чанков: ' + result.chunks_total + ', эмбеддингов: ' + result.embeddings_total + ')</div>';
-              }} else {{
-                let msg = '<div class="note" style="color:var(--warning)">⚠ Подготовка завершена с предупреждениями';
-                if (result.warnings && result.warnings.length) {{
-                  msg += '<ul>' + result.warnings.map(function(w) {{ return '<li>' + escapeHtml(w) + '</li>'; }}).join('') + '</ul>';
-                }}
-                msg += '</div>';
-                if (result.errors && result.errors.length) {{
-                  msg += '<div class="note" style="color:var(--danger)">✗ Ошибки:<ul>' + result.errors.map(function(e) {{ return '<li>' + escapeHtml(e) + '</li>'; }}).join('') + '</ul></div>';
-                }}
-                statusNode.innerHTML = msg;
-              }}
-              statusNode.className = '';
-              await handleCheckReadiness();
+              renderAnalysisJobStatus({{
+                id: job.job_id,
+                job_type: job.job_type,
+                registry_number: job.registry_number,
+                status: job.status,
+                progress_percent: 0,
+                current_step: 'queued',
+                steps: [],
+                warnings: [],
+                errors: [],
+                source: 'api',
+              }});
+              statusNode.innerHTML = '<div class="note">Фоновая задача создана. Обновляем статус…</div>';
+              startAnalysisJobPolling(job.job_id, rn);
             }} catch (error) {{
               stepsNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ Ошибка подготовки: ' + escapeHtml(error.message) + '</div>';
               document.getElementById('prepare-tender-btn').disabled = false;
@@ -2099,9 +2206,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
             const useLlm = data.get('use_llm') === 'on';
             const saveReport = data.get('save_report') === 'on';
-            setFlash('analysis-flash', `Запускаем анализ для ${{registryNumber}}…`);
+            setFlash('analysis-flash', `Создаём задачу анализа для ${{registryNumber}}…`);
             try {{
-              const payload = await fetchJson('/api/tender-research/analyze', {{
+              const job = await fetchJson('/api/tender-research/jobs/analyze', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
                 body: JSON.stringify({{
@@ -2111,23 +2218,21 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   limit: 6,
                 }}),
               }});
-              const node = document.getElementById('analysis-result');
-              const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
-              const errorsHtml = (payload.errors || []).map(function(e) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(e) + '</div>'; }}).join('');
-              node.innerHTML = `
-                <div class="grid-2">
-                  <div class="metric"><span class="metric-label">Статус</span><span class="metric-value">${{escapeHtml(payload.status)}}</span></div>
-                  <div class="metric"><span class="metric-label">Разделов</span><span class="metric-value">${{payload.sections_count}}</span></div>
-                  <div class="metric"><span class="metric-label">Источников</span><span class="metric-value">${{payload.sources_count}}</span></div>
-                  <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{payload.used_llm ? 'да' : 'нет'}}</span></div>
-                </div>
-                ${{warningsHtml}}
-                ${{errorsHtml}}
-                ${{payload.report_path ? `<div class="form-actions" style="margin-top:14px"><a class="link-button" href="/api/tender-research/analyze/${{encodeURIComponent(registryNumber)}}/latest" target="_blank" rel="noreferrer">Открыть отчёт</a></div>` : ''}}
-              `;
-              node.className = '';
-              setFlash('analysis-flash', `Анализ завершён: статус «${{payload.status}}», разделов: ${{payload.sections_count}}, источников: ${{payload.sources_count}}.`);
-              await handleRefreshHistory(registryNumber);
+              renderAnalysisJobStatus({{
+                id: job.job_id,
+                job_type: job.job_type,
+                registry_number: job.registry_number,
+                status: job.status,
+                progress_percent: 0,
+                current_step: 'queued',
+                steps: [],
+                warnings: [],
+                errors: [],
+                source: 'api',
+              }});
+              document.getElementById('analysis-result').innerHTML = '<div class="empty">Фоновая задача анализа создана. Ожидаем результат…</div>';
+              document.getElementById('analysis-result').className = '';
+              startAnalysisJobPolling(job.job_id, registryNumber);
             }} catch (error) {{
               setFlash('analysis-flash', 'Ошибка анализа: ' + escapeHtml(error.message), true);
             }}

@@ -65,6 +65,13 @@ curl -s http://127.0.0.1:8088/v1/models
 curl http://127.0.0.1:8001/api/tender-research/analyze/0323100010326000013/latest
 ```
 
+Для history/report-by-run:
+
+```bash
+curl "http://127.0.0.1:8001/api/tender-research/analyze/history?registry_number=0323100010326000013&limit=5"
+curl http://127.0.0.1:8001/api/tender-research/analyze/history/<run_id>/report
+```
+
 ## 7. Backend смотрит не в ту БД
 
 Проверить:
@@ -83,3 +90,31 @@ curl http://127.0.0.1:8001/api/tender-research/analyze/0323100010326000013/lates
 --run-llama-cpp
 --run-live-smoke
 ```
+
+## 9. Background job завис в `running`
+
+Проверить:
+
+```bash
+curl http://127.0.0.1:8001/api/tender-research/jobs/<job_id>
+```
+
+Если backend был перезапущен во время выполнения:
+- для MVP это известное ограничение;
+- job metadata остаётся в БД;
+- активная in-process задача не возобновляется автоматически;
+- нужно перезапустить prepare/analyze job вручную.
+
+## 10. UI долго показывает polling
+
+Это ожидаемо для новой закупки, если идут:
+- загрузка документов;
+- text extraction;
+- chunks;
+- embeddings;
+- LLM section analysis.
+
+Если polling превысил ~10 минут:
+- проверить `/api/tender-research/jobs/<job_id>`;
+- проверить backend logs;
+- повторно проверить `health`, embedding server и LLM server.

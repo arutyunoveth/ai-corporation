@@ -1,6 +1,7 @@
 from src.modules.action_queue.models import ActionQueueApproval, ActionQueueRecord, ActionQueueSet
 from src.modules.agent_registry.models import AgentRegistryRecord, AgentRegistrySet
 from src.tender_research.models import (
+    TenderAnalysisJob,
     ProcurementCustomer,
     ProcurementDocumentChunk,
     ProcurementDocumentEmbedding,

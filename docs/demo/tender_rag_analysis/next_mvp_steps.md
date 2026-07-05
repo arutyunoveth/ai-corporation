@@ -11,9 +11,10 @@
 
 ## 2. Technical next steps
 
-- Background jobs для prepare/analyze (Celery / RQ / arq)
-- Progress polling через WebSocket или polling endpoint
-- Persistent run history в БД
+- Background jobs для prepare/analyze: выполнено в MVP через in-process runner + polling API
+- Persistent run history в БД: выполнено
+- Следующий шаг: production-grade queue (Celery / RQ / arq) или durable worker model
+- Следующий шаг: push notifications через WebSocket/SSE вместо polling
 - Улучшенное извлечение текста из документов
 - OCR backlog (сканированные PDF)
 - Извлечение таблиц
@@ -29,15 +30,15 @@
 
 ## 4. MVP proposal (ближайший спринт)
 
-**Вариант A: "История анализов и экспорт отчёта"**
-- persist runs
-- список предыдущих анализов
-- просмотр/скачивание отчёта DOCX/PDF
+**Вариант A: "Экспорт отчёта"**
+- HTML/DOCX/PDF export
+- скачивание отчёта в customer-friendly формате
+- шаблон executive summary
 
-**Вариант B: "Фоновая подготовка закупки с прогрессом"**
-- async prepare
-- background task queue
-- progress polling в UI
+**Вариант B: "Production queue"**
+- durable background workers
+- retry policy
+- stale job reconciliation после restart
 - WebSocket / SSE уведомления
 
 **Вариант C: "Выбор закупки и улучшенный UI"**

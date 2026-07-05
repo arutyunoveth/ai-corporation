@@ -277,6 +277,32 @@ Expected response fields:
 | `warnings` | Non-fatal warnings (e.g. LLM fallback) |
 | `errors` | Fatal errors (e.g. tender not found) |
 
+### Background Jobs
+
+For long-running prepare/analyze flows the backend now also exposes
+lightweight in-process background jobs:
+
+```text
+POST /api/tender-research/jobs/prepare
+POST /api/tender-research/jobs/analyze
+GET  /api/tender-research/jobs/{job_id}
+GET  /api/tender-research/jobs
+```
+
+The start endpoints return `job_id`, `status=queued`, and a `status_url`.
+The status endpoint returns:
+
+- `status`: `queued`, `running`, `completed`, `completed_with_warnings`, `failed`, `cancelled`
+- `progress_percent`
+- `current_step`
+- `steps`
+- `result`
+- `warnings`
+- `errors`
+
+This MVP runner is in-process and intentionally does not require Celery, Redis,
+or any external queue for the local demo contour.
+
 **`no_context` behavior**: If the tender is not found in the database, or no
 embeddings exist for the chosen provider/model, the endpoint returns
 `status=no_context` with an empty sections list and a descriptive error.
