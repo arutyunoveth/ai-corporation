@@ -85,6 +85,7 @@ from src.modules.tender_screening.router import router as tender_screening_route
 from src.modules.tender_import.router import router as tender_import_router
 from src.modules.tender_intake.router import router as tender_intake_router
 from src.modules.tender_operator_agent_demo.router import router as tender_operator_agent_demo_router
+from src.tender_research.api import router as tender_research_router
 from src.modules.tender_normalization.router import router as tender_normalization_router
 from src.modules.tender_summary.router import router as tender_summary_router
 from src.modules.vendor_connectors.router import router as vendor_connectors_router
@@ -191,6 +192,7 @@ app.include_router(shipping_acceptance_router)
 app.include_router(incident_register_router)
 app.include_router(supplier_fulfillment_router)
 app.include_router(supplier_progress_router)
+app.include_router(tender_research_router)
 
 
 @app.get("/health")

@@ -69,6 +69,7 @@ class LocalChatLlmClient:
         contexts: Sequence[RagSearchHit],
         registry_number: str | None = None,
     ) -> RagAnswer:
+        sources = build_source_citations(contexts)
         if not contexts:
             return RagAnswer(
                 answer="В найденных документах недостаточно информации для ответа.",
@@ -205,7 +206,6 @@ class LocalChatLlmClient:
                 break
             selected.append(context)
         return selected
-
     def _build_context_block(self, contexts: Sequence[RagSearchHit]) -> str:
         blocks: list[str] = []
         for index, context in enumerate(contexts, start=1):

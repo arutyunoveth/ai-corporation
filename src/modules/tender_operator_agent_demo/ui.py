@@ -454,6 +454,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <button class="tab-button" data-tab="upload" type="button">Загрузить документы</button>
                 <button class="tab-button" data-tab="dataset" type="button">Демо-набор</button>
                 <button class="tab-button" data-tab="profile" type="button">Профиль поставщика</button>
+                <button class="tab-button" data-tab="analysis" type="button">Анализ закупки</button>
               </div>
 
               <section id="tab-search">
@@ -779,6 +780,45 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   </main>
                 </div>
               </section>
+
+              <section id="tab-analysis" class="hidden">
+                <div class="layout">
+                  <aside class="stack">
+                    <div class="card">
+                      <h2>Анализ закупки через RAG</h2>
+                      <p>Полный RAG-анализ закупки: поиск по проиндексированным документам и генерация структурированного отчета по 10 разделам (извещение → предмет → требования → заявка → оценка → контракт → документы → ограничения → сроки → список документов).</p>
+                      <div id="analysis-flash" class="hidden"></div>
+                      <form id="analysis-form">
+                        <label>
+                          Реестровый номер
+                          <input name="registry_number" required placeholder="Например: 0323100010326000013" />
+                        </label>
+                        <label class="checkbox">
+                          <input name="use_llm" type="checkbox" />
+                          <span>Использовать локальную LLM для генерации ответов</span>
+                        </label>
+                        <label class="checkbox">
+                          <input name="save_report" type="checkbox" checked />
+                          <span>Сохранить отчёт на диск</span>
+                        </label>
+                        <div class="form-actions">
+                          <button class="button primary" type="submit">Запустить анализ</button>
+                        </div>
+                      </form>
+                    </div>
+                  </aside>
+                  <main class="stack">
+                    <div class="card" id="analysis-result-card">
+                      <h2>Результат анализа</h2>
+                      <div id="analysis-result" class="empty">Введите реестровый номер и нажмите «Запустить анализ».</div>
+                    </div>
+                    <div class="card" id="analysis-report-card" class="hidden">
+                      <h2>Отчёт</h2>
+                      <div id="analysis-report-content"></div>
+                    </div>
+                  </main>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -1081,6 +1121,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 document.getElementById('tab-dataset').classList.toggle('hidden', target !== 'dataset');
                 document.getElementById('tab-upload').classList.toggle('hidden', target !== 'upload');
                 document.getElementById('tab-profile').classList.toggle('hidden', target !== 'profile');
+                document.getElementById('tab-analysis').classList.toggle('hidden', target !== 'analysis');
                 if (target === 'profile') {{
                   loadSupplierProfile();
                 }}
@@ -1937,8 +1978,54 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
           }}
 
+          async function handleAnalysisForm(event) {{
+            event.preventDefault();
+            clearFlash('analysis-flash');
+            const form = event.currentTarget;
+            const data = new FormData(form);
+            const registryNumber = String(data.get('registry_number') || '').trim();
+            if (!registryNumber) {{
+              setFlash('analysis-flash', 'Введите реестровый номер.', true);
+              return;
+            }}
+            const useLlm = data.get('use_llm') === 'on';
+            const saveReport = data.get('save_report') === 'on';
+            setFlash('analysis-flash', `Запускаем анализ для ${{registryNumber}}…`);
+            try {{
+              const payload = await fetchJson('/api/tender-research/analyze', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                  registry_number: registryNumber,
+                  use_llm: useLlm,
+                  save_report: saveReport,
+                  limit: 6,
+                }}),
+              }});
+              const node = document.getElementById('analysis-result');
+              const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
+              const errorsHtml = (payload.errors || []).map(function(e) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(e) + '</div>'; }}).join('');
+              node.innerHTML = `
+                <div class="grid-2">
+                  <div class="metric"><span class="metric-label">Статус</span><span class="metric-value">${{escapeHtml(payload.status)}}</span></div>
+                  <div class="metric"><span class="metric-label">Разделов</span><span class="metric-value">${{payload.sections_count}}</span></div>
+                  <div class="metric"><span class="metric-label">Источников</span><span class="metric-value">${{payload.sources_count}}</span></div>
+                  <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{payload.used_llm ? 'да' : 'нет'}}</span></div>
+                </div>
+                ${{warningsHtml}}
+                ${{errorsHtml}}
+                ${{payload.report_path ? `<div class="form-actions" style="margin-top:14px"><a class="link-button" href="/api/tender-research/analyze/${{encodeURIComponent(registryNumber)}}/latest" target="_blank" rel="noreferrer">Открыть отчёт</a></div>` : ''}}
+              `;
+              node.className = '';
+              setFlash('analysis-flash', `Анализ завершён: статус «${{payload.status}}», разделов: ${{payload.sections_count}}, источников: ${{payload.sources_count}}.`);
+            }} catch (error) {{
+              setFlash('analysis-flash', 'Ошибка анализа: ' + escapeHtml(error.message), true);
+            }}
+          }}
+
           async function bootstrap() {{
             wireTabs();
+            document.getElementById('analysis-form').addEventListener('submit', handleAnalysisForm);
             document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
             document.getElementById('eis-docs-form').addEventListener('submit', handleEisDocsArchive);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);

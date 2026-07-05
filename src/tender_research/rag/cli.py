@@ -20,6 +20,7 @@ from src.shared.db.base import Base
 from src.tender_research.config import load_config
 from src.tender_research.rag.embeddings import build_embedding_provider, probe_embedding_provider
 from src.tender_research.rag.indexer import DocumentChunkIndexer, DocumentEmbeddingIndexer
+from src.tender_research.rag.analysis_service import analyze_tender
 from src.tender_research.rag.llm import LocalChatLlmClient, SourceCitation, build_source_citations
 from src.tender_research.rag.retriever import RagRetriever
 from src.tender_research.rag.vector_store import JsonVectorStore
@@ -362,8 +363,6 @@ def _build_retrieval_only_answer(hits) -> str:
     if not previews:
         return _INSUFFICIENT_INFO_MESSAGE
     return "LLM не использовалась. Ниже релевантные фрагменты.\n" + "\n".join(previews)
-
-
 def _build_local_llm_client(config) -> LocalChatLlmClient:
     return LocalChatLlmClient(
         base_url=config.local_llm_base_url,
