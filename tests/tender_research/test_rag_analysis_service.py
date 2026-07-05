@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from src.tender_research.rag.analysis_service import (
     _build_report_markdown,
+    _finalize_analysis_status,
     _save_report,
     _slugify,
     _vector_store_path,
@@ -125,6 +126,18 @@ class TestSaveReport:
 
 
 class TestAnalyzeTender:
+    def test_finalize_analysis_status_adds_warning_when_sources_missing(self):
+        status, warnings = _finalize_analysis_status(
+            sections=[],
+            sources_count=0,
+            warnings=[],
+            errors=[],
+            use_llm=True,
+        )
+
+        assert status == "completed_with_warnings"
+        assert warnings == ["Analysis completed, but no cited sources were found."]
+
     def test_no_tender_found(self):
         with patch(
             "src.tender_research.rag.analysis_service._get_session"

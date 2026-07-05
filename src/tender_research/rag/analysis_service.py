@@ -159,6 +159,27 @@ def _record_history(
         return None
 
 
+def _finalize_analysis_status(
+    *,
+    sections: list[TenderAnalysisSection],
+    sources_count: int,
+    warnings: list[str],
+    errors: list[str],
+    use_llm: bool,
+) -> tuple[str, list[str]]:
+    normalized_warnings = list(warnings)
+    if errors:
+        return "failed", normalized_warnings
+    if sources_count <= 0:
+        message = "Analysis completed, but no cited sources were found."
+        if message not in normalized_warnings:
+            normalized_warnings.append(message)
+        return "completed_with_warnings", normalized_warnings
+    if any(section.status in ("insufficient_context", "no_context") for section in sections):
+        return "completed_with_warnings", normalized_warnings
+    return "completed", normalized_warnings
+
+
 def analyze_tender(
     registry_number: str,
     *,
@@ -334,14 +355,14 @@ def analyze_tender(
             ))
         emit_progress(90, "section_analysis", "Анализ разделов завершён.")
 
-        overall_status = "completed"
-        if errors:
-            overall_status = "failed"
-        elif any(s.status in ("insufficient_context", "no_context") for s in sections):
-            if use_llm:
-                overall_status = "completed_with_warnings"
-            else:
-                overall_status = "completed_with_warnings"
+        sources_count = len(set(source.chunk_id for source in all_sources))
+        overall_status, warnings = _finalize_analysis_status(
+            sections=sections,
+            sources_count=sources_count,
+            warnings=warnings,
+            errors=errors,
+            use_llm=use_llm,
+        )
 
         report_markdown = _build_report_markdown(
             registry_number=registry_number,
@@ -362,7 +383,7 @@ def analyze_tender(
             registry_number=registry_number,
             sections=sections,
             sections_count=len(sections),
-            sources_count=len(set(s.chunk_id for s in all_sources)),
+            sources_count=sources_count,
             report_markdown=report_markdown,
             report_path=report_path,
             used_llm=use_llm and llm_client is not None,

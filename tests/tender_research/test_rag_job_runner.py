@@ -81,6 +81,11 @@ def test_run_analyze_job_completes_and_saves_history_link() -> None:
         run_analyze_job("job-analyze-1", {"registry_number": "0323100010326000013", "use_llm": True, "save_report": True})
 
     mock_analyze.assert_called_once()
+    analyze_kwargs = mock_analyze.call_args.kwargs
+    assert analyze_kwargs["registry_number"] == "0323100010326000013"
+    assert analyze_kwargs["use_llm"] is True
+    assert analyze_kwargs["save_report"] is True
+    assert analyze_kwargs["limit"] == 6
     assert mock_progress.call_count >= 1
     mock_complete.assert_called_once()
     kwargs = mock_complete.call_args.kwargs
@@ -88,6 +93,95 @@ def test_run_analyze_job_completes_and_saves_history_link() -> None:
     assert kwargs["result"]["run_id"] == "run-123"
     assert kwargs["analysis_run_id"] == "run-123"
     assert kwargs["report_path"] == "data/rag/reports/test.md"
+    session.close.assert_called_once()
+
+
+def test_run_analyze_job_preserves_request_parameters() -> None:
+    session = MagicMock()
+    analyze_result = TenderAnalysisResult(
+        status="completed",
+        registry_number="0323100010326000013",
+        sections=[],
+        sections_count=10,
+        sources_count=12,
+        report_markdown="# Preview",
+        report_path="data/rag/reports/test.md",
+        used_llm=True,
+        run_id="run-params",
+    )
+
+    request = {
+        "registry_number": "0323100010326000013",
+        "provider": "llama_cpp",
+        "model": "Qwen3-Embedding-4B",
+        "base_url": "http://127.0.0.1:8090/v1",
+        "use_llm": True,
+        "llm_base_url": "http://127.0.0.1:8088/v1",
+        "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+        "limit": 8,
+        "save_report": True,
+        "source": "api",
+    }
+
+    with patch("src.tender_research.rag.job_runner._get_session", return_value=session), patch(
+        "src.tender_research.rag.job_runner.mark_job_running"
+    ), patch(
+        "src.tender_research.rag.job_runner.analyze_tender",
+        return_value=analyze_result,
+    ) as mock_analyze, patch(
+        "src.tender_research.rag.job_runner.update_job_progress"
+    ), patch(
+        "src.tender_research.rag.job_runner.complete_job"
+    ):
+        run_analyze_job("job-analyze-params", request)
+
+    assert mock_analyze.call_args.kwargs == {
+        "registry_number": "0323100010326000013",
+        "provider": "llama_cpp",
+        "model": "Qwen3-Embedding-4B",
+        "base_url": "http://127.0.0.1:8090/v1",
+        "use_llm": True,
+        "llm_base_url": "http://127.0.0.1:8088/v1",
+        "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+        "limit": 8,
+        "save_report": True,
+        "record_history": True,
+        "history_source": "api",
+        "session": session,
+        "progress_callback": mock_analyze.call_args.kwargs["progress_callback"],
+    }
+    session.close.assert_called_once()
+
+
+def test_run_analyze_job_downgrades_zero_sources_to_warning_status() -> None:
+    session = MagicMock()
+    analyze_result = TenderAnalysisResult(
+        status="completed",
+        registry_number="0323100010326000013",
+        sections=[],
+        sections_count=10,
+        sources_count=0,
+        report_markdown="# Preview",
+        report_path="data/rag/reports/test.md",
+        used_llm=True,
+        run_id="run-zero",
+    )
+
+    with patch("src.tender_research.rag.job_runner._get_session", return_value=session), patch(
+        "src.tender_research.rag.job_runner.mark_job_running"
+    ), patch(
+        "src.tender_research.rag.job_runner.analyze_tender",
+        return_value=analyze_result,
+    ), patch(
+        "src.tender_research.rag.job_runner.update_job_progress"
+    ), patch(
+        "src.tender_research.rag.job_runner.complete_job"
+    ) as mock_complete:
+        run_analyze_job("job-analyze-zero", {"registry_number": "0323100010326000013"})
+
+    kwargs = mock_complete.call_args.kwargs
+    assert kwargs["status"] == "completed_with_warnings"
+    assert "Analysis completed, but no cited sources were found." in kwargs["warnings"]
     session.close.assert_called_once()
 
 

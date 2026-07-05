@@ -157,6 +157,20 @@ def _analyze_result_payload(result) -> dict:
     }
 
 
+def _resolve_analyze_job_status(result) -> tuple[str, list[str]]:
+    warnings = [warning for warning in (result.warnings or []) if warning]
+    if result.status == "failed":
+        return "failed", warnings
+    if result.sources_count <= 0:
+        message = "Analysis completed, but no cited sources were found."
+        if message not in warnings:
+            warnings.append(message)
+        return "completed_with_warnings", warnings
+    if result.status in {"completed", "completed_with_warnings"}:
+        return result.status, warnings
+    return "completed", warnings
+
+
 def run_prepare_job(job_id: str, request: dict) -> None:
     session = _get_session()
     try:
@@ -252,7 +266,7 @@ def run_analyze_job(job_id: str, request: dict) -> None:
             session=session,
             progress_callback=on_progress,
         )
-        status = result.status if result.status in {"completed", "completed_with_warnings"} else "completed"
+        status, warnings = _resolve_analyze_job_status(result)
         if result.status == "failed":
             fail_job(
                 session,
@@ -267,7 +281,7 @@ def run_analyze_job(job_id: str, request: dict) -> None:
             session,
             job_id,
             result=_analyze_result_payload(result),
-            warnings=result.warnings,
+            warnings=warnings,
             report_path=result.report_path,
             analysis_run_id=result.run_id,
             status=status,

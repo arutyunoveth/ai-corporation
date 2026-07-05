@@ -77,6 +77,28 @@ class TestJobApi:
         assert data["status"] == "queued"
         mock_submit.assert_called_once()
 
+    def test_start_analyze_job_persists_full_request_payload(self) -> None:
+        payload = {
+            "registry_number": "0323100010326000013",
+            "provider": "llama_cpp",
+            "model": "Qwen3-Embedding-4B",
+            "base_url": "http://127.0.0.1:8090/v1",
+            "use_llm": True,
+            "llm_base_url": "http://127.0.0.1:8088/v1",
+            "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+            "limit": 8,
+            "save_report": True,
+        }
+        with patch("src.tender_research.api.create_job", return_value=_job_record(job_type="analyze")) as mock_create, patch(
+            "src.tender_research.api.submit_analyze_job"
+        ):
+            response = client.post("/api/tender-research/jobs/analyze", json=payload)
+
+        assert response.status_code == 200
+        assert mock_create.call_args.kwargs["request"] == payload
+        assert mock_create.call_args.kwargs["job_type"] == "analyze"
+        assert mock_create.call_args.kwargs["registry_number"] == "0323100010326000013"
+
     def test_get_job_status_returns_payload(self) -> None:
         with patch("src.tender_research.api.get_job", return_value=_job_record(status="running", job_type="analyze")):
             response = client.get("/api/tender-research/jobs/job-001")
