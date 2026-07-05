@@ -2158,12 +2158,17 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 html += '<td style="padding:6px 8px;text-align:center">' + item.sections_count + '</td>';
                 html += '<td style="padding:6px 8px;text-align:center">' + item.sources_count + '</td>';
                 html += '<td style="padding:6px 8px;text-align:center">' + (item.used_llm ? 'да' : 'нет') + '</td>';
-                html += '<td style="padding:6px 8px"><button class="button button-small" data-run-id="' + escapeHtml(item.id) + '" onclick="handleOpenHistoryReport(\'' + escapeHtml(item.id) + '\')">Открыть отчёт</button></td>';
+                html += '<td style="padding:6px 8px"><button class="button button-small history-open-report" data-run-id="' + escapeHtml(item.id) + '">Открыть отчёт</button></td>';
                 html += '</tr>';
               }}
               html += '</tbody></table>';
               html += '<div style="margin-top:8px;font-size:0.85em;opacity:0.7">Всего записей: ' + data.total + '</div>';
               listNode.innerHTML = html;
+              listNode.querySelectorAll('.history-open-report').forEach(function(button) {{
+                button.addEventListener('click', function() {{
+                  handleOpenHistoryReport(button.dataset.runId || '');
+                }});
+              }});
               listNode.className = '';
             }} catch (error) {{
               listNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ Ошибка загрузки истории: ' + escapeHtml(error.message) + '</div>';

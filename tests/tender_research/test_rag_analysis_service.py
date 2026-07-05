@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from src.tender_research.rag.analysis_service import (
     _build_report_markdown,
+    _save_report,
     _slugify,
     _vector_store_path,
     analyze_tender,
@@ -108,6 +110,18 @@ class TestBuildReportMarkdown:
         ]
         result = _build_report_markdown("123", sections, False, None, "hash", "v1")
         assert "Нет документов для анализа" in result
+
+
+class TestSaveReport:
+    def test_save_report_uses_unique_file_per_run(self, tmp_path):
+        first_path = _save_report("# First", "123", str(tmp_path), run_token="run-a")
+        second_path = _save_report("# Second", "123", str(tmp_path), run_token="run-b")
+
+        assert first_path != second_path
+        assert Path(first_path).read_text(encoding="utf-8") == "# First"
+        assert Path(second_path).read_text(encoding="utf-8") == "# Second"
+        assert Path(first_path).name.startswith("analyze_tender_123_")
+        assert Path(second_path).name.startswith("analyze_tender_123_")
 
 
 class TestAnalyzeTender:

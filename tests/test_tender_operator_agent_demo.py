@@ -1,5 +1,7 @@
 import socket
 
+from src.modules.tender_operator_agent_demo.ui import render_tender_operator_console_html
+
 
 REQUIRED_STEP_FIELDS = {
     "key",
@@ -27,6 +29,7 @@ def test_tender_operator_demo_page_and_report_render(client):
     assert "Демо-режим / подтверждение человеком" in page.text
     assert "Найти закупку" in page.text
     assert "Загрузка и анализ" in page.text
+    assert "История анализов" in page.text
 
     assert report_page.status_code == 200
     assert "Отчёт тендерного агента" in report_page.text
@@ -98,3 +101,11 @@ def test_tender_operator_demo_stays_off_external_network(client, monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert "no external actions" in payload["safety"]["restrictions"]
+
+
+def test_tender_operator_console_history_report_button_avoids_broken_inline_js():
+    page = render_tender_operator_console_html()
+
+    assert "history-open-report" in page
+    assert "data-run-id=" in page
+    assert "handleOpenHistoryReport(''" not in page

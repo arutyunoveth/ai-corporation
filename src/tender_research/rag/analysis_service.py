@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -113,10 +114,15 @@ def _build_report_markdown(
     return "\n".join(lines)
 
 
-def _save_report(report_markdown: str, registry_number: str, data_dir: str) -> str:
+def _save_report(report_markdown: str, registry_number: str, data_dir: str, *, run_token: str | None = None) -> str:
     reports_dir = Path(data_dir) / "rag" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    output_path = reports_dir / f"analyze_tender_{registry_number}.md"
+    if run_token is None:
+        from datetime import datetime, timezone
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        run_token = f"{timestamp}_{uuid4().hex[:8]}"
+    output_path = reports_dir / f"analyze_tender_{registry_number}_{run_token}.md"
     output_path.write_text(report_markdown, encoding="utf-8")
     return str(output_path)
 
