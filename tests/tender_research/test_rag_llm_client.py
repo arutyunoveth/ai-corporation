@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from urllib.error import HTTPError
 from urllib.error import URLError
 
 from src.tender_research.rag.llm import LocalChatLlmClient
@@ -136,3 +137,39 @@ def test_local_chat_llm_client_empty_response(monkeypatch):
     answer = client.generate_answer("Вопрос", _hits())
 
     assert answer.error == "Local LLM returned an empty response."
+
+
+def test_local_chat_llm_client_retries_with_fewer_contexts_on_context_limit(monkeypatch):
+    client = LocalChatLlmClient(
+        base_url="http://127.0.0.1:8088/v1",
+        model_name="qwen-local",
+        max_context_chars=10000,
+    )
+    observed_inputs: list[int] = []
+    hits = _hits() * 2
+
+    def fake_urlopen(request, timeout):
+        payload = json.loads(request.data.decode("utf-8"))
+        prompt = payload["messages"][1]["content"]
+        observed_inputs.append(prompt.count("[Источник "))
+        if observed_inputs[-1] > 1:
+            raise HTTPError(
+                request.full_url,
+                400,
+                "bad request",
+                hdrs=None,
+                fp=io.BytesIO(
+                    b'{"error":{"message":"request exceeds the available context size","type":"exceed_context_size_error"}}'
+                ),
+            )
+        return _FakeResponse(
+            json.dumps({"choices": [{"message": {"content": "Краткий ответ:\nОк.\n\nИсточники:\n1. spec.docx, chunk_id=chunk-1, registry_number=123"}}]})
+        )
+
+    monkeypatch.setattr("src.tender_research.rag.llm.urllib.request.urlopen", fake_urlopen)
+
+    answer = client.generate_answer("Вопрос", hits)
+
+    assert answer.error is None
+    assert observed_inputs == [2, 1]
+    assert answer.used_chunks_count == 1

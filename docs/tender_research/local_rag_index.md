@@ -132,6 +132,21 @@ python -m src.tender_research.rag.cli ask \
   --question "Какие требования к составу заявки?"
 ```
 
+Analyze one registry number into a markdown report:
+
+```bash
+python -m src.tender_research.rag.cli analyze-tender \
+  --registry-number 0323100010326000013 \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1 \
+  --use-llm \
+  --llm-base-url http://127.0.0.1:8088/v1 \
+  --llm-model /Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf \
+  --limit 8 \
+  --output data/rag/reports/analyze_tender_0323100010326000013.md
+```
+
 ## Configuration
 
 Supported environment variables:
@@ -182,6 +197,12 @@ By default `ask` works in retrieval-only mode and prints the best matching
 chunks. If `AI_CORP_RAG_USE_LLM=true` or `--use-llm` is passed, the CLI can
 optionally call a local OpenAI-compatible chat endpoint and answer strictly
 from the retrieved context.
+
+`analyze-tender` builds a multi-section markdown report for a single
+`registry_number`. Without `--use-llm` it stays retrieval-only and shows the
+best matching local fragments per section. With `--use-llm` it calls the local
+chat endpoint section by section and preserves structured citations for every
+answer.
 
 ## Known Limitations
 

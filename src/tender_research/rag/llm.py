@@ -69,7 +69,6 @@ class LocalChatLlmClient:
         contexts: Sequence[RagSearchHit],
         registry_number: str | None = None,
     ) -> RagAnswer:
-        sources = build_source_citations(contexts)
         if not contexts:
             return RagAnswer(
                 answer="В найденных документах недостаточно информации для ответа.",
@@ -79,19 +78,33 @@ class LocalChatLlmClient:
                 error="No retrieved context was provided to the local LLM.",
             )
 
-        context_block = self._build_context_block(contexts)
-        if len(context_block) > self.max_context_chars:
+        selected_contexts = self._select_contexts_within_budget(contexts)
+        sources = build_source_citations(selected_contexts)
+        context_block = self._build_context_block(selected_contexts)
+        if not selected_contexts:
             return RagAnswer(
                 answer="В найденных документах недостаточно информации для ответа.",
-                sources=sources,
-                used_chunks_count=len(contexts),
+                sources=[],
+                used_chunks_count=0,
                 model=self.model_name,
                 error=(
                     "Local LLM context too long: "
-                    f"{len(context_block)} chars exceeds limit {self.max_context_chars}."
+                    f"no chunks fit within limit {self.max_context_chars}."
                 ),
             )
 
+        return self._generate_with_retry(question, selected_contexts, registry_number=registry_number)
+
+    def _generate_with_retry(
+        self,
+        question: str,
+        contexts: Sequence[RagSearchHit],
+        *,
+        registry_number: str | None,
+    ) -> RagAnswer:
+        selected_contexts = list(contexts)
+        sources = build_source_citations(selected_contexts)
+        context_block = self._build_context_block(selected_contexts)
         payload = {
             "model": self.model_name,
             "messages": [
@@ -119,10 +132,16 @@ class LocalChatLlmClient:
                 raw_body = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             details = _read_http_error_body(exc)
+            if exc.code == 400 and _is_context_limit_error(details) and len(selected_contexts) > 1:
+                return self._generate_with_retry(
+                    question,
+                    selected_contexts[:-1],
+                    registry_number=registry_number,
+                )
             return RagAnswer(
                 answer="",
                 sources=sources,
-                used_chunks_count=len(contexts),
+                used_chunks_count=len(selected_contexts),
                 model=self.model_name,
                 error=f"Local LLM request failed with HTTP {exc.code}: {details}",
             )
@@ -130,7 +149,7 @@ class LocalChatLlmClient:
             return RagAnswer(
                 answer="",
                 sources=sources,
-                used_chunks_count=len(contexts),
+                used_chunks_count=len(selected_contexts),
                 model=self.model_name,
                 error="Local LLM request timed out.",
             )
@@ -145,28 +164,28 @@ class LocalChatLlmClient:
             return RagAnswer(
                 answer="",
                 sources=sources,
-                used_chunks_count=len(contexts),
+                used_chunks_count=len(selected_contexts),
                 model=self.model_name,
                 error=message,
             )
 
         try:
-            payload = json.loads(raw_body)
+            response_payload = json.loads(raw_body)
         except json.JSONDecodeError:
             return RagAnswer(
                 answer="",
                 sources=sources,
-                used_chunks_count=len(contexts),
+                used_chunks_count=len(selected_contexts),
                 model=self.model_name,
                 error="Local LLM returned a non-JSON response.",
             )
 
-        answer = _extract_answer_text(payload)
+        answer = _extract_answer_text(response_payload)
         if not answer:
             return RagAnswer(
                 answer="",
                 sources=sources,
-                used_chunks_count=len(contexts),
+                used_chunks_count=len(selected_contexts),
                 model=self.model_name,
                 error="Local LLM returned an empty response.",
             )
@@ -174,9 +193,18 @@ class LocalChatLlmClient:
         return RagAnswer(
             answer=answer,
             sources=sources,
-            used_chunks_count=len(contexts),
+            used_chunks_count=len(selected_contexts),
             model=self.model_name,
         )
+
+    def _select_contexts_within_budget(self, contexts: Sequence[RagSearchHit]) -> list[RagSearchHit]:
+        selected: list[RagSearchHit] = []
+        for context in contexts:
+            candidate = [*selected, context]
+            if len(self._build_context_block(candidate)) > self.max_context_chars:
+                break
+            selected.append(context)
+        return selected
 
     def _build_context_block(self, contexts: Sequence[RagSearchHit]) -> str:
         blocks: list[str] = []
@@ -251,3 +279,8 @@ def _read_http_error_body(exc: urllib.error.HTTPError) -> str:
     except Exception:
         body = ""
     return body or exc.reason or "no details"
+
+
+def _is_context_limit_error(details: str) -> bool:
+    lowered = details.lower()
+    return "context size" in lowered or "exceeds the available context size" in lowered

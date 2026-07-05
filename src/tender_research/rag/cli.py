@@ -5,6 +5,7 @@ import json
 import re
 import time
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -26,6 +27,37 @@ from src.tender_research.repository import TenderRepository
 
 _RUNTIME_ARGS: argparse.Namespace | None = None
 _DEFAULT_HASH_PROVIDER_NAMES = {"hash", "hashing", "local_hash"}
+_INSUFFICIENT_INFO_MESSAGE = "В найденных документах недостаточно информации для ответа."
+
+
+@dataclass(frozen=True)
+class TenderAnalysisSection:
+    title: str
+    question: str
+
+
+@dataclass(frozen=True)
+class TenderAnalysisResult:
+    title: str
+    question: str
+    answer: str
+    sources: list[SourceCitation]
+    llm_error: str | None = None
+    used_llm: bool = False
+
+
+_ANALYZE_TENDER_SECTIONS: tuple[TenderAnalysisSection, ...] = (
+    TenderAnalysisSection("1. Требования к заявке", "Требования к содержанию и составу заявки."),
+    TenderAnalysisSection("2. Документы участника", "Какие документы должен предоставить участник."),
+    TenderAnalysisSection("3. Срок поставки / выполнения", "Срок поставки / выполнения."),
+    TenderAnalysisSection("4. Условия оплаты", "Условия оплаты."),
+    TenderAnalysisSection("5. Обеспечение заявки / контракта", "Обеспечение заявки / контракта."),
+    TenderAnalysisSection("6. Штрафы, пени, ответственность", "Штрафы, пени, ответственность."),
+    TenderAnalysisSection("7. Требования к товару / услуге", "Требования к товару / услуге."),
+    TenderAnalysisSection("8. Приёмка и закрывающие документы", "Приёмка и закрывающие документы."),
+    TenderAnalysisSection("9. Гарантийные обязательства", "Гарантийные обязательства."),
+    TenderAnalysisSection("10. Риски и ручная проверка", "Риски участия и что проверить вручную."),
+)
 
 
 def _get_session() -> Session:
@@ -233,6 +265,105 @@ def cmd_ask(args: argparse.Namespace) -> None:
     session.close()
 
 
+def cmd_analyze_tender(args: argparse.Namespace) -> None:
+    session, _repo, config, provider, _vector_store, retriever = _build_runtime()
+    llm_enabled = bool(args.use_llm or config.rag_use_llm)
+    llm_client = _build_local_llm_client(config) if llm_enabled else None
+
+    results = [
+        _analyze_section(
+            retriever=retriever,
+            registry_number=args.registry_number,
+            section=section,
+            limit=args.limit,
+            llm_client=llm_client,
+            use_llm=llm_enabled,
+        )
+        for section in _ANALYZE_TENDER_SECTIONS
+    ]
+    markdown = _render_tender_analysis_markdown(
+        registry_number=args.registry_number,
+        retrieval_provider=args.provider or provider.provider_name,
+        retrieval_model=args.model or provider.model_name,
+        llm_model=config.local_llm_model if llm_enabled else None,
+        results=results,
+    )
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown, encoding="utf-8")
+        print(f"output_path: {output_path}")
+    else:
+        print(markdown)
+    session.close()
+
+
+def _analyze_section(
+    *,
+    retriever: RagRetriever,
+    registry_number: str,
+    section: TenderAnalysisSection,
+    limit: int,
+    llm_client: LocalChatLlmClient | None,
+    use_llm: bool,
+) -> TenderAnalysisResult:
+    hits = retriever.search_documents(
+        section.question,
+        registry_number=registry_number,
+        limit=limit,
+    )
+    sources = build_source_citations(hits)
+    llm_hits = hits[:1]
+    if not hits:
+        return TenderAnalysisResult(
+            title=section.title,
+            question=section.question,
+            answer=_INSUFFICIENT_INFO_MESSAGE,
+            sources=[],
+        )
+
+    if use_llm and llm_client is not None:
+        answer = llm_client.generate_answer(
+            section.question,
+            llm_hits,
+            registry_number=registry_number,
+        )
+        if answer.error:
+            return TenderAnalysisResult(
+                title=section.title,
+                question=section.question,
+                answer=_build_retrieval_only_answer(hits),
+                sources=answer.sources or sources,
+                llm_error=answer.error,
+                used_llm=False,
+            )
+        return TenderAnalysisResult(
+            title=section.title,
+            question=section.question,
+            answer=answer.answer,
+            sources=answer.sources,
+            used_llm=True,
+        )
+
+    return TenderAnalysisResult(
+        title=section.title,
+        question=section.question,
+        answer=_build_retrieval_only_answer(hits),
+        sources=sources,
+        used_llm=False,
+    )
+
+
+def _build_retrieval_only_answer(hits) -> str:
+    if not hits:
+        return _INSUFFICIENT_INFO_MESSAGE
+    previews = [f"- {hit.preview}" for hit in hits[:3] if hit.preview]
+    if not previews:
+        return _INSUFFICIENT_INFO_MESSAGE
+    return "LLM не использовалась. Ниже релевантные фрагменты.\n" + "\n".join(previews)
+
+
 def _build_local_llm_client(config) -> LocalChatLlmClient:
     return LocalChatLlmClient(
         base_url=config.local_llm_base_url,
@@ -254,6 +385,56 @@ def _print_sources(sources: list[SourceCitation]) -> None:
         print(f"score: {source.score:.4f}")
         print(f"preview: {source.quote_preview}")
         print()
+
+
+def _render_tender_analysis_markdown(
+    *,
+    registry_number: str,
+    retrieval_provider: str,
+    retrieval_model: str,
+    llm_model: str | None,
+    results: list[TenderAnalysisResult],
+) -> str:
+    lines = [f"# Анализ закупки {registry_number}", ""]
+    lines.append(f"Retrieval: `{retrieval_provider}` / `{retrieval_model}`")
+    if llm_model:
+        lines.append(f"LLM: `{llm_model}`")
+    lines.append("")
+
+    unique_sources: dict[tuple[str, str | None], int] = {}
+    for result in results:
+        lines.append(f"## {result.title}")
+        lines.append(result.answer.strip() if result.answer.strip() else _INSUFFICIENT_INFO_MESSAGE)
+        lines.append("")
+        if result.llm_error:
+            lines.append(f"_LLM fallback: {result.llm_error}_")
+            lines.append("")
+        lines.append("Источники:")
+        if result.sources:
+            for source in result.sources:
+                lines.append(
+                    "- "
+                    f"{source.document_file_name}, "
+                    f"chunk_id={source.chunk_id}, "
+                    f"score={source.score:.4f}, "
+                    f"registry_number={source.registry_number}"
+                )
+                source_key = (source.document_file_name, source.registry_number)
+                unique_sources[source_key] = unique_sources.get(source_key, 0) + 1
+        else:
+            lines.append(f"- {_INSUFFICIENT_INFO_MESSAGE}")
+        lines.append("")
+
+    lines.append("## Сводка источников")
+    if unique_sources:
+        for (document_file_name, source_registry_number), chunks_used in sorted(unique_sources.items()):
+            lines.append(
+                f"- {document_file_name} | chunks used: {chunks_used} | registry_number: {source_registry_number}"
+            )
+    else:
+        lines.append(f"- {_INSUFFICIENT_INFO_MESSAGE}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def cmd_check_embedding_server(args: argparse.Namespace) -> None:
@@ -375,6 +556,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_provider_args(p_ask)
     _add_llm_args(p_ask)
 
+    p_analyze = sub.add_parser("analyze-tender", help="Build a structured RAG analysis report for one registry number")
+    p_analyze.add_argument("--registry-number", required=True)
+    p_analyze.add_argument("--limit", type=int, default=8)
+    p_analyze.add_argument("--use-llm", action="store_true")
+    p_analyze.add_argument("--output", default=None, help="Optional markdown output path")
+    _add_provider_args(p_analyze)
+    _add_llm_args(p_analyze)
+
     p_check = sub.add_parser("check-embedding-server", help="Check embedding provider reachability and sample dimension")
     _add_provider_args(p_check)
 
@@ -404,6 +593,8 @@ def main() -> None:
             cmd_search(args)
         elif args.command == "ask":
             cmd_ask(args)
+        elif args.command == "analyze-tender":
+            cmd_analyze_tender(args)
     finally:
         _RUNTIME_ARGS = None
 

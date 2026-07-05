@@ -121,3 +121,18 @@ Ask with local chat LLM:
   --llm-model qwen2.5-14b \
   --limit 8
 ```
+
+Analyze one tender into a markdown report:
+
+```bash
+./.venv/bin/python -m src.tender_research.rag.cli analyze-tender \
+  --registry-number 0323100010326000013 \
+  --provider llama_cpp \
+  --model Qwen3-Embedding-4B \
+  --base-url http://127.0.0.1:8090/v1 \
+  --use-llm \
+  --llm-base-url http://127.0.0.1:8088/v1 \
+  --llm-model /Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf \
+  --limit 8 \
+  --output data/rag/reports/analyze_tender_0323100010326000013.md
+```
