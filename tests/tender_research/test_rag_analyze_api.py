@@ -148,9 +148,13 @@ class TestLatestReportEndpoint:
 
         with patch(
             "src.tender_research.api.load_config"
-        ) as mock_load_config:
+        ) as mock_load_config, patch(
+            "src.tender_research.api.get_latest_report"
+        ) as mock_get:
             mock_config = mock_load_config.return_value
             mock_config.data_dir = str(tmp_path)
+            mock_record = type("MockRecord", (), {"registry_number": registry_number, "report_path": "", "created_at": None})()
+            mock_get.return_value = (mock_record, "# Test Report Content", None)
             response = client.get(
                 f"/api/tender-research/analyze/{registry_number}/latest"
             )

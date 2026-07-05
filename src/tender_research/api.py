@@ -3,14 +3,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 from src.shared.config.settings import get_settings
 from src.shared.db.diagnostics import get_database_diagnostics, masked_database_url
+from src.shared.db.base import Base
 from src.tender_research.config import load_config
 from src.tender_research.rag.analysis_service import analyze_tender
+from src.tender_research.rag.history_service import (
+    get_analysis_run,
+    get_analysis_run_report,
+    get_latest_analysis_report as get_latest_report,
+    list_analysis_runs,
+)
 from src.tender_research.rag.prepare_service import check_preparation_status, prepare_tender_for_analysis
 from src.tender_research.rag.schemas import TenderAnalysisResult
 
@@ -103,6 +111,7 @@ class AnalyzeResponse(BaseModel):
     report_markdown: str = ""
     report_path: str | None = None
     used_llm: bool = False
+    run_id: str | None = None
     warnings: list[str] = []
     errors: list[str] = []
 
@@ -112,6 +121,78 @@ class LatestReportResponse(BaseModel):
     report_markdown: str
     report_path: str
     created_at: str | None = None
+
+
+class HistoryListItem(BaseModel):
+    id: str
+    registry_number: str
+    status: str
+    used_llm: bool
+    sections_count: int
+    sources_count: int
+    report_path: str | None = None
+    preview: str | None = None
+    warnings: list[str] = []
+    errors: list[str] = []
+    duration_seconds: float | None = None
+    source: str | None = None
+    created_at: str | None = None
+
+
+class HistoryListResponse(BaseModel):
+    items: list[HistoryListItem]
+    limit: int
+    offset: int
+    total: int
+
+
+class HistoryRunDetail(BaseModel):
+    id: str
+    registry_number: str
+    status: str
+    used_llm: bool
+    sections_count: int
+    sources_count: int
+    report_path: str | None = None
+    preview: str | None = None
+    warnings: list[str] = []
+    errors: list[str] = []
+    duration_seconds: float | None = None
+    source: str | None = None
+    created_at: str | None = None
+
+
+class HistoryReportResponse(BaseModel):
+    id: str
+    registry_number: str
+    report_markdown: str
+    report_path: str | None = None
+
+
+def _get_session() -> Session:
+    settings = get_settings()
+    engine = create_engine(settings.database_url)
+    try:
+        Base.metadata.create_all(engine)
+    except Exception:
+        pass
+    from sqlalchemy.orm import sessionmaker
+    return sessionmaker(bind=engine)()
+
+
+def _safe_filename(name: str) -> str:
+    import re
+    if not name or not re.match(r"^\d{11,25}$", name.strip()):
+        return ""
+    return name.strip()
+
+
+_OLD_TABLE_COUNTS = [
+    "procurement_tenders",
+    "procurement_tender_documents",
+    "procurement_document_chunks",
+    "procurement_document_embeddings",
+]
 
 
 def _to_prepare_response(result) -> PrepareResponse:
@@ -151,49 +232,30 @@ def _to_analyze_response(result: TenderAnalysisResult) -> AnalyzeResponse:
     )
 
 
-_TABLE_COUNTS = [
-    "procurement_tenders",
-    "procurement_tender_documents",
-    "procurement_document_chunks",
-    "procurement_document_embeddings",
-]
-
-
-class HealthResponse(BaseModel):
-    status: str = "ok"
-    database_dialect: str | None = None
-    database_url_masked: str | None = None
-    can_connect: bool = False
-    current_migration: str | None = None
-    migration_head: str | None = None
-    pgvector_extension_available: bool = False
-    table_counts: dict[str, int] = {}
-
-
-@router.get("/health", response_model=HealthResponse)
-def tender_research_health() -> HealthResponse:
+@router.get("/health", response_model=dict)
+def tender_research_health() -> dict:
     settings = get_settings()
     engine = create_engine(settings.database_url, future=True)
     diag = get_database_diagnostics(engine)
     table_counts: dict[str, int] = {}
     if diag.get("can_connect"):
-        for table in _TABLE_COUNTS:
+        for table in _OLD_TABLE_COUNTS:
             try:
                 with engine.connect() as conn:
                     row = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
                     table_counts[table] = row
             except Exception:
                 table_counts[table] = -1
-    return HealthResponse(
-        status="ok",
-        database_dialect=diag.get("database_dialect"),
-        database_url_masked=diag.get("database_url_masked"),
-        can_connect=diag.get("can_connect", False),
-        current_migration=diag.get("current_migration"),
-        migration_head=diag.get("migration_head"),
-        pgvector_extension_available=diag.get("pgvector_extension_available", False),
-        table_counts=table_counts,
-    )
+    return {
+        "status": "ok",
+        "database_dialect": diag.get("database_dialect"),
+        "database_url_masked": diag.get("database_url_masked"),
+        "can_connect": diag.get("can_connect", False),
+        "current_migration": diag.get("current_migration"),
+        "migration_head": diag.get("migration_head"),
+        "pgvector_extension_available": diag.get("pgvector_extension_available", False),
+        "table_counts": table_counts,
+    }
 
 
 @router.post("/prepare", response_model=PrepareResponse)
@@ -242,6 +304,8 @@ def analyze_tender_endpoint(payload: AnalyzeRequest) -> AnalyzeResponse:
             llm_model=payload.llm_model,
             limit=payload.limit,
             save_report=payload.save_report,
+            record_history=True,
+            history_source="api",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -251,34 +315,81 @@ def analyze_tender_endpoint(payload: AnalyzeRequest) -> AnalyzeResponse:
 
 @router.get("/analyze/{registry_number}/latest", response_model=LatestReportResponse)
 def get_latest_analysis_report(registry_number: str) -> LatestReportResponse:
-    config = load_config()
-    reports_dir = Path(config.data_dir) / "rag" / "reports"
-
     safe_name = _safe_filename(registry_number)
     if safe_name != registry_number:
         raise HTTPException(status_code=400, detail="Invalid registry number")
 
-    report_path = reports_dir / f"analyze_tender_{safe_name}.md"
-
-    resolved = report_path.resolve()
+    config = load_config()
+    session = _get_session()
     try:
-        resolved.relative_to(reports_dir.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Path traversal detected")
+        record, markdown, error = get_latest_report(session, registry_number, config.data_dir)
+        if record is None:
+            raise HTTPException(status_code=404, detail=error or "No analysis runs found for this registry number")
+        if markdown is None:
+            raise HTTPException(status_code=404, detail=error or "Report file is missing or inaccessible")
+        return LatestReportResponse(
+            registry_number=record.registry_number,
+            report_markdown=markdown,
+            report_path=record.report_path or "",
+            created_at=record.created_at.isoformat() if record.created_at else None,
+        )
+    finally:
+        session.close()
 
-    if not report_path.exists():
-        raise HTTPException(status_code=404, detail=f"No report found for registry_number={registry_number}")
 
-    markdown = report_path.read_text(encoding="utf-8")
-    return LatestReportResponse(
-        registry_number=registry_number,
-        report_markdown=markdown,
-        report_path=str(report_path),
-    )
+@router.get("/analyze/history", response_model=HistoryListResponse)
+def list_analysis_history(
+    registry_number: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> HistoryListResponse:
+    session = _get_session()
+    try:
+        items, total = list_analysis_runs(
+            session,
+            registry_number=registry_number,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
+        return HistoryListResponse(
+            items=[HistoryListItem(**r.to_dict()) for r in items],
+            limit=limit,
+            offset=offset,
+            total=total,
+        )
+    finally:
+        session.close()
 
 
-def _safe_filename(name: str) -> str:
-    import re
-    if not name or not re.match(r"^\d{11,25}$", name.strip()):
-        return ""
-    return name.strip()
+@router.get("/analyze/history/{run_id}", response_model=HistoryRunDetail)
+def get_analysis_history_run(run_id: str) -> HistoryRunDetail:
+    session = _get_session()
+    try:
+        record = get_analysis_run(session, run_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Analysis run not found")
+        return HistoryRunDetail(**record.to_dict())
+    finally:
+        session.close()
+
+
+@router.get("/analyze/history/{run_id}/report", response_model=HistoryReportResponse)
+def get_analysis_history_report(run_id: str) -> HistoryReportResponse:
+    config = load_config()
+    session = _get_session()
+    try:
+        record, markdown, error = get_analysis_run_report(session, run_id, config.data_dir)
+        if record is None:
+            raise HTTPException(status_code=404, detail=error or "Analysis run not found")
+        if markdown is None:
+            raise HTTPException(status_code=404, detail=error or "Report file is missing or inaccessible")
+        return HistoryReportResponse(
+            id=record.id,
+            registry_number=record.registry_number,
+            report_markdown=markdown,
+            report_path=record.report_path,
+        )
+    finally:
+        session.close()

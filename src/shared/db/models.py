@@ -8,6 +8,7 @@ from src.tender_research.models import (
     ProcurementTender,
     ProcurementTenderDocument,
     ProcurementTenderSearchQuery,
+    TenderAnalysisRun,
     ProcurementWebPage,
     ProcurementWebSearchResult,
 )

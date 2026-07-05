@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.shared.db.base import UUIDPrimaryKeyMixin, Base, utcnow
@@ -221,6 +221,34 @@ class ProcurementWebPage(UUIDPrimaryKeyMixin, Base):
         UniqueConstraint("url_hash"),
         Index("ix_procurement_web_pages_fetch_status", "fetch_status"),
         Index("ix_procurement_web_pages_content_type", "content_type"),
+    )
+
+
+class TenderAnalysisRun(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "tender_analysis_runs"
+
+    registry_number: Mapped[str] = mapped_column(String(256), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="completed")
+    used_llm: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    llm_model: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    retrieval_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    retrieval_model: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    sections_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sources_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    report_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    report_markdown_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    warnings_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    errors_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_tender_analysis_runs_registry_number", "registry_number"),
+        Index("ix_tender_analysis_runs_status", "status"),
+        Index("ix_tender_analysis_runs_created_at", "created_at"),
     )
 
 

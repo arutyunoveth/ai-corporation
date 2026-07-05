@@ -10,6 +10,7 @@ from src.shared.config.settings import get_settings
 from src.shared.db.base import Base
 from src.tender_research.config import load_config
 from src.tender_research.rag.embeddings import build_embedding_provider
+from src.tender_research.rag.history_service import record_analysis_run
 from src.tender_research.rag.llm import (
     LocalChatLlmClient,
     build_source_citations,
@@ -120,6 +121,37 @@ def _save_report(report_markdown: str, registry_number: str, data_dir: str) -> s
     return str(output_path)
 
 
+def _record_history(
+    result: TenderAnalysisResult,
+    session: Session,
+    *,
+    duration_seconds: float | None = None,
+    source: str | None = None,
+) -> str | None:
+    try:
+        run = record_analysis_run(
+            session,
+            registry_number=result.registry_number,
+            status=result.status,
+            used_llm=result.used_llm,
+            llm_model=result.llm_model,
+            retrieval_provider=result.retrieval_provider,
+            retrieval_model=result.retrieval_model,
+            sections_count=result.sections_count,
+            sources_count=result.sources_count,
+            report_path=result.report_path,
+            report_markdown=result.report_markdown,
+            warnings=result.warnings,
+            errors=result.errors,
+            duration_seconds=duration_seconds,
+            source=source,
+        )
+        return run.id
+    except Exception as e:
+        logger.warning("Analysis completed, but history record was not saved: %s", e)
+        return None
+
+
 def analyze_tender(
     registry_number: str,
     *,
@@ -135,6 +167,8 @@ def analyze_tender(
     limit: int = 6,
     session: Session | None = None,
     save_report: bool = False,
+    record_history: bool = True,
+    history_source: str | None = None,
 ) -> TenderAnalysisResult:
     own_session = False
     if session is None:
@@ -145,6 +179,10 @@ def analyze_tender(
         warnings: list[str] = []
         errors: list[str] = []
         config = load_config()
+        _start_time: float | None = None
+        if record_history:
+            import time
+            _start_time = time.time()
 
         if provider:
             object.__setattr__(config, "rag_embeddings_provider", provider)
@@ -172,7 +210,7 @@ def analyze_tender(
         if not tender:
             tender = repo.get_tender_by_external("external_public_44fz", registry_number)
         if not tender:
-            return TenderAnalysisResult(
+            result = TenderAnalysisResult(
                 status="no_context",
                 registry_number=registry_number,
                 sections=[],
@@ -180,6 +218,9 @@ def analyze_tender(
                 sources_count=0,
                 errors=[f"Tender {registry_number} not found in database"],
             )
+            if record_history:
+                _record_history(result, session, duration_seconds=None, source=history_source)
+            return result
 
         emb_provider = build_embedding_provider(config)
         vector_store = JsonVectorStore(
@@ -193,7 +234,7 @@ def analyze_tender(
             model=emb_provider.model_name,
         )
         if embeddings_count == 0:
-            return TenderAnalysisResult(
+            result = TenderAnalysisResult(
                 status="no_context",
                 registry_number=registry_number,
                 sections=[],
@@ -203,6 +244,9 @@ def analyze_tender(
                 retrieval_provider=emb_provider.provider_name,
                 retrieval_model=emb_provider.model_name,
             )
+            if record_history:
+                _record_history(result, session, duration_seconds=None, source=history_source)
+            return result
 
         llm_client: LocalChatLlmClient | None = None
         if use_llm:
@@ -303,6 +347,12 @@ def analyze_tender(
             warnings=warnings,
             errors=errors,
         )
+        if record_history:
+            duration = None
+            if _start_time is not None:
+                import time
+                duration = time.time() - _start_time
+            _record_history(result, session, duration_seconds=duration, source=history_source)
         return result
     finally:
         if own_session:

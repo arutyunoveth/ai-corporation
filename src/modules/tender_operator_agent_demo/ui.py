@@ -823,6 +823,17 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                       <h2>Отчёт</h2>
                       <div id="analysis-report-content"></div>
                     </div>
+                    <div class="card">
+                      <h2>История анализов</h2>
+                      <div class="form-actions" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" class="button" id="history-refresh-btn">Обновить историю</button>
+                      </div>
+                      <div id="history-list" class="empty">Пока нет сохранённых анализов.</div>
+                      <div id="history-report-container" class="hidden" style="margin-top:12px;">
+                        <h3>Отчёт из истории</h3>
+                        <div id="history-report-content"></div>
+                      </div>
+                    </div>
                   </main>
                 </div>
               </section>
@@ -2116,8 +2127,63 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               `;
               node.className = '';
               setFlash('analysis-flash', `Анализ завершён: статус «${{payload.status}}», разделов: ${{payload.sections_count}}, источников: ${{payload.sources_count}}.`);
+              await handleRefreshHistory(registryNumber);
             }} catch (error) {{
               setFlash('analysis-flash', 'Ошибка анализа: ' + escapeHtml(error.message), true);
+            }}
+          }}
+
+          async function handleRefreshHistory(registryNumber) {{
+            const rn = registryNumber || String(document.querySelector('#analysis-form [name=registry_number]').value || '').trim();
+            const listNode = document.getElementById('history-list');
+            const containerNode = document.getElementById('history-report-container');
+            containerNode.className = 'hidden';
+            try {{
+              const url = '/api/tender-research/analyze/history?limit=20' + (rn ? '&registry_number=' + encodeURIComponent(rn) : '');
+              const data = await fetchJson(url);
+              if (!data.items || data.items.length === 0) {{
+                listNode.innerHTML = '<div class="empty">Пока нет сохранённых анализов.</div>';
+                listNode.className = '';
+                return;
+              }}
+              let html = '<table style="width:100%;border-collapse:collapse;font-size:0.9em">';
+              html += '<thead><tr style="border-bottom:1px solid var(--border)"><th>Дата</th><th>Номер</th><th>Статус</th><th>Разделов</th><th>Источников</th><th>LLM</th><th></th></tr></thead><tbody>';
+              for (const item of data.items) {{
+                const date = item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : '—';
+                const statusColor = item.status === 'completed' ? 'var(--success)' : 'var(--warning)';
+                html += '<tr style="border-bottom:1px solid var(--border)">';
+                html += '<td style="padding:6px 8px">' + escapeHtml(date) + '</td>';
+                html += '<td style="padding:6px 8px">' + escapeHtml(item.registry_number) + '</td>';
+                html += '<td style="padding:6px 8px;color:' + statusColor + '">' + escapeHtml(item.status) + '</td>';
+                html += '<td style="padding:6px 8px;text-align:center">' + item.sections_count + '</td>';
+                html += '<td style="padding:6px 8px;text-align:center">' + item.sources_count + '</td>';
+                html += '<td style="padding:6px 8px;text-align:center">' + (item.used_llm ? 'да' : 'нет') + '</td>';
+                html += '<td style="padding:6px 8px"><button class="button button-small" data-run-id="' + escapeHtml(item.id) + '" onclick="handleOpenHistoryReport(\'' + escapeHtml(item.id) + '\')">Открыть отчёт</button></td>';
+                html += '</tr>';
+              }}
+              html += '</tbody></table>';
+              html += '<div style="margin-top:8px;font-size:0.85em;opacity:0.7">Всего записей: ' + data.total + '</div>';
+              listNode.innerHTML = html;
+              listNode.className = '';
+            }} catch (error) {{
+              listNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ Ошибка загрузки истории: ' + escapeHtml(error.message) + '</div>';
+            }}
+          }}
+
+          async function handleOpenHistoryReport(runId) {{
+            const containerNode = document.getElementById('history-report-container');
+            const contentNode = document.getElementById('history-report-content');
+            containerNode.className = '';
+            contentNode.innerHTML = '<div class="empty">Загрузка отчёта…</div>';
+            try {{
+              const data = await fetchJson('/api/tender-research/analyze/history/' + encodeURIComponent(runId) + '/report');
+              if (!data.report_markdown) {{
+                contentNode.innerHTML = '<div class="note" style="color:var(--warning)">⚠ Метаданные запуска найдены, но файл отчёта недоступен.</div>';
+                return;
+              }}
+              contentNode.innerHTML = '<pre style="white-space:pre-wrap;font-size:0.85em;max-height:600px;overflow-y:auto;border:1px solid var(--border);padding:12px;border-radius:6px;">' + escapeHtml(data.report_markdown) + '</pre>';
+            }} catch (error) {{
+              contentNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(error.message) + '</div>';
             }}
           }}
 
@@ -2126,6 +2192,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             document.getElementById('check-readiness-btn').addEventListener('click', handleCheckReadiness);
             document.getElementById('prepare-tender-btn').addEventListener('click', handlePrepareTender);
             document.getElementById('analysis-form').addEventListener('submit', handleAnalysisForm);
+            document.getElementById('history-refresh-btn').addEventListener('click', function() {{ handleRefreshHistory(); }});
             document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
             document.getElementById('eis-docs-form').addEventListener('submit', handleEisDocsArchive);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);
