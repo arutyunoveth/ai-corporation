@@ -32,6 +32,16 @@ def test_tender_operator_demo_page_and_report_render(client):
     assert "История анализов" in page.text
     assert "Статус фоновой задачи" in page.text
     assert "Режим анализа" in page.text
+    assert "Параметры анализа" in page.text
+    assert "Mac mini: локальная LLM + Qwen3 embeddings" in page.text
+    assert "Быстрый тест без LLM / local hash" in page.text
+    assert "Qwen3-Embedding-4B" in page.text
+    assert "llama_cpp" in page.text
+    assert "http://127.0.0.1:8090/v1" in page.text
+    assert "http://127.0.0.1:8088/v1" in page.text
+    assert "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf" in page.text
+    assert "local-hash-v1" in page.text
+    assert "limit: 8" in page.text or "limit: 3" in page.text
 
     assert report_page.status_code == 200
     assert "Отчёт тендерного агента" in report_page.text
@@ -121,3 +131,13 @@ def test_tender_operator_console_contains_background_job_polling():
     assert "/api/tender-research/jobs/" in page
     assert "analysis-job-status" in page
     assert "current_section_title" in page
+    assert "provider: runtime.provider" in page
+    assert "model: runtime.model" in page
+    assert "base_url: runtime.base_url" in page
+    assert "payload.llm_base_url = runtime.llm_base_url" in page
+    assert "payload.llm_model = runtime.llm_model" in page
+    assert "analysis_mode: runtime.analysis_mode" in page
+    assert "limit: runtime.limit" in page
+    assert "analysis-runtime-summary" in page
+    assert "Mac mini: локальная LLM + Qwen3 embeddings" in page
+    assert "Быстрый тест без LLM / local hash" in page

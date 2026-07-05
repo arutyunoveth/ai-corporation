@@ -794,6 +794,13 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           <input name="registry_number" required placeholder="Например: 0323100010326000013" />
                         </label>
                         <label>
+                          Контур выполнения
+                          <select name="runtime_preset" id="analysis-runtime-preset">
+                            <option value="mac_mini_local" selected>Mac mini: локальная LLM + Qwen3 embeddings</option>
+                            <option value="local_hash_smoke">Быстрый тест без LLM / local hash</option>
+                          </select>
+                        </label>
+                        <label>
                           Режим анализа
                           <select name="analysis_mode">
                             <option value="fast" selected>Быстрый</option>
@@ -802,7 +809,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           </select>
                         </label>
                         <label class="checkbox">
-                          <input name="use_llm" type="checkbox" />
+                          <input name="use_llm" type="checkbox" checked />
                           <span>Использовать локальную LLM (может работать долго)</span>
                         </label>
                         <label class="checkbox">
@@ -815,6 +822,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           <button type="submit" class="button primary" id="run-analysis-btn">Проанализировать закупку</button>
                         </div>
                       </form>
+                    </div>
+                    <div class="card" id="analysis-runtime-card">
+                      <h2>Параметры анализа</h2>
+                      <div id="analysis-runtime-summary" class="list">
+                        <div class="empty">Выберите контур, чтобы увидеть runtime-параметры.</div>
+                      </div>
                     </div>
                     <div class="card" id="analysis-preparation-card">
                       <h2>Состояние готовности</h2>
@@ -867,6 +880,40 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             analysisJobPollTimer: null,
             activeAnalysisJobId: null,
             activeAnalysisJobStartedAt: null,
+            activeAnalysisRuntime: null,
+          }};
+
+          const ANALYSIS_PRESETS = {{
+            mac_mini_local: {{
+              key: 'mac_mini_local',
+              name: 'Mac mini: локальная LLM + Qwen3 embeddings',
+              contour_label: 'Mac mini local',
+              provider: 'llama_cpp',
+              model: 'Qwen3-Embedding-4B',
+              base_url: 'http://127.0.0.1:8090/v1',
+              use_llm: true,
+              llm_base_url: 'http://127.0.0.1:8088/v1',
+              llm_model: '/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf',
+              llm_model_label: 'Qwen2.5-14B local',
+              analysis_mode: 'fast',
+              limit: 8,
+              save_report: true,
+            }},
+            local_hash_smoke: {{
+              key: 'local_hash_smoke',
+              name: 'Быстрый тест без LLM / local hash',
+              contour_label: 'Smoke local hash',
+              provider: 'local_hash',
+              model: 'local-hash-v1',
+              base_url: null,
+              use_llm: false,
+              llm_base_url: null,
+              llm_model: null,
+              llm_model_label: 'LLM отключена',
+              analysis_mode: 'fast',
+              limit: 3,
+              save_report: true,
+            }},
           }};
 
           const STEP_STATUS_LABELS = {{
@@ -914,6 +961,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           function analysisModeLabel(mode) {{
             return ANALYSIS_MODE_LABELS[mode] || mode || 'не определено';
+          }}
+
+          function getAnalysisPreset(presetKey) {{
+            return ANALYSIS_PRESETS[presetKey] || ANALYSIS_PRESETS.mac_mini_local;
           }}
 
           function attachmentsStatusLabel(status) {{
@@ -1158,6 +1209,72 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             return value.toFixed(value >= 10 ? 1 : 2) + ' сек';
           }}
 
+          function buildAnalysisRuntime() {{
+            const form = document.getElementById('analysis-form');
+            const presetKey = form?.querySelector('[name="runtime_preset"]')?.value || 'mac_mini_local';
+            const preset = getAnalysisPreset(presetKey);
+            const analysisMode = String(form?.querySelector('[name="analysis_mode"]')?.value || preset.analysis_mode || 'fast');
+            const useLlm = form?.querySelector('[name="use_llm"]')?.checked ?? preset.use_llm;
+            const saveReport = form?.querySelector('[name="save_report"]')?.checked ?? preset.save_report;
+            return {{
+              preset_key: preset.key,
+              preset_name: preset.name,
+              contour_label: preset.contour_label,
+              provider: preset.provider,
+              model: preset.model,
+              base_url: preset.base_url,
+              use_llm: useLlm,
+              llm_base_url: useLlm ? preset.llm_base_url : null,
+              llm_model: useLlm ? preset.llm_model : null,
+              llm_model_label: useLlm ? preset.llm_model_label : 'LLM отключена',
+              analysis_mode: analysisMode,
+              limit: preset.limit,
+              save_report: saveReport,
+            }};
+          }}
+
+          function renderAnalysisRuntimeSummary() {{
+            const runtime = buildAnalysisRuntime();
+            const node = document.getElementById('analysis-runtime-summary');
+            const embeddingEndpoint = runtime.base_url || 'не требуется';
+            const llmEndpoint = runtime.use_llm ? (runtime.llm_base_url || 'не задан') : 'LLM отключена';
+            const llmModelDebug = runtime.use_llm && runtime.llm_model
+              ? `<div class="note" style="margin-top:12px">Debug: llm_model=${{escapeHtml(runtime.llm_model)}}</div>`
+              : `<div class="note" style="margin-top:12px">Упрощённый smoke-контур без локальной LLM.</div>`;
+            node.innerHTML = `
+              <div class="metric"><span class="metric-label">Контур</span><span class="metric-value">${{escapeHtml(runtime.preset_name)}}</span></div>
+              <div class="metric"><span class="metric-label">Embeddings</span><span class="metric-value">${{escapeHtml(runtime.model)}} через ${{escapeHtml(runtime.provider)}}</span></div>
+              <div class="metric"><span class="metric-label">Embedding endpoint</span><span class="metric-value">${{escapeHtml(embeddingEndpoint)}}</span></div>
+              <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{runtime.use_llm ? escapeHtml(runtime.llm_model_label) : 'выключена'}}</span></div>
+              <div class="metric"><span class="metric-label">LLM endpoint</span><span class="metric-value">${{escapeHtml(llmEndpoint)}}</span></div>
+              <div class="metric"><span class="metric-label">Режим</span><span class="metric-value">${{escapeHtml(runtime.analysis_mode)}}</span></div>
+              <div class="metric"><span class="metric-label">Источники</span><span class="metric-value">до ${{runtime.limit}} фрагментов на раздел</span></div>
+              <div class="metric"><span class="metric-label">Отчёт</span><span class="metric-value">${{runtime.save_report ? 'сохраняется' : 'не сохраняется'}}</span></div>
+              ${{llmModelDebug}}
+            `;
+            node.className = 'list';
+            return runtime;
+          }}
+
+          function applyAnalysisPreset() {{
+            const form = document.getElementById('analysis-form');
+            const presetKey = form?.querySelector('[name="runtime_preset"]')?.value || 'mac_mini_local';
+            const preset = getAnalysisPreset(presetKey);
+            const analysisMode = form?.querySelector('[name="analysis_mode"]');
+            const useLlm = form?.querySelector('[name="use_llm"]');
+            const saveReport = form?.querySelector('[name="save_report"]');
+            if (analysisMode) {{
+              analysisMode.value = preset.analysis_mode;
+            }}
+            if (useLlm) {{
+              useLlm.checked = preset.use_llm;
+            }}
+            if (saveReport) {{
+              saveReport.checked = preset.save_report;
+            }}
+            renderAnalysisRuntimeSummary();
+          }}
+
           function buildTimingSummary(payload) {{
             const timings = payload.timings || {{}};
             const slowest = (timings.slowest_sections || []).map(function(item) {{
@@ -1178,6 +1295,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           function renderAnalysisResultPayload(payload, registryNumber) {{
             const node = document.getElementById('analysis-result');
+            const runtime = state.activeAnalysisRuntime || buildAnalysisRuntime();
             const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
             const errorsHtml = (payload.errors || []).map(function(e) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(e) + '</div>'; }}).join('');
             const analysisRunId = payload.analysis_run_id || payload.run_id || '';
@@ -1185,6 +1303,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/report'
               : (payload.report_path ? '/api/tender-research/analyze/' + encodeURIComponent(registryNumber) + '/latest' : '');
             node.innerHTML = `
+              <div class="grid-2" style="margin-bottom:12px">
+                <div class="metric"><span class="metric-label">Контур</span><span class="metric-value">${{escapeHtml(runtime.preset_name || 'не определено')}}</span></div>
+                <div class="metric"><span class="metric-label">Embeddings</span><span class="metric-value">${{escapeHtml((payload.retrieval_model || runtime.model || '?') + ' / ' + (payload.retrieval_provider || runtime.provider || '?'))}}</span></div>
+                <div class="metric"><span class="metric-label">Embedding endpoint</span><span class="metric-value">${{escapeHtml(runtime.base_url || 'не требуется')}}</span></div>
+                <div class="metric"><span class="metric-label">LLM endpoint</span><span class="metric-value">${{escapeHtml(payload.llm_endpoint || runtime.llm_base_url || 'LLM отключена')}}</span></div>
+              </div>
               <div class="grid-2">
                 <div class="metric"><span class="metric-label">Статус</span><span class="metric-value">${{escapeHtml(payload.status || 'unknown')}}</span></div>
                 <div class="metric"><span class="metric-label">Разделов</span><span class="metric-value">${{payload.sections_count ?? 0}}</span></div>
@@ -1207,6 +1331,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               node.className = 'empty';
               return;
             }}
+            const runtime = state.activeAnalysisRuntime || buildAnalysisRuntime();
             const statusColor = job.status === 'completed' ? 'var(--success)' : job.status === 'completed_with_warnings' ? 'var(--warning)' : job.status === 'failed' ? 'var(--danger)' : 'var(--text)';
             const stepsHtml = (job.steps || []).map(function(step) {{
               const icon = step.status === 'completed' ? '✓' : step.status === 'skipped' ? '–' : step.status === 'warning' ? '⚠' : step.status === 'failed' ? '✗' : step.status === 'running' ? '…' : '·';
@@ -1227,6 +1352,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="metric"><span class="metric-label">Источник</span><span class="metric-value">${{escapeHtml(job.source || 'api')}}</span></div>
                 <div class="metric"><span class="metric-label">Режим</span><span class="metric-value">${{escapeHtml(job.analysis_mode || 'balanced')}}</span></div>
                 <div class="metric"><span class="metric-label">Время</span><span class="metric-value">${{escapeHtml(formatSeconds(job.duration_seconds))}}</span></div>
+                <div class="metric"><span class="metric-label">Контур</span><span class="metric-value">${{escapeHtml(runtime.preset_name || 'не определено')}}</span></div>
+                <div class="metric"><span class="metric-label">Embeddings</span><span class="metric-value">${{escapeHtml(runtime.model + ' / ' + runtime.provider)}}</span></div>
+                <div class="metric"><span class="metric-label">LLM endpoint</span><span class="metric-value">${{escapeHtml(runtime.use_llm ? (runtime.llm_base_url || 'не задан') : 'LLM отключена')}}</span></div>
+                <div class="metric"><span class="metric-label">LLM model</span><span class="metric-value" style="font-size:12px">${{escapeHtml(runtime.use_llm ? (runtime.llm_model || runtime.llm_model_label || 'не задана') : 'LLM отключена')}}</span></div>
               </div>
               <div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
                 <div style="height:10px;background:var(--panel)">
@@ -2195,6 +2324,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             clearFlash('analysis-flash');
             const rn = document.querySelector('#analysis-form [name="registry_number"]').value.trim();
             if (!rn) {{ setFlash('analysis-flash', 'Введите реестровый номер.', true); return; }}
+            const runtime = renderAnalysisRuntimeSummary();
             const stepsNode = document.getElementById('analysis-preparation-steps');
             const statusNode = document.getElementById('analysis-readiness-status');
             stepsNode.classList.remove('hidden');
@@ -2207,10 +2337,14 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 headers: {{ 'Content-Type': 'application/json' }},
                 body: JSON.stringify({{
                   registry_number: rn,
+                  provider: runtime.provider,
+                  model: runtime.model,
+                  base_url: runtime.base_url,
                   rebuild_chunks: false,
                   rebuild_embeddings: false,
                 }}),
               }});
+              state.activeAnalysisRuntime = runtime;
               renderAnalysisJobStatus({{
                 id: job.job_id,
                 job_type: job.job_type,
@@ -2241,21 +2375,29 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               setFlash('analysis-flash', 'Введите реестровый номер.', true);
               return;
             }}
-            const useLlm = data.get('use_llm') === 'on';
-            const saveReport = data.get('save_report') === 'on';
-            const analysisMode = String(data.get('analysis_mode') || 'fast');
+            const runtime = renderAnalysisRuntimeSummary();
             setFlash('analysis-flash', `Создаём задачу анализа для ${{registryNumber}}…`);
             try {{
+              const payload = {{
+                registry_number: registryNumber,
+                provider: runtime.provider,
+                model: runtime.model,
+                base_url: runtime.base_url,
+                use_llm: runtime.use_llm,
+                analysis_mode: runtime.analysis_mode,
+                limit: runtime.limit,
+                save_report: runtime.save_report,
+              }};
+              if (runtime.use_llm) {{
+                payload.llm_base_url = runtime.llm_base_url;
+                payload.llm_model = runtime.llm_model;
+              }}
               const job = await fetchJson('/api/tender-research/jobs/analyze', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
-                  registry_number: registryNumber,
-                  use_llm: useLlm,
-                  save_report: saveReport,
-                  analysis_mode: analysisMode,
-                }}),
+                body: JSON.stringify(payload),
               }});
+              state.activeAnalysisRuntime = runtime;
               renderAnalysisJobStatus({{
                 id: job.job_id,
                 job_type: job.job_type,
@@ -2341,12 +2483,20 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             document.getElementById('prepare-tender-btn').addEventListener('click', handlePrepareTender);
             document.getElementById('analysis-form').addEventListener('submit', handleAnalysisForm);
             document.getElementById('history-refresh-btn').addEventListener('click', function() {{ handleRefreshHistory(); }});
+            document.getElementById('analysis-runtime-preset').addEventListener('change', applyAnalysisPreset);
+            document.querySelector('#analysis-form [name="analysis_mode"]').addEventListener('change', renderAnalysisRuntimeSummary);
+            document.querySelector('#analysis-form [name="use_llm"]').addEventListener('change', renderAnalysisRuntimeSummary);
+            document.querySelector('#analysis-form [name="save_report"]').addEventListener('change', renderAnalysisRuntimeSummary);
+            document.querySelector('#analysis-form [name="registry_number"]').addEventListener('change', function(event) {{
+              handleRefreshHistory(event.currentTarget.value.trim());
+            }});
             document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
             document.getElementById('eis-docs-form').addEventListener('submit', handleEisDocsArchive);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);
             document.getElementById('upload-form').addEventListener('submit', handleUpload);
             const resetBtn = document.getElementById('reset-supplier-profile');
             if (resetBtn) resetBtn.addEventListener('click', resetSupplierProfile);
+            applyAnalysisPreset();
             await loadProcurementSources();
             await loadDataset();
             await loadRuns();
