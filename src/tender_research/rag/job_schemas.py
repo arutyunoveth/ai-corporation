@@ -51,6 +51,10 @@ class TenderAnalysisJobRecord:
     duration_seconds: float | None = None
     source: str | None = None
     request: dict | None = None
+    analysis_mode: str | None = None
+    current_section_title: str | None = None
+    current_section_index: int | None = None
+    total_sections: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -72,6 +76,10 @@ class TenderAnalysisJobRecord:
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "duration_seconds": self.duration_seconds,
             "source": self.source,
+            "analysis_mode": self.analysis_mode,
+            "current_section_title": self.current_section_title,
+            "current_section_index": self.current_section_index,
+            "total_sections": self.total_sections,
         }
 
 
@@ -113,6 +121,10 @@ class JobStatusResponse(BaseModel):
     updated_at: str | None = None
     duration_seconds: float | None = None
     source: str | None = None
+    analysis_mode: str | None = None
+    current_section_title: str | None = None
+    current_section_index: int | None = None
+    total_sections: int | None = None
 
 
 class JobListResponse(BaseModel):

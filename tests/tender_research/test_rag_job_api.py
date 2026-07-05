@@ -41,6 +41,10 @@ def _job_record(*, job_id: str = "job-001", job_type: str = "prepare", status: s
         duration_seconds=12.5 if status.startswith("completed") else None,
         source="api",
         request={"registry_number": "0323100010326000013"},
+        analysis_mode="balanced",
+        current_section_title="Условия контракта" if status == "running" else None,
+        current_section_index=6 if status == "running" else None,
+        total_sections=10 if status == "running" else None,
     )
 
 
@@ -95,7 +99,11 @@ class TestJobApi:
             response = client.post("/api/tender-research/jobs/analyze", json=payload)
 
         assert response.status_code == 200
-        assert mock_create.call_args.kwargs["request"] == payload
+        request_payload = mock_create.call_args.kwargs["request"]
+        assert request_payload["registry_number"] == payload["registry_number"]
+        assert request_payload["provider"] == payload["provider"]
+        assert request_payload["analysis_mode"] == "balanced"
+        assert request_payload["llm_timeout_seconds"] is None
         assert mock_create.call_args.kwargs["job_type"] == "analyze"
         assert mock_create.call_args.kwargs["registry_number"] == "0323100010326000013"
 
@@ -109,6 +117,7 @@ class TestJobApi:
         assert data["status"] == "running"
         assert data["progress_percent"] == 45
         assert data["current_step"] == "build_chunks"
+        assert data["current_section_title"] == "Условия контракта"
         assert data["steps"][0]["name"] == "build_chunks"
         assert "password" not in response.text.lower()
 

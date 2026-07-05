@@ -31,6 +31,7 @@ def test_tender_operator_demo_page_and_report_render(client):
     assert "Загрузка и анализ" in page.text
     assert "История анализов" in page.text
     assert "Статус фоновой задачи" in page.text
+    assert "Режим анализа" in page.text
 
     assert report_page.status_code == 200
     assert "Отчёт тендерного агента" in report_page.text
@@ -119,3 +120,4 @@ def test_tender_operator_console_contains_background_job_polling():
     assert "/api/tender-research/jobs/analyze" in page
     assert "/api/tender-research/jobs/" in page
     assert "analysis-job-status" in page
+    assert "current_section_title" in page

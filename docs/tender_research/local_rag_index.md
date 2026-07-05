@@ -144,11 +144,24 @@ python -m src.tender_research.rag.cli analyze-tender \
   --model Qwen3-Embedding-4B \
   --base-url http://127.0.0.1:8090/v1 \
   --use-llm \
+  --analysis-mode fast \
   --llm-base-url http://127.0.0.1:8088/v1 \
   --llm-model /Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf \
   --limit 8 \
   --output data/rag/reports/analyze_tender_0323100010326000013.md
 ```
+
+`analyze-tender` now supports latency presets:
+
+- `--analysis-mode fast`
+- `--analysis-mode balanced`
+- `--analysis-mode detailed`
+
+Optional overrides:
+
+- `--max-context-chars-per-section`
+- `--max-chunks-per-section`
+- `--llm-timeout-seconds`
 
 ## Configuration
 
@@ -206,6 +219,16 @@ from the retrieved context.
 best matching local fragments per section. With `--use-llm` it calls the local
 chat endpoint section by section and preserves structured citations for every
 answer.
+
+For latency visibility, both CLI and API now expose:
+
+- `analysis_mode`
+- `duration_seconds`
+- `timings`
+- `per_section_timings`
+- `llm_calls_count`
+- `total_context_chars`
+- `max_section_context_chars`
 
 ## REST API
 

@@ -106,6 +106,18 @@ def _deserialize_steps(value: str | None) -> list[TenderJobStep]:
 
 
 def _row_to_record(row: TenderAnalysisJob) -> TenderAnalysisJobRecord:
+    request_payload = _json_loads_dict(row.request_json)
+    steps = _deserialize_steps(row.steps_json)
+    current_section_title = None
+    current_section_index = None
+    total_sections = None
+    for step in steps:
+        details = step.details if isinstance(step.details, dict) else {}
+        if step.status == "running" and step.name.startswith("section:"):
+            current_section_title = str(details.get("section_title") or step.title or "")
+            current_section_index = int(details.get("section_index", 0) or 0) or None
+            total_sections = int(details.get("total_sections", 0) or 0) or None
+            break
     return TenderAnalysisJobRecord(
         id=row.id,
         job_type=row.job_type,
@@ -113,7 +125,7 @@ def _row_to_record(row: TenderAnalysisJob) -> TenderAnalysisJobRecord:
         status=row.status,
         progress_percent=row.progress_percent,
         current_step=row.current_step,
-        steps=_deserialize_steps(row.steps_json),
+        steps=steps,
         result=_json_loads_dict(row.result_json),
         warnings=_normalize_messages(_json_loads_list(row.warnings_json)),
         errors=_normalize_messages(_json_loads_list(row.errors_json)),
@@ -125,7 +137,11 @@ def _row_to_record(row: TenderAnalysisJob) -> TenderAnalysisJobRecord:
         updated_at=_ensure_aware_utc(row.updated_at),
         duration_seconds=row.duration_seconds,
         source=row.source,
-        request=_json_loads_dict(row.request_json),
+        request=request_payload,
+        analysis_mode=(request_payload or {}).get("analysis_mode"),
+        current_section_title=current_section_title,
+        current_section_index=current_section_index,
+        total_sections=total_sections,
     )
 
 

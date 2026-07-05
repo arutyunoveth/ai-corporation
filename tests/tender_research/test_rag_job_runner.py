@@ -62,9 +62,13 @@ def test_run_analyze_job_completes_and_saves_history_link() -> None:
         sections=[],
         sections_count=10,
         sources_count=30,
+        analysis_mode="fast",
         report_markdown="# Preview",
         report_path="data/rag/reports/test.md",
         used_llm=True,
+        duration_seconds=18.4,
+        timings={"total_seconds": 18.4},
+        per_section_timings=[],
         run_id="run-123",
     )
 
@@ -85,12 +89,15 @@ def test_run_analyze_job_completes_and_saves_history_link() -> None:
     assert analyze_kwargs["registry_number"] == "0323100010326000013"
     assert analyze_kwargs["use_llm"] is True
     assert analyze_kwargs["save_report"] is True
-    assert analyze_kwargs["limit"] == 6
+    assert analyze_kwargs["limit"] is None
+    assert analyze_kwargs["analysis_mode"] == "balanced"
     assert mock_progress.call_count >= 1
     mock_complete.assert_called_once()
     kwargs = mock_complete.call_args.kwargs
     assert kwargs["result"]["analysis_run_id"] == "run-123"
     assert kwargs["result"]["run_id"] == "run-123"
+    assert kwargs["result"]["analysis_mode"] == "fast"
+    assert kwargs["result"]["duration_seconds"] == 18.4
     assert kwargs["analysis_run_id"] == "run-123"
     assert kwargs["report_path"] == "data/rag/reports/test.md"
     session.close.assert_called_once()
@@ -104,6 +111,7 @@ def test_run_analyze_job_preserves_request_parameters() -> None:
         sections=[],
         sections_count=10,
         sources_count=12,
+        analysis_mode="fast",
         report_markdown="# Preview",
         report_path="data/rag/reports/test.md",
         used_llm=True,
@@ -119,6 +127,10 @@ def test_run_analyze_job_preserves_request_parameters() -> None:
         "llm_base_url": "http://127.0.0.1:8088/v1",
         "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
         "limit": 8,
+        "analysis_mode": "fast",
+        "llm_timeout_seconds": 90,
+        "max_context_chars_per_section": 4000,
+        "max_chunks_per_section": 3,
         "save_report": True,
         "source": "api",
     }
@@ -143,7 +155,11 @@ def test_run_analyze_job_preserves_request_parameters() -> None:
         "use_llm": True,
         "llm_base_url": "http://127.0.0.1:8088/v1",
         "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+        "llm_timeout_seconds": 90,
         "limit": 8,
+        "analysis_mode": "fast",
+        "max_context_chars_per_section": 4000,
+        "max_chunks_per_section": 3,
         "save_report": True,
         "record_history": True,
         "history_source": "api",
@@ -203,3 +219,70 @@ def test_run_analyze_job_failure_marks_failed() -> None:
     mock_fail.assert_called_once()
     assert "embedding server unavailable" in mock_fail.call_args.kwargs["errors"][0]
     session.close.assert_called_once()
+
+
+def test_run_analyze_job_progress_preserves_section_statuses() -> None:
+    session = MagicMock()
+
+    def fake_analyze(**kwargs):
+        kwargs["progress_callback"](
+            {
+                "progress_percent": 42,
+                "current_step": "section_analysis",
+                "message": "2/10 — Условия контракта",
+                "steps": [
+                    {
+                        "name": "section:contract_terms",
+                        "title": "2/10 — Условия контракта",
+                        "status": "running",
+                        "progress_percent": 42,
+                        "message": "Выполняем запрос к локальной LLM.",
+                        "details": {
+                            "section_id": "contract_terms",
+                            "section_title": "Условия контракта",
+                            "section_index": 2,
+                            "total_sections": 10,
+                        },
+                    }
+                ],
+            }
+        )
+        return TenderAnalysisResult(
+            status="completed",
+            registry_number="0323100010326000013",
+            sections=[],
+            sections_count=10,
+            sources_count=10,
+            per_section_timings=[
+                {
+                    "section_id": "contract_terms",
+                    "section_title": "Условия контракта",
+                    "section_index": 2,
+                    "status": "completed",
+                    "retrieval_seconds": 0.2,
+                    "llm_seconds": 1.1,
+                    "duration_seconds": 1.3,
+                    "chunks_retrieved": 3,
+                    "chunks_used": 3,
+                    "context_chars": 2500,
+                    "context_tokens_estimate": 625,
+                    "fallback_reason": None,
+                }
+            ],
+        )
+
+    with patch("src.tender_research.rag.job_runner._get_session", return_value=session), patch(
+        "src.tender_research.rag.job_runner.mark_job_running"
+    ), patch(
+        "src.tender_research.rag.job_runner.analyze_tender",
+        side_effect=fake_analyze,
+    ), patch(
+        "src.tender_research.rag.job_runner.update_job_progress"
+    ) as mock_progress, patch(
+        "src.tender_research.rag.job_runner.complete_job"
+    ):
+        run_analyze_job("job-analyze-progress", {"registry_number": "0323100010326000013"})
+
+    progress_steps = mock_progress.call_args_list[-1].kwargs["steps"]
+    section_step = next(step for step in progress_steps if step["name"] == "section:contract_terms")
+    assert section_step["details"]["section_title"] == "Условия контракта"

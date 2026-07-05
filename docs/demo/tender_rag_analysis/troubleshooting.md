@@ -118,3 +118,36 @@ curl http://127.0.0.1:8001/api/tender-research/jobs/<job_id>
 - проверить `/api/tender-research/jobs/<job_id>`;
 - проверить backend logs;
 - повторно проверить `health`, embedding server и LLM server.
+
+## 11. `use_llm=true` идёт слишком долго
+
+Проверить:
+
+- какой выбран `analysis_mode`;
+- есть ли в job result `duration_seconds`, `timings`, `per_section_timings`;
+- какие разделы попали в `slowest_sections`;
+- не срабатывает ли `retrieval_only_fallback` по timeout.
+
+Для demo сначала повторить в `fast`:
+
+```bash
+curl -X POST http://127.0.0.1:8001/api/tender-research/jobs/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "registry_number": "0323100010326000013",
+    "use_llm": true,
+    "analysis_mode": "fast",
+    "save_report": true
+  }'
+```
+
+Если `fast` стабилен, а `detailed` нет, это ожидаемо: локальный LLM latency зависит от железа и размера контекста.
+
+## 12. Один раздел упал, но job завершился
+
+Это нормальное ожидаемое поведение нового latency-safe режима:
+
+- секция получает статус `retrieval_only_fallback`;
+- общий job status может быть `completed_with_warnings`;
+- citations и report сохраняются;
+- warning содержит причину timeout/error.

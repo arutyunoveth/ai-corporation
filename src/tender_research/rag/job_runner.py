@@ -85,7 +85,13 @@ def _prepare_steps_payload(raw_steps: list[Any]) -> list[dict]:
     return result
 
 
-def _analysis_steps_payload(current_step: str, progress_percent: int, message: str = "") -> list[dict]:
+def _analysis_steps_payload(
+    current_step: str,
+    progress_percent: int,
+    message: str = "",
+    *,
+    section_states: list[dict] | None = None,
+) -> list[dict]:
     ordered = ["retrieval", "section_analysis", "save_report", "record_history", "completed"]
     steps: list[dict] = []
     current_index = ordered.index(current_step) if current_step in ordered else -1
@@ -108,7 +114,49 @@ def _analysis_steps_payload(current_step: str, progress_percent: int, message: s
                 "details": None,
             }
         )
+        if name == "section_analysis" and section_states:
+            for section_state in section_states:
+                steps.append(
+                    {
+                        "name": section_state.get("name", ""),
+                        "title": section_state.get("title") or section_state.get("name", ""),
+                        "status": _normalize_step_status(str(section_state.get("status", "pending"))),
+                        "progress_percent": int(section_state.get("progress_percent", 0) or 0),
+                        "message": str(section_state.get("message", "") or ""),
+                        "details": section_state.get("details"),
+                    }
+                )
     return steps
+
+
+def _section_states_from_timings(per_section_timings: list[dict] | None) -> list[dict]:
+    result: list[dict] = []
+    for item in per_section_timings or []:
+        status = str(item.get("status") or "pending")
+        result.append(
+            {
+                "name": f"section:{item.get('section_id', '')}",
+                "title": f"{item.get('section_index', '?')}/{len(per_section_timings or [])} — {item.get('section_title', '')}",
+                "status": "warning" if status in {"retrieval_only_fallback", "insufficient_context", "no_context"} else "completed",
+                "progress_percent": 100,
+                "message": "Готово с предупреждением." if status == "retrieval_only_fallback" else "Раздел завершён.",
+                "details": {
+                    "section_id": item.get("section_id"),
+                    "section_title": item.get("section_title"),
+                    "section_index": item.get("section_index"),
+                    "total_sections": len(per_section_timings or []),
+                    "retrieval_seconds": item.get("retrieval_seconds"),
+                    "llm_seconds": item.get("llm_seconds"),
+                    "duration_seconds": item.get("duration_seconds"),
+                    "chunks_retrieved": item.get("chunks_retrieved"),
+                    "chunks_used": item.get("chunks_used"),
+                    "context_chars": item.get("context_chars"),
+                    "context_tokens_estimate": item.get("context_tokens_estimate"),
+                    "fallback_reason": item.get("fallback_reason"),
+                },
+            }
+        )
+    return result
 
 
 def _prepare_result_payload(result) -> dict:
@@ -147,7 +195,18 @@ def _analyze_result_payload(result) -> dict:
         "registry_number": result.registry_number,
         "sections_count": result.sections_count,
         "sources_count": result.sources_count,
+        "analysis_mode": result.analysis_mode,
         "used_llm": result.used_llm,
+        "llm_model": result.llm_model,
+        "llm_endpoint": result.llm_endpoint,
+        "duration_seconds": result.duration_seconds,
+        "timings": result.timings,
+        "per_section_timings": result.per_section_timings,
+        "llm_calls_count": result.llm_calls_count,
+        "total_context_chars": result.total_context_chars,
+        "max_section_context_chars": result.max_section_context_chars,
+        "avg_section_llm_seconds": result.avg_section_llm_seconds,
+        "retrieval_limit_used": result.retrieval_limit_used,
         "warnings": result.warnings,
         "errors": result.errors,
         "report_path": result.report_path,
@@ -242,12 +301,18 @@ def run_analyze_job(job_id: str, request: dict) -> None:
             current_step = str(payload.get("current_step") or "running")
             progress_percent = int(payload.get("progress_percent", 0) or 0)
             message = str(payload.get("message") or "")
+            section_states = payload.get("steps") if isinstance(payload.get("steps"), list) else None
             update_job_progress(
                 session,
                 job_id,
                 progress_percent=progress_percent,
                 current_step=current_step,
-                steps=_analysis_steps_payload(current_step, progress_percent, message),
+                steps=_analysis_steps_payload(
+                    current_step,
+                    progress_percent,
+                    message,
+                    section_states=section_states,
+                ),
                 message=message,
             )
 
@@ -259,7 +324,11 @@ def run_analyze_job(job_id: str, request: dict) -> None:
             use_llm=bool(request.get("use_llm", False)),
             llm_base_url=request.get("llm_base_url"),
             llm_model=request.get("llm_model"),
-            limit=int(request.get("limit", 6) or 6),
+            llm_timeout_seconds=request.get("llm_timeout_seconds"),
+            limit=request.get("limit"),
+            analysis_mode=request.get("analysis_mode") or "balanced",
+            max_context_chars_per_section=request.get("max_context_chars_per_section"),
+            max_chunks_per_section=request.get("max_chunks_per_section"),
             save_report=bool(request.get("save_report", False)),
             record_history=True,
             history_source=request.get("source") or "api",
@@ -285,7 +354,12 @@ def run_analyze_job(job_id: str, request: dict) -> None:
             report_path=result.report_path,
             analysis_run_id=result.run_id,
             status=status,
-            steps=_analysis_steps_payload("completed", 100, "Анализ завершён."),
+            steps=_analysis_steps_payload(
+                "completed",
+                100,
+                "Анализ завершён.",
+                section_states=_section_states_from_timings(result.per_section_timings),
+            ),
         )
     except Exception as exc:
         logger.exception("Analyze background job %s failed", job_id)

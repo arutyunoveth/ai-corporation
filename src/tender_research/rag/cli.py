@@ -27,6 +27,7 @@ from src.tender_research.rag.history_service import (
 )
 from src.tender_research.rag.llm import LocalChatLlmClient, SourceCitation, build_source_citations
 from src.tender_research.rag.retriever import RagRetriever
+from src.tender_research.rag.schemas import DEFAULT_ANALYSIS_MODE
 from src.tender_research.rag.vector_store import JsonVectorStore
 from src.tender_research.repository import TenderRepository
 
@@ -257,6 +258,9 @@ def cmd_analyze_tender(args: argparse.Namespace) -> None:
         llm_model=args.llm_model,
         llm_timeout_seconds=args.llm_timeout_seconds,
         limit=args.limit,
+        analysis_mode=args.analysis_mode,
+        max_context_chars_per_section=args.max_context_chars_per_section,
+        max_chunks_per_section=args.max_chunks_per_section,
         save_report=True,
         record_history=not getattr(args, "no_history", False),
         history_source="cli",
@@ -272,10 +276,20 @@ def cmd_analyze_tender(args: argparse.Namespace) -> None:
             "registry_number": result.registry_number,
             "sections_count": result.sections_count,
             "sources_count": result.sources_count,
+            "analysis_mode": result.analysis_mode,
             "used_llm": result.used_llm,
             "llm_model": result.llm_model,
+            "llm_endpoint": result.llm_endpoint,
             "retrieval_provider": result.retrieval_provider,
             "retrieval_model": result.retrieval_model,
+            "retrieval_limit_used": result.retrieval_limit_used,
+            "duration_seconds": result.duration_seconds,
+            "timings": result.timings,
+            "per_section_timings": result.per_section_timings,
+            "llm_calls_count": result.llm_calls_count,
+            "total_context_chars": result.total_context_chars,
+            "max_section_context_chars": result.max_section_context_chars,
+            "avg_section_llm_seconds": result.avg_section_llm_seconds,
             "report_path": result.report_path,
             "warnings": result.warnings,
             "errors": result.errors,
@@ -480,8 +494,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_analyze = sub.add_parser("analyze-tender", help="Build a structured RAG analysis report for one registry number")
     p_analyze.add_argument("--registry-number", required=True)
-    p_analyze.add_argument("--limit", type=int, default=8)
+    p_analyze.add_argument("--limit", type=int, default=None)
     p_analyze.add_argument("--use-llm", action="store_true")
+    p_analyze.add_argument(
+        "--analysis-mode",
+        choices=["fast", "balanced", "detailed"],
+        default=DEFAULT_ANALYSIS_MODE,
+        help="Latency/detail preset for tender analysis",
+    )
+    p_analyze.add_argument("--max-context-chars-per-section", type=int, default=None)
+    p_analyze.add_argument("--max-chunks-per-section", type=int, default=None)
     p_analyze.add_argument("--output", default=None, help="Optional markdown output path")
     p_analyze.add_argument("--no-history", action="store_true", help="Skip saving to analysis history")
     _add_provider_args(p_analyze)

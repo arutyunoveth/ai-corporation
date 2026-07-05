@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -24,7 +25,7 @@ from src.tender_research.rag.history_service import (
     list_analysis_runs,
 )
 from src.tender_research.rag.prepare_service import check_preparation_status, prepare_tender_for_analysis
-from src.tender_research.rag.schemas import TenderAnalysisResult
+from src.tender_research.rag.schemas import DEFAULT_ANALYSIS_MODE, TenderAnalysisResult
 
 router = APIRouter(prefix="/api/tender-research", tags=["tender-research"])
 logger = logging.getLogger(__name__)
@@ -38,7 +39,11 @@ class AnalyzeRequest(BaseModel):
     use_llm: bool = Field(default=False, description="Enable local LLM for analysis")
     llm_base_url: str | None = Field(default=None, description="Local LLM base URL override")
     llm_model: str | None = Field(default=None, description="Local LLM model override")
-    limit: int = Field(default=6, description="Max chunks per section", ge=1, le=50)
+    llm_timeout_seconds: int | None = Field(default=None, description="Per-section LLM timeout override", ge=1, le=1800)
+    analysis_mode: Literal["fast", "balanced", "detailed"] = Field(default=DEFAULT_ANALYSIS_MODE)
+    limit: int | None = Field(default=None, description="Retrieval top-k override per section", ge=1, le=50)
+    max_context_chars_per_section: int | None = Field(default=None, description="Context budget override per section", ge=500, le=50000)
+    max_chunks_per_section: int | None = Field(default=None, description="Chunk count override per section", ge=1, le=50)
     save_report: bool = Field(default=False, description="Save report markdown to disk")
 
 
@@ -113,9 +118,20 @@ class AnalyzeResponse(BaseModel):
     registry_number: str
     sections_count: int
     sources_count: int
+    analysis_mode: str = DEFAULT_ANALYSIS_MODE
     report_markdown: str = ""
     report_path: str | None = None
     used_llm: bool = False
+    llm_model: str | None = None
+    llm_endpoint: str | None = None
+    duration_seconds: float | None = None
+    timings: dict = Field(default_factory=dict)
+    per_section_timings: list[dict] = Field(default_factory=list)
+    llm_calls_count: int = 0
+    total_context_chars: int = 0
+    max_section_context_chars: int = 0
+    avg_section_llm_seconds: float | None = None
+    retrieval_limit_used: int | None = None
     run_id: str | None = None
     warnings: list[str] = []
     errors: list[str] = []
@@ -141,6 +157,7 @@ class HistoryListItem(BaseModel):
     errors: list[str] = []
     duration_seconds: float | None = None
     source: str | None = None
+    metadata: dict = Field(default_factory=dict)
     created_at: str | None = None
 
 
@@ -164,6 +181,7 @@ class HistoryRunDetail(BaseModel):
     errors: list[str] = []
     duration_seconds: float | None = None
     source: str | None = None
+    metadata: dict = Field(default_factory=dict)
     created_at: str | None = None
 
 
@@ -229,9 +247,20 @@ def _to_analyze_response(result: TenderAnalysisResult) -> AnalyzeResponse:
         registry_number=result.registry_number,
         sections_count=result.sections_count,
         sources_count=result.sources_count,
+        analysis_mode=result.analysis_mode,
         report_markdown=result.report_markdown,
         report_path=result.report_path,
         used_llm=result.used_llm,
+        llm_model=result.llm_model,
+        llm_endpoint=result.llm_endpoint,
+        duration_seconds=result.duration_seconds,
+        timings=result.timings,
+        per_section_timings=result.per_section_timings,
+        llm_calls_count=result.llm_calls_count,
+        total_context_chars=result.total_context_chars,
+        max_section_context_chars=result.max_section_context_chars,
+        avg_section_llm_seconds=result.avg_section_llm_seconds,
+        retrieval_limit_used=result.retrieval_limit_used,
         run_id=result.run_id,
         warnings=result.warnings,
         errors=result.errors,
@@ -342,7 +371,11 @@ def analyze_tender_endpoint(payload: AnalyzeRequest) -> AnalyzeResponse:
             use_llm=payload.use_llm,
             llm_base_url=payload.llm_base_url,
             llm_model=payload.llm_model,
+            llm_timeout_seconds=payload.llm_timeout_seconds,
             limit=payload.limit,
+            analysis_mode=payload.analysis_mode,
+            max_context_chars_per_section=payload.max_context_chars_per_section,
+            max_chunks_per_section=payload.max_chunks_per_section,
             save_report=payload.save_report,
             record_history=True,
             history_source="api",

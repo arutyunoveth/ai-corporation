@@ -93,6 +93,7 @@ python -m src.tender_research.rag.cli analyze-tender \
   --model Qwen3-Embedding-4B \
   --base-url http://127.0.0.1:8090/v1 \
   --use-llm \
+  --analysis-mode fast \
   --llm-base-url http://127.0.0.1:8088/v1 \
   --llm-model /Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf \
   --limit 8 \
@@ -111,6 +112,15 @@ Output:
 | retrieval_provider | llama_cpp |
 | retrieval_model | Qwen3-Embedding-4B |
 | report_path | data/rag/reports/analyze_tender_0323100010326000013.md |
+
+For the latency-tuning sprint, also verify:
+
+- `analysis_mode`
+- `duration_seconds`
+- `timings.slowest_sections`
+- `per_section_timings`
+- `llm_calls_count`
+- `total_context_chars`
 
 ### API POST Result
 
@@ -173,10 +183,11 @@ GET /api/tender-research/health
 | UI HTML all 9/9 checks | PASS |
 
 The demo UI lives on the same FastAPI backend (port 8001), uses relative URLs,
-and needs no CORS setup. Default limit=6 sent by the form is accepted by the
-API (query param default). The full flow — tab display → background job start
-→ polling → result display → history/report link — works without any
-integration fixes.
+and needs no CORS setup. The updated form exposes `fast / balanced / detailed`
+analysis modes, shows `current_section_title`, and surfaces post-run timing
+summary. The full flow — tab display → background job start → polling by
+section → result display → history/report link — works without any integration
+fixes.
 
 ### Background Jobs MVP
 

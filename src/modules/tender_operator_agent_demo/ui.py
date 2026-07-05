@@ -793,6 +793,14 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           Реестровый номер
                           <input name="registry_number" required placeholder="Например: 0323100010326000013" />
                         </label>
+                        <label>
+                          Режим анализа
+                          <select name="analysis_mode">
+                            <option value="fast" selected>Быстрый</option>
+                            <option value="balanced">Сбалансированный</option>
+                            <option value="detailed">Подробный</option>
+                          </select>
+                        </label>
                         <label class="checkbox">
                           <input name="use_llm" type="checkbox" />
                           <span>Использовать локальную LLM (может работать долго)</span>
@@ -1143,6 +1151,31 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             state.activeAnalysisJobStartedAt = null;
           }}
 
+          function formatSeconds(value) {{
+            if (typeof value !== 'number' || !Number.isFinite(value)) {{
+              return '—';
+            }}
+            return value.toFixed(value >= 10 ? 1 : 2) + ' сек';
+          }}
+
+          function buildTimingSummary(payload) {{
+            const timings = payload.timings || {{}};
+            const slowest = (timings.slowest_sections || []).map(function(item) {{
+              return '<li>' + escapeHtml(item.section_title || item.section_id || 'section') + ': ' + escapeHtml(formatSeconds(item.duration_seconds)) + '</li>';
+            }}).join('');
+            return `
+              <div class="grid-2" style="margin-top:12px">
+                <div class="metric"><span class="metric-label">Длительность</span><span class="metric-value">${{escapeHtml(formatSeconds(payload.duration_seconds))}}</span></div>
+                <div class="metric"><span class="metric-label">Режим</span><span class="metric-value">${{escapeHtml(payload.analysis_mode || 'balanced')}}</span></div>
+                <div class="metric"><span class="metric-label">Retrieval</span><span class="metric-value">${{escapeHtml(formatSeconds(timings.retrieval_seconds))}}</span></div>
+                <div class="metric"><span class="metric-label">LLM вызовов</span><span class="metric-value">${{payload.llm_calls_count ?? 0}}</span></div>
+                <div class="metric"><span class="metric-label">Контекст</span><span class="metric-value">${{payload.total_context_chars ?? 0}} симв.</span></div>
+                <div class="metric"><span class="metric-label">Макс. секция</span><span class="metric-value">${{payload.max_section_context_chars ?? 0}} симв.</span></div>
+              </div>
+              ${{slowest ? '<div class="note" style="margin-top:12px"><strong>Самые медленные разделы:</strong><ul style="margin:8px 0 0 18px">' + slowest + '</ul></div>' : ''}}
+            `;
+          }}
+
           function renderAnalysisResultPayload(payload, registryNumber) {{
             const node = document.getElementById('analysis-result');
             const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
@@ -1158,6 +1191,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="metric"><span class="metric-label">Источников</span><span class="metric-value">${{payload.sources_count ?? 0}}</span></div>
                 <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{payload.used_llm ? 'да' : 'нет'}}</span></div>
               </div>
+              ${{buildTimingSummary(payload)}}
               ${{payload.preview ? '<div class="note" style="margin-top:12px;white-space:pre-wrap">' + escapeHtml(payload.preview) + '</div>' : ''}}
               ${{warningsHtml}}
               ${{errorsHtml}}
@@ -1189,7 +1223,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="metric"><span class="metric-label">Статус</span><span class="metric-value" style="color:${{statusColor}}">${{escapeHtml(job.status)}}</span></div>
                 <div class="metric"><span class="metric-label">Прогресс</span><span class="metric-value">${{job.progress_percent ?? 0}}%</span></div>
                 <div class="metric"><span class="metric-label">Шаг</span><span class="metric-value">${{escapeHtml(job.current_step || 'queued')}}</span></div>
+                <div class="metric"><span class="metric-label">Текущая секция</span><span class="metric-value">${{escapeHtml(job.current_section_title || '—')}}</span></div>
                 <div class="metric"><span class="metric-label">Источник</span><span class="metric-value">${{escapeHtml(job.source || 'api')}}</span></div>
+                <div class="metric"><span class="metric-label">Режим</span><span class="metric-value">${{escapeHtml(job.analysis_mode || 'balanced')}}</span></div>
+                <div class="metric"><span class="metric-label">Время</span><span class="metric-value">${{escapeHtml(formatSeconds(job.duration_seconds))}}</span></div>
               </div>
               <div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
                 <div style="height:10px;background:var(--panel)">
@@ -2206,6 +2243,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
             const useLlm = data.get('use_llm') === 'on';
             const saveReport = data.get('save_report') === 'on';
+            const analysisMode = String(data.get('analysis_mode') || 'fast');
             setFlash('analysis-flash', `Создаём задачу анализа для ${{registryNumber}}…`);
             try {{
               const job = await fetchJson('/api/tender-research/jobs/analyze', {{
@@ -2215,7 +2253,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   registry_number: registryNumber,
                   use_llm: useLlm,
                   save_report: saveReport,
-                  limit: 6,
+                  analysis_mode: analysisMode,
                 }}),
               }});
               renderAnalysisJobStatus({{
