@@ -941,7 +941,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             if (!isoStr) return '';
             const match = String(isoStr).match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
             if (match) return `${match[3]}.${match[2]}.${match[1]}`;
-            const rusMatch = String(isoStr).match(/^(\\d{2})\.(\\d{2})\.(\\d{4})/);
+            const rusMatch = String(isoStr).match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})/);
             if (rusMatch) return isoStr;
             return isoStr;
           }
@@ -953,7 +953,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
           }
 
           function normalizePrice(value) {
-            return value.replace(/\s/g, '');
+            return value.replace(/\\s/g, '');
           }
 
           function hasManualFiles() {
