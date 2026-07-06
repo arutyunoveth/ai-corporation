@@ -1302,6 +1302,22 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const reportLink = analysisRunId
               ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/report'
               : (payload.report_path ? '/api/tender-research/analyze/' + encodeURIComponent(registryNumber) + '/latest' : '');
+            const docxExportLink = analysisRunId
+              ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/docx'
+              : '';
+            const pdfExportLink = analysisRunId
+              ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/pdf'
+              : '';
+            const actions = [];
+            if (reportLink) {{
+              actions.push(`<a class="link-button" href="${{reportLink}}" target="_blank" rel="noreferrer">Открыть отчёт</a>`);
+            }}
+            if (docxExportLink) {{
+              actions.push(`<a class="link-button" href="${{docxExportLink}}" target="_blank" rel="noreferrer">Скачать DOCX</a>`);
+            }}
+            if (pdfExportLink) {{
+              actions.push(`<a class="link-button" href="${{pdfExportLink}}" target="_blank" rel="noreferrer">Скачать PDF</a>`);
+            }}
             node.innerHTML = `
               <div class="grid-2" style="margin-bottom:12px">
                 <div class="metric"><span class="metric-label">Контур</span><span class="metric-value">${{escapeHtml(runtime.preset_name || 'не определено')}}</span></div>
@@ -1319,7 +1335,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               ${{payload.preview ? '<div class="note" style="margin-top:12px;white-space:pre-wrap">' + escapeHtml(payload.preview) + '</div>' : ''}}
               ${{warningsHtml}}
               ${{errorsHtml}}
-              ${{reportLink ? `<div class="form-actions" style="margin-top:14px"><a class="link-button" href="${{reportLink}}" target="_blank" rel="noreferrer">Открыть отчёт</a></div>` : ''}}
+              ${{actions.length ? `<div class="form-actions" style="margin-top:14px">${{actions.join('')}}</div>` : ''}}
             `;
             node.className = '';
           }}
@@ -2436,6 +2452,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               for (const item of data.items) {{
                 const date = item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : '—';
                 const statusColor = item.status === 'completed' ? 'var(--success)' : 'var(--warning)';
+                const reportUrl = '/api/tender-research/analyze/history/' + encodeURIComponent(item.id) + '/report';
+                const docxUrl = '/api/tender-research/analyze/history/' + encodeURIComponent(item.id) + '/export/docx';
+                const pdfUrl = '/api/tender-research/analyze/history/' + encodeURIComponent(item.id) + '/export/pdf';
                 html += '<tr style="border-bottom:1px solid var(--border)">';
                 html += '<td style="padding:6px 8px">' + escapeHtml(date) + '</td>';
                 html += '<td style="padding:6px 8px">' + escapeHtml(item.registry_number) + '</td>';
@@ -2443,7 +2462,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 html += '<td style="padding:6px 8px;text-align:center">' + item.sections_count + '</td>';
                 html += '<td style="padding:6px 8px;text-align:center">' + item.sources_count + '</td>';
                 html += '<td style="padding:6px 8px;text-align:center">' + (item.used_llm ? 'да' : 'нет') + '</td>';
-                html += '<td style="padding:6px 8px"><button class="button button-small history-open-report" data-run-id="' + escapeHtml(item.id) + '">Открыть отчёт</button></td>';
+                html += '<td style="padding:6px 8px"><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="button button-small history-open-report" data-run-id="' + escapeHtml(item.id) + '" data-report-url="' + escapeHtml(reportUrl) + '">Открыть отчёт</button><a class="link-button button-small" href="' + escapeHtml(docxUrl) + '" target="_blank" rel="noreferrer">Скачать DOCX</a><a class="link-button button-small" href="' + escapeHtml(pdfUrl) + '" target="_blank" rel="noreferrer">Скачать PDF</a></div></td>';
                 html += '</tr>';
               }}
               html += '</tbody></table>';

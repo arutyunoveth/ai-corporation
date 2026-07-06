@@ -27,6 +27,11 @@ The local RAG layer uses:
 
 - `procurement_document_chunks`
 - `procurement_document_embeddings`
+- `tender_analysis_runs`
+
+Saved analysis reports are written under `data/rag/reports/`.
+Generated runtime export artifacts are written under `data/rag/exports/`.
+Both locations are runtime-only and are ignored by git.
 
 Chunks keep the source document and tender linkage, character offsets, token
 estimate, and source paths. Embeddings keep provider/model metadata and a
@@ -116,6 +121,15 @@ python -m src.tender_research.rag.cli search \
   --model Qwen3-Embedding-4B \
   --limit 10
 ```
+
+## Report Reuse And Export
+
+- History/report API reuses saved `report_markdown` by `analysis_run_id`.
+- DOCX export endpoint:
+  `/api/tender-research/analyze/history/<analysis_run_id>/export/docx`
+- PDF export endpoint:
+  `/api/tender-research/analyze/history/<analysis_run_id>/export/pdf`
+- Export does **not** rerun retrieval or LLM analysis.
 
 Eval:
 

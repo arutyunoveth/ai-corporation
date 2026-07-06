@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from src.tender_research.rag.job_runner import submit_analyze_job, submit_prepar
 from src.tender_research.rag.job_schemas import JobListResponse, JobStatusResponse, StartJobResponse
 from src.tender_research.rag.job_service import create_job, get_job, list_jobs
 from src.tender_research.rag.analysis_service import analyze_tender
+from src.tender_research.rag.export_service import export_analysis_report_docx, export_analysis_report_pdf
 from src.tender_research.rag.history_service import (
     get_analysis_run,
     get_analysis_run_report,
@@ -190,6 +192,14 @@ class HistoryReportResponse(BaseModel):
     registry_number: str
     report_markdown: str
     report_path: str | None = None
+
+
+def _report_export_response(exported) -> FileResponse:
+    return FileResponse(
+        exported.file_path,
+        media_type=exported.content_type,
+        filename=exported.file_name,
+    )
 
 
 def _get_session() -> Session:
@@ -534,5 +544,43 @@ def get_analysis_history_report(run_id: str) -> HistoryReportResponse:
             report_markdown=markdown,
             report_path=record.report_path,
         )
+    finally:
+        session.close()
+
+
+@router.get("/analyze/history/{run_id}/export/docx")
+def export_analysis_history_report_docx(run_id: str) -> FileResponse:
+    config = load_config()
+    session = _get_session()
+    try:
+        try:
+            exported = export_analysis_report_docx(run_id, data_dir=config.data_dir, session=session)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc) or "Report file is missing or inaccessible") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc) or "Invalid export request") from exc
+        except Exception as exc:
+            logger.exception("DOCX export failed for analysis run %s", run_id)
+            raise HTTPException(status_code=500, detail="Failed to export DOCX report") from exc
+        return _report_export_response(exported)
+    finally:
+        session.close()
+
+
+@router.get("/analyze/history/{run_id}/export/pdf")
+def export_analysis_history_report_pdf(run_id: str) -> FileResponse:
+    config = load_config()
+    session = _get_session()
+    try:
+        try:
+            exported = export_analysis_report_pdf(run_id, data_dir=config.data_dir, session=session)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc) or "Report file is missing or inaccessible") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc) or "Invalid export request") from exc
+        except Exception as exc:
+            logger.exception("PDF export failed for analysis run %s", run_id)
+            raise HTTPException(status_code=500, detail="Failed to export PDF report") from exc
+        return _report_export_response(exported)
     finally:
         session.close()
