@@ -133,6 +133,10 @@ def test_tender_operator_wizard_page_header(client):
     assert "Прогон тендера через формы" not in html
     assert ".md" not in html
     assert "Агент скачает доступные документы" in html
+    assert "/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/docx" in html
+    assert "/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/pdf" in html
+    assert "Скачать DOCX" in html
+    assert "Скачать PDF" in html
 
 
 def test_tender_operator_wizard_date_filters_empty(client):
@@ -172,3 +176,8 @@ def test_tender_operator_console_contains_background_job_polling():
     assert "/api/tender-research/analyze/history/" in page
     assert "/export/docx" in page
     assert "/export/pdf" in page
+    assert "/api/demo/tender-agent/runs/" in page
+    assert "/api/demo/tender-agent/runs/${encodeURIComponent(result.run_id)}/export/docx" in page
+    assert "/api/demo/tender-agent/runs/${encodeURIComponent(result.run_id)}/export/pdf" in page
+    assert "/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/docx" in page
+    assert "/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/pdf" in page

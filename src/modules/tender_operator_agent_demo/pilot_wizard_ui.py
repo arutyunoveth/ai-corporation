@@ -1457,6 +1457,12 @@ def render_tender_operator_pilot_wizard_html() -> str:
             const reportLink = run.report_html_url
               ? `<a class="link-button primary" href="${escapeHtml(run.report_html_url)}" target="_blank" rel="noreferrer">Открыть HTML-отчёт</a>`
               : '';
+            const docxExportLink = run.run_id
+              ? `/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/docx`
+              : '';
+            const pdfExportLink = run.run_id
+              ? `/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/pdf`
+              : '';
 
             document.getElementById('result-root').innerHTML = `
               <div class="result-shell">
@@ -1468,6 +1474,8 @@ def render_tender_operator_pilot_wizard_html() -> str:
                 </div>
                 <div class="actions">
                   ${reportLink}
+                  ${docxExportLink ? `<a class="link-button" href="${docxExportLink}" target="_blank" rel="noreferrer">Скачать DOCX</a>` : ''}
+                  ${pdfExportLink ? `<a class="link-button" href="${pdfExportLink}" target="_blank" rel="noreferrer">Скачать PDF</a>` : ''}
                   <a class="link-button" href="/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}" target="_blank" rel="noreferrer">Открыть полный console view</a>
                 </div>
                 <div class="result-grid">

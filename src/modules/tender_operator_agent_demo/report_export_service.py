@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from html import escape as html_escape
+from html import escape as html_escape, unescape as html_unescape
 from pathlib import Path
 import re
 from typing import Literal
@@ -22,6 +22,7 @@ from reportlab.platypus import ListFlowable, ListItem, Paragraph, SimpleDocTempl
 from src.modules.tender_operator_agent_demo.upload_service import (
     _load_metadata,
     get_uploaded_demo_report,
+    get_uploaded_demo_report_html,
 )
 from src.tender_research.rag.export_service import (
     DOCX_CONTENT_TYPE,
@@ -52,12 +53,24 @@ class ExportedDemoReport:
 
 
 _DEMO_EXPORT_SUBDIR = ("demo", "exports")
+_SAFE_RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$")
 
 
 def _analysis_title(registry_number: str) -> str:
     if registry_number:
         return f"Анализ закупки {registry_number}"
     return "Отчёт demo-agent"
+
+
+def _validate_run_id(run_id: str) -> str:
+    normalized = str(run_id or "").strip()
+    if not normalized:
+        raise ValueError("Run ID must not be empty")
+    if "/" in normalized or "\\" in normalized or ".." in normalized:
+        raise ValueError("Invalid run ID")
+    if not _SAFE_RUN_ID_RE.fullmatch(normalized):
+        raise ValueError("Invalid run ID")
+    return normalized
 
 
 def _demo_metadata_lines(metadata: dict) -> list[str]:
@@ -99,7 +112,7 @@ def _format_nmck(price, currency) -> str:
 
 def _build_export_file_name(registry_number: str, run_id: str, format_name: Literal["docx", "pdf"]) -> str:
     safe_registry = _safe_segment(registry_number, "unknown_registry")
-    return f"tender_analysis_{safe_registry}_{_short_run_id(run_id)}.{format_name}"
+    return f"demo_agent_report_{safe_registry}_{_short_run_id(run_id)}.{format_name}"
 
 
 def _safe_output_dir(data_dir: str | None = None) -> Path:
@@ -109,6 +122,41 @@ def _safe_output_dir(data_dir: str | None = None) -> Path:
         root = Path.cwd().joinpath("data", *_DEMO_EXPORT_SUBDIR).resolve()
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def _html_report_to_markdown(html: str) -> str:
+    cleaned = re.sub(r"(?is)<(script|style)\b.*?>.*?</\1>", " ", html or "")
+    replacements = [
+        (r"(?i)<br\s*/?>", "\n"),
+        (r"(?i)</p\s*>", "\n\n"),
+        (r"(?i)</div\s*>", "\n"),
+        (r"(?i)</li\s*>", "\n"),
+        (r"(?i)<li\b[^>]*>", "- "),
+        (r"(?i)</h1\s*>", "\n\n"),
+        (r"(?i)</h2\s*>", "\n\n"),
+        (r"(?i)</h3\s*>", "\n\n"),
+        (r"(?i)<h1\b[^>]*>", "# "),
+        (r"(?i)<h2\b[^>]*>", "## "),
+        (r"(?i)<h3\b[^>]*>", "### "),
+        (r"(?i)</tr\s*>", "\n"),
+        (r"(?i)</td\s*>", " | "),
+        (r"(?i)</th\s*>", " | "),
+    ]
+    for pattern, replacement in replacements:
+        cleaned = re.sub(pattern, replacement, cleaned)
+    cleaned = re.sub(r"(?is)<[^>]+>", " ", cleaned)
+    cleaned = html_unescape(cleaned)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r"\n[ \t]+", "\n", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _report_markdown_for_export(run_id: str, report_markdown: str | None) -> str:
+    if (report_markdown or "").strip():
+        return str(report_markdown).strip()
+    return _html_report_to_markdown(get_uploaded_demo_report_html(run_id))
 
 
 def _build_docx_from_parts(
@@ -197,9 +245,10 @@ def _build_pdf_from_parts(
 
 
 def export_demo_agent_report_docx(run_id: str) -> ExportedDemoReport:
+    run_id = _validate_run_id(run_id)
     metadata = _load_metadata(run_id)
     report = get_uploaded_demo_report(run_id)
-    report_markdown = report.report_markdown
+    report_markdown = _report_markdown_for_export(run_id, report.report_markdown)
 
     registry_number = metadata.get("procurement_id") or metadata.get("reestr_number") or ""
     title = _analysis_title(registry_number)
@@ -225,9 +274,10 @@ def export_demo_agent_report_docx(run_id: str) -> ExportedDemoReport:
 
 
 def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
+    run_id = _validate_run_id(run_id)
     metadata = _load_metadata(run_id)
     report = get_uploaded_demo_report(run_id)
-    report_markdown = report.report_markdown
+    report_markdown = _report_markdown_for_export(run_id, report.report_markdown)
 
     registry_number = metadata.get("procurement_id") or metadata.get("reestr_number") or ""
     title = _analysis_title(registry_number)

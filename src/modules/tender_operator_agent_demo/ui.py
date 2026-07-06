@@ -1299,14 +1299,22 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
             const errorsHtml = (payload.errors || []).map(function(e) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(e) + '</div>'; }}).join('');
             const analysisRunId = payload.analysis_run_id || payload.run_id || '';
+            const demoRunId = payload.run_id || '';
+            const isDemoAgentRun = !!(demoRunId && String(demoRunId).startsWith('toa-run-'));
             const reportLink = analysisRunId
-              ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/report'
+              ? (isDemoAgentRun
+                  ? '/demo/tender-agent/runs/' + encodeURIComponent(demoRunId) + '/report'
+                  : '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/report')
               : (payload.report_path ? '/api/tender-research/analyze/' + encodeURIComponent(registryNumber) + '/latest' : '');
             const docxExportLink = analysisRunId
-              ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/docx'
+              ? (isDemoAgentRun
+                  ? '/api/demo/tender-agent/runs/' + encodeURIComponent(demoRunId) + '/export/docx'
+                  : '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/docx')
               : '';
             const pdfExportLink = analysisRunId
-              ? '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/pdf'
+              ? (isDemoAgentRun
+                  ? '/api/demo/tender-agent/runs/' + encodeURIComponent(demoRunId) + '/export/pdf'
+                  : '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/pdf')
               : '';
             const actions = [];
             if (reportLink) {{
@@ -1742,6 +1750,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const reportLink = result.report_url
               ? `<a class="link-button" href="${{escapeHtml(result.report_url)}}" target="_blank" rel="noreferrer">Открыть report</a>`
               : '';
+            const docxExportLink = result.run_id
+              ? `<a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(result.run_id)}}/export/docx" target="_blank" rel="noreferrer">Скачать DOCX</a>`
+              : '';
+            const pdfExportLink = result.run_id
+              ? `<a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(result.run_id)}}/export/pdf" target="_blank" rel="noreferrer">Скачать PDF</a>`
+              : '';
             node.innerHTML = `
               <div class="grid-2">
                 <div class="metric"><span class="metric-label">Run ID</span><span class="metric-value">${{escapeHtml(result.run_id)}}</span></div>
@@ -1758,6 +1772,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div class="form-actions" style="margin-top:14px">
                 <a class="link-button" href="${{escapeHtml(result.run_url)}}" target="_blank" rel="noreferrer">Открыть run</a>
                 ${{reportLink}}
+                ${{docxExportLink}}
+                ${{pdfExportLink}}
                 ${{analyzeButton}}
               </div>
               <div class="note" style="margin-top:12px">Полный archive URL и ticket в интерфейсе не показываются. Отображаются только host/path summary.</div>
@@ -2025,7 +2041,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           function renderSelectedRun(run) {{
             const reportLinks = run.report_html_url
               ? `<a class="link-button" href="${{run.report_html_url}}" target="_blank" rel="noreferrer">Открыть HTML-отчёт</a>
-                 <a class="link-button" href="${{run.report_download_url}}">Скачать артефакт отчёта</a>`
+                 <a class="link-button" href="${{run.report_download_url}}">Скачать артефакт отчёта</a>
+                 <a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(run.run_id)}}/export/docx" target="_blank" rel="noreferrer">Скачать DOCX</a>
+                 <a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(run.run_id)}}/export/pdf" target="_blank" rel="noreferrer">Скачать PDF</a>`
               : `<span class="note">HTML-отчёт будет доступен после анализа.</span>`;
             const needsDocs = run.status === 'docs_required';
             const eisBlock = run.procurement_source === 'zakupki_gov_ru_getdocs_ip' ? `

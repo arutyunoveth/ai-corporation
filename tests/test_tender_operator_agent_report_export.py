@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from fastapi import HTTPException
 
 from src.modules.tender_operator_agent_demo.report_export_service import (
     ExportedDemoReport,
@@ -102,6 +102,10 @@ def mock_run_data():
                 report_markdown=SAMPLE_REPORT_MARKDOWN,
             ),
         ),
+        patch(
+            "src.modules.tender_operator_agent_demo.report_export_service.get_uploaded_demo_report_html",
+            return_value="<h1>Отчёт</h1><p>НМЦК: 1 234 567,89 RUB</p><p>Дата публикации: 06.07.2026</p><p>Срок подачи: 20.07.2026</p><p>Источник сведений: электронное извещение ЕИС</p>",
+        ),
     ):
         yield
 
@@ -122,7 +126,7 @@ class TestDocxExport:
 
     def test_export_docx_filename_pattern(self, mock_run_data, tmp_path):
         result = export_demo_agent_report_docx("toa-run-test-00000000-abc123")
-        assert result.file_name.startswith("tender_analysis_")
+        assert result.file_name.startswith("demo_agent_report_")
         assert "0123456789012345" in result.file_name
 
     def test_export_docx_contains_key_fields(self, mock_run_data, tmp_path):
@@ -164,12 +168,12 @@ class TestPdfExport:
 
     def test_export_pdf_filename_pattern(self, mock_run_data, tmp_path):
         result = export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
-        assert result.file_name.startswith("tender_analysis_")
+        assert result.file_name.startswith("demo_agent_report_")
         assert "0123456789012345" in result.file_name
 
     def test_export_pdf_has_valid_size_and_metadata(self, mock_run_data, tmp_path):
         result = export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
-        assert result.file_name.startswith("tender_analysis_")
+        assert result.file_name.startswith("demo_agent_report_")
         assert "0123456789012345" in result.file_name
         assert result.file_name.endswith(".pdf")
         assert Path(result.file_path).stat().st_size > 1000
@@ -177,16 +181,12 @@ class TestPdfExport:
 
 class TestErrors:
     def test_unknown_run_id_raises_not_found(self):
-        from fastapi import HTTPException
-        from src.modules.tender_operator_agent_demo.upload_service import _load_metadata as real_load
-        real_load_ref = real_load
         with patch("src.modules.tender_operator_agent_demo.report_export_service._load_metadata") as mock_load:
             mock_load.side_effect = HTTPException(status_code=404, detail="Run not found")
             with pytest.raises(HTTPException, match="Run not found"):
                 export_demo_agent_report_docx("nonexistent-run")
 
     def test_report_not_available(self):
-        from fastapi import HTTPException
         with (
             patch("src.modules.tender_operator_agent_demo.report_export_service._load_metadata", return_value=SAMPLE_METADATA),
             patch("src.modules.tender_operator_agent_demo.report_export_service.get_uploaded_demo_report") as mock_report,
@@ -194,3 +194,101 @@ class TestErrors:
             mock_report.side_effect = HTTPException(status_code=404, detail="Report is not available yet")
             with pytest.raises(HTTPException, match="Report is not available yet"):
                 export_demo_agent_report_docx("toa-run-test-00000000-abc123")
+
+    def test_invalid_run_id_rejected_before_file_access(self):
+        with pytest.raises(ValueError, match="Invalid run ID"):
+            export_demo_agent_report_docx("../secret")
+
+
+class TestHtmlFallback:
+    def test_export_docx_uses_html_when_markdown_missing(self, tmp_path):
+        with (
+            patch("src.modules.tender_operator_agent_demo.report_export_service._safe_output_dir", return_value=tmp_path),
+            patch("src.modules.tender_operator_agent_demo.report_export_service._load_metadata", return_value=SAMPLE_METADATA),
+            patch(
+                "src.modules.tender_operator_agent_demo.report_export_service.get_uploaded_demo_report",
+                return_value=TenderOperatorDemoReportResponse(
+                    run_id="toa-run-test-00000000-abc123",
+                    report_title="Отчёт",
+                    generated_at="2026-07-06T12:00:00",
+                    recommendation="manual_review_required",
+                    recommendation_label="нужна ручная проверка",
+                    executive_summary=[],
+                    manual_checks=[],
+                    sections=[],
+                    report_markdown="",
+                ),
+            ),
+            patch(
+                "src.modules.tender_operator_agent_demo.report_export_service.get_uploaded_demo_report_html",
+                return_value="<h1>Отчёт</h1><p>НМЦК: 1 234 567,89 RUB</p><p>Дата публикации: 06.07.2026</p><p>Срок подачи: 20.07.2026</p><ul><li>Источник сведений: электронное извещение ЕИС</li></ul>",
+            ),
+        ):
+            result = export_demo_agent_report_docx("toa-run-test-00000000-abc123")
+            from docx import Document
+
+            doc = Document(result.file_path)
+            text = " ".join(p.text for p in doc.paragraphs)
+            assert "1 234 567,89" in text or "1 234 567" in text
+            assert "06.07.2026" in text
+            assert "20.07.2026" in text
+            assert "электронное извещение ЕИС" in text
+
+
+class TestApi:
+    def test_demo_run_export_docx_api_returns_file(self, client, tmp_path):
+        docx_path = tmp_path / "demo.docx"
+        docx_path.write_bytes(b"PK\x03\x04demo-docx")
+        exported = ExportedDemoReport(
+            run_id="toa-run-test-00000000-abc123",
+            registry_number="0123456789012345",
+            format="docx",
+            file_name="demo.docx",
+            file_path=str(docx_path),
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            size_bytes=123,
+            created_at="2026-07-06T12:00:00+00:00",
+            source_report_path=None,
+        )
+        with patch("src.modules.tender_operator_agent_demo.router.export_demo_agent_report_docx", return_value=exported):
+            response = client.get("/api/demo/tender-agent/runs/toa-run-test-00000000-abc123/export/docx")
+        assert response.status_code == 200
+        assert "wordprocessingml.document" in response.headers["content-type"]
+        assert "filename=\"demo.docx\"" in response.headers["content-disposition"]
+        assert response.content.startswith(b"PK")
+
+    def test_demo_run_export_pdf_api_returns_file(self, client, tmp_path):
+        pdf_path = tmp_path / "demo.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4\n%demo\n")
+        exported = ExportedDemoReport(
+            run_id="toa-run-test-00000000-abc123",
+            registry_number="0123456789012345",
+            format="pdf",
+            file_name="demo.pdf",
+            file_path=str(pdf_path),
+            content_type="application/pdf",
+            size_bytes=pdf_path.stat().st_size,
+            created_at="2026-07-06T12:00:00+00:00",
+            source_report_path=None,
+        )
+        with patch("src.modules.tender_operator_agent_demo.router.export_demo_agent_report_pdf", return_value=exported):
+            response = client.get("/api/demo/tender-agent/runs/toa-run-test-00000000-abc123/export/pdf")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/pdf")
+        assert response.content.startswith(b"%PDF-")
+
+    def test_demo_run_export_unknown_run_returns_404(self, client):
+        with patch(
+            "src.modules.tender_operator_agent_demo.router.export_demo_agent_report_docx",
+            side_effect=FileNotFoundError("Run was not found"),
+        ):
+            response = client.get("/api/demo/tender-agent/runs/nonexistent/export/docx")
+        assert response.status_code == 404
+
+    def test_demo_run_export_report_missing_returns_404(self, client):
+        with patch(
+            "src.modules.tender_operator_agent_demo.router.export_demo_agent_report_pdf",
+            side_effect=HTTPException(status_code=404, detail="Report is not available yet"),
+        ):
+            response = client.get("/api/demo/tender-agent/runs/toa-run-test-00000000-abc123/export/pdf")
+        assert response.status_code == 404
