@@ -1150,6 +1150,87 @@ def _format_money_value(value: float | str | None) -> str | None:
     return f"{numeric:,.2f}".replace(",", " ").replace(".", ",")
 
 
+def _extract_notice_price(metadata: dict[str, Any], *texts: str) -> str | None:
+    procurement = metadata.get("procurement") if isinstance(metadata.get("procurement"), dict) else {}
+    for candidate in (
+        procurement.get("initial_price"),
+        metadata.get("initial_price"),
+    ):
+        formatted = _format_money_value(candidate)
+        if formatted:
+            return formatted
+    combined = "\n".join(text for text in texts if text)
+    if not combined:
+        return None
+    raw_value = _match_first_dotall(
+        combined,
+        (
+            r"<(?:\w+:)?maxPrice>\s*([\d\s]+(?:[.,]\d+)?)\s*</(?:\w+:)?maxPrice>",
+            r"Начальная\s*\(максимальная\)\s*цена\s*(?:контракта|договора)?\D{0,80}([\d\s]+(?:[.,]\d+)?)\s*(?:руб|₽|RUB)",
+            r"\bНМЦК\b\D{0,40}([\d\s]+(?:[.,]\d+)?)\s*(?:руб|₽|RUB)",
+            r"Цена\s+контракта\D{0,40}([\d\s]+(?:[.,]\d+)?)\s*(?:руб|₽|RUB)",
+        ),
+    )
+    return _format_money_value(raw_value)
+
+
+def _extract_notice_timeline(text: str, labels: tuple[str, ...], *, stop_markers: tuple[str, ...]) -> str | None:
+    if not text:
+        return None
+    label_pattern = "|".join(re.escape(label) for label in labels)
+    stop_pattern = "|".join(re.escape(marker) for marker in stop_markers)
+    return _match_first_dotall(
+        text,
+        (
+            rf"(?:{label_pattern})[^:\n<]*[:>\-]?\s*(.+?)(?=\s*(?:{stop_pattern})|\Z)",
+        ),
+    )
+
+
+def _extract_notice_delivery_deadline(text: str) -> str | None:
+    return _extract_notice_timeline(
+        text,
+        ("Срок поставки", "Сроки поставки", "Срок поставки товара", "Сроки поставки товара", "Период поставки"),
+        stop_markers=(
+            "Место поставки",
+            "Адрес поставки",
+            "Условия оплаты",
+            "Порядок оплаты",
+            "Условия поставки",
+            "Порядок поставки",
+            "Обеспечение исполнения контракта",
+        ),
+    ) or _match_first_dotall(
+        text,
+        (
+            r"<(?:\w+:)?deliveryTerm>\s*(.+?)\s*</(?:\w+:)?deliveryTerm>",
+            r"поставка[^.\n]{0,80}(в течение[^.\n]+)",
+            r"поставка[^.\n]{0,80}(до\s+\d{1,2}\s+[А-Яа-яЁё]+\s+\d{4}\s+года)",
+        ),
+    )
+
+
+def _extract_notice_service_deadline(text: str) -> str | None:
+    return _extract_notice_timeline(
+        text,
+        ("Срок оказания услуг", "Сроки оказания услуг", "Период оказания услуг", "Срок выполнения работ"),
+        stop_markers=(
+            "Место оказания услуг",
+            "Место выполнения работ",
+            "Условия оплаты",
+            "Порядок оплаты",
+            "Обеспечение исполнения контракта",
+        ),
+    ) or _match_first_dotall(
+        text,
+        (
+            r"<(?:\w+:)?deliveryTerm>\s*(.+?)\s*</(?:\w+:)?deliveryTerm>",
+            r"оказани[ея]\s+услуг[^.\n]{0,80}(в течение[^.\n]+)",
+            r"оказани[ея]\s+услуг[^.\n]{0,80}(до\s+\d{1,2}\s+[А-Яа-яЁё]+\s+\d{4}\s+года)",
+        ),
+    )
+
+
 def _rewrite_compliance_highlight(value: str) -> str:
     lowered = value.lower()
     if "федеральной служ" in lowered and "техническому и экспортному контролю" in lowered:
@@ -1324,6 +1405,7 @@ def _build_goods_preliminary_analysis(
     tz_text = technical_spec_text or ""
     contract_text = contract_draft_text or ""
     notice = notice_text or ""
+    initial_price = _extract_notice_price(metadata, notice, contract_text)
     spec_rows = _extract_goods_spec_table(tz_text)
     delivery_deadline = _match_first_dotall(
         tz_text,
@@ -1334,7 +1416,8 @@ def _build_goods_preliminary_analysis(
         tz_text,
         ("Срок поставки", "Сроки поставки товара"),
         stop_markers=("Условия оплаты", "Адрес поставки", "Место поставки", "Условия поставки", "Порядок поставки"),
-    )
+    ) or _extract_notice_delivery_deadline(notice)
+    delivery_deadline = _cleanup_tabular_value(delivery_deadline) or delivery_deadline
     delivery_address = _match_first_dotall(
         tz_text,
         (
@@ -1345,6 +1428,7 @@ def _build_goods_preliminary_analysis(
         ("Место поставки", "Место поставки товаров", "Адрес поставки товара"),
         stop_markers=("Условия поставки", "Срок поставки", "Сроки поставки товара", "Порядок поставки", "Условия оплаты"),
     )
+    delivery_address = _cleanup_tabular_value(delivery_address) or delivery_address
     payment_terms = _match_first(
         contract_text,
         (
@@ -1375,6 +1459,8 @@ def _build_goods_preliminary_analysis(
     )
 
     overview = [f"Предмет закупки: {metadata.get('tender_title') or 'поставка товаров'}"]
+    if initial_price:
+        overview.append(f"НМЦК: {initial_price} руб.")
     if spec_rows:
         overview.append("В ТЗ выделена табличная спецификация по товарам.")
     if delivery_deadline:
@@ -1432,7 +1518,14 @@ def _build_goods_preliminary_analysis(
         "delivery_model": delivery_model,
         "contract_highlights": contract_terms,
         "next_actions": next_actions,
-        "extracted_fields": ["спецификация", "срок поставки", "адрес поставки"] if spec_rows else ["срок поставки"],
+        "extracted_fields": _dedupe_text_items(
+            [
+                "НМЦК" if initial_price else "",
+                "спецификация" if spec_rows else "",
+                "срок поставки" if delivery_deadline else "",
+                "адрес поставки" if delivery_address else "",
+            ]
+        ),
         "procurement_kind": "goods",
         "spec_table": {
             "columns": ["№", "Наименование", "Ед. изм.", "Кол-во", "Характеристики"],
@@ -1501,7 +1594,8 @@ def _build_preliminary_procurement_analysis(
             r"не позднее\s+([^.\\n]+)",
             r"Сроки оказания Услуг\s*[–-]\s*([^.\\n]+)",
         ),
-    )
+    ) or _extract_notice_service_deadline(notice)
+    service_deadline = _cleanup_tabular_value(service_deadline) or service_deadline
     location = _match_first(
         tz_text,
         (
@@ -1509,6 +1603,7 @@ def _build_preliminary_procurement_analysis(
             r"Место оказания Услуг:\s*(.+?)(?:\n\d+\.|\Z)",
         ),
     )
+    initial_price = _extract_notice_price(metadata, notice, contract_text)
     payment_terms = _match_first(
         contract_text,
         (
@@ -1582,6 +1677,7 @@ def _build_preliminary_procurement_analysis(
     extracted_fields = [
         label
         for label, value in (
+            ("НМЦК", initial_price),
             ("предмет закупки", service_subject),
             ("формат оказания услуг", training_format),
             ("объём программы", hours),
@@ -1597,6 +1693,8 @@ def _build_preliminary_procurement_analysis(
     overview: list[str] = []
     if service_subject:
         overview.append(f"Предмет закупки: {service_subject}")
+    if initial_price:
+        overview.append(f"НМЦК: {initial_price} руб.")
     if training_format:
         overview.append(f"Формат: {training_format}")
     if hours or listeners:

@@ -50,6 +50,10 @@ from src.modules.tender_operator_agent_demo.upload_service import (
 )
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
+from src.tender_research.providers.public_44fz_search import (
+    _parse_detail_metadata,
+    _parse_document_links,
+)
 
 
 ARCHIVE_DOWNLOAD_RETRY_ATTEMPTS = 5
@@ -353,13 +357,30 @@ def _extract_public_page_context(source_url: str) -> dict[str, Any]:
     if len(page_html) > PUBLIC_EIS_MAX_RESPONSE_BYTES:
         return {}
 
-    title = _extract_card_value(page_html, "Объект закупки", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
+    parsed_metadata = _parse_detail_metadata(page_html, source_url)
+
+    title = parsed_metadata.get("title") or _extract_card_value(
+        page_html,
+        "Объект закупки",
+        title_class="cardMainInfo__title",
+        content_class="cardMainInfo__content",
+    )
     if not title:
         title = _extract_card_value(page_html, "Наименование объекта закупки", title_class="section__title", content_class="section__info")
-    customer_name = _extract_card_value(page_html, "Заказчик", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
-    publication_date = _extract_card_value(page_html, "Размещено", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
+    customer_name = parsed_metadata.get("customer_name") or _extract_card_value(
+        page_html,
+        "Заказчик",
+        title_class="cardMainInfo__title",
+        content_class="cardMainInfo__content",
+    )
+    publication_date = _format_public_context_datetime(parsed_metadata.get("publication_date")) or _extract_card_value(
+        page_html,
+        "Размещено",
+        title_class="cardMainInfo__title",
+        content_class="cardMainInfo__content",
+    )
     updated_date = _extract_card_value(page_html, "Обновлено", title_class="cardMainInfo__title", content_class="cardMainInfo__content")
-    deadline = _extract_card_value(
+    deadline = _format_public_context_datetime(parsed_metadata.get("application_deadline")) or _extract_card_value(
         page_html,
         "Дата и время окончания срока подачи заявок",
         title_class="section__title",
@@ -374,7 +395,12 @@ def _extract_public_page_context(source_url: str) -> dict[str, Any]:
     currency = _extract_card_value(page_html, "Валюта", title_class="section__title", content_class="section__info")
 
     initial_price = None
-    if initial_price_raw:
+    if parsed_metadata.get("nmck_amount") not in (None, ""):
+        try:
+            initial_price = float(parsed_metadata["nmck_amount"])
+        except (TypeError, ValueError):
+            initial_price = None
+    if initial_price is None and initial_price_raw:
         cleaned = initial_price_raw.replace("\xa0", "").replace(" ", "").replace(",", ".")
         match = re.search(r"\d+(?:\.\d+)?", cleaned)
         if match:
@@ -408,26 +434,28 @@ def _infer_public_documents_url(source_url: str) -> str | None:
     return None
 
 
+def _format_public_context_datetime(value: Any) -> str | None:
+    if not isinstance(value, datetime):
+        return None
+    if value.hour == 0 and value.minute == 0 and value.second == 0:
+        return value.strftime("%d.%m.%Y")
+    return value.strftime("%d.%m.%Y %H:%M")
+
+
 def _parse_public_notice_attachments(page_html: str, *, page_url: str) -> list[ProcurementAttachment]:
     attachments: list[ProcurementAttachment] = []
     seen_urls: set[str] = set()
-    pattern = re.compile(
-        r'<a\s+href="([^"]*?/filestore/public/[^"]+)"(?:[^>]*title="([^"]*)")?[^>]*>\s*(.*?)\s*</a>',
-        re.IGNORECASE | re.DOTALL,
-    )
-    for match in pattern.finditer(page_html):
-        href = urljoin(page_url, html.unescape(match.group(1)))
+    for item in _parse_document_links(page_html, page_url):
+        href = urljoin(page_url, html.unescape(item.url))
         if href in seen_urls:
             continue
         seen_urls.add(href)
-        title_attr = _strip_html_fragment(match.group(2))
-        link_text = _strip_html_fragment(match.group(3))
-        name = title_attr or link_text
+        name = _strip_html_fragment(item.file_name) or _strip_html_fragment(item.title)
         if not name:
             continue
         parsed_href = urlparse(href)
-        attachment_id = parse_qs(parsed_href.query).get("uid", [Path(parsed_href.path).name or name])[0]
-        extension = Path(name).suffix.lower() or None
+        attachment_id = item.raw.get("uid") or parse_qs(parsed_href.query).get("uid", [Path(parsed_href.path).name or name])[0]
+        extension = Path(name).suffix.lower() or Path(parsed_href.path).suffix.lower() or None
         attachments.append(
             ProcurementAttachment(
                 attachment_id=attachment_id,

@@ -1,6 +1,47 @@
 import json
 
 
+def test_parse_public_notice_attachments_extracts_real_documents_and_skips_sign_links():
+    from src.modules.tender_operator_agent_demo import procurement_intake_service as service
+
+    documents_html = """
+    <div class="attachmentsTabDocs">
+      <div class="attachment row ">
+        <div class="col clipText">
+          <a data-modalup href="/epz/order/notice/signview/ep/listModal.html?reestrNumber=0373200000000000001&uid=sign-only">
+            sign
+          </a>
+          <img alt="Adobe Acrobat Document" src="/epz/static/img/icons/type/pdf.svg"/>
+          <span class="section__value">
+            <a href="/44fz/filestore/public/1.0/download/priz/file.html?uid=UID001" title="Техническое задание.pdf">
+              Техническое задание
+            </a>
+          </span>
+        </div>
+      </div>
+      <div class="attachment row ">
+        <div class="col clipText">
+          <img alt="Microsoft Excel Document" src="/epz/static/img/icons/type/xlsx.svg"/>
+          <span class="section__value">
+            <a href="https://zakupki.gov.ru/44fz/filestore/public/1.0/download/priz/file.html?uid=UID002" title="Расчет НМЦК.xlsx">
+              Расчет НМЦК
+            </a>
+          </span>
+        </div>
+      </div>
+    </div>
+    """
+
+    attachments = service._parse_public_notice_attachments(
+        documents_html,
+        page_url="https://zakupki.gov.ru/epz/order/notice/ea44/view/documents.html?regNumber=0373200000000000001",
+    )
+
+    assert [item.name for item in attachments] == ["Техническое задание.pdf", "Расчет НМЦК.xlsx"]
+    assert attachments[0].url == "https://zakupki.gov.ru/44fz/filestore/public/1.0/download/priz/file.html?uid=UID001"
+    assert attachments[1].attachment_id == "UID002"
+
+
 def test_handoff_endpoint_requires_reestr_number(client, monkeypatch, tmp_path):
     from src.modules.tender_operator_agent_demo import procurement_intake_service as service
     from src.modules.tender_operator_agent_demo.settings import clear_zakupki_soap_settings_cache
