@@ -118,6 +118,16 @@ For the latency-tuning sprint, also verify:
 - `analysis_mode`
 - `duration_seconds`
 - `timings.slowest_sections`
+
+## Report Export Runtime
+
+- Saved markdown reports live under `data/rag/reports/`
+- Generated DOCX/PDF exports live under `data/rag/exports/`
+- Export endpoints:
+  - `/api/tender-research/analyze/history/<analysis_run_id>/export/docx`
+  - `/api/tender-research/analyze/history/<analysis_run_id>/export/pdf`
+- Export reuses saved `report_markdown` and must not rerun analysis
+- PDF generation on Mac mini relies on a local runtime font with Cyrillic support
 - `per_section_timings`
 - `llm_calls_count`
 - `total_context_chars`

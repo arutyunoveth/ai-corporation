@@ -42,6 +42,8 @@ def test_tender_operator_demo_page_and_report_render(client):
     assert "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf" in page.text
     assert "local-hash-v1" in page.text
     assert "limit: 8" in page.text or "limit: 3" in page.text
+    assert "Скачать DOCX" in page.text
+    assert "Скачать PDF" in page.text
 
     assert report_page.status_code == 200
     assert "Отчёт тендерного агента" in report_page.text
@@ -141,3 +143,6 @@ def test_tender_operator_console_contains_background_job_polling():
     assert "analysis-runtime-summary" in page
     assert "Mac mini: локальная LLM + Qwen3 embeddings" in page
     assert "Быстрый тест без LLM / local hash" in page
+    assert "/api/tender-research/analyze/history/" in page
+    assert "/export/docx" in page
+    assert "/export/pdf" in page
