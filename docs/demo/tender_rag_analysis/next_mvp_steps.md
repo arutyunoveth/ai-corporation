@@ -1,47 +1,46 @@
-# План следующего MVP-спринта
+# Следующие шаги MVP
 
-## 1. Product next steps
+## Уже выполнено в текущем MVP
 
-- Выбор закупки из списка (не только по номеру)
-- Страница истории анализов
-- Отчёт в HTML/PDF: выполнено в MVP-экспорте
-- Экспорт DOCX/PDF: выполнено для saved history runs по `analysis_run_id`
-- "Что проверить вручную" как отдельный checklist
-- Риск-скоринг
+- background jobs / progress;
+- fast / balanced / detailed analysis modes;
+- lexical fallback retrieval;
+- DOCX / PDF export.
 
-## 2. Technical next steps
+## Ближайшие возможные спринты
 
-- Background jobs для prepare/analyze: выполнено в MVP через in-process runner + polling API
-- Persistent run history в БД: выполнено
-- Следующий шаг: production-grade queue (Celery / RQ / arq) или durable worker model
-- Следующий шаг: push notifications через WebSocket/SSE вместо polling
-- Улучшенное извлечение текста из документов
-- OCR backlog (сканированные PDF)
-- Извлечение таблиц
-- Структурированный JSON output
-- Ролевой доступ (admin / viewer / analyst)
+### 1. Брендирование DOCX/PDF отчёта под Арвектум
 
-## 3. Demo / customer next steps
+- логотип;
+- фирменные цвета;
+- титульная страница;
+- аккуратные таблицы;
+- footer с `arvectum.com`.
 
-- Подготовить 3–5 закупок разных типов для демо
-- Сделать demo script под поставщика
-- Сделать demo script под тендерный отдел
-- Собрать обратную связь дизайн-партнёра
+### 2. Production queue
 
-## 4. MVP proposal (ближайший спринт)
+- Celery / RQ / Redis или другой runner;
+- job recovery after restart;
+- concurrent jobs.
 
-**Вариант A: "Экспорт отчёта"**
-- HTML/DOCX/PDF export
-- скачивание отчёта в customer-friendly формате
-- шаблон executive summary
+### 3. User / project workspace
 
-**Вариант B: "Production queue"**
-- durable background workers
-- retry policy
-- stale job reconciliation после restart
-- WebSocket / SSE уведомления
+- привязка анализов к клиенту или проекту;
+- фильтрация истории запусков.
 
-**Вариант C: "Выбор закупки и улучшенный UI"**
-- список доступных закупок
-- поиск по номеру/названию
-- улучшенная навигация по отчёту
+### 4. Качество анализа
+
+- better section prompts;
+- risk scoring;
+- decision memo;
+- supplier fit.
+
+### 5. Интеграции
+
+- импорт из ЕИС;
+- API для внешних систем;
+- экспорт в CRM или документооборот.
+
+## Зачем это важно
+
+Дорожная карта показывает, что MVP уже собран в управляемый контур, а следующие шаги понятны и отделены от текущего демо.

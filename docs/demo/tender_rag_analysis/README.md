@@ -1,41 +1,48 @@
-# Демо: локальный AI-анализ закупки с источниками
+# Демо-пакет: AI-агент Арвектум для анализа закупки
+
+Короткий пакет для ручного показа локального AI-агента Арвектум клиенту, дизайн-партнёру или внутренней команде.
+
+## Что это за демо
+
+Локальный AI-агент Арвектум помогает быстро разобрать закупку: проверить готовность данных, запустить анализ в background job, показать прогресс по разделам, открыть структурированный отчёт и скачать его в DOCX/PDF.
 
 ## Что показывает демо
 
-- Работа в закрытом локальном контуре (всё на Mac mini)
-- Подготовка закупки к анализу (документы, чанки, эмбеддинги)
-- Построение индекса по документам закупки
-- Анализ документации локальной LLM с привязкой к источникам
-- 10 разделов отчёта с citations
-- Сохранение и повторный доступ к отчёту
+- загрузку и подготовку закупки к анализу;
+- локальный анализ без облачных LLM;
+- progress по секциям без зависания UI;
+- структурированный отчёт по 10 разделам;
+- историю запусков;
+- экспорт DOCX/PDF.
 
-## Demo URL
+## Для кого это демо
 
-```
-http://127.0.0.1:8001/demo/tender-agent
-```
+- поставщики;
+- тендерные отделы;
+- руководители продаж и закупок;
+- дизайн-партнёры пилота.
 
-## Smoke registry number
+## Что нужно для запуска
 
-```
-0323100010326000013
-```
+- Mac mini;
+- PostgreSQL + pgvector;
+- embedding server `http://127.0.0.1:8090/v1`;
+- LLM server `http://127.0.0.1:8088/v1`;
+- backend `http://127.0.0.1:8001`;
+- demo URL: `http://127.0.0.1:8001/demo/tender-agent`.
 
-## Expected result
+## Главный сценарий
 
-| Check | Expected value |
-|---|---|
-| readiness | `ready_for_analysis=true` |
-| prepare | `status=completed` |
-| analyze | `status=completed`, `sections_count=10`, `sources_count>0` |
-| report preview | не пустой |
-| latest report | открывается, registry_number совпадает |
+- registry_number: `0323100010326000013`
+- preset: `Mac mini: локальная LLM + Qwen3 embeddings`
+- mode: `fast / Быстрый`
 
-## Порядок чтения документации
+## Подробные инструкции
 
-1. [macmini_runtime_checklist.md](macmini_runtime_checklist.md) — что проверить перед запуском
-2. [manual_demo_runbook.md](manual_demo_runbook.md) — пошаговый прогон на 5–7 минут
-3. [customer_demo_script.md](customer_demo_script.md) — скрипт разговора с заказчиком
-4. [demo_limitations.md](demo_limitations.md) — что не надо обещать
-5. [troubleshooting.md](troubleshooting.md) — что делать, если что-то пошло не так
-6. [next_mvp_steps.md](next_mvp_steps.md) — план следующего спринта
+1. [manual_demo_runbook.md](manual_demo_runbook.md) — пошаговый ручной прогон.
+2. [customer_demo_script.md](customer_demo_script.md) — готовый сценарий разговора на 5–7 минут.
+3. [macmini_runtime_checklist.md](macmini_runtime_checklist.md) — быстрая проверка перед созвоном.
+4. [troubleshooting.md](troubleshooting.md) — что делать, если что-то пошло не так.
+5. [demo_limitations.md](demo_limitations.md) — как честно объяснять ограничения.
+6. [customer_demo_boundaries.md](customer_demo_boundaries.md) — что показываем и чего не обещаем.
+7. [client_onepager.md](client_onepager.md) — one-pager после звонка.
