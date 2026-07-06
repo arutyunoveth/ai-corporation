@@ -2472,8 +2472,9 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
             f"- Номер извещения: {metadata.get('notice_number') or metadata.get('procurement_id')}\n"
             f"- Заказчик: {metadata.get('customer_name')}\n"
             f"- Закон: {metadata.get('law') or procurement.get('category') or 'не указан'}\n"
-            f"- НМЦК: {procurement.get('initial_price') or 'не указана'} {procurement.get('currency') or ''}\n"
+            f"- НМЦК: {procurement.get('initial_price') or 'не указана'} {procurement.get('currency') or '₽'}\n"
             f"- Срок подачи: {metadata.get('deadline') or 'не указан'}\n"
+            f"- Источник сведений: {procurement.get('structured_source_label') or metadata.get('notice_source_label') or 'карточка ЕИС'}\n"
             f"- Ссылка на источник: {metadata.get('procurement_url')}\n"
             f"- Статус скачивания: {metadata.get('attachments_status')}\n"
             f"- Ручная загрузка требовалась: {'да' if metadata.get('manual_upload_required') else 'нет'}\n"
@@ -2542,6 +2543,17 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
     def format_value(value: Any, *, fallback: str = "не указано") -> str:
         return fallback if is_missing(value) else str(value).strip()
 
+    def format_date_ru(value: Any) -> str:
+        text = str(value).strip() if value else ""
+        import re
+        iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", text)
+        if iso_match:
+            return f"{iso_match.group(3)}.{iso_match.group(2)}.{iso_match.group(1)}"
+        rus_match = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", text)
+        if rus_match:
+            return text
+        return text
+
     def format_price(amount: Any, currency: Any) -> str:
         if amount in (None, ""):
             return "не указана"
@@ -2550,6 +2562,8 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
         else:
             amount_text = str(amount)
         currency_text = str(currency).strip() if currency else ""
+        if not currency_text:
+            currency_text = "₽"
         return f"{amount_text} {currency_text}".strip()
 
     def build_archive_button_html(run_id: str, archive_available: bool) -> str:
@@ -2622,9 +2636,11 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
         else html.escape(notice_number)
     )
     publication_update = format_publication_update(
-        metadata.get("publication_date") or procurement.get("publication_date"),
-        metadata.get("updated_date") or procurement.get("updated_date"),
+        format_date_ru(metadata.get("publication_date") or procurement.get("publication_date")),
+        format_date_ru(metadata.get("updated_date") or procurement.get("updated_date")),
     )
+    deadline_ru = format_date_ru(metadata.get("deadline") or procurement.get("deadline"))
+    delivery_term_ru = format_date_ru(procurement.get("delivery_term"))
     downloaded_files_count = int(metadata.get("downloaded_files_count", len(files)))
     archive_available = (get_demo_run_input_dir(str(metadata.get("run_id"))) / "documentation-archive.zip").is_file()
     archive_button_html = build_archive_button_html(str(metadata.get("run_id")), archive_available)
@@ -2759,7 +2775,9 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
               <div class="metric"><span class="metric-label">Заказчик</span><span class="metric-value">{html.escape(format_value(metadata.get('customer_name') or procurement.get('customer_name')))}</span></div>
               <div class="metric"><span class="metric-label">НМЦК</span><span class="metric-value">{html.escape(format_price(procurement.get('initial_price'), procurement.get('currency')))}</span></div>
               <div class="metric"><span class="metric-label">Дата публикации / обновления</span><span class="metric-value">{html.escape(publication_update)}</span></div>
-              <div class="metric"><span class="metric-label">Срок подачи</span><span class="metric-value">{html.escape(format_value(metadata.get('deadline') or procurement.get('deadline')))}</span></div>
+              <div class="metric"><span class="metric-label">Срок подачи</span><span class="metric-value">{html.escape(deadline_ru or 'не указан')}</span></div>
+              <div class="metric"><span class="metric-label">Срок поставки</span><span class="metric-value">{html.escape(delivery_term_ru or 'не указан')}</span></div>
+              <div class="metric"><span class="metric-label">Источник сведений</span><span class="metric-value">{html.escape(procurement.get('structured_source_label') or metadata.get('notice_source_label') or 'карточка ЕИС')}</span></div>
               <div class="metric"><span class="metric-label">Статус подключения</span><span class="metric-value">{html.escape("Документы получены через ЕИС" if metadata.get("procurement_source") else "Документы загружены вручную")}</span></div>
               <div class="metric"><span class="metric-label">Скачано документов</span><span class="metric-value">{downloaded_files_count}</span></div>
             </div>
@@ -2923,14 +2941,44 @@ def _extract_updated_date_from_text(*texts: str | None) -> str | None:
 def _enrich_procurement_metadata_from_documents(
     metadata: dict[str, Any],
     *,
+    documents: list[AnalyzedDocument] | None = None,
     combined_text: str | None = None,
     notice_text: str | None,
     technical_spec_text: str | None,
     contract_draft_text: str | None,
 ) -> dict[str, Any]:
+    from src.modules.tender_operator_agent_demo.eis_notice_parser import (
+        apply_structured_metadata_to_procurement,
+        extract_notice_metadata,
+        merge_structured_metadata,
+    )
+
     procurement = dict(metadata.get("procurement") or {})
+
+    eis_notice_meta: dict[str, Any] = {}
+    if documents:
+        for doc in documents:
+            if doc.role == "notice" and doc.extension == ".xml" and doc.raw_content:
+                raw_text = doc.raw_content.decode("utf-8", errors="replace")
+                parsed = extract_notice_metadata(raw_text)
+                if parsed.get("_has_notice_data"):
+                    eis_notice_meta = parsed
+                    metadata["notice_source_label"] = parsed.get("source_label", "электронное извещение ЕИС")
+                    break
+
+    card_meta = {
+        "nmck": procurement.get("initial_price"),
+        "publication_date": procurement.get("publication_date"),
+        "submission_deadline": procurement.get("deadline"),
+        "delivery_term": procurement.get("delivery_term"),
+        "customer_name": procurement.get("customer_name"),
+        "procedure_type": procurement.get("procedure_type"),
+    }
+
+    doc_meta: dict[str, Any] = {}
     customer_candidate = _extract_customer_name_from_text(combined_text, notice_text, contract_draft_text, technical_spec_text)
     if customer_candidate:
+        doc_meta["customer_name"] = customer_candidate
         if metadata.get("mode") == "procurement_search_intake" or _is_missing_metadata_value(metadata.get("customer_name")):
             metadata["customer_name"] = customer_candidate
         if metadata.get("mode") == "procurement_search_intake" or _is_missing_metadata_value(procurement.get("customer_name")):
@@ -2941,6 +2989,17 @@ def _enrich_procurement_metadata_from_documents(
         if updated_date:
             metadata["updated_date"] = updated_date
             procurement["updated_date"] = updated_date
+
+    structured = merge_structured_metadata(eis_notice_meta, card_meta, doc_meta)
+    apply_structured_metadata_to_procurement(procurement, structured)
+    metadata["_structured_metadata"] = structured
+
+    if eis_notice_meta.get("_has_notice_data"):
+        metadata["notice_source_label"] = eis_notice_meta.get("source_label", "электронное извещение ЕИС")
+        procurement["structured_source_label"] = metadata["notice_source_label"]
+    elif not procurement.get("structured_source_label"):
+        procurement["structured_source_label"] = "карточка ЕИС"
+        metadata["notice_source_label"] = "карточка ЕИС"
 
     if procurement:
         metadata["procurement"] = procurement
@@ -2982,9 +3041,16 @@ def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
         if procurement_url and notice_number.strip() and notice_number != "не указано"
         else html.escape(notice_number)
     )
-    publication_date = str(metadata.get("publication_date") or procurement.get("publication_date") or "не указано")
-    updated_date = str(metadata.get("updated_date") or procurement.get("updated_date") or "").strip()
+    import re as _re
+    def _format_d(v: Any) -> str:
+        t = str(v).strip() if v else ""
+        m = _re.match(r"(\d{4})-(\d{2})-(\d{2})", t)
+        return f"{m.group(3)}.{m.group(2)}.{m.group(1)}" if m else t
+    publication_date = _format_d(metadata.get("publication_date") or procurement.get("publication_date") or "не указано")
+    updated_date = _format_d(metadata.get("updated_date") or procurement.get("updated_date") or "").strip()
     publication_update = f"{publication_date} / {updated_date}" if updated_date and updated_date != publication_date else publication_date
+    deadline_ru = _format_d(metadata.get("deadline") or procurement.get("deadline"))
+    source_label = html.escape(procurement.get("structured_source_label") or metadata.get("notice_source_label") or "карточка ЕИС")
     return f"""
     <html lang="ru">
       <head>
@@ -3015,9 +3081,10 @@ def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
               <div class="metric"><span class="metric-label">Номер извещения</span><span class="metric-value">{notice_number_html}</span></div>
               <div class="metric"><span class="metric-label">Категория закупки</span><span class="metric-value">{html.escape(str(metadata.get("law") or procurement.get("category") or "не указана"))}</span></div>
               <div class="metric"><span class="metric-label">Заказчик</span><span class="metric-value">{html.escape(str(metadata.get("customer_name") or procurement.get("customer_name") or "не указан"))}</span></div>
-              <div class="metric"><span class="metric-label">НМЦК</span><span class="metric-value">{html.escape(str(procurement.get("initial_price") or "не указана"))} {html.escape(str(procurement.get("currency") or ""))}</span></div>
+              <div class="metric"><span class="metric-label">НМЦК</span><span class="metric-value">{html.escape(str(procurement.get("initial_price") or "не указана"))} {html.escape(str(procurement.get("currency") or "₽"))}</span></div>
               <div class="metric"><span class="metric-label">Дата публикации / обновления</span><span class="metric-value">{html.escape(publication_update)}</span></div>
-              <div class="metric"><span class="metric-label">Срок подачи</span><span class="metric-value">{html.escape(str(metadata.get("deadline") or procurement.get("deadline") or "не указан"))}</span></div>
+              <div class="metric"><span class="metric-label">Срок подачи</span><span class="metric-value">{html.escape(deadline_ru or "не указан")}</span></div>
+              <div class="metric"><span class="metric-label">Источник сведений</span><span class="metric-value">{source_label}</span></div>
               <div class="metric"><span class="metric-label">Статус подключения</span><span class="metric-value">Документы получены через ЕИС</span></div>
               <div class="metric"><span class="metric-label">Скачано документов</span><span class="metric-value">{html.escape(str(metadata.get("downloaded_files_count", len(metadata.get("files", [])))))}</span></div>
             </div>
@@ -3078,6 +3145,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         economics_inputs = metadata.get("economics_inputs", {})
         metadata = _enrich_procurement_metadata_from_documents(
             metadata,
+            documents=documents,
             combined_text=combined_text,
             notice_text=notice_text,
             technical_spec_text=technical_spec_text,
@@ -3093,6 +3161,12 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             f"Скоринг документов выполнен: найдено {len(doc_relevance.get('document_matched_terms', []))} совпадений.",
             {"document_score": doc_relevance.get("document_score")},
         )
+
+        from src.modules.tender_operator_agent_demo.eis_notice_parser import build_notice_priority_prompt_section
+        procurement = metadata.get("procurement", {})
+        priority_section = build_notice_priority_prompt_section(procurement)
+        if priority_section and notice_text:
+            notice_text = priority_section + "\n\n" + notice_text
 
         core_complete = bool(technical_spec_text and contract_draft_text and notice_text)
         if not technical_spec_text and combined_text:

@@ -125,6 +125,32 @@ def test_tender_operator_console_history_report_button_avoids_broken_inline_js()
     assert "handleOpenHistoryReport(''" not in page
 
 
+def test_tender_operator_wizard_page_header(client):
+    response = client.get("/demo/tender-agent/wizard")
+    assert response.status_code == 200
+    html = response.text
+    assert "Поиск и анализ закупки" in html
+    assert "Прогон тендера через формы" not in html
+    assert ".md" not in html
+    assert "Агент скачает доступные документы" in html
+
+
+def test_tender_operator_wizard_date_filters_empty(client):
+    response = client.get("/demo/tender-agent/wizard")
+    html = response.text
+    assert "search_date_from" in html
+    assert "placeholder=\"дд.мм.гггг\"" in html
+    assert "mm/dd/yyyy" not in html.lower()
+
+
+def test_tender_operator_wizard_nmck_format(client):
+    response = client.get("/demo/tender-agent/wizard")
+    html = response.text
+    assert "НМЦК: от, ₽" in html
+    assert "НМЦК: до, ₽" in html
+    assert "placeholder=\"1 000 000\"" in html
+
+
 def test_tender_operator_console_contains_background_job_polling():
     page = render_tender_operator_console_html()
 

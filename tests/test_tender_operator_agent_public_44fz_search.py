@@ -142,6 +142,40 @@ def test_build_search_url_max_results_minimum():
     assert "recordsPerPage=1" in url
 
 
+def test_normalize_params_omits_empty_dates():
+    params = normalize_44fz_search_params(query="тест", date_from="", date_to="")
+    assert "publishDateFrom" not in params
+    assert "publishDateTo" not in params
+
+
+def test_normalize_params_omits_none_dates():
+    params = normalize_44fz_search_params(query="тест", date_from=None, date_to=None)
+    assert "publishDateFrom" not in params
+    assert "publishDateTo" not in params
+
+
+def test_normalize_params_price_from_normalized():
+    params = normalize_44fz_search_params(query="тест", price_from=5000000)
+    assert params.get("priceFromGeneral") == "5000000"
+
+
+def test_normalize_params_price_from_zero():
+    params = normalize_44fz_search_params(query="тест", price_from=0)
+    assert "priceFromGeneral" not in params
+
+
+def test_build_search_url_no_dates():
+    url = build_public_eis_search_url("кабель")
+    assert "publishDateFrom" not in url
+    assert "publishDateTo" not in url
+
+
+def test_build_search_url_with_russian_format_date():
+    url = build_public_eis_search_url("кабель", date_from="01.07.2026", date_to="06.07.2026")
+    assert "publishDateFrom=01.07.2026" in url
+    assert "publishDateTo=06.07.2026" in url
+
+
 def test_source_urls_available(client):
     response = client.get("/api/demo/tender-agent/procurement/sources")
     assert response.status_code == 200

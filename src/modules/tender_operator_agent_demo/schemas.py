@@ -264,6 +264,12 @@ class SearchResultHandoffRequest(APIModel):
     source_url: str | None = None
     title: str | None = None
     customer_name: str | None = None
+    initial_price: float | None = None
+    publication_date: str | None = None
+    deadline: str | None = None
+    currency: str | None = None
+    status: str | None = None
+    procedure_type: str | None = None
     download_archive: bool = True
     analyze_after_download: bool = True
 

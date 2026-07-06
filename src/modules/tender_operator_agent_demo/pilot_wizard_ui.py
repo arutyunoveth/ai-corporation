@@ -189,6 +189,24 @@ def render_tender_operator_pilot_wizard_html() -> str:
             font-size: 13px;
             line-height: 1.45;
           }
+          .input-group {
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            background: rgba(255,255,255,0.06);
+          }
+          .input-group input {
+            border: none;
+            background: none;
+            border-radius: 16px 0 0 16px;
+          }
+          .input-group .input-currency {
+            padding: 13px 14px 13px 0;
+            color: var(--muted);
+            font-size: 15px;
+            white-space: nowrap;
+          }
           input, textarea, select {
             width: 100%;
             border: 1px solid rgba(255,255,255,0.1);
@@ -624,9 +642,9 @@ def render_tender_operator_pilot_wizard_html() -> str:
             </div>
             <div class="hero-top">
               <div class="hero-copy">
-                <h1>Прогон тендера через формы, а не через `.md`</h1>
+                <h1>Поиск и анализ закупки</h1>
                 <p class="subtitle">
-                  Найдите закупку по фильтрам или вставьте ссылку ЕИС. Обработка запускается прямо из карточки результата поиска.
+                  Найдите закупку в ЕИС, выберите подходящую карточку и запустите обработку. Агент скачает доступные документы, извещение и подготовит предварительный отчёт с источниками.
                 </p>
                 <div class="hero-badges">
                   <span class="badge">44-ФЗ, 223-ФЗ и капремонт</span>
@@ -708,29 +726,29 @@ def render_tender_operator_pilot_wizard_html() -> str:
                             </label>
                             <label>
                               <span class="label-title">Дата публикации: от</span>
-                              <input name="search_date_from" type="date" />
+                              <input name="search_date_from" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                             <label>
                               <span class="label-title">Дата публикации: до</span>
-                              <input name="search_date_to" type="date" />
+                              <input name="search_date_to" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                           </div>
                           <div class="search-toolbar-row tertiary">
                             <label>
                               <span class="label-title">Срок подачи: от</span>
-                              <input name="search_deadline_from" type="date" />
+                              <input name="search_deadline_from" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                             <label>
                               <span class="label-title">Срок подачи: до</span>
-                              <input name="search_deadline_to" type="date" />
+                              <input name="search_deadline_to" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                             <label>
-                              <span class="label-title">НМЦК: от</span>
-                              <input name="search_price_from" type="number" min="0" step="1" placeholder="Например: 500000" />
+                              <span class="label-title">НМЦК: от, ₽</span>
+                              <input name="search_price_from" type="text" inputmode="numeric" placeholder="1 000 000" autocomplete="off" />
                             </label>
                             <label>
-                              <span class="label-title">НМЦК: до</span>
-                              <input name="search_price_to" type="number" min="0" step="1" placeholder="Например: 5000000" />
+                              <span class="label-title">НМЦК: до, ₽</span>
+                              <input name="search_price_to" type="text" inputmode="numeric" placeholder="5 000 000" autocomplete="off" />
                             </label>
                           </div>
                         </div>
@@ -904,6 +922,40 @@ def render_tender_operator_pilot_wizard_html() -> str:
             return field ? field.value.trim() : '';
           }
 
+          function normalizeDateRus(value) {
+            const cleaned = value.replace(/[^0-9.]/g, '');
+            const match = cleaned.match(/^(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})$/);
+            if (!match) return null;
+            const d = String(match[1]).padStart(2, '0');
+            const m = String(match[2]).padStart(2, '0');
+            const y = match[3];
+            return `${y}-${m}-${d}`;
+          }
+
+          function isValidDateRus(value) {
+            if (!value) return true;
+            return normalizeDateRus(value) !== null;
+          }
+
+          function formatDateRus(isoStr) {
+            if (!isoStr) return '';
+            const match = String(isoStr).match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+            if (match) return `${match[3]}.${match[2]}.${match[1]}`;
+            const rusMatch = String(isoStr).match(/^(\\d{2})\.(\\d{2})\.(\\d{4})/);
+            if (rusMatch) return isoStr;
+            return isoStr;
+          }
+
+          function formatPriceInput(value) {
+            const cleaned = value.replace(/[^\\d]/g, '');
+            if (!cleaned) return '';
+            return cleaned.replace(/\\B(?=(\\d{3})+(?!\\d))/g, ' ');
+          }
+
+          function normalizePrice(value) {
+            return value.replace(/\s/g, '');
+          }
+
           function hasManualFiles() {
             return ['notice-files', 'technical-files', 'contract-files', 'quote-files', 'supporting-files']
               .some((inputId) => collectFiles(inputId).length > 0);
@@ -998,6 +1050,12 @@ def render_tender_operator_pilot_wizard_html() -> str:
               source_url: procurementUrl,
               title: card?.title || null,
               customer_name: card?.customer_name || null,
+              initial_price: card?.initial_price ?? null,
+              publication_date: card?.publication_date || null,
+              deadline: card?.deadline || null,
+              currency: card?.currency || null,
+              status: card?.status || null,
+              procedure_type: card?.procedure_type || null,
               download_archive: true,
               analyze_after_download: false,
             };
@@ -1025,7 +1083,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             if (Number.isNaN(numeric)) {
               return escapeHtml(String(value));
             }
-            return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(numeric) + ' руб.';
+            return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(numeric) + ' ₽';
           }
 
           function renderSelectedProcurement(card) {
@@ -1035,6 +1093,9 @@ def render_tender_operator_pilot_wizard_html() -> str:
               node.innerHTML = '';
               return;
             }
+            const nmck = card.initial_price != null ? formatMoney(card.initial_price) : null;
+            const pubDate = card.publication_date ? formatDateRus(card.publication_date) : null;
+            const deadline = card.deadline ? formatDateRus(card.deadline) : null;
             node.style.display = 'block';
             node.innerHTML = `
               <strong>Выбрана закупка для прогона</strong>
@@ -1044,6 +1105,11 @@ def render_tender_operator_pilot_wizard_html() -> str:
                 <span class="search-badge">${escapeHtml(card.category || lawLabel(card.law || '44fz'))}</span>
                 ${card.procedure_type ? `<span class="search-badge">${escapeHtml(card.procedure_type)}</span>` : ''}
                 ${card.status ? `<span class="search-badge">${escapeHtml(card.status)}</span>` : ''}
+              </div>
+              <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">
+                ${nmck ? `<span style="font-size:15px;font-weight:700">${escapeHtml(nmck)}</span>` : ''}
+                ${pubDate ? `<span style="font-size:13px;color:var(--muted)">📅 ${escapeHtml(pubDate)}</span>` : ''}
+                ${deadline ? `<span style="font-size:13px;color:var(--muted)">⏰ ${escapeHtml(deadline)}</span>` : ''}
               </div>
             `;
           }
@@ -1095,17 +1161,35 @@ def render_tender_operator_pilot_wizard_html() -> str:
             const dateTo = getTrimmedValue('search_date_to');
             const deadlineFrom = getTrimmedValue('search_deadline_from');
             const deadlineTo = getTrimmedValue('search_deadline_to');
-            const priceFrom = getTrimmedValue('search_price_from');
-            const priceTo = getTrimmedValue('search_price_to');
+            let priceFrom = getTrimmedValue('search_price_from');
+            let priceTo = getTrimmedValue('search_price_to');
             if (region) params.set('region', region);
             if (statusFilter) params.set('status_filter', statusFilter);
             if (procedureType) params.set('procedure_type', procedureType);
-            if (dateFrom) params.set('date_from', dateFrom);
-            if (dateTo) params.set('date_to', dateTo);
-            if (deadlineFrom) params.set('deadline_from', deadlineFrom);
-            if (deadlineTo) params.set('deadline_to', deadlineTo);
-            if (priceFrom) params.set('price_from', priceFrom);
-            if (priceTo) params.set('price_to', priceTo);
+            if (dateFrom) {
+              const nd = normalizeDateRus(dateFrom);
+              if (nd) params.set('date_from', nd);
+            }
+            if (dateTo) {
+              const nd = normalizeDateRus(dateTo);
+              if (nd) params.set('date_to', nd);
+            }
+            if (deadlineFrom) {
+              const nd = normalizeDateRus(deadlineFrom);
+              if (nd) params.set('deadline_from', nd);
+            }
+            if (deadlineTo) {
+              const nd = normalizeDateRus(deadlineTo);
+              if (nd) params.set('deadline_to', nd);
+            }
+            if (priceFrom) {
+              priceFrom = normalizePrice(priceFrom);
+              if (priceFrom) params.set('price_from', priceFrom);
+            }
+            if (priceTo) {
+              priceTo = normalizePrice(priceTo);
+              if (priceTo) params.set('price_to', priceTo);
+            }
             return params;
           }
 
@@ -1225,8 +1309,8 @@ def render_tender_operator_pilot_wizard_html() -> str:
                       </div>
                     </div>
                     <div class="search-card-meta">
-                      <div class="search-meta-item"><span class="metric-label">Дата публикации</span><span class="metric-value">${escapeHtml(card.publication_date || 'не указана')}</span></div>
-                      <div class="search-meta-item"><span class="metric-label">Срок подачи</span><span class="metric-value">${escapeHtml(card.deadline || 'не указан')}</span></div>
+                      <div class="search-meta-item"><span class="metric-label">Дата публикации</span><span class="metric-value">${escapeHtml(formatDateRus(card.publication_date) || 'не указана')}</span></div>
+                      <div class="search-meta-item"><span class="metric-label">Срок подачи</span><span class="metric-value">${escapeHtml(formatDateRus(card.deadline) || 'не указан')}</span></div>
                       <div class="search-meta-item"><span class="metric-label">Заказчик</span><span class="metric-value">${escapeHtml(card.customer_name || 'не указан')}</span></div>
                       <div class="search-meta-item"><span class="metric-label">Номер</span><span class="metric-value">${escapeHtml(card.notice_number || card.reestr_number || 'не указан')}</span></div>
                     </div>
@@ -1512,6 +1596,20 @@ def render_tender_operator_pilot_wizard_html() -> str:
             const searchResults = document.getElementById('search-results');
             searchResults.className = 'search-results empty';
             searchResults.textContent = 'Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.';
+          }
+
+          for (const name of ['search_price_from', 'search_price_to']) {
+            const field = document.querySelector(`[name="${name}"]`);
+            if (!field) continue;
+            field.addEventListener('input', function () {
+              const cursor = this.selectionStart;
+              const oldLen = this.value.length;
+              const raw = this.value.replace(/[^\\d]/g, '');
+              const formatted = formatPriceInput(raw);
+              this.value = formatted;
+              const newLen = formatted.length;
+              this.setSelectionRange(cursor + (newLen - oldLen), cursor + (newLen - oldLen));
+            });
           }
 
           document.getElementById('pilot-form').addEventListener('submit', processWizard);
