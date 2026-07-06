@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from src.tender_research.providers.public_44fz_search import (
     EIS_44FZ_HOST,
     EIS_44FZ_SEARCH_PATH,
@@ -33,6 +35,19 @@ def resolve_public_eis_stage_flag(status_filter: str | None) -> str | None:
     return PUBLIC_EIS_STAGE_FLAGS.get(status_filter.strip().lower())
 
 
+def _normalize_public_eis_date(value: str | None) -> str | None:
+    if not value or not value.strip():
+        return None
+    cleaned = value.strip()
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            parsed = datetime.strptime(cleaned, fmt)
+            return parsed.strftime("%d.%m.%Y")
+        except ValueError:
+            continue
+    return cleaned
+
+
 def _build_public_eis_search_params(
     *,
     query: str,
@@ -58,10 +73,12 @@ def _build_public_eis_search_params(
     if region and region.strip():
         params["regionDeleted"] = "false"
         params["region"] = region.strip()
-    if date_from:
-        params["publishDateFrom"] = date_from
-    if date_to:
-        params["publishDateTo"] = date_to
+    normalized_date_from = _normalize_public_eis_date(date_from)
+    normalized_date_to = _normalize_public_eis_date(date_to)
+    if normalized_date_from:
+        params["publishDateFrom"] = normalized_date_from
+    if normalized_date_to:
+        params["publishDateTo"] = normalized_date_to
     if price_from is not None:
         params["priceFromGeneral"] = str(price_from)
     if price_to is not None:

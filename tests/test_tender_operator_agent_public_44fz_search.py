@@ -45,8 +45,8 @@ def test_build_search_url_with_all_params():
     )
     assert "priceFromGeneral=1000000" in url
     assert "priceToGeneral=5000000" in url
-    assert "publishDateFrom=2026-01-01" in url
-    assert "publishDateTo=2026-06-30" in url
+    assert "publishDateFrom=01.01.2026" in url
+    assert "publishDateTo=30.06.2026" in url
     assert "region=%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0" in url
     assert "pageNumber=2" in url
     assert "recordsPerPage=20" in url
@@ -62,6 +62,13 @@ def test_resolve_public_eis_stage_flag_maps_known_values():
     assert resolve_public_eis_stage_flag("Подача заявок") == "af"
     assert resolve_public_eis_stage_flag("Работа комиссии") == "ca"
     assert resolve_public_eis_stage_flag("Закупка завершена") == "pc"
+
+
+def test_build_search_url_normalizes_iso_dates_for_eis():
+    url = build_public_eis_search_url("электротех", date_from="2026-07-01", date_to="2026-07-06")
+
+    assert "publishDateFrom=01.07.2026" in url
+    assert "publishDateTo=06.07.2026" in url
 
 
 def test_build_search_url_rejects_empty_query():
@@ -119,7 +126,7 @@ def test_normalize_params_with_all():
     )
     assert params["searchString"] == "тест"
     assert params["region"] == "СПб"
-    assert params["publishDateFrom"] == "2026-01-01"
+    assert params["publishDateFrom"] == "01.01.2026"
     assert params["priceFromGeneral"] == "1000.0"
     assert params["pageNumber"] == "3"
     assert params["recordsPerPage"] == "5"
