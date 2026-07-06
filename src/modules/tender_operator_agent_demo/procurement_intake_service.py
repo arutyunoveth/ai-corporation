@@ -186,6 +186,10 @@ def _create_public_html_run_from_search_result(
     source_url = (request.source_url or "").strip() or "https://zakupki.gov.ru/"
     page_context = _extract_public_page_context(source_url) if source_url else {}
     law_label = _law_label_for_run(normalized_law)
+    publication_date = request.publication_date or page_context.get("publication_date")
+    deadline = request.deadline or page_context.get("deadline")
+    initial_price = request.initial_price if request.initial_price is not None else page_context.get("initial_price")
+    currency = request.currency or page_context.get("currency") or "RUB"
     selected = ProcurementSearchResult(
         procurement_id=reestr_number,
         source=_source_for_public_law(normalized_law),
@@ -193,10 +197,10 @@ def _create_public_html_run_from_search_result(
         procurement_number=reestr_number,
         customer_name=(request.customer_name or "").strip() or page_context.get("customer_name") or "Не указан",
         category=law_label,
-        publication_date=page_context.get("publication_date"),
-        deadline=page_context.get("deadline"),
-        initial_price=page_context.get("initial_price"),
-        currency=page_context.get("currency") or "RUB",
+        publication_date=publication_date,
+        deadline=deadline,
+        initial_price=initial_price,
+        currency=currency,
         region=None,
         source_url=source_url,
         attachments_status="manual_upload_required",
@@ -231,9 +235,9 @@ def _create_public_html_run_from_search_result(
         "procurement_id": reestr_number,
         "procurement_url": source_url,
         "procurement_query": reestr_number,
-        "publication_date": selected.publication_date,
+        "publication_date": publication_date,
         "updated_date": page_context.get("updated_date"),
-        "deadline": selected.deadline,
+        "deadline": deadline,
         "attachments_status": "manual_upload_required",
         "downloaded_files_count": 0,
         "manual_upload_required": True,
@@ -672,9 +676,9 @@ def _apply_search_result_context(
     metadata["tender_title"] = title
     metadata["customer_name"] = customer_name
     metadata["procurement_url"] = source_url
-    metadata["publication_date"] = page_context.get("publication_date") or metadata.get("publication_date")
+    metadata["publication_date"] = request.publication_date or page_context.get("publication_date") or metadata.get("publication_date")
     metadata["updated_date"] = page_context.get("updated_date") or metadata.get("updated_date")
-    metadata["deadline"] = page_context.get("deadline") or metadata.get("deadline")
+    metadata["deadline"] = request.deadline or page_context.get("deadline") or metadata.get("deadline")
 
     procurement_payload["title"] = title
     procurement_payload["customer_name"] = customer_name
@@ -682,11 +686,14 @@ def _apply_search_result_context(
     procurement_payload["procurement_number"] = procurement_payload.get("procurement_number") or request.reestr_number.strip()
     procurement_payload["procurement_id"] = procurement_payload.get("procurement_id") or request.reestr_number.strip()
     procurement_payload["source"] = procurement_payload.get("source") or "zakupki_gov_ru_getdocs_ip"
-    procurement_payload["publication_date"] = page_context.get("publication_date") or procurement_payload.get("publication_date")
+    procurement_payload["publication_date"] = request.publication_date or page_context.get("publication_date") or procurement_payload.get("publication_date")
     procurement_payload["updated_date"] = page_context.get("updated_date") or procurement_payload.get("updated_date")
-    procurement_payload["deadline"] = page_context.get("deadline") or procurement_payload.get("deadline")
-    procurement_payload["initial_price"] = page_context.get("initial_price") or procurement_payload.get("initial_price")
-    procurement_payload["currency"] = page_context.get("currency") or procurement_payload.get("currency")
+    procurement_payload["deadline"] = request.deadline or page_context.get("deadline") or procurement_payload.get("deadline")
+    procurement_payload["initial_price"] = request.initial_price if request.initial_price is not None else (page_context.get("initial_price") or procurement_payload.get("initial_price"))
+    procurement_payload["currency"] = request.currency or page_context.get("currency") or procurement_payload.get("currency")
+    procurement_payload["status"] = request.status or procurement_payload.get("status")
+    procurement_payload["procedure_type"] = request.procedure_type or procurement_payload.get("procedure_type")
+    procurement_payload["structured_source_label"] = "карточка ЕИС"
     metadata["procurement"] = procurement_payload
 
     save_demo_run_metadata(run_id, metadata)

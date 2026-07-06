@@ -79,9 +79,9 @@ def _build_public_eis_search_params(
         params["publishDateFrom"] = normalized_date_from
     if normalized_date_to:
         params["publishDateTo"] = normalized_date_to
-    if price_from is not None:
+    if price_from is not None and price_from > 0:
         params["priceFromGeneral"] = str(price_from)
-    if price_to is not None:
+    if price_to is not None and price_to > 0:
         params["priceToGeneral"] = str(price_to)
     stage_flag = resolve_public_eis_stage_flag(status_filter)
     if stage_flag:

@@ -2,7 +2,8 @@ def test_pilot_wizard_page_renders_simple_form(client):
     response = client.get("/pilot/tender-agent")
 
     assert response.status_code == 200
-    assert "Прогон тендера через формы" in response.text
+    assert "Поиск и анализ закупки" in response.text
+    assert "Прогон тендера через формы" not in response.text
     assert "Ссылка на закупку в ЕИС или реестровый номер" in response.text
     assert "Поиск закупки по ключевым словам и фильтрам" in response.text
     assert "Расширенные фильтры" in response.text
@@ -42,3 +43,5 @@ def test_pilot_wizard_alias_renders(client):
     assert response.status_code == 200
     assert "Найдите закупку или вставьте ссылку / реестровый номер" in response.text
     assert "Найти закупки" in response.text
+    assert "дд.мм.гггг" in response.text
+    assert "НМЦК: от, ₽" in response.text
