@@ -37,6 +37,7 @@ from src.modules.tender_operator_agent_demo.procurement_intake_service import (
 )
 from src.modules.tender_operator_agent_demo.procurement_schemas import (
     ProcurementDetails,
+    PublicProcurementSearchResponse,
     ProcurementSearchRequest as ProcurementSearchRequestV2,
     ProcurementSearchResult as ProcurementSearchResultV2,
     ProcurementSourceStatus,
@@ -187,7 +188,7 @@ def get_tender_operator_public_search_url(
     return build_public_search_url(query=query, law=law, region=region, date_from=date_from, date_to=date_to)
 
 
-@router.post("/api/demo/tender-agent/procurement/public-44fz-search")
+@router.post("/api/demo/tender-agent/procurement/public-44fz-search", response_model=PublicProcurementSearchResponse)
 def search_tender_operator_public_44fz(
     query: str = "",
     law: str = "44fz",
@@ -200,6 +201,8 @@ def search_tender_operator_public_44fz(
     deadline_to: str | None = None,
     status_filter: str | None = None,
     procedure_type: str | None = None,
+    page: int = 1,
+    page_size: int = 10,
     max_results: int = 10,
 ):
     return search_public_44fz(
@@ -214,6 +217,8 @@ def search_tender_operator_public_44fz(
         deadline_to=deadline_to,
         status_filter=status_filter,
         procedure_type=procedure_type,
+        page=page,
+        page_size=page_size,
         max_results=max_results,
     )
 

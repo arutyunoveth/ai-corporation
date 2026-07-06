@@ -5,6 +5,7 @@ from src.modules.tender_operator_agent_demo.public_44fz_search import (
     build_public_eis_search_url,
     normalize_44fz_search_params,
     normalize_public_eis_law,
+    resolve_public_eis_stage_flag,
     validate_public_eis_url,
 )
 
@@ -39,14 +40,28 @@ def test_build_search_url_with_all_params():
         date_to="2026-06-30",
         price_from=1000000,
         price_to=5000000,
+        page=2,
         max_results=20,
     )
-    assert "priceFrom=1000000" in url
-    assert "priceTo=5000000" in url
+    assert "priceFromGeneral=1000000" in url
+    assert "priceToGeneral=5000000" in url
     assert "publishDateFrom=2026-01-01" in url
     assert "publishDateTo=2026-06-30" in url
     assert "region=%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0" in url
+    assert "pageNumber=2" in url
     assert "recordsPerPage=20" in url
+
+
+def test_build_search_url_includes_stage_flag():
+    url = build_public_eis_search_url("электротех", law="44fz", status_filter="Подача заявок", max_results=10)
+
+    assert "af=on" in url
+
+
+def test_resolve_public_eis_stage_flag_maps_known_values():
+    assert resolve_public_eis_stage_flag("Подача заявок") == "af"
+    assert resolve_public_eis_stage_flag("Работа комиссии") == "ca"
+    assert resolve_public_eis_stage_flag("Закупка завершена") == "pc"
 
 
 def test_build_search_url_rejects_empty_query():
@@ -99,12 +114,14 @@ def test_normalize_params_with_all():
         region="СПб",
         date_from="2026-01-01",
         price_from=1000.0,
+        page=3,
         max_results=5,
     )
     assert params["searchString"] == "тест"
     assert params["region"] == "СПб"
     assert params["publishDateFrom"] == "2026-01-01"
-    assert params["priceFrom"] == "1000.0"
+    assert params["priceFromGeneral"] == "1000.0"
+    assert params["pageNumber"] == "3"
     assert params["recordsPerPage"] == "5"
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from src.tender_research.providers.public_44fz_search import (
     MAX_RESPONSE_BYTES,
     PublicSearchStatus,
@@ -30,15 +32,51 @@ PublicTenderSearchPage = PublicTenderSearchPage
 Public44FzSearchProvider = Public44FzSearchProvider
 extract_reestr_number_from_44fz_card = _extract_reestr_from_card
 
+
+def extract_public_search_total_count(html_content: str) -> int | None:
+    if not html_content or not html_content.strip():
+        return None
+    csv_count_match = re.search(
+        r'downloadCsv\([^\)]*?,\s*["\'](?P<count>\d+)["\']\)',
+        html_content,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if csv_count_match:
+        return int(csv_count_match.group("count"))
+    match = re.search(
+        r'<div class="search-results__total">\s*(?P<content>.*?)\s*</div>',
+        html_content,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+    content = _strip_html(match.group("content")).replace("\xa0", " ").strip()
+    if not content:
+        return None
+    if "более" in content.lower():
+        return None
+    number_match = re.search(r'(\d[\d\s]*)', content)
+    if not number_match:
+        return None
+    digits = number_match.group(1).replace(" ", "")
+    return int(digits) if digits.isdigit() else None
+
 def classify_public_search_response(html_content: str) -> str:
     if not html_content or not html_content.strip():
         return PublicSearchStatus.EMPTY_RESULTS
+    if parse_44fz_search_results(html_content):
+        return PublicSearchStatus.PARSED
     lower = html_content.lower()
-    if any(marker in lower for marker in ("your browser does not support javascript", "ваш браузер не поддерживает javascript", "<noscript>", "включите javascript")):
+    if any(
+        marker in lower
+        for marker in (
+            "your browser does not support javascript",
+            "ваш браузер не поддерживает javascript",
+            "включите javascript",
+        )
+    ):
         return PublicSearchStatus.JS_HEAVY
     classified = _classify_search_html(html_content)
-    if classified == "parsed":
-        return PublicSearchStatus.PARSED
     if classified == "empty_results":
         return PublicSearchStatus.EMPTY_RESULTS
     if classified == "captcha_or_blocked":
