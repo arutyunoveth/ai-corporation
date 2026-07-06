@@ -2573,6 +2573,12 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
             f'<a class="action-button primary" href="/api/demo/tender-agent/runs/{html.escape(run_id)}/archive/download">Скачать архив</a>'
         )
 
+    def build_export_buttons_html(run_id: str) -> str:
+        return (
+            f'<a class="action-button" href="/api/demo/tender-agent/runs/{html.escape(run_id)}/export/docx">Скачать DOCX</a>'
+            f'<a class="action-button" href="/api/demo/tender-agent/runs/{html.escape(run_id)}/export/pdf">Скачать PDF</a>'
+        )
+
     def build_document_list_html(run_id: str, files_payload: list[dict[str, Any]]) -> str:
         items: list[str] = []
         for item in files_payload:
@@ -2645,6 +2651,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
     archive_available = (get_demo_run_input_dir(str(metadata.get("run_id"))) / "documentation-archive.zip").is_file()
     archive_button_html = build_archive_button_html(str(metadata.get("run_id")), archive_available)
     document_toggle_html = build_document_toggle_html(str(metadata.get("run_id")), files)
+    export_buttons_html = build_export_buttons_html(str(metadata.get("run_id")))
 
     return f"""
     <html lang="ru">
@@ -2781,7 +2788,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
               <div class="metric"><span class="metric-label">Статус подключения</span><span class="metric-value">{html.escape("Документы получены через ЕИС" if metadata.get("procurement_source") else "Документы загружены вручную")}</span></div>
               <div class="metric"><span class="metric-label">Скачано документов</span><span class="metric-value">{downloaded_files_count}</span></div>
             </div>
-            <div class="downloads">{archive_button_html}{document_toggle_html}</div>
+            <div class="downloads">{export_buttons_html}{archive_button_html}{document_toggle_html}</div>
             {('<p class="muted">Документация не получена. Анализ невозможен до ручной загрузки файлов.</p>' if procurement_manual_required and not files else '')}
           </div>
 
