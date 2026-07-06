@@ -1109,27 +1109,47 @@ def render_tender_operator_pilot_wizard_html() -> str:
             return params;
           }
 
-          function buildSearchPageParams(page) {
+          function buildSearchPageParams(page, cursor = null) {
             const params = new URLSearchParams(lastSearchBaseParams ? lastSearchBaseParams.toString() : buildSearchBaseParams().toString());
             params.set('page', String(Math.max(1, Number(page) || 1)));
             params.set('page_size', String(SEARCH_PAGE_SIZE));
             params.set('max_results', String(SEARCH_PAGE_SIZE));
+            if (cursor) {
+              params.set('cursor', cursor);
+            }
+            if (lastSeenRegistryNumbers.length > 0) {
+              params.set('seen_registry_numbers', JSON.stringify(lastSeenRegistryNumbers));
+            }
             return params;
           }
+
+          let lastSeenRegistryNumbers = [];
 
           function searchResultsMeta(payload = {}, cards = []) {
             const page = Math.max(1, Number(payload.page) || 1);
             const pageSize = Math.max(1, Number(payload.page_size) || SEARCH_PAGE_SIZE);
             const returnedCount = Math.max(0, Number(payload.returned_count) || cards.length);
             const totalCount = Number.isInteger(payload.total_count) ? Number(payload.total_count) : null;
+            const exactTotal = payload.total_count_exact_for_displayed_filters === true;
+            const hasMore = payload.has_more === true;
             const startIndex = returnedCount ? ((page - 1) * pageSize) + 1 : 0;
             const endIndex = returnedCount ? startIndex + returnedCount - 1 : 0;
             let countLine = '';
-            if (totalCount !== null) {
+            if (exactTotal && totalCount !== null) {
               countLine = page === 1
                 ? `Показаны первые ${String(returnedCount)} карточек из ${String(totalCount)}.`
                 : `Показаны карточки ${String(startIndex)}-${String(endIndex)} из ${String(totalCount)}.`;
-            } else if (payload.has_more) {
+            } else if (totalCount !== null) {
+              if (payload.local_post_filter_applied) {
+                countLine = `По данным ЕИС найдено ${String(totalCount)}. Показаны первые ${String(returnedCount)} актуальных карточек после проверки.`;
+              } else {
+                countLine = `Показаны первые ${String(returnedCount)} карточек. Есть ещё результаты.`;
+              }
+            } else if (returnedCount < pageSize) {
+              countLine = hasMore
+                ? `Показаны ${String(returnedCount)} карточек. Есть ещё результаты.`
+                : `Показаны ${String(returnedCount)} карточек. Больше результатов не найдено.`;
+            } else if (hasMore) {
               countLine = page === 1
                 ? `Показаны первые ${String(returnedCount)} карточек. Есть ещё результаты.`
                 : `Показаны карточки ${String(startIndex)}-${String(endIndex)}. Есть ещё результаты.`;
@@ -1143,6 +1163,8 @@ def render_tender_operator_pilot_wizard_html() -> str:
             const cards = payload.cards || [];
             const eisSearchUrl = payload.eis_search_url || '';
             const outcome = String(payload.outcome || '');
+            const hasMore = payload.has_more === true;
+            const nextCursor = payload.next_cursor || null;
             const node = document.getElementById('search-results');
             if (!cards?.length) {
               node.className = 'search-results empty';
@@ -1160,6 +1182,12 @@ def render_tender_operator_pilot_wizard_html() -> str:
                 demoButton.addEventListener('click', useDemoProcurement);
               }
               return;
+            }
+            for (const card of cards) {
+              const regNum = card.notice_number || card.reestr_number || '';
+              if (regNum && !lastSeenRegistryNumbers.includes(regNum)) {
+                lastSeenRegistryNumbers.push(regNum);
+              }
             }
             node.className = 'search-results';
             const law = cards[0]?.law || getTrimmedValue('search_law') || '44fz';
@@ -1218,7 +1246,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
                 <div class="search-results-footer">
                   <div class="search-results-count">${escapeHtml(meta.countLine || '')}</div>
                   <div class="search-results-pagination">
-                    ${payload.has_more && payload.next_page ? `<button class="button" id="search-next-page-button" type="button">Показать следующие 10</button>` : ''}
+                    ${hasMore && nextCursor ? `<button class="button" id="search-next-page-button" type="button">Показать следующие 10</button>` : ''}
                   </div>
                 </div>
               </div>
@@ -1228,13 +1256,14 @@ def render_tender_operator_pilot_wizard_html() -> str:
             }
             const nextPageButton = document.getElementById('search-next-page-button');
             if (nextPageButton) {
-              nextPageButton.addEventListener('click', () => loadNextSearchPage(payload.next_page));
+              nextPageButton.addEventListener('click', () => loadNextSearchPage(nextCursor));
             }
           }
 
-          async function runSearchPage(page = 1) {
-            const params = buildSearchPageParams(page);
-            setFlash(page > 1 ? `Загружаем страницу ${String(page)}…` : 'Ищем закупки по ключевым словам и фильтрам…', false, 'search-flash');
+          async function runSearchPage(page = 1, cursor = null) {
+            const params = buildSearchPageParams(page, cursor);
+            const label = cursor ? 'Загружаем следующую страницу…' : (page > 1 ? `Загружаем страницу ${String(page)}…` : 'Ищем закупки по ключевым словам и фильтрам…');
+            setFlash(label, false, 'search-flash');
             try {
               const payload = await fetchJson(`/api/demo/tender-agent/procurement/public-44fz-search?${params.toString()}`, {
                 method: 'POST',
@@ -1254,15 +1283,16 @@ def render_tender_operator_pilot_wizard_html() -> str:
               return;
             }
             lastSearchBaseParams = buildSearchBaseParams();
+            lastSeenRegistryNumbers = [];
             await runSearchPage(1);
           }
 
-          async function loadNextSearchPage(page) {
+          async function loadNextSearchPage(cursor) {
             if (!lastSearchBaseParams) {
               setFlash('Сначала выполните поиск с ключевыми словами.', true, 'search-flash');
               return;
             }
-            await runSearchPage(page);
+            await runSearchPage(1, cursor);
           }
 
           function useDemoProcurement() {
@@ -1307,6 +1337,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             }
             clearFlash('search-flash');
             lastSearchBaseParams = null;
+            lastSeenRegistryNumbers = [];
             const searchResults = document.getElementById('search-results');
             searchResults.className = 'search-results empty';
             searchResults.innerHTML = 'Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.';

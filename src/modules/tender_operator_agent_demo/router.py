@@ -204,7 +204,18 @@ def search_tender_operator_public_44fz(
     page: int = 1,
     page_size: int = 10,
     max_results: int = 10,
+    cursor: str | None = None,
+    seen_registry_numbers: str | None = None,
 ):
+    parsed_seen: list[str] = []
+    if seen_registry_numbers:
+        try:
+            import json
+            parsed_seen = json.loads(seen_registry_numbers)
+            if not isinstance(parsed_seen, list):
+                parsed_seen = []
+        except (json.JSONDecodeError, ValueError):
+            parsed_seen = []
     return search_public_44fz(
         query=query,
         law=law,
@@ -220,6 +231,8 @@ def search_tender_operator_public_44fz(
         page=page,
         page_size=page_size,
         max_results=max_results,
+        cursor=cursor,
+        seen_registry_numbers=parsed_seen,
     )
 
 

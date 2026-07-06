@@ -86,8 +86,15 @@ class PublicProcurementSearchResponse(APIModel):
     page_size: int = Field(default=10, ge=1)
     returned_count: int = Field(default=0, ge=0)
     total_count: int | None = Field(default=None, ge=0)
+    total_count_source: str | None = None
+    total_count_exact_for_displayed_filters: bool = False
+    raw_returned_count: int | None = Field(default=None, ge=0)
+    local_filtered_count: int = Field(default=0, ge=0)
+    local_post_filter_applied: bool = False
+    eis_pages_fetched: int = Field(default=1, ge=0)
     has_more: bool = False
     next_page: int | None = Field(default=None, ge=1)
+    next_cursor: str | None = None
     requested_limit: int | None = Field(default=None, ge=1)
     sort: str | None = None
     cards: list[dict[str, Any]] = Field(default_factory=list)
