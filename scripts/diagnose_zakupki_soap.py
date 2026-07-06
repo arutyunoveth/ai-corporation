@@ -5,10 +5,15 @@ import json
 import os
 import socket
 import ssl
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.modules.tender_operator_agent_demo.settings import ZakupkiSoapSettings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
