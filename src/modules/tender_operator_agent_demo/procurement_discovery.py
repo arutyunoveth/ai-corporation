@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 from pathlib import Path
 from datetime import date, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 from src.modules.tender_operator_agent_demo.procurement_sources import (
@@ -14,7 +16,9 @@ from src.modules.tender_operator_agent_demo.procurement_sources import (
 from src.modules.tender_operator_agent_demo.procurement_schemas import (
     ProcurementAttachment,
     ProcurementDetails,
+    PublicProcurementSearchResponse,
     ProcurementSearchRequest as ProcurementSearchRequestV2,
+    ProcurementSearchOutcome,
     ProcurementSearchResult as ProcurementSearchResultV2,
     ProcurementSourceStatus,
 )
@@ -23,15 +27,86 @@ from src.modules.tender_operator_agent_demo.schemas import ProcurementSearchResp
 from src.modules.tender_operator_agent_demo.supplier_profile import SupplierProfile
 from src.modules.tender_operator_agent_demo.public_44fz_parser import (
     Public44FzSearchStatus,
+    extract_public_search_total_count,
     fetch_public_44fz_search_page,
     parse_44fz_search_results,
 )
 from src.modules.tender_operator_agent_demo.public_44fz_search import (
     build_public_eis_search_url,
     normalize_public_eis_law,
+    resolve_public_eis_stage_flag,
 )
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSoapClient
+
+
+DEFAULT_SEARCH_PAGE_SIZE = 10
+MAX_BACKFILL_PAGES = 3
+
+
+def _encode_search_cursor(
+    query: str,
+    filters: dict[str, Any],
+    next_eis_page: int,
+    seen_registry_numbers: list[str],
+    page_size: int,
+    ui_page: int = 1,
+) -> str:
+    payload = {
+        "v": 1,
+        "q": query,
+        "f": filters,
+        "ep": next_eis_page,
+        "sn": seen_registry_numbers,
+        "ps": page_size,
+        "up": ui_page,
+    }
+    return base64.urlsafe_b64encode(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).decode("ascii")
+
+
+def _decode_search_cursor(raw: str) -> dict[str, Any] | None:
+    try:
+        decoded = base64.urlsafe_b64decode(raw.encode("ascii"))
+        payload = json.loads(decoded)
+        if not isinstance(payload, dict) or payload.get("v") != 1:
+            return None
+        return payload
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _build_cursor_filters(
+    region: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    price_from: float | None = None,
+    price_to: float | None = None,
+    status_filter: str | None = None,
+    procedure_type: str | None = None,
+    deadline_from: str | None = None,
+    deadline_to: str | None = None,
+    law: str = "44fz",
+) -> dict[str, Any]:
+    out: dict[str, Any] = {"law": law}
+    if region:
+        out["region"] = region
+    if date_from:
+        out["date_from"] = date_from
+    if date_to:
+        out["date_to"] = date_to
+    if price_from is not None:
+        out["price_from"] = price_from
+    if price_to is not None:
+        out["price_to"] = price_to
+    if status_filter:
+        out["status_filter"] = status_filter
+    if procedure_type:
+        out["procedure_type"] = procedure_type
+    if deadline_from:
+        out["deadline_from"] = deadline_from
+    if deadline_to:
+        out["deadline_to"] = deadline_to
+    return out
 
 
 def _diagnostics_dir() -> Path:
@@ -267,14 +342,18 @@ def search_procurements(
             raise ValueError(f"Unknown procurement source: {request.source}")
         if request.source == "demo_local":
             return _search_demo_local_v2(request)
+        source_status = sources[request.source]
+        if not source_status.configured:
+            raise RuntimeError(source_status.reason or "Источник поиска не настроен.")
+        if request.source == "zakupki_gov_ru_getdocs_ip":
+            raise RuntimeError("Источник ЕИС getDocsIP не поддерживает keyword search. Используйте поиск ЕИС или поиск по номеру закупки.")
         if request.source in {
             "public_eis_html_44fz",
             "public_eis_html_223fz",
             "public_eis_html_capital_repair",
-            "zakupki_gov_ru_getdocs_ip",
         }:
-            return []
-        return []
+            raise RuntimeError("Прямой JSON keyword search для публичного HTML-источника не реализован. Используйте endpoint public-44fz-search.")
+        raise RuntimeError("Выбранный режим поиска не поддерживается.")
 
     descriptors = get_procurement_source_descriptors()
     allowed_sources = {item.code: item for item in descriptors}
@@ -353,13 +432,48 @@ def search_public_44fz(
     deadline_to: str | None = None,
     status_filter: str | None = None,
     procedure_type: str | None = None,
+    page: int = 1,
+    page_size: int = 10,
     max_results: int = 10,
+    cursor: str | None = None,
+    seen_registry_numbers: list[str] | None = None,
 ) -> dict:
     normalized_law = normalize_public_eis_law(law)
-    needs_post_filters = any([deadline_from, deadline_to, status_filter, procedure_type])
-    fetch_limit = min(50, max(max_results * 5, 20)) if needs_post_filters else max_results
+    page_num = max(page, 1)
+    effective_page_size = min(max(page_size, 1), 50)
+    requested_limit = max_results if max_results else effective_page_size
+
+    status_filter_stage_flag = resolve_public_eis_stage_flag(status_filter)
+    local_status_filter = status_filter if status_filter_stage_flag is None else None
+    has_non_native_filter = any([region, deadline_from, deadline_to, local_status_filter, procedure_type])
+
+    cursor_filters = _build_cursor_filters(
+        region=region,
+        date_from=date_from,
+        date_to=date_to,
+        price_from=price_from,
+        price_to=price_to,
+        status_filter=status_filter,
+        procedure_type=procedure_type,
+        deadline_from=deadline_from,
+        deadline_to=deadline_to,
+        law=normalized_law,
+    )
+
+    seen: set[str] = set((seen_registry_numbers or []))
+    start_eis_page = page_num
+    next_eis_page = page_num
+
+    if cursor:
+        decoded = _decode_search_cursor(cursor)
+        if decoded:
+            start_eis_page = decoded.get("ep", 1)
+            next_eis_page = start_eis_page
+            seen = set(decoded.get("sn", []))
+            page_num = decoded.get("up", 1) + 1
+
     try:
-        url = build_public_eis_search_url(
+        first_url = build_public_eis_search_url(
             query=query,
             law=normalized_law,
             region=region,
@@ -367,44 +481,206 @@ def search_public_44fz(
             date_to=date_to,
             price_from=price_from,
             price_to=price_to,
-            max_results=fetch_limit,
+            status_filter=status_filter,
+            page=next_eis_page,
+            max_results=effective_page_size,
         )
     except ValueError as exc:
-        return {
-            "status": "validation_error",
-            "cards": [],
-            "eis_search_url": None,
-            "error": str(exc),
-            "parser_status": Public44FzSearchStatus.MANUAL_OPEN_REQUIRED,
-        }
+        return PublicProcurementSearchResponse(
+            status="validation_error",
+            outcome=ProcurementSearchOutcome.VALIDATION_ERROR,
+            query=query,
+            source=_public_source_from_law(normalized_law),
+            page=page_num,
+            page_size=effective_page_size,
+            returned_count=0,
+            total_count=None,
+            total_count_source=None,
+            total_count_exact_for_displayed_filters=False,
+            raw_returned_count=None,
+            local_filtered_count=0,
+            local_post_filter_applied=False,
+            eis_pages_fetched=0,
+            has_more=False,
+            next_page=None,
+            next_cursor=None,
+            requested_limit=requested_limit,
+            sort="publication_date_desc",
+            cards=[],
+            eis_search_url=None,
+            error=str(exc),
+            parser_status=Public44FzSearchStatus.MANUAL_OPEN_REQUIRED,
+            message="Поисковый запрос не прошёл валидацию. Исправьте параметры и повторите поиск.",
+            warnings=[],
+        ).model_dump(mode="json")
 
-    fetch_result = fetch_public_44fz_search_page(url)
+    first_fetch_url = first_url
+
+    def _build_error_response(status_val, outcome_val, msg, err=None, ps=None, url=first_fetch_url):
+        return PublicProcurementSearchResponse(
+            status=status_val,
+            outcome=outcome_val,
+            query=query,
+            source=_public_source_from_law(normalized_law),
+            page=page_num,
+            page_size=effective_page_size,
+            returned_count=0,
+            total_count=None,
+            total_count_source=None,
+            total_count_exact_for_displayed_filters=False,
+            raw_returned_count=None,
+            local_filtered_count=0,
+            local_post_filter_applied=False,
+            eis_pages_fetched=1 if ps else 0,
+            has_more=False,
+            next_page=None,
+            next_cursor=None,
+            requested_limit=requested_limit,
+            sort="publication_date_desc",
+            cards=[],
+            eis_search_url=url,
+            error=err,
+            parser_status=ps or status_val,
+            message=msg,
+            warnings=[],
+        ).model_dump(mode="json")
+
+    fetch_result = fetch_public_44fz_search_page(first_fetch_url)
     parser_status = fetch_result.get("status", Public44FzSearchStatus.NETWORK_ERROR)
 
-    if parser_status != Public44FzSearchStatus.PARSED or not fetch_result.get("html"):
-        return {
-            "status": parser_status,
-            "cards": [],
-            "eis_search_url": url,
-            "error": fetch_result.get("error"),
-            "parser_status": parser_status,
-        }
+    if parser_status == Public44FzSearchStatus.EMPTY_RESULTS:
+        return _build_error_response(
+            parser_status, ProcurementSearchOutcome.SUCCESS_EMPTY,
+            "Источник доступен, но по заданным фильтрам закупки не найдены.",
+            ps=parser_status,
+        )
 
-    cards = parse_44fz_search_results(fetch_result["html"])
-    cards = _filter_public_44fz_cards(
-        cards,
-        date_from=date_from,
-        date_to=date_to,
-        deadline_from=deadline_from,
-        deadline_to=deadline_to,
-        price_from=price_from,
-        price_to=price_to,
-        status_filter=status_filter,
-        procedure_type=procedure_type,
-    )
+    if parser_status != Public44FzSearchStatus.PARSED or not fetch_result.get("html"):
+        error_message = fetch_result.get("error")
+        outcome = ProcurementSearchOutcome.SOURCE_ERROR
+        message = "Поиск ЕИС завершился с ошибкой обработки ответа."
+        if parser_status in {
+            Public44FzSearchStatus.NETWORK_ERROR,
+            Public44FzSearchStatus.TIMEOUT,
+            Public44FzSearchStatus.BAD_GATEWAY,
+            Public44FzSearchStatus.BLOCKED,
+            Public44FzSearchStatus.CAPTCHA,
+            Public44FzSearchStatus.CAPTCHA_OR_BLOCKED,
+            Public44FzSearchStatus.JS_HEAVY,
+        }:
+            outcome = ProcurementSearchOutcome.SOURCE_UNAVAILABLE
+            message = "Публичный поиск ЕИС сейчас недоступен для автоматического чтения. Откройте выдачу в ЕИС или используйте демо-закупку."
+        elif parser_status == Public44FzSearchStatus.MANUAL_OPEN_REQUIRED:
+            outcome = ProcurementSearchOutcome.UNSUPPORTED_SEARCH_MODE
+            message = "Этот режим поиска не поддерживается автоматически. Откройте поиск в ЕИС вручную."
+        return _build_error_response(parser_status, outcome, message, err=error_message, ps=parser_status)
+
+    parsed_total_count = extract_public_search_total_count(fetch_result["html"])
+    total_count_source: str | None = None
+    if parsed_total_count is not None:
+        total_count_source = "eis_download_csv"
+
+    has_eis_total = parsed_total_count is not None
+
+    valid_cards: list[dict] = []
+    total_raw_count = 0
+    total_filtered_count = 0
+    pages_fetched = 0
+    eis_has_more = True
+    current_eis_page = next_eis_page
+
+    while len(valid_cards) < effective_page_size and pages_fetched < MAX_BACKFILL_PAGES and eis_has_more:
+        if pages_fetched == 0 and not cursor:
+            fetch_url = first_fetch_url
+            raw_html = fetch_result.get("html", "")
+        else:
+            fetch_url = build_public_eis_search_url(
+                query=query,
+                law=normalized_law,
+                region=region,
+                date_from=date_from,
+                date_to=date_to,
+                price_from=price_from,
+                price_to=price_to,
+                status_filter=status_filter,
+                page=current_eis_page,
+                max_results=effective_page_size,
+            )
+            page_fetch = fetch_public_44fz_search_page(fetch_url)
+            if page_fetch.get("status") != Public44FzSearchStatus.PARSED or not page_fetch.get("html"):
+                break
+            raw_html = page_fetch.get("html", "")
+
+        page_cards = parse_44fz_search_results(raw_html)
+        if not page_cards:
+            eis_has_more = False
+            break
+
+        total_raw_count += len(page_cards)
+
+        filtered = _filter_public_44fz_cards(
+            page_cards,
+            date_from=date_from,
+            date_to=date_to,
+            deadline_from=deadline_from,
+            deadline_to=deadline_to,
+            price_from=price_from,
+            price_to=price_to,
+            status_filter=local_status_filter,
+            procedure_type=procedure_type,
+        )
+        newly_filtered = len(page_cards) - len(filtered)
+        total_filtered_count += newly_filtered
+
+        for card in filtered:
+            reg_num = card.get("reestr_number") or card.get("notice_number") or ""
+            if reg_num and reg_num in seen:
+                continue
+            if reg_num:
+                seen.add(reg_num)
+            valid_cards.append(card)
+
+        pages_fetched += 1
+        current_eis_page += 1
+
+        if len(page_cards) < effective_page_size and not has_eis_total:
+            eis_has_more = False
+
+    is_backfill = pages_fetched > 1
+
+    if not valid_cards:
+        return PublicProcurementSearchResponse(
+            status=Public44FzSearchStatus.EMPTY_RESULTS,
+            outcome=ProcurementSearchOutcome.SUCCESS_EMPTY,
+            query=query,
+            source=_public_source_from_law(normalized_law),
+            page=page_num,
+            page_size=effective_page_size,
+            returned_count=0,
+            total_count=parsed_total_count,
+            total_count_source=total_count_source,
+            total_count_exact_for_displayed_filters=False,
+            raw_returned_count=total_raw_count,
+            local_filtered_count=total_filtered_count,
+            local_post_filter_applied=True,
+            eis_pages_fetched=pages_fetched,
+            has_more=False,
+            next_page=None,
+            next_cursor=None,
+            requested_limit=requested_limit,
+            sort="publication_date_desc",
+            cards=[],
+            eis_search_url=first_fetch_url,
+            error=None,
+            parser_status=Public44FzSearchStatus.PARSED,
+            message="Источник доступен, но после применения фильтров закупки не найдены.",
+            warnings=[],
+        ).model_dump(mode="json")
+
+    valid_cards = _sort_public_44fz_cards(valid_cards)
     profile = get_supplier_profile()
     scored_cards = []
-    for card in cards[:max_results]:
+    for card in valid_cards[:effective_page_size]:
         result = score_procurement_card(
             title=card.get("title", ""),
             initial_price=card.get("initial_price"),
@@ -419,13 +695,130 @@ def search_public_44fz(
         card_with_relevance["relevance"] = result.to_dict()
         scored_cards.append(card_with_relevance)
 
-    return {
-        "status": Public44FzSearchStatus.PARSED if cards else Public44FzSearchStatus.UNSUPPORTED_LAYOUT,
-        "cards": scored_cards,
-        "eis_search_url": url,
-        "error": None,
-        "parser_status": Public44FzSearchStatus.PARSED if cards else Public44FzSearchStatus.UNSUPPORTED_LAYOUT,
-    }
+    returned_count = len(scored_cards)
+    local_post_filter_applied = total_filtered_count > 0
+
+    total_count_exact_for_displayed_filters = False
+    if has_eis_total:
+        if not has_non_native_filter and not local_post_filter_applied:
+            total_count_exact_for_displayed_filters = True
+
+    eis_has_more_results = eis_has_more
+
+    has_more = False
+    if total_count_exact_for_displayed_filters and has_eis_total:
+        has_more = page_num * effective_page_size < parsed_total_count
+    elif eis_has_more_results:
+        has_more = True
+    elif not is_backfill and len(valid_cards) > effective_page_size:
+        has_more = True
+    elif is_backfill and (
+        eis_has_more_results or current_eis_page <= page_num + MAX_BACKFILL_PAGES
+    ):
+        has_more = True
+
+    next_cursor_val: str | None = None
+    if has_more:
+        next_cursor_val = _encode_search_cursor(
+            query=query,
+            filters=cursor_filters,
+            next_eis_page=current_eis_page,
+            seen_registry_numbers=sorted(seen),
+            page_size=effective_page_size,
+            ui_page=page_num,
+        )
+
+    summary_message = _build_search_message(
+        page_num=page_num,
+        page_size=effective_page_size,
+        returned_count=returned_count,
+        total_count=parsed_total_count,
+        total_count_exact=total_count_exact_for_displayed_filters,
+        has_more=has_more,
+        has_non_native_filter=has_non_native_filter,
+        local_post_filter_applied=local_post_filter_applied,
+    )
+
+    return PublicProcurementSearchResponse(
+        status=Public44FzSearchStatus.PARSED,
+        outcome=ProcurementSearchOutcome.SUCCESS_WITH_RESULTS,
+        query=query,
+        source=_public_source_from_law(normalized_law),
+        page=page_num,
+        page_size=effective_page_size,
+        returned_count=returned_count,
+        total_count=parsed_total_count,
+        total_count_source=total_count_source,
+        total_count_exact_for_displayed_filters=total_count_exact_for_displayed_filters,
+        raw_returned_count=total_raw_count,
+        local_filtered_count=total_filtered_count,
+        local_post_filter_applied=local_post_filter_applied,
+        eis_pages_fetched=pages_fetched,
+        has_more=has_more,
+        next_page=None,
+        next_cursor=next_cursor_val,
+        requested_limit=requested_limit,
+        sort="publication_date_desc",
+        cards=scored_cards,
+        eis_search_url=first_fetch_url,
+        error=None,
+        parser_status=Public44FzSearchStatus.PARSED,
+        message=summary_message,
+        warnings=[],
+    ).model_dump(mode="json")
+
+
+def _build_search_message(
+    *,
+    page_num: int,
+    page_size: int,
+    returned_count: int,
+    total_count: int | None,
+    total_count_exact: bool,
+    has_more: bool,
+    has_non_native_filter: bool,
+    local_post_filter_applied: bool,
+) -> str:
+    if returned_count == 0:
+        return "Источник доступен, но после применения фильтров закупки не найдены."
+
+    if total_count_exact and total_count is not None:
+        if page_num == 1 or page_num is None:
+            return f"Показаны первые {returned_count} карточек из {total_count}."
+        if page_num == 2:
+            return f"Показаны следующие {returned_count} карточек из {total_count}."
+        return f"Показаны карточки (страница {page_num}) из {total_count}."
+
+    if total_count is not None and not total_count_exact:
+        if has_non_native_filter:
+            return (
+                f"По данным ЕИС найдено {total_count}. "
+                f"Показаны первые {returned_count} карточек после уточнения."
+            )
+        if local_post_filter_applied:
+            return (
+                f"По данным ЕИС найдено {total_count}. "
+                f"Показаны первые {returned_count} актуальных карточек после проверки."
+            )
+        if page_num == 1 or page_num is None:
+            return f"Показаны первые {returned_count} карточек из {total_count}."
+        return f"Показаны следующие карточки. Всего найдено: {total_count}."
+
+    if returned_count < page_size:
+        if has_more:
+            return f"Показаны {returned_count} карточек. Есть ещё результаты."
+        return f"Показаны {returned_count} карточек. Больше результатов не найдено."
+
+    if page_num == 1 or page_num is None:
+        if has_more:
+            if local_post_filter_applied:
+                return f"Показаны первые {returned_count} актуальных карточек. Есть ещё результаты."
+            return f"Показаны первые {returned_count} карточек. Есть ещё результаты."
+        return f"Показаны первые {returned_count} карточек."
+
+    if has_more:
+        return f"Показаны следующие {returned_count} карточек. Есть ещё результаты."
+    return f"Показаны следующие {returned_count} карточек."
 
 
 def _parse_public_card_date(value: str | None) -> date | None:
@@ -438,6 +831,16 @@ def _parse_public_card_date(value: str | None) -> date | None:
         except ValueError:
             continue
     return None
+
+
+def _sort_public_44fz_cards(cards: list[dict]) -> list[dict]:
+    def sort_key(card: dict) -> tuple[int, int]:
+        parsed_date = _parse_public_card_date(card.get("publication_date"))
+        if parsed_date is None:
+            return (1, 0)
+        return (0, -parsed_date.toordinal())
+
+    return sorted(cards, key=sort_key)
 
 
 def _matches_public_card_date_range(value: str | None, date_from: str | None, date_to: str | None) -> bool:
@@ -461,6 +864,17 @@ def _matches_public_card_text(value: str | None, expected: str | None) -> bool:
     return needle in haystack
 
 
+def _matches_public_card_status_consistency(card: dict, *, today: date | None = None) -> bool:
+    status = (card.get("status") or "").strip().lower()
+    if "подача заявок" not in status:
+        return True
+    parsed_deadline = _parse_public_card_date(card.get("deadline"))
+    if parsed_deadline is None:
+        return True
+    current_day = today or date.today()
+    return parsed_deadline >= current_day
+
+
 def _filter_public_44fz_cards(
     cards: list[dict],
     *,
@@ -475,6 +889,8 @@ def _filter_public_44fz_cards(
 ) -> list[dict]:
     filtered: list[dict] = []
     for card in cards:
+        if not _matches_public_card_status_consistency(card):
+            continue
         if not _matches_public_card_date_range(card.get("publication_date"), date_from, date_to):
             continue
         if not _matches_public_card_date_range(card.get("deadline"), deadline_from, deadline_to):

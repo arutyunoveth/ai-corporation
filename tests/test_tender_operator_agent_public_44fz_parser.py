@@ -1,6 +1,7 @@
 from src.modules.tender_operator_agent_demo.public_44fz_parser import (
     Public44FzSearchStatus,
     classify_public_search_response,
+    extract_public_search_total_count,
     extract_reestr_number_from_44fz_card,
     parse_44fz_search_results,
 )
@@ -59,9 +60,44 @@ def test_classify_js_heavy_page():
     assert classify_public_search_response(html) == Public44FzSearchStatus.JS_HEAVY
 
 
+def test_classify_parsed_html_with_noscript_marker():
+    html = f"{SAMPLE_SEARCH_HTML}<noscript>Для корректной работы интерфейса включите JavaScript только в браузере.</noscript>"
+    assert classify_public_search_response(html) == Public44FzSearchStatus.PARSED
+
+
 def test_classify_unsupported_layout():
     html = "<html><body>Страница не содержит распознаваемых элементов поиска</body></html>"
     assert classify_public_search_response(html) == Public44FzSearchStatus.UNSUPPORTED_LAYOUT
+
+
+def test_extract_total_count_exact_value():
+    html = """
+    <div class="search-results__total">
+      1 234 записей
+    </div>
+    """
+    assert extract_public_search_total_count(html) == 1234
+
+
+def test_extract_total_count_ignores_more_than_phrase():
+    html = """
+    <div class="search-results__total">
+      более 150 000 записей
+    </div>
+    """
+    assert extract_public_search_total_count(html) is None
+
+
+def test_extract_total_count_prefers_hidden_download_csv_exact_value():
+    html = """
+    <a href="#" class="downLoad-search"
+       onclick="downloadCsv('?searchString=%D0%BA%D0%B0%D0%B1%D0%B5%D0%BB%D1%8C', '159715')">
+    </a>
+    <div class="search-results__total">
+      более 150 000 записей
+    </div>
+    """
+    assert extract_public_search_total_count(html) == 159715
 
 
 def test_parse_extracts_cards():

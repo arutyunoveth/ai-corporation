@@ -15,6 +15,13 @@ def test_acceptance_console_page_200_and_russian(client):
         assert tab in text
 
 
+def test_acceptance_wizard_page_contains_demo_procurement_fallback(client):
+    page = client.get("/demo/tender-agent/wizard")
+    assert page.status_code == 200
+    text = page.text
+    assert "Открыть демо-закупку 0323100010326000013" in text
+
+
 def test_acceptance_supplier_profile_endpoint(client):
     resp = client.get("/api/demo/tender-agent/supplier-profile")
     assert resp.status_code == 200
@@ -64,6 +71,17 @@ def test_acceptance_relevance_scoring_public_search(client):
     )
     assert resp.status_code == 200
     data = resp.json()
+    assert "outcome" in data
+    assert data["outcome"] in {
+        "success_with_results",
+        "success_empty",
+        "source_unavailable",
+        "source_error",
+        "unsupported_search_mode",
+        "validation_error",
+    }
+    for field in ("page", "page_size", "returned_count", "has_more", "sort"):
+        assert field in data
     if data.get("status") == "parsed" and data.get("cards"):
         for card in data["cards"]:
             rel = card.get("relevance")

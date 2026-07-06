@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import Field
@@ -30,6 +31,16 @@ class ProcurementSearchRequest(APIModel):
     price_from: float | None = None
     price_to: float | None = None
     max_results: int = Field(default=10, ge=1, le=50)
+
+
+class ProcurementSearchOutcome(StrEnum):
+    SUCCESS_WITH_RESULTS = "success_with_results"
+    SUCCESS_EMPTY = "success_empty"
+    SOURCE_UNAVAILABLE = "source_unavailable"
+    SOURCE_NOT_CONFIGURED = "source_not_configured"
+    SOURCE_ERROR = "source_error"
+    UNSUPPORTED_SEARCH_MODE = "unsupported_search_mode"
+    VALIDATION_ERROR = "validation_error"
 
 
 class ProcurementAttachment(APIModel):
@@ -63,6 +74,34 @@ class ProcurementSearchResult(APIModel):
     attachments_status: str = "unknown"
     can_download_attachments: bool = False
     requires_manual_upload: bool = True
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PublicProcurementSearchResponse(APIModel):
+    status: str
+    outcome: ProcurementSearchOutcome
+    query: str = ""
+    source: str = "public_eis_html_44fz"
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=10, ge=1)
+    returned_count: int = Field(default=0, ge=0)
+    total_count: int | None = Field(default=None, ge=0)
+    total_count_source: str | None = None
+    total_count_exact_for_displayed_filters: bool = False
+    raw_returned_count: int | None = Field(default=None, ge=0)
+    local_filtered_count: int = Field(default=0, ge=0)
+    local_post_filter_applied: bool = False
+    eis_pages_fetched: int = Field(default=1, ge=0)
+    has_more: bool = False
+    next_page: int | None = Field(default=None, ge=1)
+    next_cursor: str | None = None
+    requested_limit: int | None = Field(default=None, ge=1)
+    sort: str | None = None
+    cards: list[dict[str, Any]] = Field(default_factory=list)
+    eis_search_url: str | None = None
+    error: str | None = None
+    parser_status: str | None = None
+    message: str
     warnings: list[str] = Field(default_factory=list)
 
 

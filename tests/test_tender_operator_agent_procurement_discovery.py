@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from urllib.parse import unquote
 
 from src.modules.tender_operator_agent_demo.procurement_discovery import (
@@ -105,9 +106,8 @@ def test_public_search_url_is_built_for_capital_repair():
 
 
 def test_getdocs_source_returns_empty_results_in_search_mode():
-    results = search_procurements(ProcurementSearchRequest(source="zakupki_gov_ru_getdocs_ip", query="кабель"))
-
-    assert results == []
+    with pytest.raises(RuntimeError, match="не настроен|не поддерживает keyword search"):
+        search_procurements(ProcurementSearchRequest(source="zakupki_gov_ru_getdocs_ip", query="кабель"))
 
 
 def test_public_44fz_filter_helper_applies_status_procedure_and_deadline():
@@ -140,6 +140,40 @@ def test_public_44fz_filter_helper_applies_status_procedure_and_deadline():
 
     assert len(filtered) == 1
     assert filtered[0]["title"] == "Закупка 1"
+
+
+def test_public_44fz_filter_helper_drops_expired_submission_status(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 7, 6)
+
+    monkeypatch.setattr(discovery, "date", FixedDate)
+
+    cards = [
+        {
+            "title": "Просроченная закупка",
+            "status": "Подача заявок",
+            "procedure_type": "Электронный аукцион",
+            "publication_date": "01.07.2026",
+            "deadline": "05.07.2026",
+            "initial_price": 1000000.0,
+        },
+        {
+            "title": "Актуальная закупка",
+            "status": "Подача заявок",
+            "procedure_type": "Электронный аукцион",
+            "publication_date": "01.07.2026",
+            "deadline": "07.07.2026",
+            "initial_price": 1000000.0,
+        },
+    ]
+
+    filtered = _filter_public_44fz_cards(cards)
+
+    assert [card["title"] for card in filtered] == ["Актуальная закупка"]
 
 
 def test_public_44fz_search_uses_post_filters(monkeypatch):
@@ -200,3 +234,759 @@ def test_public_44fz_search_uses_post_filters(monkeypatch):
     assert result["cards"][0]["notice_number"] == "1"
     assert result["cards"][0]["law"] == "223fz"
     assert result["cards"][0]["source"] == "public_eis_html_223fz"
+
+
+def test_public_44fz_search_returns_success_empty_after_post_filters(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {"status": "parsed", "html": "<html></html>", "error": None},
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка 1",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "01.07.2026",
+                "deadline": "10.07.2026",
+                "status": "Закупка завершена",
+                "procedure_type": "Запрос котировок",
+                "source_url": "https://zakupki.gov.ru/epz/order/notice/zk20/view/common-info.html?regNumber=1",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        procedure_type="Электронный аукцион",
+        max_results=5,
+    )
+
+    assert result["status"] == "empty_results"
+    assert result["outcome"] == "success_empty"
+    assert result["cards"] == []
+    assert "не найдены" in result["message"]
+
+
+def test_public_44fz_search_returns_source_unavailable_for_js_heavy(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {"status": "js_heavy", "html": None, "error": None},
+    )
+
+    result = search_public_44fz(query="тест", law="44fz")
+
+    assert result["status"] == "js_heavy"
+    assert result["outcome"] == "source_unavailable"
+    assert result["cards"] == []
+    assert "недоступен" in result["message"]
+
+
+def test_public_44fz_search_backfill_fills_to_page_size(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    call_count: list[int] = []
+
+    def fake_fetch(url: str):
+        call_count.append(len(call_count) + 1)
+        page_num = call_count[-1]
+        if page_num == 1:
+            return {
+                "status": "parsed",
+                "html": '<a onclick="downloadCsv(\'?searchString=test\', \'100\')"></a>',
+                "error": None,
+            }
+        return {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'100\')"></a>',
+            "error": None,
+        }
+
+    monkeypatch.setattr(discovery, "fetch_public_44fz_search_page", fake_fetch)
+    cards_page1 = [
+        {
+            "title": f"Закупка {i}",
+            "notice_number": str(i),
+            "reestr_number": str(i),
+            "customer_name": "Заказчик",
+            "initial_price": 1000000.0,
+            "publication_date": "01.06.2026",
+            "deadline": "01.01.2020",
+            "status": "Подача заявок",
+            "procedure_type": "Электронный аукцион",
+            "source_url": f"https://zakupki.gov.ru/{i}",
+            "law": "44fz",
+            "warnings": [],
+        }
+        for i in range(1, 11)
+    ]
+
+    def fake_parse(html):
+        page_num = call_count[-1] if call_count else 1
+        cards = list(cards_page1)
+        if page_num == 2:
+            cards = [
+                {
+                    "title": f"Backfill {i}",
+                    "notice_number": f"b{i}",
+                    "reestr_number": f"b{i}",
+                    "customer_name": "Заказчик",
+                    "initial_price": 2000000.0,
+                    "publication_date": "06.07.2026",
+                    "deadline": "20.07.2026",
+                    "status": "Подача заявок",
+                    "procedure_type": "Электронный аукцион",
+                    "source_url": f"https://zakupki.gov.ru/b{i}",
+                    "law": "44fz",
+                    "warnings": [],
+                }
+                for i in range(1, 11)
+            ]
+        return cards
+
+    monkeypatch.setattr(discovery, "parse_44fz_search_results", fake_parse)
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert result["status"] == "parsed"
+    assert result["returned_count"] == 10
+    assert result["local_filtered_count"] >= 1
+    assert result["local_post_filter_applied"] is True
+    assert result["eis_pages_fetched"] >= 2
+    assert result["total_count"] == 100
+    assert result["total_count_exact_for_displayed_filters"] is False
+    assert result["total_count_source"] == "eis_download_csv"
+    assert result["raw_returned_count"] is not None
+    assert result["has_more"] is True
+    assert result["next_cursor"] is not None
+
+
+def test_public_44fz_search_backfill_limit_not_exceeded(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    call_count: list[int] = []
+
+    def fake_fetch(url: str):
+        call_count.append(len(call_count) + 1)
+        return {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'500\')"></a>',
+            "error": None,
+        }
+
+    monkeypatch.setattr(discovery, "fetch_public_44fz_search_page", fake_fetch)
+
+    original_filter = discovery._filter_public_44fz_cards
+
+    def restrictive_filter(cards, **kwargs):
+        filtered = original_filter(cards, **kwargs)
+        if filtered:
+            return filtered[:1]
+        return filtered
+
+    monkeypatch.setattr(discovery, "_filter_public_44fz_cards", restrictive_filter)
+
+    def fake_parse(html):
+        return [
+            {
+                "title": f"Закупка {i}",
+                "notice_number": str(i),
+                "reestr_number": str(i),
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": f"https://zakupki.gov.ru/{i}",
+                "law": "44fz",
+                "warnings": [],
+            }
+            for i in range(1, 11)
+        ]
+
+    monkeypatch.setattr(discovery, "parse_44fz_search_results", fake_parse)
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert result["status"] == "parsed"
+    assert result["returned_count"] <= 10
+    assert result["eis_pages_fetched"] <= 3
+
+
+def test_public_44fz_search_no_duplicates_with_cursor(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    fetch_call_index: list[int] = [0]
+
+    def fake_fetch(url: str):
+        fetch_call_index[0] += 1
+        return {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'50\')"></a>',
+            "error": None,
+        }
+
+    monkeypatch.setattr(discovery, "fetch_public_44fz_search_page", fake_fetch)
+
+    cards_page1 = [
+        {
+            "title": f"Page1 {i}",
+            "notice_number": str(i),
+            "reestr_number": str(i),
+            "customer_name": "Заказчик",
+            "initial_price": 1000000.0,
+            "publication_date": "06.07.2026",
+            "deadline": "12.07.2026",
+            "status": "Подача заявок",
+            "procedure_type": "Электронный аукцион",
+            "source_url": f"https://zakupki.gov.ru/{i}",
+            "law": "44fz",
+            "warnings": [],
+        }
+        for i in range(1, 11)
+    ]
+    cards_page2 = [
+        {
+            "title": f"Page2 {i}",
+            "notice_number": str(i + 10),
+            "reestr_number": str(i + 10),
+            "customer_name": "Заказчик",
+            "initial_price": 2000000.0,
+            "publication_date": "06.07.2026",
+            "deadline": "12.07.2026",
+            "status": "Закупка завершена",
+            "procedure_type": "Электронный аукцион",
+            "source_url": f"https://zakupki.gov.ru/{i + 10}",
+            "law": "44fz",
+            "warnings": [],
+        }
+        for i in range(1, 11)
+    ]
+
+    def fake_parse_page1(html):
+        return list(cards_page1)
+
+    def fake_parse_page2(html):
+        return list(cards_page2)
+
+    monkeypatch.setattr(discovery, "parse_44fz_search_results", fake_parse_page1)
+
+    page1_result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert page1_result["returned_count"] == 10
+    assert page1_result["next_cursor"] is not None
+
+    page1_numbers = {c["notice_number"] for c in page1_result["cards"]}
+
+    monkeypatch.setattr(discovery, "parse_44fz_search_results", fake_parse_page2)
+
+    cursor = page1_result["next_cursor"]
+    page2_result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+        cursor=cursor,
+    )
+
+    assert page2_result["returned_count"] >= 1
+    page2_numbers = {c["notice_number"] for c in page2_result["cards"]}
+    assert page1_numbers.isdisjoint(page2_numbers)
+
+
+def test_public_44fz_search_exact_total_true_when_native_only(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'24\')"></a>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Закупка завершена",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+            {
+                "title": "Закупка 2",
+                "notice_number": "2",
+                "reestr_number": "2",
+                "customer_name": "Заказчик",
+                "initial_price": 2000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Закупка завершена",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/2",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert result["total_count"] == 24
+    assert result["total_count_exact_for_displayed_filters"] is True
+    assert result["local_filtered_count"] == 0
+    assert result["local_post_filter_applied"] is False
+
+
+def test_public_44fz_search_exact_total_false_when_local_filter_applied(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'99\')"></a>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+            {
+                "title": "Закупка с истёкшим сроком",
+                "notice_number": "2",
+                "reestr_number": "2",
+                "customer_name": "Заказчик",
+                "initial_price": 2000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "01.01.2020",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/2",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert result["total_count"] == 99
+    assert result["total_count_exact_for_displayed_filters"] is False
+    assert result["local_post_filter_applied"] is True
+    assert result["local_filtered_count"] >= 1
+
+
+def test_public_44fz_search_exact_total_false_when_non_native_filter(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'150\')"></a>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Закупка завершена",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+        region="77",
+    )
+
+    assert result["total_count"] == 150
+    assert result["total_count_exact_for_displayed_filters"] is False
+
+
+def test_public_44fz_search_returned_count_reflects_backfill(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'50\')"></a>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": f"Закупка {i}",
+                "notice_number": str(i),
+                "reestr_number": str(i),
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": f"https://zakupki.gov.ru/{i}",
+                "law": "44fz",
+                "warnings": [],
+            }
+            for i in range(1, 10)
+        ],
+    )
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert result["status"] == "parsed"
+    assert result["returned_count"] <= 10
+
+
+def test_public_44fz_search_parser_status_includes_diagnostics(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'24\')"></a>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Закупка завершена",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert "raw_returned_count" in result
+    assert "local_filtered_count" in result
+    assert "local_post_filter_applied" in result
+    assert "eis_pages_fetched" in result
+    assert "total_count_source" in result
+    assert "total_count_exact_for_displayed_filters" in result
+    assert "next_cursor" in result
+
+
+def test_public_44fz_search_validation_error_cursor_not_affected(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'24\')"></a>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Закупка завершена",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(query="", law="44fz")
+
+    assert result["status"] == "validation_error"
+    assert result["cards"] == []
+
+
+def test_public_44fz_search_validation_error_for_empty_query():
+    result = search_public_44fz(query="", law="44fz")
+
+    assert result["status"] == "validation_error"
+    assert result["outcome"] == "validation_error"
+    assert result["cards"] == []
+    assert result["error"]
+
+
+def test_public_44fz_search_returns_pagination_fields_and_date_desc(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<div class="search-results__total">24 записи</div>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Старая закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000.0,
+                "publication_date": "01.07.2026",
+                "deadline": "10.07.2026",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+            {
+                "title": "Новая закупка",
+                "notice_number": "2",
+                "reestr_number": "2",
+                "customer_name": "Заказчик",
+                "initial_price": 2000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/2",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(query="тест", law="44fz", page=2, page_size=10, max_results=10)
+
+    assert result["page"] == 2
+    assert result["page_size"] == 10
+    assert result["returned_count"] == 2
+    assert result["total_count"] == 24
+    assert result["has_more"] is True
+    assert result["next_page"] is None
+    assert result["next_cursor"] is not None
+    assert result["sort"] == "publication_date_desc"
+    assert "следующие" in result["message"].lower() or "карточки" in result["message"].lower()
+    assert "24" in result["message"]
+    assert [card["notice_number"] for card in result["cards"]] == ["2", "1"]
+
+
+def test_public_44fz_search_pushes_status_filter_to_eis_and_keeps_exact_total(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    captured: dict[str, str] = {}
+
+    def fake_fetch(url: str):
+        captured["url"] = url
+        return {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'12\')"></a>',
+            "error": None,
+        }
+
+    monkeypatch.setattr(discovery, "fetch_public_44fz_search_page", fake_fetch)
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Определение поставщика завершено",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        status_filter="Закупка завершена",
+        page=1,
+        page_size=10,
+        max_results=10,
+    )
+
+    assert "pc=on" in captured["url"]
+    assert result["total_count"] == 12
+    assert result["returned_count"] == 1
+    assert result["message"] == "Показаны первые 1 карточек из 12."
+    assert result["cards"][0]["notice_number"] == "1"
+
+
+def test_public_44fz_search_drops_exact_total_for_non_native_filters(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {
+            "status": "parsed",
+            "html": '<a onclick="downloadCsv(\'?searchString=test\', \'99\')"></a>',
+            "error": None,
+        },
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Закупка",
+                "notice_number": "1",
+                "reestr_number": "1",
+                "customer_name": "Заказчик",
+                "initial_price": 1000.0,
+                "publication_date": "06.07.2026",
+                "deadline": "12.07.2026",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/1",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(query="тест", law="44fz", procedure_type="Электронный аукцион", page=1, page_size=10, max_results=10)
+
+    assert result["total_count"] == 99
+    assert result["total_count_exact_for_displayed_filters"] is False
+    assert "ЕИС найдено" in result["message"]

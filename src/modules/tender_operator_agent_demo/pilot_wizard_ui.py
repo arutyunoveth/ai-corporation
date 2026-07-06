@@ -348,6 +348,25 @@ def render_tender_operator_pilot_wizard_html() -> str:
             gap: 10px;
             flex-wrap: wrap;
           }
+          .search-results-footer {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            padding: 4px 4px 0;
+          }
+          .search-results-pagination {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+          }
+          .search-results-count {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.4;
+          }
           .search-list-head {
             display: grid;
             grid-template-columns: minmax(0, 2.55fr) minmax(220px, 1.1fr) minmax(180px, 0.8fr) auto;
@@ -721,6 +740,9 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     <div id="search-results" class="search-results empty">
                       Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.
                     </div>
+                    <div class="form-actions" style="margin-top:12px">
+                      <button class="button" id="search-demo-button" type="button">Открыть демо-закупку 0323100010326000013</button>
+                    </div>
                   </div>
                 </section>
 
@@ -834,6 +856,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             warning: 'риск',
             blocked: 'заблокировано',
           };
+          const SEARCH_PAGE_SIZE = 10;
           const fileRolePrefixes = {
             notice: 'notice',
             technical: 'technical_spec',
@@ -841,6 +864,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             quote: 'tkp',
             supporting: 'supporting',
           };
+          let lastSearchBaseParams = null;
 
           function escapeHtml(value) {
             return String(value ?? '')
@@ -1032,24 +1056,149 @@ def render_tender_operator_pilot_wizard_html() -> str:
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }
 
-          function renderSearchResults(cards, eisSearchUrl = '') {
+          function searchStatusMessage(payload = {}) {
+            const outcome = String(payload.outcome || '');
+            const parserStatus = String(payload.parser_status || payload.status || '');
+            const error = String(payload.error || '').trim();
+            const details = error ? ` Причина: ${escapeHtml(error)}.` : '';
+            if (outcome === 'success_with_results') {
+              return payload.message || `Поиск завершен. Найдено карточек: ${String((payload.cards || []).length)}.`;
+            }
+            if (outcome === 'success_empty') {
+              return payload.message || 'Источник доступен, но закупки по заданным фильтрам не найдены.';
+            }
+            if (outcome === 'source_unavailable') {
+              if (parserStatus === 'js_heavy') {
+                return `ЕИС вернула JS-heavy страницу, поэтому автоматический поиск сейчас недоступен.${details}`;
+              }
+              return (payload.message || 'Публичный поиск ЕИС сейчас недоступен.') + details;
+            }
+            if (outcome === 'unsupported_search_mode') {
+              return (payload.message || 'Автоматический режим поиска для этого источника не поддерживается.') + details;
+            }
+            if (outcome === 'validation_error') {
+              return (payload.message || 'Проверьте запрос и параметры поиска.') + details;
+            }
+            return (payload.message || 'Поиск ЕИС завершился с ошибкой.') + details;
+          }
+
+          function buildSearchBaseParams() {
+            const params = new URLSearchParams();
+            params.set('query', getTrimmedValue('search_query'));
+            params.set('max_results', String(SEARCH_PAGE_SIZE));
+            params.set('page_size', String(SEARCH_PAGE_SIZE));
+            params.set('law', getTrimmedValue('search_law') || '44fz');
+            const region = getTrimmedValue('search_region');
+            const statusFilter = getTrimmedValue('search_status');
+            const procedureType = getTrimmedValue('search_procedure_type');
+            const dateFrom = getTrimmedValue('search_date_from');
+            const dateTo = getTrimmedValue('search_date_to');
+            const deadlineFrom = getTrimmedValue('search_deadline_from');
+            const deadlineTo = getTrimmedValue('search_deadline_to');
+            const priceFrom = getTrimmedValue('search_price_from');
+            const priceTo = getTrimmedValue('search_price_to');
+            if (region) params.set('region', region);
+            if (statusFilter) params.set('status_filter', statusFilter);
+            if (procedureType) params.set('procedure_type', procedureType);
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            if (deadlineFrom) params.set('deadline_from', deadlineFrom);
+            if (deadlineTo) params.set('deadline_to', deadlineTo);
+            if (priceFrom) params.set('price_from', priceFrom);
+            if (priceTo) params.set('price_to', priceTo);
+            return params;
+          }
+
+          function buildSearchPageParams(page, cursor = null) {
+            const params = new URLSearchParams(lastSearchBaseParams ? lastSearchBaseParams.toString() : buildSearchBaseParams().toString());
+            params.set('page', String(Math.max(1, Number(page) || 1)));
+            params.set('page_size', String(SEARCH_PAGE_SIZE));
+            params.set('max_results', String(SEARCH_PAGE_SIZE));
+            if (cursor) {
+              params.set('cursor', cursor);
+            }
+            if (lastSeenRegistryNumbers.length > 0) {
+              params.set('seen_registry_numbers', JSON.stringify(lastSeenRegistryNumbers));
+            }
+            return params;
+          }
+
+          let lastSeenRegistryNumbers = [];
+
+          function searchResultsMeta(payload = {}, cards = []) {
+            const page = Math.max(1, Number(payload.page) || 1);
+            const pageSize = Math.max(1, Number(payload.page_size) || SEARCH_PAGE_SIZE);
+            const returnedCount = Math.max(0, Number(payload.returned_count) || cards.length);
+            const totalCount = Number.isInteger(payload.total_count) ? Number(payload.total_count) : null;
+            const exactTotal = payload.total_count_exact_for_displayed_filters === true;
+            const hasMore = payload.has_more === true;
+            const startIndex = returnedCount ? ((page - 1) * pageSize) + 1 : 0;
+            const endIndex = returnedCount ? startIndex + returnedCount - 1 : 0;
+            let countLine = '';
+            if (exactTotal && totalCount !== null) {
+              countLine = page === 1
+                ? `Показаны первые ${String(returnedCount)} карточек из ${String(totalCount)}.`
+                : `Показаны карточки ${String(startIndex)}-${String(endIndex)} из ${String(totalCount)}.`;
+            } else if (totalCount !== null) {
+              if (payload.local_post_filter_applied) {
+                countLine = `По данным ЕИС найдено ${String(totalCount)}. Показаны первые ${String(returnedCount)} актуальных карточек после проверки.`;
+              } else {
+                countLine = `Показаны первые ${String(returnedCount)} карточек. Есть ещё результаты.`;
+              }
+            } else if (returnedCount < pageSize) {
+              countLine = hasMore
+                ? `Показаны ${String(returnedCount)} карточек. Есть ещё результаты.`
+                : `Показаны ${String(returnedCount)} карточек. Больше результатов не найдено.`;
+            } else if (hasMore) {
+              countLine = page === 1
+                ? `Показаны первые ${String(returnedCount)} карточек. Есть ещё результаты.`
+                : `Показаны карточки ${String(startIndex)}-${String(endIndex)}. Есть ещё результаты.`;
+            } else if (returnedCount) {
+              countLine = `Показаны карточки ${String(startIndex)}-${String(endIndex)}.`;
+            }
+            return { page, pageSize, returnedCount, totalCount, startIndex, endIndex, countLine };
+          }
+
+          function renderSearchResults(payload = {}) {
+            const cards = payload.cards || [];
+            const eisSearchUrl = payload.eis_search_url || '';
+            const outcome = String(payload.outcome || '');
+            const hasMore = payload.has_more === true;
+            const nextCursor = payload.next_cursor || null;
             const node = document.getElementById('search-results');
             if (!cards?.length) {
               node.className = 'search-results empty';
-              node.innerHTML = eisSearchUrl
-                ? `Закупки не найдены. Можно открыть поиск в ЕИС: <a class="doc-link" href="${escapeHtml(eisSearchUrl)}" target="_blank" rel="noreferrer">перейти в ЕИС</a>.`
-                : 'Закупки не найдены. Уточните ключевые слова или фильтры.';
+              const needsManualLink = eisSearchUrl && outcome !== 'success_empty';
+              const emptyHint = outcome === 'success_empty'
+                ? 'Ничего не найдено по заданным фильтрам. Попробуйте упростить запрос или изменить диапазоны.'
+                : searchStatusMessage(payload);
+              node.innerHTML = `
+                <div>${emptyHint}</div>
+                ${needsManualLink ? `<div style="margin-top:10px"><a class="doc-link" href="${escapeHtml(eisSearchUrl)}" target="_blank" rel="noreferrer">Открыть поиск в ЕИС</a></div>` : ''}
+                <div style="margin-top:10px"><button class="button" id="search-results-demo-button" type="button">Открыть демо-закупку 0323100010326000013</button></div>
+              `;
+              const demoButton = document.getElementById('search-results-demo-button');
+              if (demoButton) {
+                demoButton.addEventListener('click', useDemoProcurement);
+              }
               return;
+            }
+            for (const card of cards) {
+              const regNum = card.notice_number || card.reestr_number || '';
+              if (regNum && !lastSeenRegistryNumbers.includes(regNum)) {
+                lastSeenRegistryNumbers.push(regNum);
+              }
             }
             node.className = 'search-results';
             const law = cards[0]?.law || getTrimmedValue('search_law') || '44fz';
+            const meta = searchResultsMeta(payload, cards);
             const resultWord = cards.length === 1 ? 'карточка' : (cards.length >= 2 && cards.length <= 4 ? 'карточки' : 'карточек');
             node.innerHTML = `
               <div class="search-results-board">
                 <div class="search-results-header">
                   <div class="search-results-headline">
-                    <div class="search-results-title">Результаты поиска: ${cards.length} ${resultWord}</div>
-                    <div class="search-results-note">${escapeHtml(lawLabel(law))} · обработка запускается прямо из строки результата</div>
+                    <div class="search-results-title">Результаты поиска: ${cards.length} ${resultWord} · страница ${String(meta.page)}</div>
+                    <div class="search-results-note">${escapeHtml(lawLabel(law))} · сортировка: сначала самые новые · обработка запускается прямо из строки результата</div>
                   </div>
                   <div class="search-results-tools">
                     ${eisSearchUrl ? `<a class="link-button" href="${escapeHtml(eisSearchUrl)}" target="_blank" rel="noreferrer">Открыть поиск в ЕИС</a>` : ''}
@@ -1094,10 +1243,35 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     </div>
                   </div>
                 `).join('')}
+                <div class="search-results-footer">
+                  <div class="search-results-count">${escapeHtml(meta.countLine || '')}</div>
+                  <div class="search-results-pagination">
+                    ${hasMore && nextCursor ? `<button class="button" id="search-next-page-button" type="button">Показать следующие 10</button>` : ''}
+                  </div>
+                </div>
               </div>
             `;
             for (const button of node.querySelectorAll('.search-process-button')) {
               button.addEventListener('click', () => processSearchCard(cards[Number(button.dataset.index)], button));
+            }
+            const nextPageButton = document.getElementById('search-next-page-button');
+            if (nextPageButton) {
+              nextPageButton.addEventListener('click', () => loadNextSearchPage(nextCursor));
+            }
+          }
+
+          async function runSearchPage(page = 1, cursor = null) {
+            const params = buildSearchPageParams(page, cursor);
+            const label = cursor ? 'Загружаем следующую страницу…' : (page > 1 ? `Загружаем страницу ${String(page)}…` : 'Ищем закупки по ключевым словам и фильтрам…');
+            setFlash(label, false, 'search-flash');
+            try {
+              const payload = await fetchJson(`/api/demo/tender-agent/procurement/public-44fz-search?${params.toString()}`, {
+                method: 'POST',
+              });
+              renderSearchResults(payload);
+              setFlash(searchStatusMessage(payload), payload.outcome !== 'success_with_results' && payload.outcome !== 'success_empty', 'search-flash');
+            } catch (error) {
+              setFlash(`Не удалось выполнить поиск: ${error.message}`, true, 'search-flash');
             }
           }
 
@@ -1108,39 +1282,33 @@ def render_tender_operator_pilot_wizard_html() -> str:
               setFlash('Введите ключевые слова для поиска закупок.', true, 'search-flash');
               return;
             }
-            const params = new URLSearchParams();
-            params.set('query', query);
-            params.set('max_results', '8');
-            params.set('law', getTrimmedValue('search_law') || '44fz');
-            const region = getTrimmedValue('search_region');
-            const statusFilter = getTrimmedValue('search_status');
-            const procedureType = getTrimmedValue('search_procedure_type');
-            const dateFrom = getTrimmedValue('search_date_from');
-            const dateTo = getTrimmedValue('search_date_to');
-            const deadlineFrom = getTrimmedValue('search_deadline_from');
-            const deadlineTo = getTrimmedValue('search_deadline_to');
-            const priceFrom = getTrimmedValue('search_price_from');
-            const priceTo = getTrimmedValue('search_price_to');
-            if (region) params.set('region', region);
-            if (statusFilter) params.set('status_filter', statusFilter);
-            if (procedureType) params.set('procedure_type', procedureType);
-            if (dateFrom) params.set('date_from', dateFrom);
-            if (dateTo) params.set('date_to', dateTo);
-            if (deadlineFrom) params.set('deadline_from', deadlineFrom);
-            if (deadlineTo) params.set('deadline_to', deadlineTo);
-            if (priceFrom) params.set('price_from', priceFrom);
-            if (priceTo) params.set('price_to', priceTo);
+            lastSearchBaseParams = buildSearchBaseParams();
+            lastSeenRegistryNumbers = [];
+            await runSearchPage(1);
+          }
 
-            setFlash('Ищем закупки по ключевым словам и фильтрам…', false, 'search-flash');
-            try {
-              const payload = await fetchJson(`/api/demo/tender-agent/procurement/public-44fz-search?${params.toString()}`, {
-                method: 'POST',
-              });
-              renderSearchResults(payload.cards || [], payload.eis_search_url || '');
-              setFlash(`Поиск завершен. Найдено карточек: ${String((payload.cards || []).length)}.`, false, 'search-flash');
-            } catch (error) {
-              setFlash(`Не удалось выполнить поиск: ${error.message}`, true, 'search-flash');
+          async function loadNextSearchPage(cursor) {
+            if (!lastSearchBaseParams) {
+              setFlash('Сначала выполните поиск с ключевыми словами.', true, 'search-flash');
+              return;
             }
+            await runSearchPage(1, cursor);
+          }
+
+          function useDemoProcurement() {
+            const demoRegistryNumber = '0323100010326000013';
+            document.querySelector('[name="procurement_url"]').value = demoRegistryNumber;
+            renderSelectedProcurement({
+              reestr_number: demoRegistryNumber,
+              notice_number: demoRegistryNumber,
+              title: 'Демо-закупка для безопасного показа сценария анализа',
+              customer_name: 'Демо-контур Tender Agent',
+              law: '44fz',
+              category: '44-ФЗ',
+              source: 'public_eis_html_44fz',
+            });
+            setFlash(`Подставлена демо-закупка ${demoRegistryNumber}. Можно сразу запускать обработку или продолжить поиск.`, false, 'search-flash');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }
 
           function resetSearchFilters() {
@@ -1168,6 +1336,8 @@ def render_tender_operator_pilot_wizard_html() -> str:
               lawField.value = '44fz';
             }
             clearFlash('search-flash');
+            lastSearchBaseParams = null;
+            lastSeenRegistryNumbers = [];
             const searchResults = document.getElementById('search-results');
             searchResults.className = 'search-results empty';
             searchResults.innerHTML = 'Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.';
@@ -1348,6 +1518,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
           document.getElementById('reset-button').addEventListener('click', resetWizard);
           document.getElementById('search-button').addEventListener('click', searchProcurements);
           document.getElementById('search-reset-button').addEventListener('click', resetSearchFilters);
+          document.getElementById('search-demo-button').addEventListener('click', useDemoProcurement);
         </script>
       </body>
     </html>
