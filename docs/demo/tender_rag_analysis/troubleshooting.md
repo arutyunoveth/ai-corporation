@@ -1,50 +1,48 @@
 # Troubleshooting
 
-## 1. UI не открывается
+## 1. Backend не отвечает на 8001
 
 Проверить:
-
-```bash
-curl http://127.0.0.1:8001/demo/tender-agent
-```
-
-Если не открывается:
-- backend не запущен → перезапустить
-- неправильный порт → проверить `lsof -i :8001`
-- backend смотрит не туда → проверить логи
-
-## 2. Health не отвечает
 
 ```bash
 curl http://127.0.0.1:8001/api/tender-research/health
 ```
 
-Если ошибка:
-- backend не запущен
-- неправильный `AI_CORP_DATABASE_URL`
-- PostgreSQL не запущен
+Что делать:
 
-## 3. `no_context` при analyze
+- проверить, что backend-процесс запущен;
+- при необходимости перезапустить backend;
+- повторно проверить health.
 
-Причины:
-- закупки нет в БД
-- нет chunks
-- нет embeddings
-- backend смотрит не в ту БД
+Полезные команды:
+
+```bash
+lsof -nP -iTCP:8001 -sTCP:LISTEN
+tail -n 40 /tmp/ai_corp_uvicorn_8001.log
+set -a && source .env.prod >/dev/null 2>&1 && set +a
+nohup ./.venv/bin/python -m uvicorn src.main:app --host 127.0.0.1 --port 8001 --proxy-headers >/tmp/ai_corp_uvicorn_8001.log 2>&1 &
+```
+
+## 2. DB смотрит не туда
+
+Симптом:
+
+- backend внезапно работает через SQLite вместо PostgreSQL;
+- health или alembic показывают не тот контур.
+
+Что делать:
+
+- загрузить правильный `.env.prod` или runtime env;
+- убедиться, что используется `AI_CORP_DATABASE_URL` для PostgreSQL;
+- повторно проверить health.
+
+Типичный симптом:
+
+- health показывает `database_dialect=sqlite` вместо `postgresql`.
+
+## 3. Embedding server недоступен
 
 Проверить:
-
-```bash
-python -m src.tender_research.cli check-db
-```
-
-И:
-
-```bash
-curl http://127.0.0.1:8001/api/tender-research/prepare/0323100010326000013/status
-```
-
-## 4. Embedding server недоступен
 
 ```bash
 python -m src.tender_research.rag.cli check-embedding-server \
@@ -53,127 +51,93 @@ python -m src.tender_research.rag.cli check-embedding-server \
   --base-url http://127.0.0.1:8090/v1
 ```
 
-## 5. Chat LLM server недоступен
+Что делать:
+
+- проверить `8090`;
+- проверить процесс `llama-server`;
+- проверить модель embeddings.
+
+## 4. LLM server недоступен
+
+Проверить:
 
 ```bash
 curl -s http://127.0.0.1:8088/v1/models
 ```
 
-## 6. Report link не открывается
+Что делать:
+
+- проверить `8088`;
+- проверить `model id`;
+- проверить путь к GGUF.
+
+## 5. Анализ идёт долго
+
+Что делать:
+
+- использовать `fast` mode;
+- смотреть progress по секциям;
+- не перезапускать без причины;
+- объяснить, что локальная LLM работает без облака.
+
+## 6. `sources_count=0`
+
+Что проверить:
+
+- chunks и embeddings;
+- retrieval;
+- корректность `registry_number`.
+
+Полезная проверка:
 
 ```bash
-curl http://127.0.0.1:8001/api/tender-research/analyze/0323100010326000013/latest
+curl "http://127.0.0.1:8001/api/tender-research/analyze/history?registry_number=0323100010326000013&limit=5"
 ```
 
-Для history/report-by-run:
+## 7. DOCX не скачивается
+
+Проверить:
+
+```bash
+curl -OJ http://127.0.0.1:8001/api/tender-research/analyze/history/<run_id>/export/docx
+```
+
+И:
+
+- export endpoint;
+- права на `data/rag/exports/`.
+
+## 8. PDF не читается / проблемы с кириллицей
+
+Проверить:
+
+- локальный шрифт с кириллицей;
+- `reportlab` / font config;
+- в качестве fallback использовать DOCX.
+
+## 9. History run не экспортируется
+
+Проверить:
+
+- существует ли исходный saved report file;
+- history row не orphaned.
+
+Важно:
+
+- orphaned history rows могут давать `404`.
+
+## 10. Report или history открываются, а export нет
+
+Проверить:
 
 ```bash
 curl "http://127.0.0.1:8001/api/tender-research/analyze/history?registry_number=0323100010326000013&limit=5"
 curl http://127.0.0.1:8001/api/tender-research/analyze/history/<run_id>/report
-```
-
-Для экспортов:
-
-```bash
-curl -OJ http://127.0.0.1:8001/api/tender-research/analyze/history/<run_id>/export/docx
 curl -OJ http://127.0.0.1:8001/api/tender-research/analyze/history/<run_id>/export/pdf
 ```
 
-Если `report` endpoint работает, а export падает:
-- проверить, что исходный `report_markdown` сохранён и файл отчёта доступен;
+Если report открывается, а export падает:
+
+- проверить наличие saved markdown;
 - проверить права на `data/rag/exports/`;
-- для PDF на Mac mini проверить доступность системного шрифта с кириллицей.
-
-## 7. Backend смотрит не в ту БД
-
-Проверить:
-- `python -m src.tender_research.cli check-db`
-- API health `can_connect`
-- `AI_CORP_DATABASE_URL` — правильный порт (55432, не 5432)
-
-## 8. Тесты неожиданно запускают live network
-
-Напомнить: default pytest offline. Live профили только по флагам:
-
-```
---run-integration
---run-postgres
---run-network
---run-llama-cpp
---run-live-smoke
-```
-
-## 9. Background job завис в `running`
-
-Проверить:
-
-```bash
-curl http://127.0.0.1:8001/api/tender-research/jobs/<job_id>
-```
-
-Если backend был перезапущен во время выполнения:
-- для MVP это известное ограничение;
-- job metadata остаётся в БД;
-- активная in-process задача не возобновляется автоматически;
-- нужно перезапустить prepare/analyze job вручную.
-
-## 10. UI долго показывает polling
-
-Это ожидаемо для новой закупки, если идут:
-- загрузка документов;
-- text extraction;
-- chunks;
-- embeddings;
-- LLM section analysis.
-
-Если polling превысил ~10 минут:
-- проверить `/api/tender-research/jobs/<job_id>`;
-- проверить backend logs;
-- повторно проверить `health`, embedding server и LLM server.
-
-## 11. DOCX/PDF export не создаётся
-
-Проверить:
-
-```bash
-ls -la data/rag/exports/
-```
-
-И убедиться, что:
-- `analysis_run_id` существует в history;
-- `report` по `run_id` открывается;
-- generated artifacts не блокируются правами записи;
-- PDF runtime видит кириллический шрифт.
-
-## 11. `use_llm=true` идёт слишком долго
-
-Проверить:
-
-- какой выбран `analysis_mode`;
-- есть ли в job result `duration_seconds`, `timings`, `per_section_timings`;
-- какие разделы попали в `slowest_sections`;
-- не срабатывает ли `retrieval_only_fallback` по timeout.
-
-Для demo сначала повторить в `fast`:
-
-```bash
-curl -X POST http://127.0.0.1:8001/api/tender-research/jobs/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "registry_number": "0323100010326000013",
-    "use_llm": true,
-    "analysis_mode": "fast",
-    "save_report": true
-  }'
-```
-
-Если `fast` стабилен, а `detailed` нет, это ожидаемо: локальный LLM latency зависит от железа и размера контекста.
-
-## 12. Один раздел упал, но job завершился
-
-Это нормальное ожидаемое поведение нового latency-safe режима:
-
-- секция получает статус `retrieval_only_fallback`;
-- общий job status может быть `completed_with_warnings`;
-- citations и report сохраняются;
-- warning содержит причину timeout/error.
+- проверить локальный шрифт для PDF.

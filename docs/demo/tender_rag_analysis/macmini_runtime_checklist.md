@@ -1,20 +1,50 @@
-# Mac mini Runtime Checklist
+# Runtime checklist для Mac mini
 
-Проверить перед демо.
+Проверка за 3–5 минут перед созвоном.
 
-## A. Backend health
+## 1. Git
+
+- HEAD на актуальном `main`
+- `git status` без неожиданных tracked changes
+
+Ожидаемый ориентир:
+- `origin/main = 8eec85516b690b6f58d80ea9d26fe6d3d708bb9c`
+
+## 2. DB
+
+Проверить health:
 
 ```bash
 curl http://127.0.0.1:8001/api/tender-research/health
 ```
 
 Ожидаем:
-- HTTP 200
-- `database_url_masked` без пароля
-- `can_connect=true`
-- `table_counts` не пуст
 
-## B. Embedding server
+- PostgreSQL `127.0.0.1:55432`
+- `pgvector_extension_available=true`
+- `current_migration=092_create_tender_analysis_jobs_table`
+- `migration_head=092_create_tender_analysis_jobs_table`
+
+## 3. Backend
+
+```bash
+curl http://127.0.0.1:8001/api/tender-research/health
+```
+
+Ожидаем:
+
+- HTTP 200
+- `status=ok`
+- `can_connect=true`
+
+Если backend не отвечает:
+
+```bash
+lsof -nP -iTCP:8001 -sTCP:LISTEN
+tail -n 40 /tmp/ai_corp_uvicorn_8001.log
+```
+
+## 4. Embeddings
 
 ```bash
 python -m src.tender_research.rag.cli check-embedding-server \
@@ -24,84 +54,42 @@ python -m src.tender_research.rag.cli check-embedding-server \
 ```
 
 Ожидаем:
-- `reachable=true`
+
+- endpoint `http://127.0.0.1:8090/v1`
+- model `Qwen3-Embedding-4B`
 - `dimension=2560`
 
-## C. Chat LLM server
+## 5. LLM
 
 ```bash
 curl -s http://127.0.0.1:8088/v1/models
 ```
 
 Ожидаем:
-- server reachable
-- model list содержит `/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf`
 
-## D. Database
+- endpoint `http://127.0.0.1:8088/v1`
+- model `/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf`
 
-```bash
-export AI_CORP_DATABASE_URL='postgresql+psycopg://arvectum:<PASSWORD>@127.0.0.1:55432/arvectum'
-python -m src.tender_research.cli check-db
-```
+## 6. UI
 
-Ожидаем:
-- `can_connect=true`
-- таблицы присутствуют
+Открыть:
 
-## E. Demo UI
+`http://127.0.0.1:8001/demo/tender-agent`
 
-Открыть в браузере:
+Проверить:
 
-```
-http://127.0.0.1:8001/demo/tender-agent
-```
+- страница загружается;
+- вкладка `Анализ закупки` есть;
+- preset `Mac mini: локальная LLM + Qwen3 embeddings` доступен.
 
-Ожидаем:
-- страница загружается
-- вкладка "Анализ закупки" присутствует
-- кнопки "Проверить готовность", "Подготовить закупку к анализу", "Проанализировать закупку" видны
+## 7. Export
 
-## F. Быстрый API precheck
+Проверить на свежем или историческом run:
 
-```bash
-curl -X POST http://127.0.0.1:8001/api/tender-research/jobs/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "registry_number": "0323100010326000013",
-    "provider": "llama_cpp",
-    "model": "Qwen3-Embedding-4B",
-    "base_url": "http://127.0.0.1:8090/v1",
-    "use_llm": true,
-    "llm_base_url": "http://127.0.0.1:8088/v1",
-    "llm_model": "/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
-    "limit": 8,
-    "save_report": true
-  }'
-```
+- DOCX download работает;
+- PDF download работает;
+- PDF Cyrillic readable.
 
-Ожидаем:
-- HTTP 200
-- `job_id` не пуст
-- `status=queued`
+Рекомендуемый historical run для быстрой проверки:
 
-После этого:
-
-```bash
-curl http://127.0.0.1:8001/api/tender-research/jobs/<job_id>
-```
-
-Ожидаем:
-- `status` доходит до `completed`
-- `progress_percent=100`
-- `result.sections_count=10`
-- `result.sources_count>0`
-- `report_path` или `analysis_run_id` присутствуют
-
-## G. Ограничение MVP
-
-- Background jobs выполняются in-process.
-- Активные `running` jobs не переживают restart backend как выполняющиеся задачи.
-
-## H. Если что-то не работает
-
-Перейти к [troubleshooting.md](troubleshooting.md).
+- `7b29f717-13d6-4dc9-9764-79ba17cbf0e3`
