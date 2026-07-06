@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from src.modules.tender_operator_agent_demo.schemas import (
     EisDocsArchiveRunRequest,
@@ -53,6 +53,10 @@ from src.modules.tender_operator_agent_demo.service import (
 )
 from src.modules.tender_operator_agent_demo.pilot_wizard_ui import render_tender_operator_pilot_wizard_html
 from src.modules.tender_operator_agent_demo.ui import render_tender_operator_console_html
+from src.modules.tender_operator_agent_demo.report_export_service import (
+    export_demo_agent_report_docx,
+    export_demo_agent_report_pdf,
+)
 from src.modules.tender_operator_agent_demo.upload_service import (
     analyze_uploaded_demo_run,
     append_files_to_demo_run,
@@ -373,3 +377,37 @@ def download_tender_operator_uploaded_run_source_file(run_id: str, file_id: str)
 @router.get("/api/demo/tender-agent/runs/{run_id}/archive/download")
 def download_tender_operator_uploaded_run_archive(run_id: str):
     return get_uploaded_demo_archive_download(run_id)
+
+
+@router.get("/api/demo/tender-agent/runs/{run_id}/export/docx")
+def export_tender_operator_uploaded_run_docx(run_id: str) -> FileResponse:
+    try:
+        exported = export_demo_agent_report_docx(run_id)
+    except HTTPException:
+        raise
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to export DOCX report") from exc
+    return FileResponse(
+        exported.file_path,
+        media_type=exported.content_type,
+        filename=exported.file_name,
+    )
+
+
+@router.get("/api/demo/tender-agent/runs/{run_id}/export/pdf")
+def export_tender_operator_uploaded_run_pdf(run_id: str) -> FileResponse:
+    try:
+        exported = export_demo_agent_report_pdf(run_id)
+    except HTTPException:
+        raise
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to export PDF report") from exc
+    return FileResponse(
+        exported.file_path,
+        media_type=exported.content_type,
+        filename=exported.file_name,
+    )
