@@ -445,6 +445,146 @@ def test_handoff_supplements_public_documents_when_getdocs_archive_contains_only
     clear_zakupki_soap_settings_cache()
 
 
+def test_handoff_supplements_documents_from_notice_xml_when_public_documents_are_empty(client, monkeypatch, tmp_path):
+    from src.modules.tender_operator_agent_demo import procurement_intake_service as service
+    from src.modules.tender_operator_agent_demo.attachment_downloader import (
+        AttachmentDownloadManifestItem,
+        AttachmentDownloadResult,
+    )
+    from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult, DownloadedAttachment
+    from src.modules.tender_operator_agent_demo.settings import clear_zakupki_soap_settings_cache
+
+    runs_root = tmp_path / "tender_operator_demo_runs"
+    monkeypatch.setenv("AI_CORP_TENDER_OPERATOR_DEMO_RUNS_DIR", str(runs_root))
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_ENABLED", "1")
+    monkeypatch.setenv("ZAKUPKI_GOV_RU_SOAP_TOKEN", "test-token-value-not-real")
+    clear_zakupki_soap_settings_cache()
+
+    class FakeClient:
+        def __init__(self, _settings):
+            pass
+
+        def get_docs_by_reestr_number(self, _reestr_number, subsystem_type="PRIZ"):
+            return DocsArchiveResult(
+                request_id="req-docs-xml-001",
+                ref_id="ref-docs-xml-001",
+                archive_url="https://int.zakupki.gov.ru/archive/demo.zip",
+                status="completed",
+                warnings=[],
+                safe_diagnostic={"archive_url_present": True},
+            )
+
+        def download_archive(self, _archive_url, target_dir):
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (target_dir / "documentation-archive.zip").write_bytes(b"PK\x03\x04demo")
+            return DownloadedAttachment(
+                file_name="demo.zip",
+                stored_name="documentation-archive.zip",
+                size_bytes=10,
+                content_type="application/zip",
+                source_url_host="int.zakupki.gov.ru",
+                source_url_path="/archive/demo.zip",
+            )
+
+    xml_notice = """<?xml version="1.0" encoding="UTF-8"?>
+    <epNotification xmlns="http://zakupki.gov.ru/44fz/types/1">
+      <attachmentsInfo>
+        <attachmentInfo>
+          <fileName>Описание объекта закупки.docx</fileName>
+          <url>https://zakupki.gov.ru/44fz/filestore/public/1.0/download/priz/file.html?uid=uid-tech-xml</url>
+        </attachmentInfo>
+        <attachmentInfo>
+          <fileName>Проект контракта.docx</fileName>
+          <url>https://zakupki.gov.ru/44fz/filestore/public/1.0/download/priz/file.html?uid=uid-contract-xml</url>
+        </attachmentInfo>
+      </attachmentsInfo>
+    </epNotification>
+    """
+
+    monkeypatch.setattr(service, "ZakupkiSoapClient", FakeClient)
+    monkeypatch.setattr(
+        service,
+        "_extract_safe_archive_into_run",
+        lambda run_id, _path: (
+            [
+                service.build_demo_file_descriptor(
+                    file_id="FILE-01",
+                    original_name="epNotificationEF2020.xml",
+                    stored_name="extracted/01-epnotification.xml",
+                    role_hint="notice",
+                    size_bytes=len(xml_notice.encode("utf-8")),
+                    content_type="application/xml",
+                    source="eis_getdocs_archive",
+                    source_type="getdocs_archive",
+                    document_kind="eis_notice",
+                )
+            ],
+            [
+                service.ProcurementAttachmentManifestItem(
+                    name="epNotificationEF2020.xml",
+                    stored_name="extracted/01-epnotification.xml",
+                    extension=".xml",
+                    status="saved",
+                    note="ok",
+                    source_type="getdocs_archive",
+                    document_kind="eis_notice",
+                )
+            ],
+            1,
+        ),
+    )
+    monkeypatch.setattr(service, "_fetch_public_notice_attachments", lambda _url: [])
+
+    def fake_download(attachments, *, target_dir, **_kwargs):
+        target_dir.mkdir(parents=True, exist_ok=True)
+        saved = []
+        for index, attachment in enumerate(attachments, start=1):
+            stored_name = f"{index:02d}-notice-xml-{index}.docx"
+            (target_dir / stored_name).write_bytes(f"payload-{index}".encode("utf-8"))
+            saved.append(
+                AttachmentDownloadManifestItem(
+                    name=attachment.name,
+                    stored_name=stored_name,
+                    extension=".docx",
+                    status="saved",
+                    note="ok",
+                    size_bytes=9,
+                    source_url=attachment.url,
+                    document_kind=attachment.document_kind,
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            )
+        return AttachmentDownloadResult(saved=saved, skipped=[])
+
+    monkeypatch.setattr(service, "download_procurement_attachments", fake_download)
+
+    response = client.post(
+        "/api/demo/tender-agent/runs/from-search-result",
+        json={
+            "source": "public_44fz",
+            "reestr_number": "0122300006126000831",
+            "source_url": "https://zakupki.gov.ru/epz/order/notice/ea20/view/common-info.html?regNumber=0122300006126000831",
+            "download_archive": True,
+            "analyze_after_download": False,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    run_dir = runs_root / payload["run_id"]
+    (run_dir / "input" / "extracted").mkdir(parents=True, exist_ok=True)
+    (run_dir / "input" / "extracted" / "01-epnotification.xml").write_text(xml_notice, encoding="utf-8")
+
+    saved_count = service._supplement_run_with_notice_xml_attachments(payload["run_id"])
+    assert saved_count == 2
+
+    metadata = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert len(metadata["files"]) == 3
+    assert any(item["document_kind"] == "procurement_object_description" for item in metadata["files"])
+    assert any(item["role_hint"] == "contract_draft" for item in metadata["files"])
+    clear_zakupki_soap_settings_cache()
+
+
 def test_existing_getdocs_intake_tests_still_pass(client, monkeypatch, tmp_path):
     from src.modules.tender_operator_agent_demo import procurement_intake_service as service
     from src.modules.tender_operator_agent_demo.procurement_schemas import DocsArchiveResult, DownloadedAttachment

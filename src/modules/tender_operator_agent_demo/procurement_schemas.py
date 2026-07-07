@@ -50,6 +50,7 @@ class ProcurementAttachment(APIModel):
     content_type: str | None = None
     size_bytes: int | None = Field(default=None, ge=0)
     extension: str | None = None
+    document_kind: str | None = None
     can_download: bool = False
     requires_manual_upload: bool = False
     warnings: list[str] = Field(default_factory=list)

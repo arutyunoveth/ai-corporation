@@ -14,6 +14,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 from fastapi import HTTPException
 
 from src.modules.tender_operator_agent_demo.attachment_downloader import download_procurement_attachments
+from src.modules.tender_operator_agent_demo.eis_notice_parser import extract_notice_attachments
 from src.modules.tender_operator_agent_demo.public_44fz_search import normalize_public_eis_law
 from src.modules.tender_operator_agent_demo.procurement_discovery import (
     get_demo_procurement,
@@ -60,6 +61,7 @@ ARCHIVE_DOWNLOAD_RETRY_ATTEMPTS = 5
 ARCHIVE_DOWNLOAD_RETRY_DELAY_SECONDS = 10
 PUBLIC_EIS_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 PUBLIC_EIS_USER_AGENT = "Mozilla/5.0 (compatible; ArvectumTenderAgent/0.1; read-only)"
+MAX_PROCUREMENT_DOCUMENTS = 100
 
 
 def _now_iso() -> str:
@@ -492,6 +494,8 @@ def _fetch_public_notice_attachments(source_url: str) -> list[ProcurementAttachm
 
 def _role_hint_from_procurement_attachment(name: str) -> str | None:
     lowered = name.lower()
+    if any(token in lowered for token in ("обоснование нмцк", "обоснование начальной", "расчет нмцк", "расчёт нмцк")):
+        return None
     if any(token in lowered for token in ("ткп", "кп", "коммерческое предложение", "supplier quote")):
         return "tkp"
     if any(
@@ -519,63 +523,144 @@ def _role_hint_from_procurement_attachment(name: str) -> str | None:
             "описание товара",
             "описание работ",
             "описание услуг",
+            "ведомост",
         )
     ):
         return "technical_spec"
-    if any(token in lowered for token in ("извещение", "notice")):
+    if any(token in lowered for token in ("извещение", "notice", "epnotification")):
         return "notice"
     return None
 
 
-def _supplement_run_with_public_notice_attachments(run_id: str, source_url: str | None) -> int:
-    if not source_url:
+def _document_kind_from_role_hint(role_hint: str | None) -> str:
+    mapping = {
+        "notice": "eis_notice",
+        "technical_spec": "technical_specification",
+        "contract_draft": "contract_draft",
+        "tkp": "attachment",
+    }
+    return mapping.get(role_hint or "", "attachment")
+
+
+def _discover_notice_xml_attachments(run_id: str, metadata: dict[str, Any]) -> list[ProcurementAttachment]:
+    attachments: list[ProcurementAttachment] = []
+    seen: set[tuple[str, str]] = set()
+    for item in metadata.get("files", []):
+        ext = Path(str(item.get("stored_name") or "")).suffix.lower()
+        role_hint = str(item.get("role_hint") or "")
+        if ext != ".xml" and role_hint != "notice":
+            continue
+        stored_name = str(item.get("stored_name") or "")
+        if not stored_name:
+            continue
+        stored_path = get_demo_run_input_dir(run_id) / stored_name
+        if not stored_path.is_file():
+            continue
+        try:
+            xml_text = stored_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            xml_text = stored_path.read_text(encoding="cp1251", errors="replace")
+        for idx, payload in enumerate(extract_notice_attachments(xml_text), start=1):
+            name = str(payload.get("name") or "").strip() or f"notice-attachment-{idx}"
+            url = str(payload.get("url") or "").strip() or None
+            key = (name.lower(), url or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            attachments.append(
+                ProcurementAttachment(
+                    attachment_id=f"notice-xml-{idx}",
+                    name=name,
+                    url=url,
+                    extension=Path(name).suffix.lower() or None,
+                    document_kind=str(payload.get("document_kind") or "attachment"),
+                    can_download=bool(url),
+                    requires_manual_upload=not bool(url),
+                )
+            )
+    return attachments
+
+
+def _dedupe_procurement_attachments(
+    attachments: list[ProcurementAttachment],
+    *,
+    existing_files: list[dict[str, Any]],
+) -> list[ProcurementAttachment]:
+    existing_names = {str(item.get("original_name") or "").strip().lower() for item in existing_files}
+    existing_urls = {str(item.get("source_url") or "").strip() for item in existing_files if item.get("source_url")}
+    deduped: list[ProcurementAttachment] = []
+    seen: set[tuple[str, str]] = set()
+    for item in attachments:
+        name_key = str(item.name or "").strip().lower()
+        url_key = str(item.url or "").strip()
+        if name_key in existing_names or (url_key and url_key in existing_urls):
+            continue
+        key = (name_key, url_key)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _supplement_run_with_discovered_attachments(
+    run_id: str,
+    *,
+    attachments: list[ProcurementAttachment],
+    source_type: str,
+    event_label: str,
+    source_note: str,
+) -> int:
+    if not attachments:
         return 0
 
     metadata = load_demo_run_metadata(run_id)
     existing_files = list(metadata.get("files", []))
-    existing_names = {str(item.get("original_name") or "").strip() for item in existing_files}
-    attachments = [
-        item
-        for item in _fetch_public_notice_attachments(source_url)
-        if str(item.name).strip() not in existing_names
-    ]
+    attachments = _dedupe_procurement_attachments(attachments, existing_files=existing_files)
     if not attachments:
         return 0
 
-    existing_count = len(existing_files)
-    input_dir = get_demo_run_input_dir(run_id)
     settings = get_zakupki_soap_settings()
     download_limit = settings.max_download_mb * 1024 * 1024
+    input_dir = get_demo_run_input_dir(run_id)
+    remaining_slots = max(0, min(settings.max_attachments, MAX_PROCUREMENT_DOCUMENTS) - len(existing_files))
+    if remaining_slots <= 0:
+        return 0
 
     download_result = download_procurement_attachments(
         attachments,
         target_dir=input_dir,
-        max_attachments=settings.max_attachments,
+        max_attachments=remaining_slots,
         max_file_size_bytes=download_limit,
         max_total_size_bytes=download_limit,
     )
 
     saved_count = 0
-    for offset, item in enumerate(download_result.saved, start=1):
+    file_index = len(existing_files)
+    for item in download_result.saved:
         if not item.stored_name:
             continue
-        file_id = f"FILE-{existing_count + offset:02d}"
+        file_index += 1
+        role_hint = _role_hint_from_procurement_attachment(item.name)
         existing_files.append(
             build_demo_file_descriptor(
-                file_id=file_id,
+                file_id=f"FILE-{file_index:02d}",
                 original_name=item.name,
                 stored_name=item.stored_name,
-                role_hint=_role_hint_from_procurement_attachment(item.name),
+                role_hint=role_hint,
                 size_bytes=item.size_bytes,
-                content_type="application/octet-stream",
-                source="public_notice_documents",
+                content_type=item.content_type or "application/octet-stream",
+                source=source_type,
+                source_type=source_type,
+                source_url=item.source_url,
+                document_kind=item.document_kind or _document_kind_from_role_hint(role_hint),
             )
         )
         append_demo_run_event(
             run_id,
             "attachment_saved",
-            f"Документация '{item.name}' скачана с публичной вкладки документов ЕИС.",
-            {"stored_name": item.stored_name, "source": "public_notice_documents"},
+            f"Документация '{item.name}' скачана из источника {source_type}.",
+            {"stored_name": item.stored_name, "source": source_type, "source_url": item.source_url},
         )
         saved_count += 1
 
@@ -592,14 +677,20 @@ def _supplement_run_with_public_notice_attachments(run_id: str, source_url: str 
                 extension=item.extension,
                 status=item.status,
                 note=item.note,
+                source_url=item.source_url,
+                source_type=source_type,
+                document_kind=item.document_kind,
+                content_type=item.content_type,
+                size_bytes=item.size_bytes,
+                error=item.error,
             )
         )
         if item.status != "saved":
             append_demo_run_event(
                 run_id,
                 "attachment_skipped",
-                f"Документация '{item.name}' пропущена при публичной догрузке: {item.note or 'причина не указана'}",
-                {"stored_name": item.stored_name, "source": "public_notice_documents", "status": item.status},
+                f"Документация '{item.name}' пропущена при догрузке: {item.note or 'причина не указана'}",
+                {"stored_name": item.stored_name, "source": source_type, "status": item.status, "source_url": item.source_url},
             )
 
     metadata["files"] = existing_files
@@ -614,16 +705,15 @@ def _supplement_run_with_public_notice_attachments(run_id: str, source_url: str 
     attachment_names = list(procurement_payload.get("attachment_names") or [])
     attachment_names.extend(item.name for item in download_result.saved if item.name not in attachment_names)
     procurement_payload["attachment_names"] = attachment_names
-    procurement_payload["attachments_count"] = max(int(procurement_payload.get("attachments_count") or 0), len(attachments))
+    procurement_payload["attachments_count"] = max(int(procurement_payload.get("attachments_count") or 0), len(attachment_names))
     procurement_payload["available_attachments_count"] = max(
         int(procurement_payload.get("available_attachments_count") or 0),
-        len([item for item in attachments if item.can_download]),
+        len(attachment_names),
     )
     procurement_payload["attachments_status"] = "downloaded" if saved_count > 0 else procurement_payload.get("attachments_status")
-    source_note = str(procurement_payload.get("source_note") or "").strip()
-    fallback_note = "Публичная вкладка documents.html использована как fallback для скачивания вложений."
-    if fallback_note not in source_note:
-        procurement_payload["source_note"] = f"{source_note} {fallback_note}".strip()
+    existing_note = str(procurement_payload.get("source_note") or "").strip()
+    if source_note not in existing_note:
+        procurement_payload["source_note"] = f"{existing_note} {source_note}".strip()
     metadata["procurement"] = procurement_payload
 
     save_demo_run_metadata(run_id, metadata)
@@ -632,14 +722,38 @@ def _supplement_run_with_public_notice_attachments(run_id: str, source_url: str 
         selected=ProcurementSearchResult.model_validate(procurement_payload),
         manifest=manifest,
     )
-    if attachments:
-        append_demo_run_event(
-            run_id,
-            "public_documents_loaded",
-            "Публичная вкладка документов ЕИС проверена и использована для догрузки вложений.",
-            {"attachments_found": len(attachments), "saved_files": saved_count, "skipped_files": len(download_result.skipped)},
-        )
+    append_demo_run_event(
+        run_id,
+        event_label,
+        "Дополнительные документы закупки найдены и обработаны.",
+        {"attachments_found": len(attachments), "saved_files": saved_count, "skipped_files": len(download_result.skipped), "source": source_type},
+    )
     return saved_count
+
+
+def _supplement_run_with_public_notice_attachments(run_id: str, source_url: str | None) -> int:
+    if not source_url:
+        return 0
+    attachments = _fetch_public_notice_attachments(source_url)
+    return _supplement_run_with_discovered_attachments(
+        run_id,
+        attachments=attachments,
+        source_type="public_notice_documents",
+        event_label="public_documents_loaded",
+        source_note="Публичная вкладка documents.html использована как fallback для скачивания вложений.",
+    )
+
+
+def _supplement_run_with_notice_xml_attachments(run_id: str) -> int:
+    metadata = load_demo_run_metadata(run_id)
+    attachments = _discover_notice_xml_attachments(run_id, metadata)
+    return _supplement_run_with_discovered_attachments(
+        run_id,
+        attachments=attachments,
+        source_type="notice_xml_attachments",
+        event_label="notice_xml_documents_loaded",
+        source_note="Ссылки на вложения извлечены из epNotification XML.",
+    )
 
 
 def _apply_search_result_context(
@@ -827,9 +941,13 @@ def _extract_safe_archive_into_run(run_id: str, archive_path: Path) -> tuple[lis
                         file_id=f"FILE-{extracted_count:02d}",
                         original_name=original_name,
                         stored_name=relative_stored_name,
+                        role_hint=_role_hint_from_procurement_attachment(original_name),
                         size_bytes=len(raw),
                         content_type="application/octet-stream",
                         source="eis_getdocs_archive",
+                        source_type="getdocs_archive",
+                        document_kind=_document_kind_from_role_hint(_role_hint_from_procurement_attachment(original_name)),
+                        parent_archive=archive_path.name,
                     )
                 )
                 manifest.append(
@@ -839,6 +957,10 @@ def _extract_safe_archive_into_run(run_id: str, archive_path: Path) -> tuple[lis
                         extension=ext,
                         status="saved",
                         note="Файл извлечён из getDocsIP архива в безопасном локальном режиме.",
+                        source_type="getdocs_archive",
+                        document_kind=_document_kind_from_role_hint(_role_hint_from_procurement_attachment(original_name)),
+                        content_type="application/octet-stream",
+                        size_bytes=len(raw),
                     )
                 )
     except zipfile.BadZipFile:
@@ -1400,6 +1522,7 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         archive_manifest=manifest,
     )
     _write_procurement_artifacts(run_id, selected=selected, manifest=manifest)
+    _supplement_run_with_notice_xml_attachments(run_id)
     append_demo_run_event(
         run_id,
         "run_created_from_eis_archive",
@@ -1407,25 +1530,29 @@ def create_run_from_eis_docs_archive(request: EisDocsArchiveRunRequest) -> Procu
         {"mode": "procurement_search_intake", "file_count": len(files), "token_owner": settings.token_owner},
     )
 
+    current_metadata = load_demo_run_metadata(run_id)
     final_status = status
-    analysis_status = metadata["analysis_status"]
-    if request.analyze_after_download and status == TenderOperatorUploadedRunStatus.READY_TO_ANALYZE:
+    analysis_status = current_metadata["analysis_status"]
+    current_status = current_metadata.get("status", status.value)
+    if request.analyze_after_download and current_status == TenderOperatorUploadedRunStatus.READY_TO_ANALYZE.value:
         analysis_result = analyze_eis_archive_run(run_id)
         final_status = analysis_result.status
         analysis_status = analysis_result.status.value
+    else:
+        final_status = TenderOperatorUploadedRunStatus(current_status)
 
     return ProcurementRunResponse(
         run_id=run_id,
         status=final_status,
         created_at=datetime.fromisoformat(created_at),
-        file_count=len(files),
+        file_count=len(current_metadata.get("files", [])),
         run_url=f"/demo/tender-agent/runs/{run_id}",
         report_url=f"/demo/tender-agent/runs/{run_id}/report",
-        downloaded_files_count=len(files),
-        manual_upload_required=final_status == TenderOperatorUploadedRunStatus.DOCS_REQUIRED,
-        warnings=list(archive_result.warnings),
+        downloaded_files_count=int(current_metadata.get("downloaded_files_count", len(current_metadata.get("files", [])))),
+        manual_upload_required=bool(current_metadata.get("manual_upload_required", final_status == TenderOperatorUploadedRunStatus.DOCS_REQUIRED)),
+        warnings=list(current_metadata.get("warnings", archive_result.warnings)),
         limitations=metadata["limitations"],
-        attachments_status=metadata["attachments_status"],
+        attachments_status=str(current_metadata.get("attachments_status", metadata["attachments_status"])),
         procurement=selected,
         attachments=manifest,
         archive_url_present=bool(archive_urls),
@@ -1485,7 +1612,7 @@ def create_run_from_search_result(
         analysis_status=analysis_status,
         run_url=result.run_url,
         report_url=result.report_url,
-        warnings=result.warnings,
+        warnings=list(current_metadata.get("warnings", result.warnings)),
     )
 
 

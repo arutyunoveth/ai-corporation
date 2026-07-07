@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import re
+import ssl
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import ProxyHandler, Request, build_opener
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 from src.modules.tender_operator_agent_demo.procurement_schemas import ProcurementAttachment
 
 
-ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip"}
+ALLOWED_ATTACHMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip", ".xml", ".html", ".htm"}
 DEFAULT_ALLOWED_DOMAINS = {"zakupki.gov.ru", "int44.zakupki.gov.ru"}
 AttachmentTransport = Callable[[str, int], tuple[bytes, str | None]]
 
@@ -24,6 +25,11 @@ class AttachmentDownloadManifestItem:
     status: str
     note: str | None = None
     size_bytes: int = 0
+    source_url: str | None = None
+    source_type: str | None = None
+    document_kind: str | None = None
+    content_type: str | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -62,6 +68,9 @@ def download_procurement_attachments(
                     extension=extension,
                     status="skipped",
                     note="Формат вложения не входит в allowlist.",
+                    source_url=attachment.url,
+                    document_kind=getattr(attachment, "document_kind", None),
+                    error="unsupported_extension",
                 )
             )
             continue
@@ -73,6 +82,8 @@ def download_procurement_attachments(
                     extension=extension,
                     status="skipped",
                     note="В ответе источника нет ссылки на скачивание.",
+                    document_kind=getattr(attachment, "document_kind", None),
+                    error="missing_url",
                 )
             )
             continue
@@ -85,6 +96,9 @@ def download_procurement_attachments(
                     extension=extension,
                     status="skipped",
                     note=url_error,
+                    source_url=attachment.url,
+                    document_kind=getattr(attachment, "document_kind", None),
+                    error="url_rejected",
                 )
             )
             continue
@@ -99,6 +113,10 @@ def download_procurement_attachments(
                     extension=extension,
                     status="skipped",
                     note=f"Не удалось скачать вложение: {exc}",
+                    source_url=attachment.url,
+                    source_type="remote_attachment",
+                    document_kind=getattr(attachment, "document_kind", None),
+                    error=str(exc),
                 )
             )
             continue
@@ -113,6 +131,11 @@ def download_procurement_attachments(
                     status="skipped",
                     note="Размер файла превышает лимит.",
                     size_bytes=size,
+                    source_url=attachment.url,
+                    source_type="remote_attachment",
+                    document_kind=getattr(attachment, "document_kind", None),
+                    content_type=content_type,
+                    error="file_too_large",
                 )
             )
             continue
@@ -125,6 +148,11 @@ def download_procurement_attachments(
                     status="skipped",
                     note="Общий размер скачивания превышает лимит.",
                     size_bytes=size,
+                    source_url=attachment.url,
+                    source_type="remote_attachment",
+                    document_kind=getattr(attachment, "document_kind", None),
+                    content_type=content_type,
+                    error="total_size_exceeded",
                 )
             )
             continue
@@ -140,6 +168,10 @@ def download_procurement_attachments(
                 status="saved",
                 note=f"Файл сохранён локально. Content-Type: {content_type or 'unknown'}.",
                 size_bytes=size,
+                source_url=attachment.url,
+                source_type="remote_attachment",
+                document_kind=getattr(attachment, "document_kind", None),
+                content_type=content_type,
             )
         )
 
@@ -151,6 +183,9 @@ def download_procurement_attachments(
                 extension=_extension_for_attachment(attachment),
                 status="skipped",
                 note="Вложение пропущено из-за лимита количества файлов.",
+                source_url=attachment.url,
+                document_kind=getattr(attachment, "document_kind", None),
+                error="attachment_limit_exceeded",
             )
         )
 
@@ -159,8 +194,39 @@ def download_procurement_attachments(
 
 def _default_transport(url: str, max_file_size_bytes: int) -> tuple[bytes, str | None]:
     request = Request(url, headers={"User-Agent": "ai-corporation-tender-demo/1.0"}, method="GET")
+    ssl_context = _build_ssl_context()
     try:
-        opener = build_opener(ProxyHandler({}))
+        opener = build_opener(ProxyHandler({}), HTTPSHandler(context=ssl_context))
+        with opener.open(request, timeout=30) as response:
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > max_file_size_bytes:
+                raise RuntimeError("file exceeds size limit")
+            return response.read(max_file_size_bytes + 1), response.headers.get("Content-Type")
+    except ssl.SSLError as exc:
+        if "CERTIFICATE_VERIFY_FAILED" not in str(exc):
+            raise RuntimeError(str(exc)) from exc
+        return _download_with_unverified_context(request, max_file_size_bytes)
+    except HTTPError as exc:
+        raise RuntimeError(f"HTTP {exc.code}") from exc
+    except URLError as exc:
+        if "CERTIFICATE_VERIFY_FAILED" in str(exc.reason):
+            return _download_with_unverified_context(request, max_file_size_bytes)
+        raise RuntimeError(str(exc.reason)) from exc
+
+
+def _build_ssl_context() -> ssl.SSLContext:
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+def _download_with_unverified_context(request: Request, max_file_size_bytes: int) -> tuple[bytes, str | None]:
+    fallback_context = ssl._create_unverified_context()  # noqa: SLF001
+    opener = build_opener(ProxyHandler({}), HTTPSHandler(context=fallback_context))
+    try:
         with opener.open(request, timeout=30) as response:
             content_length = response.headers.get("Content-Length")
             if content_length and int(content_length) > max_file_size_bytes:

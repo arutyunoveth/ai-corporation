@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.modules.tender_operator_agent_demo.eis_notice_parser import (
+    extract_notice_attachments,
     extract_notice_metadata,
     merge_structured_metadata,
     build_notice_priority_prompt_section,
@@ -55,6 +56,21 @@ SAMPLE_XML_NO_NS = """<?xml version="1.0" encoding="UTF-8"?>
 </epNotification>
 """
 
+SAMPLE_XML_WITH_ATTACHMENTS = """<?xml version="1.0" encoding="UTF-8"?>
+<epNotification xmlns="http://zakupki.gov.ru/44fz/types/1">
+  <attachmentsInfo>
+    <attachmentInfo>
+      <fileName>Описание объекта закупки.docx</fileName>
+      <url>https://zakupki.gov.ru/44fz/filestore/public/1.0/download/priz/file.html?uid=uid-001</url>
+    </attachmentInfo>
+    <attachmentInfo>
+      <fileName>Проект контракта.docx</fileName>
+      <url>https://zakupki.gov.ru/44fz/filestore/public/1.0/download/priz/file.html?uid=uid-002</url>
+    </attachmentInfo>
+  </attachmentsInfo>
+</epNotification>
+"""
+
 
 class TestExtractNoticeMetadata:
     def test_extracts_44fz_notice_with_namespace(self):
@@ -100,6 +116,13 @@ class TestExtractNoticeMetadata:
         assert result == {}
         result = extract_notice_metadata(None)
         assert result == {}
+
+    def test_extracts_attachment_links_from_notice_xml(self):
+        result = extract_notice_attachments(SAMPLE_XML_WITH_ATTACHMENTS)
+        assert len(result) == 2
+        assert result[0]["name"] == "Описание объекта закупки.docx"
+        assert result[0]["document_kind"] == "procurement_object_description"
+        assert result[1]["document_kind"] == "contract_draft"
 
 
 class TestMergeStructuredMetadata:
