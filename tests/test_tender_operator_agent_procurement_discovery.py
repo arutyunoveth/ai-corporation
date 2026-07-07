@@ -295,6 +295,42 @@ def test_public_44fz_search_returns_source_unavailable_for_js_heavy(monkeypatch)
     assert "недоступен" in result["message"]
 
 
+def test_public_44fz_search_by_exact_notice_number_skips_supplier_relevance(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {"status": "parsed", "html": "<html></html>", "error": None},
+    )
+    monkeypatch.setattr(
+        discovery,
+        "parse_44fz_search_results",
+        lambda html: [
+            {
+                "title": "Тестовая закупка по номеру",
+                "notice_number": "0888500000226000399",
+                "reestr_number": "0888500000226000399",
+                "customer_name": "Заказчик",
+                "initial_price": 1000000.0,
+                "publication_date": "07.07.2026",
+                "deadline": "15.07.2026",
+                "status": "Подача заявок",
+                "procedure_type": "Электронный аукцион",
+                "source_url": "https://zakupki.gov.ru/epz/order/notice/ea20/view/common-info.html?regNumber=0888500000226000399",
+                "law": "44fz",
+                "warnings": [],
+            },
+        ],
+    )
+
+    result = search_public_44fz(query="0888500000226000399", law="44fz", max_results=5)
+
+    assert result["status"] == "parsed"
+    assert len(result["cards"]) == 1
+    assert "relevance" not in result["cards"][0]
+
+
 def test_public_44fz_search_backfill_fills_to_page_size(monkeypatch):
     import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
 

@@ -2947,6 +2947,52 @@ def _build_final_recommendation(outputs: dict[str, dict[str, Any]]) -> DemoFinal
     )
 
 
+def _preliminary_analysis_supply_section_title(preliminary_analysis: dict[str, Any]) -> str:
+    columns = preliminary_analysis.get("spec_table", {}).get("columns", []) or []
+    if "Блок работ / результат" in columns:
+        return "Состав работ / поставки / услуг"
+    return "Состав поставки"
+
+
+def _preliminary_analysis_supply_section_markdown(preliminary_analysis: dict[str, Any]) -> str:
+    rows = preliminary_analysis.get("spec_table", {}).get("rows", []) or []
+    if not rows:
+        return "Структурированный состав поставки не выделен автоматически. Требуется ручная проверка ТЗ и приложений."
+
+    note = preliminary_analysis.get("supply_section_note", "").strip()
+    columns = preliminary_analysis.get("spec_table", {}).get("columns", []) or []
+    lines: list[str] = [note] if note else []
+    if "Блок работ / результат" in columns:
+        lines.extend(
+            [
+                (
+                    f"- {row.get('№', '—')}. {row.get('Блок работ / результат', 'Блок работ')} | "
+                    f"что сделать: {row.get('Что нужно сделать', 'не указано')} | "
+                    f"системы: {row.get('Входные/внешние системы', 'не указано')} | "
+                    f"результат: {row.get('Результат для заказчика', 'не указано')} | "
+                    f"приемка: {row.get('Критерии приёмки', 'не указано')} | "
+                    f"источник: {row.get('Источник', 'не указан')}"
+                )
+                for row in rows
+            ]
+        )
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            (
+                f"- {row.get('№', '—')}. {row.get('Наименование', 'Позиция')} | "
+                f"кол-во: {row.get('Кол-во', 'не указано')} | "
+                f"ед.: {row.get('Ед. изм.', '—')} | "
+                f"характеристики: {row.get('Характеристики', '—')} | "
+                f"источник: {row.get('Источник', 'не указан')}"
+            )
+            for row in rows
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str, Any]]) -> str:
     final_recommendation = outputs["final_recommendation"]
     quotes = outputs["quotes_comparison"]
@@ -2977,6 +3023,7 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
             f"- Заказчик: {metadata.get('customer_name')}\n"
             f"- Закон: {metadata.get('law') or procurement.get('category') or 'не указан'}\n"
             f"- НМЦК: {procurement.get('initial_price') or 'не указана'} {procurement.get('currency') or '₽'}\n"
+            f"- Дата публикации: {metadata.get('publication_date') or procurement.get('publication_date') or 'не указана'}\n"
             f"- Срок подачи: {metadata.get('deadline') or 'не указан'}\n"
             f"- Источник сведений: {procurement.get('structured_source_label') or metadata.get('notice_source_label') or 'карточка ЕИС'}\n"
             f"- Ссылка на источник: {metadata.get('procurement_url')}\n"
@@ -3019,17 +3066,8 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
             if preliminary_analysis.get("contract_highlights")
             else "- Ключевые условия договора нужно проверить вручную."
         )
-        + "\n\n## Состав поставки\n"
-        + (
-            preliminary_analysis.get("supply_section_note", "")
-            + "\n"
-            + "\n".join(
-                f"- {row.get('№', '—')}. {row.get('Наименование', 'Позиция')} | кол-во: {row.get('Кол-во', 'не указано')} | ед.: {row.get('Ед. изм.', '—')} | характеристики: {row.get('Характеристики', '—')} | источник: {row.get('Источник', 'не указан')}"
-                for row in preliminary_analysis.get("spec_table", {}).get("rows", [])
-            )
-            if preliminary_analysis.get("spec_table", {}).get("rows")
-            else "Структурированный состав поставки не выделен автоматически. Требуется ручная проверка ТЗ и приложений."
-        )
+        + f"\n\n## {_preliminary_analysis_supply_section_title(preliminary_analysis)}\n"
+        + _preliminary_analysis_supply_section_markdown(preliminary_analysis)
         + "\n\n## Извлечённые ТКП\n"
         + (
             "\n".join(
@@ -3341,7 +3379,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
             <h2>Предварительный анализ закупки</h2>
             <ul>{list_html(preliminary_analysis.get('overview', [])) or "<li>Пока не удалось извлечь структурированные выводы из ТЗ.</li>"}</ul>
             {(
-                '<h3>Состав поставки</h3>'
+                f"<h3>{html.escape(_preliminary_analysis_supply_section_title(preliminary_analysis))}</h3>"
                 + f"<p>{html.escape(preliminary_analysis.get('supply_section_note', 'Состав поставки собран по техническим документам.'))}</p>"
                 + '<div class="table-scroll">'
                 + render_table(
@@ -3717,7 +3755,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             contract_draft_text=contract_draft_text,
         )
 
-        profile = get_supplier_profile()
+        profile = None if metadata.get("mode") == "procurement_search_intake" else get_supplier_profile()
         doc_relevance = score_procurement_document_text(text=combined_text or "", profile=profile)
         metadata["document_relevance"] = doc_relevance
         append_demo_run_event(

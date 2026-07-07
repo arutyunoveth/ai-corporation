@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from pathlib import Path
 from datetime import date, datetime
 from typing import Any
@@ -420,6 +421,11 @@ def set_supplier_profile(profile: SupplierProfile) -> None:
     _current_supplier_profile = profile
 
 
+def _looks_like_exact_procurement_number(query: str) -> bool:
+    normalized = re.sub(r"\s+", "", str(query or ""))
+    return bool(re.fullmatch(r"\d{11,20}", normalized))
+
+
 def search_public_44fz(
     query: str,
     law: str = "44fz",
@@ -678,21 +684,22 @@ def search_public_44fz(
         ).model_dump(mode="json")
 
     valid_cards = _sort_public_44fz_cards(valid_cards)
-    profile = get_supplier_profile()
+    profile = None if _looks_like_exact_procurement_number(query) else get_supplier_profile()
     scored_cards = []
     for card in valid_cards[:effective_page_size]:
-        result = score_procurement_card(
-            title=card.get("title", ""),
-            initial_price=card.get("initial_price"),
-            customer_name=card.get("customer_name"),
-            submission_deadline=card.get("deadline"),
-            profile=profile,
-        )
         card_with_relevance = dict(card)
         card_with_relevance["law"] = normalized_law
         card_with_relevance["category"] = _public_law_label(normalized_law)
         card_with_relevance["source"] = _public_source_from_law(normalized_law)
-        card_with_relevance["relevance"] = result.to_dict()
+        if profile is not None:
+            result = score_procurement_card(
+                title=card.get("title", ""),
+                initial_price=card.get("initial_price"),
+                customer_name=card.get("customer_name"),
+                submission_deadline=card.get("deadline"),
+                profile=profile,
+            )
+            card_with_relevance["relevance"] = result.to_dict()
         scored_cards.append(card_with_relevance)
 
     returned_count = len(scored_cards)
