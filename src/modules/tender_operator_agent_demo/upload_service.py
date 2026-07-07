@@ -7,7 +7,7 @@ import re
 import subprocess
 import tempfile
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -128,6 +128,24 @@ class AnalyzedDocument:
     source: str
     file_id: str
     raw_content: bytes | None = None
+
+
+@dataclass
+class SupplyItem:
+    item_no: str | None
+    name: str
+    quantity: str | None
+    unit: str | None
+    characteristics: list[str]
+    gost: list[str]
+    equivalent_allowed: bool | None
+    source_document: str
+    source_kind: str
+    confidence: str
+    raw_fragment: str
+    unit_price: str | None = None
+    total_price: str | None = None
+    source_documents: list[str] = field(default_factory=list)
 
 
 def get_demo_runs_root() -> Path:
@@ -1377,6 +1395,17 @@ def _extract_inline_goods_field(text: str, labels: tuple[str, ...], *, stop_mark
     return _cleanup_tabular_value(match.group(1))
 
 
+def _cleanup_delivery_address(value: str | None) -> str | None:
+    cleaned = _cleanup_tabular_value(value)
+    if not cleaned:
+        return None
+    address_match = re.search(r"по адресу:\s*(.+)$", cleaned, re.IGNORECASE)
+    if address_match:
+        cleaned = address_match.group(1)
+    cleaned = re.sub(r"\s*Расходы по доставке.+$", "", cleaned, flags=re.IGNORECASE)
+    return _cleanup_tabular_value(cleaned)
+
+
 def _extract_goods_characteristics(section_text: str) -> str | None:
     normalized = _cleanup_tabular_value(section_text) or ""
     matches = re.findall(
@@ -1397,12 +1426,275 @@ def _extract_goods_characteristics(section_text: str) -> str | None:
     return "; ".join(items) if items else None
 
 
-def _extract_goods_spec_table(technical_spec_text: str) -> list[dict[str, str]]:
+_SUPPLY_UNIT_PATTERN = re.compile(
+    r"^(шт|м|м\.|м2|м3|кг|г|л|компл(?:ект)?|комп|упак(?:овка)?|пара|рул(?:он)?|набор|ед\.?|усл\.?\s*ед\.?|пог\.?\s*м\.?)$",
+    re.IGNORECASE,
+)
+
+
+def _is_goods_supply_table_present(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "перечень запасных частей",
+            "перечень товаров",
+            "перечень поставки",
+            "спецификация",
+            "№ п/п",
+            "ед.изм",
+            "кол-во",
+        )
+    )
+
+
+def _normalize_supply_name(value: str | None) -> str:
+    cleaned = _cleanup_tabular_value(value) or ""
+    cleaned = re.sub(r"\s+или\s+эквивалент\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+,", ",", cleaned)
+    return cleaned.strip(" -") or "Позиция"
+
+
+def _normalize_supply_name_key(value: str | None) -> str:
+    cleaned = _normalize_supply_name(value).lower()
+    cleaned = cleaned.replace("ё", "е")
+    cleaned = re.sub(r"\bгост\b", "", cleaned)
+    cleaned = re.sub(r"[^a-zа-я0-9]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _normalize_supply_unit(value: str | None) -> str | None:
+    cleaned = (_cleanup_tabular_value(value) or "").lower().replace(" ", "")
+    aliases = {
+        "м.": "м",
+        "пог.м.": "м",
+        "пог.м": "м",
+        "ед": "ед.",
+        "ед.": "ед.",
+        "комп": "компл",
+    }
+    return aliases.get(cleaned, cleaned) or None
+
+
+def _normalize_quantity_value(value: str | None) -> str | None:
+    cleaned = _cleanup_tabular_value(value)
+    if not cleaned:
+        return None
+    compact = cleaned.replace(" ", "")
+    if not re.fullmatch(r"\d+(?:[.,]\d+)?", compact):
+        return cleaned
+    if "." in compact:
+        compact = compact.rstrip("0").rstrip(".")
+    if "," in compact:
+        compact = compact.rstrip("0").rstrip(",")
+    return compact
+
+
+def _format_decimal_price(value: float | None) -> str | None:
+    if value is None:
+        return None
+    return f"{value:,.2f}".replace(",", " ").replace(".", ",")
+
+
+def _parse_float(value: str | None) -> float | None:
+    if not value:
+        return None
+    compact = value.replace(" ", "").replace(",", ".")
+    try:
+        return float(compact)
+    except ValueError:
+        return None
+
+
+def _extract_gost_tokens(text: str) -> list[str]:
+    seen: set[str] = set()
+    values: list[str] = []
+    for match in re.finditer(r"ГОСТ\s*[\d.]+(?:[-–]\d{2,4})?(?:-\d{4})?", text or "", re.IGNORECASE):
+        raw = _cleanup_tabular_value(match.group(0))
+        if not raw:
+            continue
+        token = raw.upper().replace("–", "-")
+        if token in seen:
+            continue
+        seen.add(token)
+        values.append(token)
+    return values
+
+
+def _summarize_supply_characteristics(values: list[str], *, limit: int = 6) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = _cleanup_tabular_value(value)
+        if not cleaned:
+            continue
+        if cleaned.lower().startswith(("требования к качеству", "требования к безопасности")):
+            continue
+        if "__" in cleaned:
+            continue
+        if any(marker in cleaned.lower() for marker in ("заказчик", "поставщик", "м.п.", "при учете требований")):
+            continue
+        normalized = cleaned.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(cleaned)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _supply_item_to_row(item: SupplyItem) -> dict[str, str]:
+    characteristics = "; ".join(item.characteristics) if item.characteristics else "Требуется сверка характеристик по ТЗ."
+    return {
+        "№": item.item_no or "—",
+        "Наименование": item.name,
+        "Кол-во": item.quantity or "не указано",
+        "Ед. изм.": item.unit or "—",
+        "Ключевые характеристики": characteristics,
+        "ГОСТ / норматив": ", ".join(item.gost) if item.gost else "—",
+        "Эквивалент": "да" if item.equivalent_allowed else "нет",
+        "Цена за ед., руб.": item.unit_price or "—",
+        "Сумма, руб.": item.total_price or "—",
+        "Источник": ", ".join(item.source_documents or [item.source_document]),
+    }
+
+
+def _extract_supply_items_from_spec_text(text: str, source_document: str) -> list[SupplyItem]:
+    if not text or not _is_goods_supply_table_present(text):
+        return []
+    lines = [_cleanup_tabular_value(line) for line in text.replace("\f", "\n").splitlines()]
+    normalized_lines = [line for line in lines if line]
+    if not normalized_lines:
+        return []
+
+    start_index = 0
+    for index, line in enumerate(normalized_lines):
+        lowered = line.lower()
+        if "№ п/п" in lowered or "перечень запасных частей" in lowered or "перечень товаров" in lowered:
+            start_index = index
+            break
+    candidate_lines = normalized_lines[start_index:]
+
+    items: list[SupplyItem] = []
+    index = 0
+    while index < len(candidate_lines):
+        line = candidate_lines[index]
+        if not re.fullmatch(r"\d{1,3}", line):
+            index += 1
+            continue
+        item_no = line
+        if index + 1 >= len(candidate_lines):
+            break
+        name = _normalize_supply_name(candidate_lines[index + 1])
+        block: list[str] = []
+        index += 2
+        while index < len(candidate_lines) and not re.fullmatch(r"\d{1,3}", candidate_lines[index]):
+            block.append(candidate_lines[index])
+            index += 1
+        equivalent_allowed = "эквивалент" in (candidate_lines[index - len(block) - 1] if block else name).lower() or "эквивалент" in name.lower()
+        unit = None
+        quantity = None
+        characteristics: list[str] = []
+        pos = 0
+        while pos < len(block):
+            normalized_value = _cleanup_tabular_value(block[pos]) or ""
+            next_value = _cleanup_tabular_value(block[pos + 1]) if pos + 1 < len(block) else None
+            if not unit and _SUPPLY_UNIT_PATTERN.fullmatch(normalized_value) and next_value:
+                if re.fullmatch(r"\d+(?:[.,]\d+)?", next_value.replace(" ", "")):
+                    unit = _normalize_supply_unit(normalized_value)
+                    quantity = _normalize_quantity_value(next_value)
+                    pos += 2
+                    continue
+            if (
+                normalized_value
+                and next_value
+                and not re.fullmatch(r"\d+(?:[.,]\d+)?", normalized_value.replace(" ", ""))
+                and not _SUPPLY_UNIT_PATTERN.fullmatch(normalized_value)
+                and not re.fullmatch(r"\d+(?:[.,]\d+)?", next_value.replace(" ", ""))
+                and not _SUPPLY_UNIT_PATTERN.fullmatch(next_value)
+            ):
+                characteristics.append(f"{normalized_value}: {next_value}")
+                pos += 2
+                continue
+            pos += 1
+        raw_fragment = "\n".join([item_no, name, *block])
+        item = SupplyItem(
+            item_no=item_no,
+            name=_normalize_supply_name(name),
+            quantity=quantity,
+            unit=unit,
+            characteristics=_summarize_supply_characteristics(characteristics or [_extract_goods_characteristics(raw_fragment) or ""]),
+            gost=_extract_gost_tokens(raw_fragment),
+            equivalent_allowed=equivalent_allowed,
+            source_document=source_document,
+            source_kind="technical_spec",
+            confidence="high" if quantity and unit else "medium",
+            raw_fragment=raw_fragment,
+            source_documents=[source_document],
+        )
+        if item.name:
+            items.append(item)
+        if len(items) >= 24:
+            break
+    return items
+
+
+def _extract_supply_items_from_xlsx_text(text: str, source_document: str) -> list[SupplyItem]:
+    if not text or "\t" not in text:
+        return []
+    items: list[SupplyItem] = []
+    for line in text.splitlines():
+        cells = [_cleanup_tabular_value(cell) or "" for cell in line.split("\t")]
+        meaningful = [cell for cell in cells if cell]
+        if len(meaningful) < 4:
+            continue
+        lowered = " ".join(meaningful).lower()
+        if any(token in lowered for token in ("используемый метод", "коммерческие предложения", "коэффициент", "лист", "sheet")):
+            continue
+        if "наименование" in lowered and ("коли" in lowered or "кол-во" in lowered):
+            continue
+        if not re.fullmatch(r"\d{1,3}", meaningful[0]):
+            continue
+        raw_name = meaningful[1]
+        name = _normalize_supply_name(raw_name)
+        unit = _normalize_supply_unit(meaningful[2])
+        quantity = _normalize_quantity_value(meaningful[3])
+        numeric_tail = [_parse_float(value) for value in meaningful[4:]]
+        numeric_tail = [value for value in numeric_tail if value is not None]
+        total_value = numeric_tail[-1] if numeric_tail else None
+        quantity_value = _parse_float(quantity)
+        derived_unit_price = (total_value / quantity_value) if total_value is not None and quantity_value not in (None, 0) else None
+        price_value = derived_unit_price or (numeric_tail[-2] if len(numeric_tail) >= 2 else None)
+        item = SupplyItem(
+            item_no=meaningful[0],
+            name=name,
+            quantity=quantity,
+            unit=unit,
+            characteristics=[],
+            gost=_extract_gost_tokens(" ".join(meaningful)),
+            equivalent_allowed="эквивалент" in raw_name.lower(),
+            source_document=source_document,
+            source_kind="nmck_xlsx",
+            confidence="high" if total_value is not None else "medium",
+            raw_fragment=line,
+            unit_price=_format_decimal_price(price_value),
+            total_price=_format_decimal_price(total_value),
+            source_documents=[source_document],
+        )
+        items.append(item)
+        if len(items) >= 24:
+            break
+    return items
+
+
+def _extract_legacy_goods_spec_rows(technical_spec_text: str) -> list[dict[str, str]]:
     if not technical_spec_text:
         return []
     unit_pattern = r"(шт|м|компл(?:ект)?|упак(?:овка)?|пара|кг|л|рул(?:он)?|набор|ед\.?|усл\.?\s*ед\.?|услуга)"
     rows: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str]] = set()
     section_pattern = re.compile(
         r"(?:(?P<section_no>\d(?:\s*\d)?)\.\s*)?Описание\s+объекта\s+закупки:",
         re.IGNORECASE,
@@ -1421,144 +1713,110 @@ def _extract_goods_spec_table(technical_spec_text: str) -> list[dict[str, str]]:
         if not row_match:
             continue
         row_text = _cleanup_tabular_value(row_match.group("row")) or ""
-        if len(section_number) > 1:
-            spaced_number = " ".join(section_number)
-            if row_text.startswith(f"{spaced_number} "):
-                row_text = f"{section_number} {row_text[len(spaced_number) + 1:]}"
         parsed_match = re.search(
             rf"(?P<num>\d+)\s+(?P<name>.+?)\s+(?P<unit>{unit_pattern})\s+(?P<tail>.+)$",
             row_text,
             re.IGNORECASE,
         )
-        if parsed_match:
-            number = section_number or parsed_match.group("num")
-            name = _cleanup_tabular_value(parsed_match.group("name")) or "Позиция"
-            unit = _cleanup_tabular_value(parsed_match.group("unit")) or "—"
-            tail = _cleanup_tabular_value(parsed_match.group("tail")) or ""
-            tail_tokens = tail.split()
-            trailing_digit_tokens: list[str] = []
-            for token in reversed(tail_tokens):
-                stripped = token.strip()
-                if stripped in {"-", "—"} and trailing_digit_tokens:
-                    continue
-                if re.fullmatch(r"\d+", stripped):
-                    trailing_digit_tokens.append(stripped)
-                    continue
-                break
-            quantity = "".join(reversed(trailing_digit_tokens)) if trailing_digit_tokens else "не указано"
-        else:
-            number = section_number
-            name = row_text[:120] or "Позиция"
-            unit = "—"
-            quantity = "не указано"
+        if not parsed_match:
+            continue
+        tail = _cleanup_tabular_value(parsed_match.group("tail")) or ""
+        quantity_match = re.search(r"(\d+(?:[.,]\d+)?)\s*$", tail)
+        quantity = _normalize_quantity_value(quantity_match.group(1) if quantity_match else "не указано") or "не указано"
         characteristics = _extract_goods_characteristics(section) or "Требуется сверка характеристик по ТЗ."
-        dedupe_key = (name.lower(), unit.lower(), quantity, characteristics.lower())
-        if dedupe_key in seen:
-            continue
-        seen.add(dedupe_key)
-        rows.append(
-            {
-                "№": number,
-                "Наименование": name,
-                "Ед. изм.": unit,
-                "Кол-во": quantity or "не указано",
-                "Характеристики": characteristics,
-            }
-        )
-        if len(rows) >= 24:
-            break
-    final_rows: list[dict[str, str]] = []
-    final_seen: set[tuple[str, str, str, str]] = set()
-    for row in rows:
+        row = {
+            "№": section_number or parsed_match.group("num"),
+            "Наименование": _cleanup_tabular_value(parsed_match.group("name")) or "Позиция",
+            "Кол-во": quantity,
+            "Ед. изм.": _cleanup_tabular_value(parsed_match.group("unit")) or "—",
+            "Ключевые характеристики": characteristics,
+            "ГОСТ / норматив": ", ".join(_extract_gost_tokens(section)) or "—",
+            "Эквивалент": "нет",
+            "Цена за ед., руб.": "—",
+            "Сумма, руб.": "—",
+            "Источник": "Техническое задание",
+        }
         key = (
-            re.sub(r"\s+", " ", row.get("Наименование", "")).strip().lower(),
-            re.sub(r"\s+", " ", row.get("Ед. изм.", "")).strip().lower(),
-            re.sub(r"\s+", "", row.get("Кол-во", "")).strip().lower(),
-            re.sub(r"\s+", " ", row.get("Характеристики", "")).strip().lower(),
+            row["Наименование"].lower(),
+            row["Ед. изм."].lower(),
+            row["Кол-во"].lower(),
+            row["Ключевые характеристики"].lower(),
         )
-        if key in final_seen:
-            continue
-        final_seen.add(key)
-        final_rows.append(row)
-    return final_rows
-
-
-def _extract_goods_spec_table_from_tabular_text(text: str) -> list[dict[str, str]]:
-    if not text or "\t" not in text:
-        return []
-
-    unit_pattern = re.compile(r"^(шт|м|компл(?:ект)?|упак(?:овка)?|пара|кг|л|рул(?:он)?|набор|ед\.?|усл\.?\s*ед\.?)$", re.IGNORECASE)
-    rows: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for line in text.splitlines():
-        cells = [_cleanup_tabular_value(cell) or "" for cell in line.split("\t")]
-        meaningful = [cell for cell in cells if cell]
-        if len(meaningful) < 3:
-            continue
-        lowered = " ".join(meaningful).lower()
-        if any(token in lowered for token in ("лист", "sheet", "наименование", "кол-во", "ед.", "единица")):
-            continue
-
-        name = next((cell for cell in meaningful if len(cell) > 4 and not re.fullmatch(r"\d+(?:[.,]\d+)?", cell)), "")
-        quantity = next((cell for cell in meaningful if re.fullmatch(r"\d+(?:[.,]\d+)?", cell)), "не указано")
-        unit = next((cell for cell in meaningful if unit_pattern.match(cell)), "—")
-        characteristics = "; ".join(cell for cell in meaningful if cell not in {name, quantity, unit}) or "Требуется сверка характеристик по приложению."
-        if not name:
-            continue
-        key = (name.lower(), unit.lower(), quantity.lower(), characteristics.lower())
         if key in seen:
             continue
         seen.add(key)
-        rows.append(
-            {
-                "№": str(len(rows) + 1),
-                "Наименование": name,
-                "Ед. изм.": unit,
-                "Кол-во": quantity,
-                "Характеристики": characteristics,
-            }
-        )
-        if len(rows) >= 24:
-            break
+        rows.append(row)
     return rows
+
+
+def _merge_supply_items(items: list[SupplyItem]) -> list[SupplyItem]:
+    merged: dict[str, SupplyItem] = {}
+    for item in items:
+        key = _normalize_supply_name_key(item.name)
+        if not key:
+            continue
+        existing = merged.get(key)
+        if not existing:
+            merged[key] = item
+            continue
+        if not existing.quantity and item.quantity:
+            existing.quantity = item.quantity
+        if not existing.unit and item.unit:
+            existing.unit = item.unit
+        if not existing.unit_price and item.unit_price:
+            existing.unit_price = item.unit_price
+        if not existing.total_price and item.total_price:
+            existing.total_price = item.total_price
+        if item.gost:
+            existing.gost = _summarize_supply_characteristics(existing.gost + item.gost, limit=4)
+        if item.characteristics:
+            existing.characteristics = _summarize_supply_characteristics(existing.characteristics + item.characteristics, limit=6)
+        existing.equivalent_allowed = existing.equivalent_allowed or item.equivalent_allowed
+        existing.confidence = "high" if "high" in {existing.confidence, item.confidence} else existing.confidence
+        for source_document in item.source_documents or [item.source_document]:
+            if source_document not in existing.source_documents:
+                existing.source_documents.append(source_document)
+        if existing.source_document != item.source_document and item.source_kind == "technical_spec":
+            existing.source_document = item.source_document
+            existing.source_kind = item.source_kind
+            existing.raw_fragment = item.raw_fragment or existing.raw_fragment
+    def sort_key(item: SupplyItem) -> tuple[int, str]:
+        try:
+            number = int(item.item_no or "999")
+        except ValueError:
+            number = 999
+        return number, item.name.lower()
+    return sorted(merged.values(), key=sort_key)
+
+
+def _collect_supply_items(documents: list[AnalyzedDocument]) -> list[SupplyItem]:
+    extracted: list[SupplyItem] = []
+    for doc in documents:
+        text = doc.text or ""
+        if not text:
+            continue
+        lowered_name = doc.display_name.lower()
+        if doc.role == "technical_spec" or any(
+            token in lowered_name
+            for token in ("техническ", "описание объекта", "спецификац", "перечень", "ведомост")
+        ):
+            extracted.extend(_extract_supply_items_from_spec_text(text, doc.display_name))
+        if doc.extension in {".xlsx", ".xls"} or "нмцк" in lowered_name or "обоснование" in lowered_name:
+            extracted.extend(_extract_supply_items_from_xlsx_text(text, doc.display_name))
+    return _merge_supply_items(extracted)
+
+
+def _extract_goods_spec_table(technical_spec_text: str) -> list[dict[str, str]]:
+    rows = [_supply_item_to_row(item) for item in _extract_supply_items_from_spec_text(technical_spec_text, "Техническое задание")]
+    return rows or _extract_legacy_goods_spec_rows(technical_spec_text)
+
+
+def _extract_goods_spec_table_from_tabular_text(text: str) -> list[dict[str, str]]:
+    return [_supply_item_to_row(item) for item in _extract_supply_items_from_xlsx_text(text, "Табличное приложение")]
 
 
 def _build_supply_rows(documents: list[AnalyzedDocument]) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
-    seen: set[tuple[str, str, str, str, str]] = set()
-    candidate_docs: list[AnalyzedDocument] = []
-    for doc in documents:
-        if not doc.text:
-            continue
-        lowered_name = doc.display_name.lower()
-        if any(token in lowered_name for token in ("обоснование", "нмцк", "контракт", "заявк", "титуль")):
-            continue
-        if doc.role == "technical_spec" or any(
-            token in lowered_name
-            for token in ("техническ", "описание объекта", "спецификац", "ведомост", "объекта закупки")
-        ):
-            candidate_docs.append(doc)
-    for doc in candidate_docs:
-        parsed_rows = _extract_goods_spec_table(doc.text or "")
-        if not parsed_rows:
-            parsed_rows = _extract_goods_spec_table_from_tabular_text(doc.text or "")
-        for row in parsed_rows:
-            enriched = dict(row)
-            enriched["Источник"] = doc.display_name
-            key = (
-                enriched.get("Наименование", "").strip().lower(),
-                enriched.get("Ед. изм.", "").strip().lower(),
-                enriched.get("Кол-во", "").strip().lower(),
-                enriched.get("Характеристики", "").strip().lower(),
-                enriched.get("Источник", "").strip().lower(),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            rows.append(enriched)
-            if len(rows) >= 24:
-                return rows
-    return rows
+    return [_supply_item_to_row(item) for item in _collect_supply_items(documents)]
 
 
 def _document_source_label(doc: AnalyzedDocument) -> str:
@@ -1666,10 +1924,157 @@ def _build_software_work_rows(documents: list[AnalyzedDocument]) -> list[dict[st
     return rows
 
 
+def _collect_goods_supply_items_from_documents(documents: list[AnalyzedDocument]) -> list[SupplyItem]:
+    return _collect_supply_items(documents)
+
+
+def _build_goods_requirement_rows(documents: list[AnalyzedDocument]) -> list[dict[str, str]]:
+    items = _collect_goods_supply_items_from_documents(documents)
+    rows: list[dict[str, str]] = []
+    for item in items:
+        details = [f"{item.name} — {item.quantity or 'не указано'} {item.unit or ''}".strip()]
+        if item.gost:
+            details.append(", ".join(item.gost))
+        if item.characteristics:
+            details.append("; ".join(item.characteristics[:3]))
+        rows.append(
+            {
+                "title": f"{item.name} — {item.quantity or 'не указано'} {item.unit or ''}".strip(),
+                "detail": " | ".join(details),
+                "source": ", ".join(item.source_documents or [item.source_document]),
+                "type": "товарная позиция",
+                "priority": "high",
+            }
+        )
+    general_requirements = [
+        ("Соответствие ГОСТ / ТУ", "Товар должен соответствовать ГОСТ, ТУ и иной действующей нормативной документации.", "нормативное"),
+        ("Сертификаты и паспорт качества", "Нужны сертификаты, декларации или паспорт качества производителя по применимым позициям.", "документы качества"),
+        ("Маркировка и безопасность", "Маркировка и безопасность товара должны соответствовать обязательным требованиям.", "качество / безопасность"),
+        ("Доставка до заказчика", "Доставка и разгрузка до адреса заказчика должны быть включены и подтверждены поставщиком.", "логистика"),
+    ]
+    for title, detail, req_type in general_requirements:
+        rows.append(
+            {
+                "title": title,
+                "detail": detail,
+                "source": "Техническое задание",
+                "type": req_type,
+                "priority": "medium",
+            }
+        )
+    return rows[:12]
+
+
+def _build_goods_questions(documents: list[AnalyzedDocument]) -> list[str]:
+    items = _collect_goods_supply_items_from_documents(documents)
+    questions = [
+        f"Подтверждаете поставку {item.name} в объёме {item.quantity or 'не указано'} {item.unit or ''}?".strip()
+        for item in items[:6]
+    ]
+    questions.extend(
+        [
+            "Укажите производителя, марку, ГОСТ/ТУ и страну происхождения по каждой позиции.",
+            "Подтвердите наличие сертификатов, деклараций и паспортов качества по поставляемым товарам.",
+            "Подтвердите срок поставки по заявке заказчика и наличие товара на складе.",
+            "Включены ли доставка и разгрузка до адреса заказчика в цену предложения?",
+            "Есть ли отклонения от характеристик ТЗ или предлагаемые аналоги?",
+        ]
+    )
+    return _dedupe_text_items(questions)
+
+
+def _build_goods_rfq_payload(metadata: dict[str, Any], documents: list[AnalyzedDocument]) -> dict[str, Any]:
+    items = _collect_goods_supply_items_from_documents(documents)
+    return {
+        "rfq_title": f"RFQ draft / {metadata['tender_title']}",
+        "sections": [
+            "Позиции поставки и объём",
+            "Подтверждение ГОСТ, сертификатов и паспортов качества",
+            "Срок поставки, наличие на складе и логистика",
+            "Цена за единицу, сумма, НДС и срок действия КП",
+        ],
+        "items": [
+            {
+                "№": item.item_no or "—",
+                "Позиция": item.name,
+                "Кол-во": item.quantity or "не указано",
+                "Ед.": item.unit or "—",
+                "Обязательные характеристики": "; ".join(item.characteristics) if item.characteristics else "Сверить по ТЗ",
+                "ГОСТ / норматив": ", ".join(item.gost) if item.gost else "—",
+                "Цена за ед.": item.unit_price or "",
+                "Сумма": item.total_price or "",
+                "Срок поставки": "",
+                "Сертификаты / паспорт": "",
+                "Отклонения / аналоги": "Допустим эквивалент" if item.equivalent_allowed else "",
+            }
+            for item in items
+        ],
+    }
+
+
+def _build_goods_economics_payload(
+    metadata: dict[str, Any],
+    documents: list[AnalyzedDocument],
+    analysis_mode: str,
+    economics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if economics:
+        return economics
+    items = _collect_goods_supply_items_from_documents(documents)
+    nmck = _extract_notice_price(metadata, _collect_role_text(documents, "technical_spec"), _collect_role_text(documents, "contract_draft"), _collect_role_text(documents, "notice"))
+    total_quantity = sum(_parse_float(item.quantity) or 0 for item in items if (item.unit or "") == "м")
+    nmck_value = _parse_float(nmck.replace(" ", "") if nmck else None)
+    avg_price = (nmck_value / total_quantity) if nmck_value is not None and total_quantity else None
+    metrics = [
+        {"label": "НМЦК", "value": f"{nmck} руб." if nmck else "не указана"},
+        {"label": "Цена закупки", "value": "не определена, требуется КП поставщика"},
+        {"label": "Что запросить", "value": "цену за единицу и сумму по каждой позиции"},
+        {"label": "Что запросить", "value": "включены ли доставка и разгрузка"},
+        {"label": "Что запросить", "value": "НДС, срок действия КП и наличие на складе"},
+        {"label": "Общий объём", "value": f"{int(total_quantity) if float(total_quantity).is_integer() else total_quantity} м" if total_quantity else "не рассчитан"},
+        {"label": "Ориентир по НМЦК на метр", "value": f"{_format_decimal_price(avg_price)} руб./м" if avg_price is not None else "не рассчитан"},
+    ]
+    return {
+        "analysis_mode": analysis_mode,
+        "currency": "RUB",
+        "economics_status": "insufficient_data",
+        "supplier_cost_min": None,
+        "supplier_cost_selected": None,
+        "expected_revenue": None,
+        "preliminary_bid_price": None,
+        "gross_margin_amount": None,
+        "gross_margin_percent": None,
+        "logistics_reserve": None,
+        "risk_reserve": None,
+        "payment_delay_days": None,
+        "cash_gap_estimate": None,
+        "selected_supplier_name": None,
+        "result": "Экономика требует запроса КП по товарным позициям",
+        "status": "blocked",
+        "metrics": metrics,
+        "drivers": [
+            "Экономика построена по НМЦК и извлечённым позициям поставки без подмены software/integration шаблонами.",
+            "Для решения нужны реальные КП по каждой позиции, включая доставку и документы качества.",
+        ],
+        "manual_checks": [
+            "Запросить цену за единицу и сумму по каждой позиции.",
+            "Проверить, включены ли доставка, разгрузка, НДС и упаковка.",
+            "Сверить наличие товара и срок поставки в течение 15 рабочих дней по заявке.",
+        ],
+        "warnings": [],
+        "limitations": [],
+        "assumptions": {"supply_items_count": len(items)},
+    }
+
+
 def _build_document_grounded_requirements(
     documents: list[AnalyzedDocument],
     procurement_kind: str,
 ) -> list[dict[str, str]]:
+    if procurement_kind == "goods":
+        rows = _build_goods_requirement_rows(documents)
+        if rows:
+            return rows
     rows: list[dict[str, str]] = []
     for doc in documents:
         text = doc.text or ""
@@ -1725,6 +2130,8 @@ def _build_document_grounded_questions(procurement_kind: str, documents: list[An
             "Как оформляется передача лицензии и прав на обновленный модуль?",
             "Какие ограничения и риски есть по персональным данным, медданным и защищенным каналам?",
         ]
+    if procurement_kind == "goods":
+        return _build_goods_questions(documents)
     return [
         "Подтверждаете ли вы исполнение требований технического задания в полном объеме?",
         "Какие сроки исполнения и ограничения по поставке/работам вы видите?",
@@ -1742,6 +2149,13 @@ def _build_document_grounded_risks(procurement_kind: str, documents: list[Analyz
             {"clause": "Риск приемки по результатам интеграционного тестирования", "classification": "market_standard_harsh_term", "impact": "Приемка зависит от внешних систем и согласований, не полностью контролируемых исполнителем.", "mitigation": "Зафиксировать критерии приемки, тестовые сценарии и роль заказчика во внешних согласованиях."},
             {"clause": "Риск лицензирования и передачи прав", "classification": "market_standard_harsh_term", "impact": "Неясные условия лицензии и передачи прав могут создать спор по результату работ.", "mitigation": "Проверить проект контракта и приложения на режим лицензии, объем прав и пакет передаваемых материалов."},
         ]
+    if procurement_kind == "goods":
+        return [
+            {"clause": "Несоответствие ГОСТ и характеристикам", "classification": "deal_breaker_candidate", "impact": "Поставка аналога с иными характеристиками приведет к отклонению или проблемам на приемке.", "mitigation": "Запросить производителя, ГОСТ/ТУ и паспорт качества по каждой позиции."},
+            {"clause": "Риск по сроку поставки", "classification": "market_standard_harsh_term", "impact": "Товар может не уложиться в срок 15 рабочих дней по заявке.", "mitigation": "Подтвердить складской остаток, срок отгрузки и логистику до адреса заказчика."},
+            {"clause": "Логистика и разгрузка не включены в цену", "classification": "market_standard_harsh_term", "impact": "Маржа может снизиться, если доставка, барабаны и разгрузка не учтены.", "mitigation": "Уточнить состав цены и включение доставки/разгрузки в КП."},
+            {"clause": "Неполный пакет документов качества", "classification": "market_standard_harsh_term", "impact": "Без сертификатов, деклараций или паспорта качества приемка может быть заблокирована.", "mitigation": "Получить комплект документов качества до подачи или до заключения контракта."},
+        ]
     return [
         {"clause": "Недостаточно предметных данных", "classification": "market_standard_harsh_term", "impact": "Часть рисков требует ручной проверки документов.", "mitigation": "Проверить ТЗ и проект контракта вручную."}
     ]
@@ -1756,6 +2170,14 @@ def _build_document_grounded_rfq_sections(procurement_kind: str) -> list[str]:
             "Подход к интеграции через СМЭВ, ЕРН и витрину Минобороны",
             "Состав передаваемых результатов: модуль, документация, лицензия, права",
             "Стоимость по блокам, тестированию, сопровождению и интеграционным рискам",
+        ]
+    if procurement_kind == "goods":
+        return [
+            "Позиции поставки, количество и единицы измерения",
+            "Подтверждение характеристик, ГОСТ и допустимости аналогов",
+            "Цена за единицу, сумма, НДС и срок действия КП",
+            "Срок поставки, наличие на складе, доставка и разгрузка",
+            "Сертификаты, декларации и паспорт качества",
         ]
     return [
         "Перечень позиций и объём поставки",
@@ -1776,29 +2198,35 @@ def _build_goods_preliminary_analysis(
     contract_text = contract_draft_text or ""
     notice = notice_text or ""
     initial_price = _extract_notice_price(metadata, notice, contract_text)
-    spec_rows = _build_supply_rows(documents) or _extract_goods_spec_table(tz_text)
-    delivery_deadline = _match_first_dotall(
-        tz_text,
-        (
-            r"Сроки поставки товара.*?1\s+2\s+1\s+(.+?)(?:\d+\.\s+[А-ЯA-ZЁ]|\Z)",
-        ),
-    ) or _extract_inline_goods_field(
+    supply_items = _collect_goods_supply_items_from_documents(documents)
+    spec_rows = [_supply_item_to_row(item) for item in supply_items] or _extract_goods_spec_table(tz_text)
+    delivery_deadline = _extract_inline_goods_field(
         tz_text,
         ("Срок поставки", "Сроки поставки товара"),
-        stop_markers=("Условия оплаты", "Адрес поставки", "Место поставки", "Условия поставки", "Порядок поставки"),
+        stop_markers=(
+            "Требования к качеству",
+            "Требования к безопасности",
+            "Условия оплаты",
+            "Адрес поставки",
+            "Место поставки",
+            "Условия поставки",
+            "Порядок поставки",
+        ),
     ) or _extract_notice_delivery_deadline(notice)
     delivery_deadline = _cleanup_tabular_value(delivery_deadline) or delivery_deadline
-    delivery_address = _match_first_dotall(
-        tz_text,
-        (
-            r"Адрес поставки товара.*?1\s+2\s+1\s+(.+?)(?:\d+\.\s+[А-ЯA-ZЁ]|\Z)",
-        ),
-    ) or _extract_inline_goods_field(
+    delivery_address = _extract_inline_goods_field(
         tz_text,
         ("Место поставки", "Место поставки товаров", "Адрес поставки товара"),
-        stop_markers=("Условия поставки", "Срок поставки", "Сроки поставки товара", "Порядок поставки", "Условия оплаты"),
+        stop_markers=(
+            "Расходы по доставке",
+            "Условия поставки",
+            "Срок поставки",
+            "Сроки поставки товара",
+            "Порядок поставки",
+            "Условия оплаты",
+        ),
     )
-    delivery_address = _cleanup_tabular_value(delivery_address) or delivery_address
+    delivery_address = _cleanup_delivery_address(delivery_address) or delivery_address
     payment_terms = _match_first(
         contract_text,
         (
@@ -1828,37 +2256,6 @@ def _build_goods_preliminary_analysis(
         ),
     )
 
-    overview = [f"Предмет закупки: {metadata.get('tender_title') or 'поставка товаров'}"]
-    if initial_price:
-        overview.append(f"НМЦК: {initial_price} руб.")
-    if spec_rows:
-        overview.append("В ТЗ выделена табличная спецификация по товарам.")
-    if delivery_deadline:
-        overview.append(f"Срок поставки: {(_normalize_analysis_sentence(delivery_deadline) or delivery_deadline).rstrip('.')}.")
-    if delivery_address:
-        overview.append(f"Адрес поставки: {(_normalize_analysis_sentence(delivery_address) or delivery_address).rstrip('.')}.")
-    if payment_terms:
-        short_payment_terms = _shorten_payment_terms(payment_terms)
-        if short_payment_terms:
-            overview.append(f"Оплата: {short_payment_terms.rstrip('.')}")
-    overview = _dedupe_text_items([_normalize_analysis_sentence(item) or item for item in overview[:6]])
-
-    compliance_highlights = [
-        "Поставка должна полностью соответствовать характеристикам ТЗ и позициям спецификации.",
-        "По товарам с КТРУ и обязательными параметрами нужно сверить неизменяемые характеристики.",
-        "Перед подачей нужно проверить сертификаты, упаковку и условия поставки по каждой позиции.",
-    ]
-    delivery_model = _dedupe_text_items(
-        [
-            item
-            for item in (
-                _normalize_analysis_sentence(f"Поставка выполняется по адресу заказчика: {delivery_address}") if delivery_address else None,
-                _normalize_analysis_sentence(f"Срок поставки: {delivery_deadline}") if delivery_deadline else None,
-                "Разгрузка и логистика поставщика должны быть подтверждены отдельно.",
-            )
-            if item
-        ]
-    )
     contract_terms = []
     if payment_terms:
         contract_terms.append(f"Условия оплаты: в течение {payment_terms}.")
@@ -1875,11 +2272,51 @@ def _build_goods_preliminary_analysis(
         contract_terms.append("Цена контракта: твердая, без индексации на период исполнения.")
     contract_terms = _dedupe_text_items([_normalize_analysis_sentence(item) or item for item in contract_terms[:6]])
 
+    total_meter_quantity = sum(_parse_float(item.quantity) or 0 for item in supply_items if (item.unit or "") == "м")
+    total_positions = len(supply_items)
+    top_position = max(supply_items, key=lambda item: _parse_float(item.quantity) or 0, default=None)
+
+    overview = [f"Предмет закупки: {metadata.get('tender_title') or 'поставка товаров'}"]
+    if initial_price:
+        overview.append(f"НМЦК: {initial_price} руб.")
+    if spec_rows:
+        overview.append("В ТЗ выделена табличная спецификация по товарам.")
+    if total_positions:
+        overview.append(f"Количество позиций: {total_positions}.")
+    if total_meter_quantity:
+        quantity_text = int(total_meter_quantity) if float(total_meter_quantity).is_integer() else total_meter_quantity
+        overview.append(f"Общий объём кабеля/провода: {quantity_text} м.")
+    if delivery_address:
+        overview.append(f"Адрес поставки: {(_normalize_analysis_sentence(delivery_address) or delivery_address).rstrip('.')}.")
+    if delivery_deadline:
+        overview.append(f"Срок поставки: {(_normalize_analysis_sentence(delivery_deadline) or delivery_deadline).rstrip('.')}.")
+    if payment_terms:
+        short_payment_terms = _shorten_payment_terms(payment_terms)
+        if short_payment_terms:
+            overview.append(f"Оплата: {short_payment_terms.rstrip('.')}")
+    overview = _dedupe_text_items([_normalize_analysis_sentence(item) or item for item in overview[:7]])
+
+    compliance_highlights = _dedupe_text_items(
+        [
+            "Нужно подтвердить соответствие каждой позиции ГОСТ, ТУ и характеристикам ТЗ.",
+            "Для позиций с обязательной сертификацией нужно получить сертификаты, декларации и паспорта качества.",
+            "Аналоги допустимы только при полном соответствии характеристикам и требованиям заказчика.",
+            "До участия нужно проверить включение доставки и разгрузки в цену поставщика.",
+        ]
+    )
+    delivery_model = _dedupe_text_items(
+        [
+            _normalize_analysis_sentence(f"Поставка выполняется по адресу заказчика: {delivery_address}") if delivery_address else None,
+            _normalize_analysis_sentence(f"Срок поставки: {delivery_deadline}") if delivery_deadline else None,
+            "Поставка выполняется по заявке заказчика; важно подтвердить складской остаток и срок отгрузки.",
+            "Доставка и разгрузка должны быть подтверждены поставщиком отдельно.",
+        ]
+    )
     next_actions = _dedupe_text_items(
         [
-            "Сверить таблицу ТЗ с исходным приложением и проверить количество по каждой позиции.",
-            "Подтвердить наличие товара или сроки поставки у поставщиков по критичным позициям.",
-            "До запроса ТКП проверить обязательные сертификаты, упаковку и требования к доставке.",
+            "Сверить извлечённые позиции с ТЗ и НМЦК.xlsx по количеству, единицам и ГОСТ.",
+            "Запросить КП по каждой позиции с ценой за единицу, суммой, НДС и сроком поставки.",
+            "Подтвердить наличие товара, документы качества и логистику до адреса заказчика.",
         ]
     )
     return {
@@ -1888,24 +2325,26 @@ def _build_goods_preliminary_analysis(
         "delivery_model": delivery_model,
         "contract_highlights": contract_terms,
         "next_actions": next_actions,
+        "supply_items": [item.__dict__ for item in supply_items],
         "extracted_fields": _dedupe_text_items(
             [
                 "НМЦК" if initial_price else "",
-                "спецификация" if spec_rows else "",
+                "позиции поставки" if spec_rows else "",
                 "срок поставки" if delivery_deadline else "",
                 "адрес поставки" if delivery_address else "",
             ]
         ),
         "procurement_kind": "goods",
         "supply_section_note": (
-            "Состав поставки собран преимущественно из ТЗ, спецификаций и приложений."
+            "Позиции поставки собраны из ТЗ, спецификаций и НМЦК.xlsx."
             if spec_rows
-            else "Структурированный состав поставки не выделен автоматически. Нужна ручная сверка ТЗ и приложений."
+            else "Позиции поставки не извлечены автоматически. Нужна ручная сверка ТЗ и приложений."
         ),
         "spec_table": {
-            "columns": ["№", "Наименование", "Кол-во", "Ед. изм.", "Характеристики", "Источник"],
+            "columns": ["№", "Наименование", "Кол-во", "Ед. изм.", "Ключевые характеристики", "ГОСТ / норматив", "Эквивалент", "Цена за ед., руб.", "Сумма, руб.", "Источник"],
             "rows": spec_rows,
         },
+        "largest_position": top_position.name if top_position else None,
     }
 
 
@@ -2284,6 +2723,8 @@ def _build_output_payloads(
         contract_draft_text=contract_draft_text,
         notice_text=notice_text,
     )
+    if procurement_kind == "goods" and _is_goods_supply_table_present(technical_spec_text) and not preliminary_analysis.get("spec_table", {}).get("rows"):
+        output_warnings.append("Позиции поставки не извлечены из ТЗ/спецификации. Анализ неполный.")
 
     tender_summary = {
         "run_id": metadata["run_id"],
@@ -2341,19 +2782,23 @@ def _build_output_payloads(
         ],
     }
 
-    rfq_payload = {
-        "rfq_title": f"RFQ draft / {metadata['tender_title']}",
-        "sections": _build_document_grounded_rfq_sections(procurement_kind),
-        "supplier_targets": [item.get("supplier_label", "Поставщик") for item in (tkp_comparison or {}).get("suppliers", [])] or [
-            "Поставщик 1",
-            "Поставщик 2",
-            "Поставщик 3",
-        ],
-        "manual_checks": [
-            "Проверить RFQ на соответствие исходной закупке.",
-            "Отправка RFQ выполняется только человеком вне этого demo UI.",
-        ],
-    }
+    rfq_payload = (
+        _build_goods_rfq_payload(metadata, documents)
+        if procurement_kind == "goods"
+        else {
+            "rfq_title": f"RFQ draft / {metadata['tender_title']}",
+            "sections": _build_document_grounded_rfq_sections(procurement_kind),
+        }
+    )
+    rfq_payload["supplier_targets"] = [item.get("supplier_label", "Поставщик") for item in (tkp_comparison or {}).get("suppliers", [])] or [
+        "Поставщик 1",
+        "Поставщик 2",
+        "Поставщик 3",
+    ]
+    rfq_payload["manual_checks"] = [
+        "Проверить RFQ на соответствие исходной закупке.",
+        "Отправка RFQ выполняется только человеком вне этого demo UI.",
+    ]
 
     quotes_payload = {
         "status": (
@@ -2398,67 +2843,70 @@ def _build_output_payloads(
         ),
     }
 
-    economics_payload = {
-        "analysis_mode": economics.get("analysis_mode", analysis_mode) if economics else analysis_mode,
-        "currency": economics.get("currency", "RUB") if economics else "RUB",
-        "economics_status": economics.get("economics_status", "insufficient_data") if economics else "insufficient_data",
-        "supplier_cost_min": economics.get("supplier_cost_min") if economics else None,
-        "supplier_cost_selected": economics.get("supplier_cost_selected") if economics else None,
-        "expected_revenue": economics.get("expected_revenue") if economics else None,
-        "preliminary_bid_price": economics.get("preliminary_bid_price") if economics else None,
-        "gross_margin_amount": economics.get("gross_margin_amount") if economics else None,
-        "gross_margin_percent": economics.get("gross_margin_percent") if economics else None,
-        "logistics_reserve": economics.get("logistics_reserve") if economics else None,
-        "risk_reserve": economics.get("risk_reserve") if economics else None,
-        "payment_delay_days": economics.get("payment_delay_days") if economics else None,
-        "cash_gap_estimate": economics.get("cash_gap_estimate") if economics else None,
-        "selected_supplier_name": economics.get("selected_supplier_name") if economics else None,
-        "result": (
-            "Экономика требует запроса КП / оценки подрядчика"
-            if not economics
-            else (
-                "Экономика выглядит условно приемлемой"
-                if economics.get("economics_status") == "conditionally_viable"
-                else "Экономика требует ручной проверки"
-            )
-        ),
-        "status": economics.get("status", "blocked") if economics else "blocked",
-        "metrics": (
-            [
-                {"label": "НМЦК", "value": _extract_notice_price(metadata, technical_spec_text, contract_draft_text, notice_text) or "не указана"},
-                {"label": "Закупочная себестоимость", "value": "не определена, требуется ТКП/оценка подрядчика"},
-                {"label": "Что запросить", "value": "оценка трудозатрат по функциональным блокам"},
-                {"label": "Что запросить", "value": "стоимость интеграции СМЭВ/ЕРН"},
-                {"label": "Что запросить", "value": "стоимость разработки СЭМД / доработок модуля"},
-                {"label": "Что запросить", "value": "стоимость лицензии/передачи прав"},
-                {"label": "Что запросить", "value": "стоимость тестирования, внедрения и резерва на интеграционные риски"},
-            ]
-            if not economics
-            else [
-                {"label": "Минимальная закупочная стоимость", "value": economics.get("supplier_cost_min", "unknown")},
-                {"label": "Выбранная закупочная стоимость", "value": economics.get("supplier_cost_selected", "unknown")},
-                {"label": "Резерв логистики", "value": economics.get("logistics_reserve", "unknown")},
-                {"label": "Резерв риска", "value": economics.get("risk_reserve", "unknown")},
-                {"label": "Целевая маржа", "value": f"{economics.get('gross_margin_percent')}%" if economics.get("gross_margin_percent") is not None else "unknown"},
-                {"label": "Предварительная цена подачи", "value": economics.get("preliminary_bid_price", "unknown")},
-                {"label": "Оценка кассового разрыва", "value": economics.get("cash_gap_estimate", "unknown")},
-            ]
-        ),
-        "drivers": (
-            [
-                f"Выбран поставщик: {economics.get('selected_supplier_name') or 'не определён'}.",
-                "Ожидаемая выручка не рассчитывается автоматически без цены заказчика.",
-                "Расчёт построен на локальных ТКП и операторских параметрах из демо-формы.",
-            ]
-            if economics
-            else ["Без КП и оценки трудозатрат экономика ограничивается НМЦК и перечнем данных, которые нужно запросить."]
-        ),
-        "manual_checks": ([item.get("message", "") for item in economics.get("manual_checks", [])] if economics else [])
-        or ["Запросить КП/оценку подрядчика по функциональным блокам, интеграциям, лицензии и тестированию."],
-        "warnings": economics.get("warnings", []) if economics else [],
-        "limitations": economics.get("limitations", []) if economics else [],
-        "assumptions": economics.get("assumptions", {}) if economics else {},
-    }
+    if procurement_kind == "goods":
+        economics_payload = _build_goods_economics_payload(metadata, documents, analysis_mode, economics)
+    else:
+        economics_payload = {
+            "analysis_mode": economics.get("analysis_mode", analysis_mode) if economics else analysis_mode,
+            "currency": economics.get("currency", "RUB") if economics else "RUB",
+            "economics_status": economics.get("economics_status", "insufficient_data") if economics else "insufficient_data",
+            "supplier_cost_min": economics.get("supplier_cost_min") if economics else None,
+            "supplier_cost_selected": economics.get("supplier_cost_selected") if economics else None,
+            "expected_revenue": economics.get("expected_revenue") if economics else None,
+            "preliminary_bid_price": economics.get("preliminary_bid_price") if economics else None,
+            "gross_margin_amount": economics.get("gross_margin_amount") if economics else None,
+            "gross_margin_percent": economics.get("gross_margin_percent") if economics else None,
+            "logistics_reserve": economics.get("logistics_reserve") if economics else None,
+            "risk_reserve": economics.get("risk_reserve") if economics else None,
+            "payment_delay_days": economics.get("payment_delay_days") if economics else None,
+            "cash_gap_estimate": economics.get("cash_gap_estimate") if economics else None,
+            "selected_supplier_name": economics.get("selected_supplier_name") if economics else None,
+            "result": (
+                "Экономика требует запроса КП / оценки подрядчика"
+                if not economics
+                else (
+                    "Экономика выглядит условно приемлемой"
+                    if economics.get("economics_status") == "conditionally_viable"
+                    else "Экономика требует ручной проверки"
+                )
+            ),
+            "status": economics.get("status", "blocked") if economics else "blocked",
+            "metrics": (
+                [
+                    {"label": "НМЦК", "value": _extract_notice_price(metadata, technical_spec_text, contract_draft_text, notice_text) or "не указана"},
+                    {"label": "Закупочная себестоимость", "value": "не определена, требуется ТКП/оценка подрядчика"},
+                    {"label": "Что запросить", "value": "оценка трудозатрат по функциональным блокам"},
+                    {"label": "Что запросить", "value": "стоимость интеграции СМЭВ/ЕРН"},
+                    {"label": "Что запросить", "value": "стоимость разработки СЭМД / доработок модуля"},
+                    {"label": "Что запросить", "value": "стоимость лицензии/передачи прав"},
+                    {"label": "Что запросить", "value": "стоимость тестирования, внедрения и резерва на интеграционные риски"},
+                ]
+                if not economics
+                else [
+                    {"label": "Минимальная закупочная стоимость", "value": economics.get("supplier_cost_min", "unknown")},
+                    {"label": "Выбранная закупочная стоимость", "value": economics.get("supplier_cost_selected", "unknown")},
+                    {"label": "Резерв логистики", "value": economics.get("logistics_reserve", "unknown")},
+                    {"label": "Резерв риска", "value": economics.get("risk_reserve", "unknown")},
+                    {"label": "Целевая маржа", "value": f"{economics.get('gross_margin_percent')}%" if economics.get("gross_margin_percent") is not None else "unknown"},
+                    {"label": "Предварительная цена подачи", "value": economics.get("preliminary_bid_price", "unknown")},
+                    {"label": "Оценка кассового разрыва", "value": economics.get("cash_gap_estimate", "unknown")},
+                ]
+            ),
+            "drivers": (
+                [
+                    f"Выбран поставщик: {economics.get('selected_supplier_name') or 'не определён'}.",
+                    "Ожидаемая выручка не рассчитывается автоматически без цены заказчика.",
+                    "Расчёт построен на локальных ТКП и операторских параметрах из демо-формы.",
+                ]
+                if economics
+                else ["Без КП и оценки трудозатрат экономика ограничивается НМЦК и перечнем данных, которые нужно запросить."]
+            ),
+            "manual_checks": ([item.get("message", "") for item in economics.get("manual_checks", [])] if economics else [])
+            or ["Запросить КП/оценку подрядчика по функциональным блокам, интеграциям, лицензии и тестированию."],
+            "warnings": economics.get("warnings", []) if economics else [],
+            "limitations": economics.get("limitations", []) if economics else [],
+            "assumptions": economics.get("assumptions", {}) if economics else {},
+        }
 
     grounded_risks = _build_document_grounded_risks(procurement_kind, documents, contract_draft_text)
     risks_payload = {
@@ -2494,6 +2942,16 @@ def _build_output_payloads(
             "ТКП структурированы и сопоставлены в локальном deterministic parser слое.",
             "Экономика выглядит условно приемлемой, но решение всё ещё требует проверки оператором.",
             "Рекомендация остаётся предварительной и не заменяет решение человека.",
+        ]
+    elif procurement_kind == "goods":
+        largest_position = preliminary_analysis.get("largest_position")
+        recommendation = DemoRecommendationCode.MANUAL_REVIEW_REQUIRED
+        label = "нужна ручная проверка"
+        rationale = [
+            "Документы извлечены, и агент выделил конкретные позиции поставки, количества и характеристики.",
+            "Для участия нужно получить КП и подтверждение ГОСТ, сертификатов и сроков поставки по каждой позиции.",
+            f"Особое внимание требует самая объёмная позиция: {largest_position}." if largest_position else "Нужно проверить наличие товара и срок поставки по всем позициям.",
+            "Финальное решение возможно только после проверки цены, логистики и документов качества.",
         ]
     else:
         recommendation = DemoRecommendationCode.MANUAL_REVIEW_REQUIRED
@@ -2800,7 +3258,15 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             findings=rfq["sections"],
             human_review=rfq["manual_checks"],
             trace=trace["rfq"],
-            result_sections=[DemoDetailSection(title="Секции RFQ", kind="bullets", items=rfq["sections"])],
+            result_sections=[
+                DemoDetailSection(title="Секции RFQ", kind="bullets", items=rfq["sections"]),
+                DemoDetailSection(
+                    title="Позиции RFQ",
+                    kind="table",
+                    columns=["№", "Позиция", "Кол-во", "Ед.", "Обязательные характеристики", "ГОСТ / норматив", "Цена за ед.", "Сумма"],
+                    rows=rfq.get("items", [])[:20],
+                ),
+            ] if rfq.get("items") else [DemoDetailSection(title="Секции RFQ", kind="bullets", items=rfq["sections"])],
         ),
         DemoStep(
             key="quotes",
@@ -2984,7 +3450,10 @@ def _preliminary_analysis_supply_section_markdown(preliminary_analysis: dict[str
                 f"- {row.get('№', '—')}. {row.get('Наименование', 'Позиция')} | "
                 f"кол-во: {row.get('Кол-во', 'не указано')} | "
                 f"ед.: {row.get('Ед. изм.', '—')} | "
-                f"характеристики: {row.get('Характеристики', '—')} | "
+                f"характеристики: {row.get('Ключевые характеристики', row.get('Характеристики', '—'))} | "
+                f"ГОСТ: {row.get('ГОСТ / норматив', '—')} | "
+                f"эквивалент: {row.get('Эквивалент', '—')} | "
+                f"цена: {row.get('Цена за ед., руб.', '—')} | "
                 f"источник: {row.get('Источник', 'не указан')}"
             )
             for row in rows
