@@ -5,6 +5,12 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
+from src.modules.tender_operator_agent_demo.upload_service import (
+    _collect_supply_items,
+    _extract_supply_items_from_spec_text,
+    AnalyzedDocument,
+)
+
 
 def _set_runs_root(monkeypatch, tmp_path: Path) -> Path:
     runs_root = tmp_path / "tender_operator_demo_runs"
@@ -424,6 +430,181 @@ def test_goods_address_is_not_cut_on_city_abbreviation(client, monkeypatch, tmp_
     assert report_page.status_code == 200
     assert "Адрес поставки: Автозаправочные станции г. Екатеринбург." in report_page.text
     assert "Адрес поставки: Автозаправочные станции г.</li>" not in report_page.text
+
+
+def test_realistic_goods_supply_items_are_extracted_from_tz_and_nmck():
+    technical_spec_text = (
+        "Приложение № 1\n"
+        "к техническому заданию\n"
+        "Перечень запасных частей\n"
+        "№ п/п\n"
+        "Наименование\n"
+        "Характеристики товара\n"
+        "Ед.изм.\n"
+        "Кол-во\n"
+        "1\n"
+        "Кабель силовой АВВГ-П 2х2.5 или эквивалент\n"
+        "Номинальное переменное напряжение\n"
+        "0,66/1 кВ, частота 50 Гц\n"
+        "м\n"
+        "200.00\n"
+        "Материал\n"
+        "алюминий\n"
+        "Соответствие\n"
+        "ГОСТ 31996-2012\n"
+        "2\n"
+        "Провод СИП-4 2х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\n"
+        "Номинальное переменное напряжение\n"
+        "0,6/1 кВ, частота 50 Гц\n"
+        "м\n"
+        "1300.00\n"
+        "Изоляция и оболочка\n"
+        "светостабилизированный сшитый полиэтилен\n"
+        "Соответствие\n"
+        "ГОСТ 31946-2012\n"
+        "3\n"
+        "Провод СИП-4 4х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\n"
+        "Номинальное переменное напряжение\n"
+        "0,6/1 кВ, частота 50 Гц\n"
+        "м\n"
+        "700.00\n"
+        "Изоляция\n"
+        "светостабилизированный сшитый полиэтилен\n"
+        "Соответствие\n"
+        "ГОСТ 31946-2012\n"
+    )
+    nmck_text = (
+        "=== Расчет цены ===\n"
+        "№ п/п\tНаименование\tЕд. изм\tКоли-чество\tЦена за единицу\tН(М)ЦК\n"
+        "1\tКабель силовой АВВГ-П 2х2.5 или эквивалент\tм.\t200\t16.75\t3350\n"
+        "2\tПровод СИП-4 2х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\tм.\t1300\t44.35\t57655\n"
+        "3\tПровод СИП-4 4х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\tм.\t700\t88.63\t62041\n"
+    )
+
+    spec_items = _extract_supply_items_from_spec_text(technical_spec_text, "Техническое задание.doc")
+    assert len(spec_items) == 3
+    assert spec_items[0].name == "Кабель силовой АВВГ-П 2х2.5"
+    assert spec_items[0].unit == "м"
+    assert spec_items[0].quantity == "200"
+    assert "ГОСТ 31996-2012" in spec_items[0].gost
+
+    merged = _collect_supply_items(
+        [
+            AnalyzedDocument(
+                display_name="Техническое задание.doc",
+                extension=".doc",
+                role="technical_spec",
+                text=technical_spec_text,
+                extracted_text_available=True,
+                warnings=[],
+                source="upload",
+                file_id="doc-1",
+            ),
+            AnalyzedDocument(
+                display_name="НМЦК.xlsx",
+                extension=".xlsx",
+                role="supporting",
+                text=nmck_text,
+                extracted_text_available=True,
+                warnings=[],
+                source="upload",
+                file_id="doc-2",
+            ),
+        ]
+    )
+    assert len(merged) == 3
+    assert [item.quantity for item in merged] == ["200", "1300", "700"]
+    assert merged[0].unit_price == "16,75"
+    assert merged[1].total_price == "57 655,00"
+    assert "НМЦК.xlsx" in merged[1].source_documents
+
+
+def test_goods_report_uses_supply_items_and_goods_economics(client, monkeypatch, tmp_path):
+    _set_runs_root(monkeypatch, tmp_path)
+    data = {
+        "tender_title": "Поставка электротехнической продукции",
+        "tender_category": "Электротехническая продукция",
+        "customer_name": "МБУ СБСК",
+    }
+    files = [
+        ("files", ("notice.txt", "Извещение о поставке товаров. НМЦК 123046 руб.".encode("utf-8"), "text/plain")),
+        (
+            "files",
+            (
+                "technical_spec.txt",
+                (
+                    "Предмет закупки: Поставка электротехнической продукции\n"
+                    "Место поставки товара\n"
+                    "Самарская область, г. Кинель, ул. Элеваторная, д. 24.\n"
+                    "Срок поставки товара\n"
+                    "Поставка Товара осуществляется Поставщиком с даты заключения Контракта по 31.12.2026 г. по заявке Заказчика в течение 15 рабочих дней.\n"
+                    "Приложение № 1\n"
+                    "Перечень запасных частей\n"
+                    "№ п/п\n"
+                    "Наименование\n"
+                    "Характеристики товара\n"
+                    "Ед.изм.\n"
+                    "Кол-во\n"
+                    "1\n"
+                    "Кабель силовой АВВГ-П 2х2.5 или эквивалент\n"
+                    "Номинальное переменное напряжение\n"
+                    "0,66/1 кВ, частота 50 Гц\n"
+                    "м\n"
+                    "200.00\n"
+                    "Соответствие\n"
+                    "ГОСТ 31996-2012\n"
+                    "2\n"
+                    "Провод СИП-4 2х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\n"
+                    "Номинальное переменное напряжение\n"
+                    "0,6/1 кВ, частота 50 Гц\n"
+                    "м\n"
+                    "1300.00\n"
+                    "Соответствие\n"
+                    "ГОСТ 31946-2012\n"
+                    "3\n"
+                    "Провод СИП-4 4х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\n"
+                    "Номинальное переменное напряжение\n"
+                    "0,6/1 кВ, частота 50 Гц\n"
+                    "м\n"
+                    "700.00\n"
+                    "Соответствие\n"
+                    "ГОСТ 31946-2012\n"
+                ).encode("utf-8"),
+                "text/plain",
+            ),
+        ),
+        (
+            "files",
+            (
+                "НМЦК.txt",
+                (
+                    "=== Расчет цены ===\n"
+                    "№ п/п\tНаименование\tЕд. изм\tКоли-чество\tЦена за единицу\tН(М)ЦК\n"
+                    "1\tКабель силовой АВВГ-П 2х2.5 или эквивалент\tм.\t200\t16.75\t3350\n"
+                    "2\tПровод СИП-4 2х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\tм.\t1300\t44.35\t57655\n"
+                    "3\tПровод СИП-4 4х16 0.6/1 ГОСТ (намотка на барабане №8) или эквивалент\tм.\t700\t88.63\t62041\n"
+                ).encode("utf-8"),
+                "text/plain",
+            ),
+        ),
+        ("files", ("contract_draft.txt", "Оплата осуществляется в течение 7 рабочих дней после подписания документа о приемке.".encode("utf-8"), "text/plain")),
+    ]
+
+    create_response = client.post("/api/demo/tender-agent/runs", data=data, files=files)
+    run_id = create_response.json()["run_id"]
+    analyze = client.post(f"/api/demo/tender-agent/runs/{run_id}/analyze")
+    assert analyze.status_code == 200
+
+    report_page = client.get(f"/demo/tender-agent/runs/{run_id}/report")
+    assert report_page.status_code == 200
+    assert "Кабель силовой АВВГ-П 2х2.5" in report_page.text
+    assert "Провод СИП-4 2х16 0.6/1 ГОСТ (намотка на барабане №8)" in report_page.text
+    assert "ГОСТ 31946-2012" in report_page.text
+    assert "57 655,00" in report_page.text
+    assert "цену за единицу и сумму по каждой позиции" in report_page.text
+    assert "Ориентир по НМЦК на метр" in report_page.text
+    assert "стоимость интеграции СМЭВ/ЕРН" not in report_page.text
+    assert "стоимость разработки СЭМД" not in report_page.text
 
 
 def test_eis_protocol_xml_is_not_misclassified_as_quote(client, monkeypatch, tmp_path):
