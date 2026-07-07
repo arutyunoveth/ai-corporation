@@ -72,6 +72,44 @@ def extract_notice_metadata(xml_text: str) -> dict[str, Any]:
     return result
 
 
+def extract_notice_attachments(xml_text: str) -> list[dict[str, str | None]]:
+    if not xml_text or not xml_text.strip():
+        return []
+
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+
+    attachments: list[dict[str, str | None]] = []
+    seen: set[tuple[str, str]] = set()
+    for attachment_node in root.iter():
+        if not attachment_node.tag.endswith("attachmentInfo"):
+            continue
+        name = _extract_child_text(
+            attachment_node,
+            ("fileName", "docName", "name", "documentName"),
+        )
+        url = _extract_child_text(
+            attachment_node,
+            ("url", "downloadUrl", "fileUrl", "href"),
+        )
+        if not name and not url:
+            continue
+        key = ((name or "").strip().lower(), (url or "").strip())
+        if key in seen:
+            continue
+        seen.add(key)
+        attachments.append(
+            {
+                "name": (name or "").strip() or None,
+                "url": (url or "").strip() or None,
+                "document_kind": _classify_notice_attachment_kind(name or ""),
+            }
+        )
+    return attachments
+
+
 def merge_structured_metadata(
     notice_meta: dict[str, Any],
     card_meta: dict[str, Any],
@@ -174,6 +212,31 @@ def build_notice_priority_prompt_section(procurement: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def build_technical_documents_prompt_section(documents: list[dict[str, Any]]) -> str:
+    if not documents:
+        return ""
+
+    lines = ["Документы технической части и состава поставки:"]
+    added = 0
+    for item in documents:
+        role = str(item.get("role_hint") or item.get("document_kind") or "attachment").strip()
+        if role not in {"technical_spec", "contract_draft", "specification", "procurement_object_description", "attachment", "supporting"}:
+            continue
+        label = str(item.get("display_name") or item.get("original_name") or "Документ").strip()
+        source_type = str(item.get("source_type") or item.get("source") or "document").strip()
+        lines.append(f"- {label} ({role}; источник: {source_type})")
+        added += 1
+        if added >= 12:
+            break
+
+    if added == 0:
+        return ""
+
+    lines.append("")
+    lines.append("Instruction: для раздела состава поставки используй прежде всего ТЗ, описание объекта закупки, спецификации, приложения и таблицы. Электронное извещение используй для реквизитов закупки, но не как замену технического задания.")
+    return "\n".join(lines)
+
+
 def _collect_namespaces(xml_text: str) -> dict[str, str]:
     ns_map: dict[str, str] = {}
     for match in re.finditer(r'xmlns:?(\w*)\s*=\s*"([^"]+)"', xml_text):
@@ -210,6 +273,35 @@ def _extract_value(
             if val:
                 return val
     return None
+
+
+def _extract_child_text(node: ET.Element, tag_names: tuple[str, ...]) -> str | None:
+    for child in node.iter():
+        child_tag = child.tag.rsplit("}", 1)[-1]
+        if child_tag in tag_names and child.text and child.text.strip():
+            return child.text.strip()
+    return None
+
+
+def _classify_notice_attachment_kind(name: str) -> str:
+    lowered = name.lower()
+    if any(token in lowered for token in ("обоснование нмцк", "обоснование начальной", "расчет нмцк", "расчёт нмцк")):
+        return "estimate"
+    if any(token in lowered for token in ("техническое задание", "техзад", " тз", "тз ", "technical specification")):
+        return "technical_specification"
+    if any(token in lowered for token in ("описание объекта закупки", "описание товара", "описание работ", "описание услуг", "ооз")):
+        return "procurement_object_description"
+    if any(token in lowered for token in ("спецификац",)):
+        return "specification"
+    if any(token in lowered for token in ("проект контракта", "проект договора", "контракт", "договор", "agreement", "contract")):
+        return "contract_draft"
+    if any(token in lowered for token in ("смет",)):
+        return "estimate"
+    if any(token in lowered for token in ("форма",)):
+        return "form"
+    if any(token in lowered for token in ("извещение", "epnotification", "notice")):
+        return "eis_notice"
+    return "attachment"
 
 
 def _parse_price(value: str) -> float | None:

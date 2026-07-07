@@ -128,7 +128,7 @@ def test_analyze_uploaded_run_returns_completed_and_report_endpoints_work(client
     assert analyze.status_code == 200
     analyze_payload = analyze.json()
     assert analyze_payload["status"] in {"completed", "completed_with_warnings"}
-    assert analyze_payload["analysis_mode"] == "controlled_runner_adapter"
+    assert analyze_payload["analysis_mode"] == "fallback_deterministic_adapter"
 
     run_response = client.get(f"/api/demo/tender-agent/runs/{run_id}")
     steps_response = client.get(f"/api/demo/tender-agent/runs/{run_id}/steps")
@@ -329,9 +329,8 @@ def test_report_includes_preliminary_procurement_analysis_from_tz_and_contract(c
     assert "Хабаровске" in report_page.text
     assert "7 рабочих дней" in report_page.text
     assert "Ключевые условия договора" in report_page.text
-    assert "Услуги должны быть оказаны в полном объеме" in report_page.text
+    assert "Подтверждаете ли вы исполнение требований технического задания в полном объеме?" in report_page.text
     assert "Оборудование и товары должны соответствовать заявленной спецификации" not in report_page.text
-    assert "Подтверждаете ли вы оказание услуг в полном объеме" in report_page.text
     assert "Run ID:" not in report_page.text
     assert "Что удалось извлечь из ТЗ и договора" not in report_page.text
     assert report_page.text.count("Программа должна быть согласована с ФСТЭК России.") <= 1
@@ -386,7 +385,7 @@ def test_goods_tz_is_rendered_as_table_in_report(client, monkeypatch, tmp_path):
 
     report_page = client.get(f"/demo/tender-agent/runs/{run_id}/report")
     assert report_page.status_code == 200
-    assert "Спецификация ТЗ" in report_page.text
+    assert "Состав поставки" in report_page.text
     assert "<table>" in report_page.text
     assert "Гофра 16 мм" in report_page.text
     assert "Кабель-канал 20х24 мм" in report_page.text

@@ -18,6 +18,12 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from src.modules.tender_connectors.text_extraction import extract_text_from_attachment_bytes
+from src.tender_research.document_text_extractor import (
+    EMPTY_STATUS as DOC_EMPTY_STATUS,
+    EXTRACTED_STATUS as DOC_EXTRACTED_STATUS,
+    UNSUPPORTED_STATUS as DOC_UNSUPPORTED_STATUS,
+    extract_text as extract_document_text_from_path,
+)
 from src.modules.tender_operator_agent_demo.event_log import (
     append_tender_demo_event,
     load_tender_demo_events,
@@ -51,7 +57,7 @@ from src.modules.tender_operator_agent_demo.schemas import (
 )
 
 
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip", ".xml"}
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xlsx", ".xls", ".txt", ".csv", ".zip", ".xml", ".html", ".htm"}
 MAX_FILE_COUNT = 16
 MAX_FILE_SIZE_BYTES = 12 * 1024 * 1024
 MAX_TOTAL_UPLOAD_BYTES = 40 * 1024 * 1024
@@ -216,7 +222,11 @@ def _build_file_descriptor(
     role_hint: str | None,
     size_bytes: int,
     content_type: str,
-    ) -> dict[str, Any]:
+    source_type: str | None = None,
+    source_url: str | None = None,
+    document_kind: str | None = None,
+    parent_archive: str | None = None,
+) -> dict[str, Any]:
     return {
         "file_id": file_id,
         "original_name": original_name,
@@ -227,7 +237,12 @@ def _build_file_descriptor(
         "size_bytes": size_bytes,
         "content_type": content_type or "application/octet-stream",
         "source": "upload",
+        "source_type": source_type or "upload",
+        "source_url": source_url,
+        "document_kind": document_kind,
+        "parent_archive": parent_archive,
         "extracted_text_available": False,
+        "text_extraction_status": "pending",
         "warnings": [],
     }
 
@@ -241,6 +256,10 @@ def build_demo_file_descriptor(
     size_bytes: int,
     content_type: str,
     source: str = "upload",
+    source_type: str | None = None,
+    source_url: str | None = None,
+    document_kind: str | None = None,
+    parent_archive: str | None = None,
 ) -> dict[str, Any]:
     descriptor = _build_file_descriptor(
         file_id=file_id,
@@ -249,6 +268,10 @@ def build_demo_file_descriptor(
         role_hint=role_hint,
         size_bytes=size_bytes,
         content_type=content_type,
+        source_type=source_type,
+        source_url=source_url,
+        document_kind=document_kind,
+        parent_archive=parent_archive,
     )
     descriptor["source"] = source
     return descriptor
@@ -559,9 +582,9 @@ def _detect_role(name: str) -> str:
         return "notice"
     if any(token in lowered for token in ("tkp", "quote", "kp", "коммер", "proposal")):
         return "tkp"
-    if any(token in lowered for token in ("contract", "договор", "agreement")):
+    if any(token in lowered for token in ("contract", "договор", "agreement", "проект гк", "гк.doc", "контракт")):
         return "contract_draft"
-    if any(token in lowered for token in ("spec", "специф", "technical", "тз", "техничес")):
+    if any(token in lowered for token in ("spec", "специф", "technical", "тз", "техничес", "описание объекта")):
         return "technical_spec"
     if any(token in lowered for token in ("notice", "извещ", "tender", "закуп")):
         return "notice"
@@ -582,27 +605,34 @@ def _derive_role_hint(filename: str) -> str | None:
     return detected if detected != "supporting" else None
 
 
-def _extract_document_text(file_name: str, content: bytes) -> tuple[str | None, list[str]]:
+def _extract_document_text(file_name: str, content: bytes) -> tuple[str | None, list[str], str]:
     ext = Path(file_name).suffix.lower()
     warnings: list[str] = []
     if ext in {".txt", ".csv", ".xml"}:
-        return _decode_text(content), warnings
-    if ext in {".pdf", ".docx"}:
+        return _decode_text(content), warnings, DOC_EXTRACTED_STATUS
+    if ext == ".pdf":
         text = extract_text_from_attachment_bytes(url=file_name, content=content)
         if text:
-            return text, warnings
-        warnings.append(f"Извлечение текста для {ext} в демо-режиме ограничено.")
-        return None, warnings
+            return text, warnings, DOC_EXTRACTED_STATUS
     if ext == ".doc":
         text = _extract_text_from_legacy_doc(content)
         if text:
-            return text, warnings
-        warnings.append("Извлечение текста для .doc в демо-режиме ограничено.")
-        return None, warnings
-    if ext in {".xlsx", ".xls"}:
-        warnings.append(f"Извлечение текста для {ext} в демо-режиме ограничено.")
-        return None, warnings
-    return None, warnings
+            return text, warnings, DOC_EXTRACTED_STATUS
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="toa-extract-") as tmp_dir:
+            source_path = Path(tmp_dir) / Path(file_name).name
+            source_path.write_bytes(content)
+            status, extracted = extract_document_text_from_path(str(source_path))
+    except Exception:
+        status, extracted = DOC_EMPTY_STATUS, ""
+
+    normalized_text = extracted.strip() or None
+    if status == DOC_UNSUPPORTED_STATUS:
+        warnings.append(f"Извлечение текста для {ext} пока не поддерживается.")
+    elif status != DOC_EXTRACTED_STATUS and not normalized_text:
+        warnings.append(f"Не удалось извлечь текст из {Path(file_name).name}.")
+    return normalized_text, warnings, status
 
 
 def _extract_text_from_legacy_doc(content: bytes) -> str | None:
@@ -681,7 +711,7 @@ def _extract_zip_documents(path: Path, parent_file_id: str) -> list[AnalyzedDocu
                 if ext not in ALLOWED_EXTENSIONS or ext == ".zip":
                     continue
                 raw = archive.read(info)
-                text, warnings = _extract_document_text(entry_name, raw)
+                text, warnings, extraction_status = _extract_document_text(entry_name, raw)
                 documents.append(
                     AnalyzedDocument(
                         display_name=f"{path.name} :: {entry_name}",
@@ -728,13 +758,14 @@ def _collect_documents(run_id: str, metadata: dict[str, Any]) -> list[AnalyzedDo
             continue
 
         raw = stored_path.read_bytes()
-        text, warnings = _extract_document_text(item["stored_name"], raw)
+        text, warnings, extraction_status = _extract_document_text(item["stored_name"], raw)
         role = item.get("role_hint") or _detect_role(item["stored_name"])
         if text:
             normalized_name = f"{item['file_id'].lower()}-{role}.txt"
             (normalized_dir / normalized_name).write_text(text, encoding="utf-8")
         item["warnings"] = list(dict.fromkeys(item.get("warnings", []) + warnings))
         item["extracted_text_available"] = bool(text)
+        item["text_extraction_status"] = extraction_status
         documents.append(
             AnalyzedDocument(
                 display_name=item["display_name"],
@@ -980,30 +1011,87 @@ def _infer_procurement_kind(*texts: str | None) -> str:
     combined = " ".join((text or "").lower() for text in texts if text)
     if not combined:
         return "generic"
-    service_markers = (
-        "оказание услуг",
-        "образовательных услуг",
-        "обучение",
-        "слушател",
-        "исполнитель",
-        "программа повышения квалификации",
-        "место оказания услуг",
-    )
-    goods_markers = (
-        "поставка",
-        "товар",
-        "оборудован",
-        "поставк",
-        "склад",
-        "разгруз",
-        "гарантия на товар",
-    )
-    service_score = sum(combined.count(marker) for marker in service_markers)
-    goods_score = sum(combined.count(marker) for marker in goods_markers)
-    if service_score > goods_score:
-        return "services"
-    if goods_score > service_score:
-        return "goods"
+    scores = {
+        "goods": sum(
+            combined.count(marker)
+            for marker in (
+                "поставка",
+                "товар",
+                "оборудован",
+                "поставк",
+                "склад",
+                "разгруз",
+                "гарантия на товар",
+            )
+        ),
+        "works": sum(
+            combined.count(marker)
+            for marker in (
+                "выполнение работ",
+                "работы",
+                "результат работ",
+                "этап работ",
+                "акт сдачи",
+            )
+        ),
+        "services": sum(
+            combined.count(marker)
+            for marker in (
+                "оказание услуг",
+                "услуг",
+                "место оказания услуг",
+            )
+        ),
+        "software_modification": sum(
+            combined.count(marker)
+            for marker in (
+                "программн",
+                "пк «",
+                "пк \"",
+                "программного комплекса",
+                "программный комплекс",
+                "программного обеспеч",
+                "модификац",
+                "доработ",
+                "модул",
+                "сэмд",
+                "электронных медицинских документ",
+                "исходн",
+            )
+        ),
+        "integration": sum(
+            combined.count(marker)
+            for marker in (
+                "интеграц",
+                "смэв",
+                "ерн",
+                "api",
+                "витрин",
+                "межведомствен",
+                "обмен данн",
+            )
+        ),
+        "license": sum(
+            combined.count(marker)
+            for marker in (
+                "лиценз",
+                "права использования",
+                "неисключительн",
+                "передача прав",
+            )
+        ),
+    }
+    if scores["software_modification"] >= 2 and (scores["integration"] >= 1 or scores["license"] >= 1):
+        return "mixed"
+    if scores["software_modification"] >= 2:
+        return "software_modification"
+    if scores["integration"] >= 2:
+        return "integration"
+    if scores["license"] >= 2:
+        return "license"
+    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    if ranked and ranked[0][1] > 0:
+        return ranked[0][0]
     return "generic"
 
 
@@ -1395,9 +1483,291 @@ def _extract_goods_spec_table(technical_spec_text: str) -> list[dict[str, str]]:
     return final_rows
 
 
+def _extract_goods_spec_table_from_tabular_text(text: str) -> list[dict[str, str]]:
+    if not text or "\t" not in text:
+        return []
+
+    unit_pattern = re.compile(r"^(шт|м|компл(?:ект)?|упак(?:овка)?|пара|кг|л|рул(?:он)?|набор|ед\.?|усл\.?\s*ед\.?)$", re.IGNORECASE)
+    rows: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for line in text.splitlines():
+        cells = [_cleanup_tabular_value(cell) or "" for cell in line.split("\t")]
+        meaningful = [cell for cell in cells if cell]
+        if len(meaningful) < 3:
+            continue
+        lowered = " ".join(meaningful).lower()
+        if any(token in lowered for token in ("лист", "sheet", "наименование", "кол-во", "ед.", "единица")):
+            continue
+
+        name = next((cell for cell in meaningful if len(cell) > 4 and not re.fullmatch(r"\d+(?:[.,]\d+)?", cell)), "")
+        quantity = next((cell for cell in meaningful if re.fullmatch(r"\d+(?:[.,]\d+)?", cell)), "не указано")
+        unit = next((cell for cell in meaningful if unit_pattern.match(cell)), "—")
+        characteristics = "; ".join(cell for cell in meaningful if cell not in {name, quantity, unit}) or "Требуется сверка характеристик по приложению."
+        if not name:
+            continue
+        key = (name.lower(), unit.lower(), quantity.lower(), characteristics.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "№": str(len(rows) + 1),
+                "Наименование": name,
+                "Ед. изм.": unit,
+                "Кол-во": quantity,
+                "Характеристики": characteristics,
+            }
+        )
+        if len(rows) >= 24:
+            break
+    return rows
+
+
+def _build_supply_rows(documents: list[AnalyzedDocument]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    candidate_docs: list[AnalyzedDocument] = []
+    for doc in documents:
+        if not doc.text:
+            continue
+        lowered_name = doc.display_name.lower()
+        if any(token in lowered_name for token in ("обоснование", "нмцк", "контракт", "заявк", "титуль")):
+            continue
+        if doc.role == "technical_spec" or any(
+            token in lowered_name
+            for token in ("техническ", "описание объекта", "спецификац", "ведомост", "объекта закупки")
+        ):
+            candidate_docs.append(doc)
+    for doc in candidate_docs:
+        parsed_rows = _extract_goods_spec_table(doc.text or "")
+        if not parsed_rows:
+            parsed_rows = _extract_goods_spec_table_from_tabular_text(doc.text or "")
+        for row in parsed_rows:
+            enriched = dict(row)
+            enriched["Источник"] = doc.display_name
+            key = (
+                enriched.get("Наименование", "").strip().lower(),
+                enriched.get("Ед. изм.", "").strip().lower(),
+                enriched.get("Кол-во", "").strip().lower(),
+                enriched.get("Характеристики", "").strip().lower(),
+                enriched.get("Источник", "").strip().lower(),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(enriched)
+            if len(rows) >= 24:
+                return rows
+    return rows
+
+
+def _document_source_label(doc: AnalyzedDocument) -> str:
+    return doc.display_name
+
+
+def _extract_meaningful_snippets(text: str, keywords: tuple[str, ...], *, max_snippets: int = 8) -> list[str]:
+    if not text:
+        return []
+    snippets: list[str] = []
+    seen: set[str] = set()
+    normalized_text = re.sub(r"\s+", " ", text)
+    for keyword in keywords:
+        for match in re.finditer(re.escape(keyword), normalized_text, re.IGNORECASE):
+            start = max(0, match.start() - 120)
+            end = min(len(normalized_text), match.end() + 220)
+            snippet = normalized_text[start:end].strip(" .;,\n\t")
+            if len(snippet) < 40:
+                continue
+            key = snippet.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            snippets.append(snippet)
+            if len(snippets) >= max_snippets:
+                return snippets
+    return snippets
+
+
+def _build_software_work_rows(documents: list[AnalyzedDocument]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    candidate_docs = [
+        doc
+        for doc in documents
+        if doc.text and (
+            doc.role == "technical_spec"
+            or "описание объекта" in doc.display_name.lower()
+            or "техничес" in doc.display_name.lower()
+        )
+    ]
+    block_definitions = [
+        (
+            "Новые структурированные электронные медицинские документы",
+            ("структурированных электронных медицинских документ", "сэмд"),
+            "Разработать и внедрить новые структуры/формы электронных медицинских документов.",
+            "ПК «Здравоохранение», медицинская информационная система",
+            "Обновленный модуль с поддержкой новых СЭМД",
+            "Приемка по реализованным структурам документов и результатам тестирования",
+        ),
+        (
+            "Обработка информации об ИПРА",
+            ("ипра", "реабилитации и абилитации"),
+            "Реализовать обработку данных индивидуальных программ реабилитации и абилитации.",
+            "ПК «Здравоохранение», внешние данные ИПРА",
+            "Система обрабатывает и хранит сведения ИПРА в требуемом формате",
+            "Приемка по корректной обработке сценариев и данным ИПРА",
+        ),
+        (
+            "Интеграция с ЕРН через СМЭВ",
+            ("ерн", "смэв", "межведомственного электронного взаимодействия"),
+            "Настроить обмен данными и интеграционный контур с ЕРН через СМЭВ.",
+            "ЕРН, СМЭВ, ПК «Здравоохранение»",
+            "Рабочая интеграция и обмен данными с внешним регистром",
+            "Приемка по интеграционному тестированию и доступности обмена",
+        ),
+        (
+            "Получение данных об участниках СВО",
+            ("сво", "витрины данных министерства обороны", "статуса сво"),
+            "Реализовать получение и обработку данных об участниках СВО из внешней витрины.",
+            "Витрина данных Минобороны, ПК «Здравоохранение»",
+            "Обогащение записей пациентов данными по статусу СВО",
+            "Приемка по корректному получению, кэшированию и журналированию данных",
+        ),
+        (
+            "Передача лицензии на обновленный модуль",
+            ("лиценз", "передаче лицензии", "передача прав"),
+            "Передать заказчику лицензию и права использования обновленного модуля.",
+            "Документы на лицензирование, обновленный модуль",
+            "Заказчик получает правоомерное использование обновленного решения",
+            "Приемка по передаче лицензии и комплекту закрывающих документов",
+        ),
+    ]
+    for title, keywords, action, systems, result, acceptance in block_definitions:
+        matched_doc = None
+        matched_snippet = None
+        for doc in candidate_docs:
+            snippets = _extract_meaningful_snippets(doc.text or "", keywords, max_snippets=1)
+            if snippets:
+                matched_doc = doc
+                matched_snippet = snippets[0]
+                break
+        if not matched_doc:
+            continue
+        rows.append(
+            {
+                "№": str(len(rows) + 1),
+                "Блок работ / результат": title,
+                "Что нужно сделать": action,
+                "Входные/внешние системы": systems,
+                "Результат для заказчика": result,
+                "Критерии приёмки": acceptance if not matched_snippet else _cleanup_tabular_value(matched_snippet[:220]) or acceptance,
+                "Источник": _document_source_label(matched_doc),
+            }
+        )
+    return rows
+
+
+def _build_document_grounded_requirements(
+    documents: list[AnalyzedDocument],
+    procurement_kind: str,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for doc in documents:
+        text = doc.text or ""
+        if not text:
+            continue
+        doc_name = doc.display_name
+        if procurement_kind in {"mixed", "software_modification", "integration", "license"}:
+            mapping = [
+                (("модификац", "программного комплекса", "модул"), "Модификация ПК «Здравоохранение»", "функциональное", "high"),
+                (("структурированных электронных медицинских документ", "сэмд"), "Разработка новых структурированных электронных медицинских документов", "функциональное", "high"),
+                (("ипра", "реабилитации и абилитации"), "Обработка информации об ИПРА", "функциональное", "high"),
+                (("ерн", "смэв"), "Интеграция с ЕРН через СМЭВ", "интеграционное", "high"),
+                (("сво", "витрины данных министерства обороны"), "Получение данных об участниках СВО из витрины Минобороны", "интеграционное", "high"),
+                (("лиценз", "передаче лицензии", "передача прав"), "Передача лицензии и прав на обновленный модуль", "лицензионное", "high"),
+                (("приемк", "испытан", "акт"), "Требования к приемке результатов работ", "приёмка", "medium"),
+                (("срок", "этап"), "Сроки и этапность выполнения работ", "срок / этап", "medium"),
+                (("заявк", "инструкц"), "Требования к заявке участника", "заявка участника", "medium"),
+                (("персональн", "медицинск"), "Требования к обработке медицинских и персональных данных", "информационная безопасность / персональные данные", "medium"),
+            ]
+        else:
+            mapping = [
+                (("поставка", "товар"), "Требования к предмету поставки", "функциональное", "high"),
+                (("приемк", "испытан", "акт"), "Требования к приемке", "приёмка", "medium"),
+                (("срок",), "Сроки исполнения", "срок / этап", "medium"),
+            ]
+        for keywords, title, req_type, priority in mapping:
+            snippets = _extract_meaningful_snippets(text, keywords, max_snippets=1)
+            if not snippets:
+                continue
+            if any(item["title"] == title and item["source"] == doc_name for item in rows):
+                continue
+            rows.append(
+                {
+                    "title": title,
+                    "detail": _cleanup_tabular_value(snippets[0][:260]) or title,
+                    "source": doc_name,
+                    "type": req_type,
+                    "priority": priority,
+                }
+            )
+    return rows[:12]
+
+
+def _build_document_grounded_questions(procurement_kind: str, documents: list[AnalyzedDocument]) -> list[str]:
+    if procurement_kind in {"mixed", "software_modification", "integration", "license"}:
+        return [
+            "Есть ли у исполнителя опыт доработки медицинских информационных систем и аналогичных госинтеграций?",
+            "Есть ли подтвержденный опыт интеграции через СМЭВ и подключения внешних реестров?",
+            "Кто предоставляет доступы и тестовые контуры ЕРН, СМЭВ и витрины данных Минобороны?",
+            "Доступны ли форматы обмена, спецификации API и правила согласования СЭМД?",
+            "Входит ли в объем работ интеграционное тестирование и сопровождение приемки?",
+            "Какие результаты передаются заказчику: код, модуль, лицензия, документация, инструкции?",
+            "Как оформляется передача лицензии и прав на обновленный модуль?",
+            "Какие ограничения и риски есть по персональным данным, медданным и защищенным каналам?",
+        ]
+    return [
+        "Подтверждаете ли вы исполнение требований технического задания в полном объеме?",
+        "Какие сроки исполнения и ограничения по поставке/работам вы видите?",
+        "Какие документы и подтверждения должны быть подготовлены для заявки?",
+    ]
+
+
+def _build_document_grounded_risks(procurement_kind: str, documents: list[AnalyzedDocument], contract_text: str) -> list[dict[str, str]]:
+    if procurement_kind in {"mixed", "software_modification", "integration", "license"}:
+        return [
+            {"clause": "Неполные требования к интеграциям", "classification": "deal_breaker_candidate", "impact": "Без описания форматов и сценариев обмена объем работ может быть занижен.", "mitigation": "Запросить спецификации API/СМЭВ и перечень обязательных сценариев обмена."},
+            {"clause": "Зависимость от доступов к СМЭВ/ЕРН/витрине Минобороны", "classification": "deal_breaker_candidate", "impact": "Без доступов и тестовых контуров сроки и приемка будут сдвигаться.", "mitigation": "Зафиксировать в переписке и контракте, кто и когда предоставляет доступы и тестовые среды."},
+            {"clause": "Риск по персональным и медицинским данным", "classification": "deal_breaker_candidate", "impact": "Ошибки в требованиях ИБ и обработке медданных создают юридический и проектный риск.", "mitigation": "Уточнить требования к ИБ, журналированию, ролям доступа и защите каналов."},
+            {"clause": "Неочевидный объем доработок", "classification": "market_standard_harsh_term", "impact": "Фактическая трудоемкость модификации модуля может быть выше, чем следует из краткого описания.", "mitigation": "Разбить оценку по функциональным блокам, этапам и интеграциям до запроса КП."},
+            {"clause": "Риск приемки по результатам интеграционного тестирования", "classification": "market_standard_harsh_term", "impact": "Приемка зависит от внешних систем и согласований, не полностью контролируемых исполнителем.", "mitigation": "Зафиксировать критерии приемки, тестовые сценарии и роль заказчика во внешних согласованиях."},
+            {"clause": "Риск лицензирования и передачи прав", "classification": "market_standard_harsh_term", "impact": "Неясные условия лицензии и передачи прав могут создать спор по результату работ.", "mitigation": "Проверить проект контракта и приложения на режим лицензии, объем прав и пакет передаваемых материалов."},
+        ]
+    return [
+        {"clause": "Недостаточно предметных данных", "classification": "market_standard_harsh_term", "impact": "Часть рисков требует ручной проверки документов.", "mitigation": "Проверить ТЗ и проект контракта вручную."}
+    ]
+
+
+def _build_document_grounded_rfq_sections(procurement_kind: str) -> list[str]:
+    if procurement_kind in {"mixed", "software_modification", "integration", "license"}:
+        return [
+            "Опыт аналогичных доработок медицинских ИС и интеграций",
+            "Команда проекта и роли по разработке, интеграции, тестированию и ИБ",
+            "Оценка трудоемкости по функциональным блокам и этапам",
+            "Подход к интеграции через СМЭВ, ЕРН и витрину Минобороны",
+            "Состав передаваемых результатов: модуль, документация, лицензия, права",
+            "Стоимость по блокам, тестированию, сопровождению и интеграционным рискам",
+        ]
+    return [
+        "Перечень позиций и объём поставки",
+        "Подтверждение сроков, сертификатов и гарантий",
+        "Условия оплаты и срок действия КП",
+    ]
+
+
 def _build_goods_preliminary_analysis(
     *,
     metadata: dict[str, Any],
+    documents: list[AnalyzedDocument],
     technical_spec_text: str,
     contract_draft_text: str,
     notice_text: str,
@@ -1406,7 +1776,7 @@ def _build_goods_preliminary_analysis(
     contract_text = contract_draft_text or ""
     notice = notice_text or ""
     initial_price = _extract_notice_price(metadata, notice, contract_text)
-    spec_rows = _extract_goods_spec_table(tz_text)
+    spec_rows = _build_supply_rows(documents) or _extract_goods_spec_table(tz_text)
     delivery_deadline = _match_first_dotall(
         tz_text,
         (
@@ -1527,8 +1897,13 @@ def _build_goods_preliminary_analysis(
             ]
         ),
         "procurement_kind": "goods",
+        "supply_section_note": (
+            "Состав поставки собран преимущественно из ТЗ, спецификаций и приложений."
+            if spec_rows
+            else "Структурированный состав поставки не выделен автоматически. Нужна ручная сверка ТЗ и приложений."
+        ),
         "spec_table": {
-            "columns": ["№", "Наименование", "Ед. изм.", "Кол-во", "Характеристики"],
+            "columns": ["№", "Наименование", "Кол-во", "Ед. изм.", "Характеристики", "Источник"],
             "rows": spec_rows,
         },
     }
@@ -1537,6 +1912,7 @@ def _build_goods_preliminary_analysis(
 def _build_preliminary_procurement_analysis(
     *,
     metadata: dict[str, Any],
+    documents: list[AnalyzedDocument],
     technical_spec_text: str,
     contract_draft_text: str,
     notice_text: str,
@@ -1549,10 +1925,67 @@ def _build_preliminary_procurement_analysis(
     if procurement_kind == "goods":
         return _build_goods_preliminary_analysis(
             metadata=metadata,
+            documents=documents,
             technical_spec_text=technical_spec_text,
             contract_draft_text=contract_draft_text,
             notice_text=notice_text,
         )
+    if procurement_kind in {"mixed", "software_modification", "integration", "license", "works"}:
+        work_rows = _build_software_work_rows(documents)
+        initial_price = _extract_notice_price(metadata, notice, contract_text)
+        deadline = metadata.get("deadline") or _extract_notice_service_deadline(notice) or _extract_notice_delivery_deadline(notice)
+        delivery_term = metadata.get("procurement", {}).get("delivery_term") if isinstance(metadata.get("procurement"), dict) else None
+        overview = [
+            f"Предмет закупки: {metadata.get('tender_title') or _cleanup_tabular_value(_match_first(combined, (r'Наименование работ:\s*(.+?)(?:\n|$)',))) or 'не указан'}",
+            f"НМЦК: {initial_price} руб." if initial_price else "",
+            f"Тип закупки: {procurement_kind}.",
+            f"Срок исполнения / подачи: {deadline}." if deadline else "",
+            f"Результат для заказчика: модифицированный модуль, интеграции и лицензионный пакет." if work_rows else "",
+        ]
+        compliance = [
+            "Нужно проверить полноту функциональных требований по каждому блоку доработки.",
+            "Требования к интеграциям, доступам и форматам обмена должны быть подтверждены документами и перепиской с заказчиком.",
+            "Нужно отдельно проверить требования к передаче лицензии, прав и итоговой документации.",
+        ]
+        contract_terms = []
+        if delivery_term:
+            contract_terms.append(f"Срок исполнения по документам: {delivery_term}.")
+        if "акт" in contract_text.lower() or "приемк" in contract_text.lower():
+            contract_terms.append("В проекте контракта есть условия приемки и закрывающих документов.")
+        if "лиценз" in (tz_text + "\n" + contract_text).lower():
+            contract_terms.append("В составе результата работ фигурирует передача лицензии или прав использования.")
+        return {
+            "overview": [item for item in overview if item][:6],
+            "compliance_highlights": compliance[:6],
+            "delivery_model": [
+                "Работы зависят от внешних систем, доступов и интеграционного контура заказчика.",
+                "Часть требований относится к программной доработке, а не к поставке товара.",
+            ],
+            "contract_highlights": contract_terms[:6],
+            "next_actions": [
+                "Разбить объем работ по функциональным блокам и запросить оценку трудозатрат по каждому блоку.",
+                "Уточнить порядок предоставления доступов к СМЭВ, ЕРН и витрине Минобороны.",
+                "Проверить критерии приемки, тестирования и пакет лицензионных документов.",
+            ],
+            "extracted_fields": _dedupe_text_items(
+                [
+                    "НМЦК" if initial_price else "",
+                    "функциональные блоки" if work_rows else "",
+                    "интеграции" if any("Интеграция" in row.get("Блок работ / результат", "") for row in work_rows) else "",
+                    "лицензия" if "лиценз" in (tz_text + contract_text).lower() else "",
+                ]
+            ),
+            "procurement_kind": procurement_kind,
+            "supply_section_note": (
+                "Состав работ собран по техническим документам и проекту контракта."
+                if work_rows
+                else "Полный смысловой разбор состава работ не выполнен автоматически. Нужна ручная проверка ТЗ."
+            ),
+            "spec_table": {
+                "columns": ["№", "Блок работ / результат", "Что нужно сделать", "Входные/внешние системы", "Результат для заказчика", "Критерии приёмки", "Источник"],
+                "rows": work_rows,
+            },
+        }
 
     service_subject = _match_first(
         tz_text,
@@ -1764,6 +2197,7 @@ def _build_preliminary_procurement_analysis(
     if unilateral_termination:
         contract_terms.append("Односторонний отказ от исполнения контракта предусмотрен по основаниям, указанным в договоре.")
     contract_terms = _dedupe_text_items([_normalize_analysis_sentence(item) or item for item in contract_terms[:6]])
+    service_spec_rows = _build_supply_rows(documents)
 
     return {
         "overview": overview[:6],
@@ -1773,6 +2207,15 @@ def _build_preliminary_procurement_analysis(
         "next_actions": next_actions[:4],
         "extracted_fields": extracted_fields[:8],
         "procurement_kind": procurement_kind,
+        "supply_section_note": (
+            "Позиции объекта закупки собраны из технических документов и приложений."
+            if service_spec_rows
+            else "Структурированные позиции объекта закупки не выделены автоматически. Нужна ручная сверка ТЗ и приложений."
+        ),
+        "spec_table": {
+            "columns": ["№", "Наименование", "Кол-во", "Ед. изм.", "Характеристики", "Источник"],
+            "rows": service_spec_rows,
+        },
     }
 
 
@@ -1830,11 +2273,13 @@ def _build_output_payloads(
         notice_text,
         str(metadata.get("tender_title") or ""),
     )
-    requirement_rows = _extract_requirement_rows(requirements, core_complete, procurement_kind)
+    grounded_requirement_rows = _build_document_grounded_requirements(documents, procurement_kind)
+    requirement_rows = grounded_requirement_rows or _extract_requirement_rows(requirements, core_complete, procurement_kind)
     quote_files_present = quote_inputs_present
     output_warnings = list(metadata.get("warnings", []))
     preliminary_analysis = _build_preliminary_procurement_analysis(
         metadata=metadata,
+        documents=documents,
         technical_spec_text=technical_spec_text,
         contract_draft_text=contract_draft_text,
         notice_text=notice_text,
@@ -1876,12 +2321,20 @@ def _build_output_payloads(
         ],
     }
 
+    grounded_questions = _build_document_grounded_questions(procurement_kind, documents)
+
     supplier_questions_payload = {
-        "ambiguities": [
-            "Часть требований получена из ограниченного demo-parsing.",
-            "Параметры оплаты и допустимость аналогов требуют ручной валидации.",
-        ],
-        "questions": _normalize_supplier_questions(supplier_questions, procurement_kind),
+        "ambiguities": (
+            [
+                "Полный LLM-анализ не выполнялся; вопросы собраны детерминированно из документов.",
+                "Нужно проверить недостающие доступы, интеграции и лицензионные условия вручную.",
+            ]
+            if analysis_mode == "fallback_deterministic_adapter"
+            else [
+                "Параметры оплаты и допустимость аналогов требуют ручной валидации.",
+            ]
+        ),
+        "questions": grounded_questions if grounded_questions else _normalize_supplier_questions(supplier_questions, procurement_kind),
         "manual_checks": [
             "Согласовать финальный вопросник с оператором.",
             "Не отправлять вопросы поставщикам автоматически из этого интерфейса.",
@@ -1890,12 +2343,7 @@ def _build_output_payloads(
 
     rfq_payload = {
         "rfq_title": f"RFQ draft / {metadata['tender_title']}",
-        "sections": [
-            "Перечень позиций и объём поставки",
-            "Подтверждение сроков, сертификатов и гарантий",
-            "Условия оплаты и срок действия КП",
-            "Таблица для аналогов и замечаний поставщика",
-        ],
+        "sections": _build_document_grounded_rfq_sections(procurement_kind),
         "supplier_targets": [item.get("supplier_label", "Поставщик") for item in (tkp_comparison or {}).get("suppliers", [])] or [
             "Поставщик 1",
             "Поставщик 2",
@@ -1966,7 +2414,7 @@ def _build_output_payloads(
         "cash_gap_estimate": economics.get("cash_gap_estimate") if economics else None,
         "selected_supplier_name": economics.get("selected_supplier_name") if economics else None,
         "result": (
-            "Недостаточно данных для полной экономики"
+            "Экономика требует запроса КП / оценки подрядчика"
             if not economics
             else (
                 "Экономика выглядит условно приемлемой"
@@ -1975,15 +2423,27 @@ def _build_output_payloads(
             )
         ),
         "status": economics.get("status", "blocked") if economics else "blocked",
-        "metrics": [
-            {"label": "Минимальная закупочная стоимость", "value": economics.get("supplier_cost_min", "unknown") if economics else "unknown"},
-            {"label": "Выбранная закупочная стоимость", "value": economics.get("supplier_cost_selected", "unknown") if economics else "unknown"},
-            {"label": "Резерв логистики", "value": economics.get("logistics_reserve", "unknown") if economics else "unknown"},
-            {"label": "Резерв риска", "value": economics.get("risk_reserve", "unknown") if economics else "unknown"},
-            {"label": "Целевая маржа", "value": f"{economics.get('gross_margin_percent')}%" if economics and economics.get("gross_margin_percent") is not None else "unknown"},
-            {"label": "Предварительная цена подачи", "value": economics.get("preliminary_bid_price", "unknown") if economics else "unknown"},
-            {"label": "Оценка кассового разрыва", "value": economics.get("cash_gap_estimate", "unknown") if economics else "unknown"},
-        ],
+        "metrics": (
+            [
+                {"label": "НМЦК", "value": _extract_notice_price(metadata, technical_spec_text, contract_draft_text, notice_text) or "не указана"},
+                {"label": "Закупочная себестоимость", "value": "не определена, требуется ТКП/оценка подрядчика"},
+                {"label": "Что запросить", "value": "оценка трудозатрат по функциональным блокам"},
+                {"label": "Что запросить", "value": "стоимость интеграции СМЭВ/ЕРН"},
+                {"label": "Что запросить", "value": "стоимость разработки СЭМД / доработок модуля"},
+                {"label": "Что запросить", "value": "стоимость лицензии/передачи прав"},
+                {"label": "Что запросить", "value": "стоимость тестирования, внедрения и резерва на интеграционные риски"},
+            ]
+            if not economics
+            else [
+                {"label": "Минимальная закупочная стоимость", "value": economics.get("supplier_cost_min", "unknown")},
+                {"label": "Выбранная закупочная стоимость", "value": economics.get("supplier_cost_selected", "unknown")},
+                {"label": "Резерв логистики", "value": economics.get("logistics_reserve", "unknown")},
+                {"label": "Резерв риска", "value": economics.get("risk_reserve", "unknown")},
+                {"label": "Целевая маржа", "value": f"{economics.get('gross_margin_percent')}%" if economics.get("gross_margin_percent") is not None else "unknown"},
+                {"label": "Предварительная цена подачи", "value": economics.get("preliminary_bid_price", "unknown")},
+                {"label": "Оценка кассового разрыва", "value": economics.get("cash_gap_estimate", "unknown")},
+            ]
+        ),
         "drivers": (
             [
                 f"Выбран поставщик: {economics.get('selected_supplier_name') or 'не определён'}.",
@@ -1991,15 +2451,16 @@ def _build_output_payloads(
                 "Расчёт построен на локальных ТКП и операторских параметрах из демо-формы.",
             ]
             if economics
-            else ["Без структурированных цен экономика не может быть автоматически признана полной."]
+            else ["Без КП и оценки трудозатрат экономика ограничивается НМЦК и перечнем данных, которые нужно запросить."]
         ),
         "manual_checks": ([item.get("message", "") for item in economics.get("manual_checks", [])] if economics else [])
-        or ["Сверить фактические цены, логистику и резерв вручную."],
+        or ["Запросить КП/оценку подрядчика по функциональным блокам, интеграциям, лицензии и тестированию."],
         "warnings": economics.get("warnings", []) if economics else [],
         "limitations": economics.get("limitations", []) if economics else [],
         "assumptions": economics.get("assumptions", {}) if economics else {},
     }
 
+    grounded_risks = _build_document_grounded_risks(procurement_kind, documents, contract_draft_text)
     risks_payload = {
         "summary": "Найдены ограничения и риски, требующие ручной проверки.",
         "risks": [
@@ -2009,7 +2470,7 @@ def _build_output_payloads(
                 "impact": _translate_user_text(risk.get("impact", "")),
                 "mitigation": _translate_user_text(risk.get("mitigation", "")),
             }
-            for risk in calibrated_risks
+            for risk in (grounded_risks or calibrated_risks)
         ]
         or [
             {
@@ -2038,9 +2499,9 @@ def _build_output_payloads(
         recommendation = DemoRecommendationCode.MANUAL_REVIEW_REQUIRED
         label = "нужна ручная проверка"
         rationale = [
-            "Данных недостаточно для безусловной рекомендации.",
-            "Часть шагов выполнена в fallback-режиме или заблокирована отсутствием ТКП или извлечённого текста.",
-            "Следующее действие должен подтвердить оператор.",
+            "Документы извлечены и дают предметное понимание закупки, но ценовая модель и подтверждение ресурсов отсутствуют.",
+            "Решение зависит от оценки трудозатрат, доступов к внешним системам и условий передачи лицензии.",
+            "Следующее действие должен подтвердить оператор после запроса КП или внутренней оценки подрядчика.",
         ]
 
     final_recommendation = {
@@ -2071,19 +2532,19 @@ def _build_output_payloads(
             *preliminary_analysis.get("extracted_fields", []),
         ],
         "risk_signals": [
-            "Режим анализа ограничен локальным контролируемым адаптером.",
+            "При отсутствии LLM используется документ-зависимый детерминированный анализ без шаблонов из чужой предметной области.",
             "Внешние действия отключены по design policy.",
             "Нормализация Excel-таблиц использует deterministic parser + heuristics без LLM.",
             "Часть выводов требует ручного подтверждения по исходным файлам.",
         ],
         "decision_factors": rationale,
         "overall_explanation": (
-            "Агент использовал только локально загруженные файлы, безопасное извлечение текста и контролируемый адаптер раннера или fallback-адаптер. "
-            "Если комплект документов или ТКП неполный, интерфейс честно показывает блокировки и необходимость ручной проверки вместо ложной полной автоматизации."
+            "Агент использовал локально загруженные файлы, безопасное извлечение текста и документ-зависимый детерминированный анализ. "
+            "Если LLM недоступен или ТКП отсутствуют, интерфейс показывает предметные выводы по документам и честно отмечает ограничения вместо подстановки шаблонов из другой предметной области."
         ),
         "per_step": {
             "documents": "Файлы сохранены локально, имена нормализованы, опасные пути отброшены.",
-            "requirements": "Требования и предварительный анализ собраны из ТЗ, извещения и проекта договора с безопасным локальным извлечением текста.",
+            "requirements": "Требования и предварительный анализ собраны из ТЗ, извещения, проекта договора и документа по заявке с безопасным локальным извлечением текста.",
             "questions": "Сформирован список вопросов для ручной коммуникации с поставщиками.",
             "rfq": "Подготовлен draft RFQ для ручной отправки вне системы.",
             "quotes": "Сравнение ТКП использует детерминированный парсер таблиц и честно помечает частичные результаты и зоны ручной проверки.",
@@ -2106,6 +2567,39 @@ def _build_output_payloads(
         "final_recommendation": final_recommendation,
         "trace": trace,
     }
+
+
+def _document_type_label(item: dict[str, Any]) -> str:
+    role = str(item.get("role_hint") or item.get("document_kind") or "").strip().lower()
+    labels = {
+        "notice": "электронное извещение ЕИС",
+        "eis_notice": "электронное извещение ЕИС",
+        "technical_spec": "техническое задание / техническая часть",
+        "technical_specification": "техническое задание / техническая часть",
+        "procurement_object_description": "описание объекта закупки",
+        "contract_draft": "проект контракта",
+        "specification": "спецификация",
+        "estimate": "смета",
+        "form": "форма",
+        "attachment": "приложение",
+        "supporting": "вспомогательный документ",
+    }
+    return labels.get(role, "документ закупки")
+
+
+def _build_downloaded_documents_inventory(metadata: dict[str, Any]) -> list[dict[str, str]]:
+    inventory: list[dict[str, str]] = []
+    for item in metadata.get("files", []):
+        inventory.append(
+            {
+                "name": str(item.get("display_name") or item.get("original_name") or "Документ"),
+                "type": _document_type_label(item),
+                "download_status": "downloaded",
+                "text_status": "extracted" if item.get("extracted_text_available") else str(item.get("text_extraction_status") or "pending"),
+                "source": str(item.get("source_type") or item.get("source") or "runtime"),
+            }
+        )
+    return inventory
 
 
 def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[str, Any]]) -> list[DemoStep]:
@@ -2235,10 +2729,12 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
                 DemoDetailSection(
                     title="Требования",
                     kind="table",
-                    columns=["Требование", "Деталь", "Источник"],
+                    columns=["Требование", "Тип", "Приоритет", "Деталь", "Источник"],
                     rows=[
                         {
                             "Требование": item["title"],
+                            "Тип": item.get("type", "общее"),
+                            "Приоритет": item.get("priority", "medium"),
                             "Деталь": item["detail"],
                             "Источник": item["source"],
                         }
@@ -2451,16 +2947,70 @@ def _build_final_recommendation(outputs: dict[str, dict[str, Any]]) -> DemoFinal
     )
 
 
+def _preliminary_analysis_supply_section_title(preliminary_analysis: dict[str, Any]) -> str:
+    columns = preliminary_analysis.get("spec_table", {}).get("columns", []) or []
+    if "Блок работ / результат" in columns:
+        return "Состав работ / поставки / услуг"
+    return "Состав поставки"
+
+
+def _preliminary_analysis_supply_section_markdown(preliminary_analysis: dict[str, Any]) -> str:
+    rows = preliminary_analysis.get("spec_table", {}).get("rows", []) or []
+    if not rows:
+        return "Структурированный состав поставки не выделен автоматически. Требуется ручная проверка ТЗ и приложений."
+
+    note = preliminary_analysis.get("supply_section_note", "").strip()
+    columns = preliminary_analysis.get("spec_table", {}).get("columns", []) or []
+    lines: list[str] = [note] if note else []
+    if "Блок работ / результат" in columns:
+        lines.extend(
+            [
+                (
+                    f"- {row.get('№', '—')}. {row.get('Блок работ / результат', 'Блок работ')} | "
+                    f"что сделать: {row.get('Что нужно сделать', 'не указано')} | "
+                    f"системы: {row.get('Входные/внешние системы', 'не указано')} | "
+                    f"результат: {row.get('Результат для заказчика', 'не указано')} | "
+                    f"приемка: {row.get('Критерии приёмки', 'не указано')} | "
+                    f"источник: {row.get('Источник', 'не указан')}"
+                )
+                for row in rows
+            ]
+        )
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            (
+                f"- {row.get('№', '—')}. {row.get('Наименование', 'Позиция')} | "
+                f"кол-во: {row.get('Кол-во', 'не указано')} | "
+                f"ед.: {row.get('Ед. изм.', '—')} | "
+                f"характеристики: {row.get('Характеристики', '—')} | "
+                f"источник: {row.get('Источник', 'не указан')}"
+            )
+            for row in rows
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str, Any]]) -> str:
     final_recommendation = outputs["final_recommendation"]
     quotes = outputs["quotes_comparison"]
     economics = outputs["economics"]
     preliminary_analysis = outputs["requirements"].get("preliminary_analysis", {})
+    downloaded_docs = _build_downloaded_documents_inventory(metadata)
     procurement_block = ""
     if metadata.get("procurement_source"):
         procurement = metadata.get("procurement", {})
         documentation = procurement.get("attachment_names") or [item.get("display_name", "") for item in metadata.get("files", [])]
         documentation_block = "\n".join(f"- {item}" for item in documentation) or "- Документация не получена."
+        downloaded_documents_block = (
+            "\n".join(
+                f"- {item['type']}: {item['name']} | download={item['download_status']} | text={item['text_status']} | source={item['source']}"
+                for item in downloaded_docs
+            )
+            or "- Документы не скачаны."
+        )
         blocked_note = (
             "\nДокументация не получена. Анализ невозможен до ручной загрузки файлов.\n"
             if metadata.get("attachments_status") == "manual_upload_required" or not metadata.get("files")
@@ -2473,6 +3023,7 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
             f"- Заказчик: {metadata.get('customer_name')}\n"
             f"- Закон: {metadata.get('law') or procurement.get('category') or 'не указан'}\n"
             f"- НМЦК: {procurement.get('initial_price') or 'не указана'} {procurement.get('currency') or '₽'}\n"
+            f"- Дата публикации: {metadata.get('publication_date') or procurement.get('publication_date') or 'не указана'}\n"
             f"- Срок подачи: {metadata.get('deadline') or 'не указан'}\n"
             f"- Источник сведений: {procurement.get('structured_source_label') or metadata.get('notice_source_label') or 'карточка ЕИС'}\n"
             f"- Ссылка на источник: {metadata.get('procurement_url')}\n"
@@ -2481,6 +3032,8 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
             f"- Скачано/добавлено файлов: {metadata.get('downloaded_files_count', len(metadata.get('files', [])))}\n\n"
             "### Документация\n"
             f"{documentation_block}\n"
+            "### Загруженные документы\n"
+            f"{downloaded_documents_block}\n"
             f"{blocked_note}\n"
         )
     return (
@@ -2513,6 +3066,8 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
             if preliminary_analysis.get("contract_highlights")
             else "- Ключевые условия договора нужно проверить вручную."
         )
+        + f"\n\n## {_preliminary_analysis_supply_section_title(preliminary_analysis)}\n"
+        + _preliminary_analysis_supply_section_markdown(preliminary_analysis)
         + "\n\n## Извлечённые ТКП\n"
         + (
             "\n".join(
@@ -2524,6 +3079,15 @@ def _build_report_markdown(metadata: dict[str, Any], outputs: dict[str, dict[str
         )
         + "\n\n## Экономика\n"
         + "\n".join(f"- {item['label']}: {item['value']}" for item in economics["metrics"])
+        + "\n\n## Ключевые требования\n"
+        + (
+            "\n".join(
+                f"- {item['title']} | тип: {item.get('type', 'общее')} | приоритет: {item.get('priority', 'medium')} | источник: {item['source']}"
+                for item in outputs["requirements"].get("requirements", [])
+            )
+            if outputs["requirements"].get("requirements")
+            else "- Требования не выделены автоматически."
+        )
         + "\n\n## Ручные проверки\n"
         + "\n".join(f"- {item}" for item in final_recommendation["manual_checks"])
         + "\n"
@@ -2631,6 +3195,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
     final_recommendation = outputs["final_recommendation"]
     trace = outputs["trace"]
     preliminary_analysis = requirements.get("preliminary_analysis", {})
+    downloaded_docs = _build_downloaded_documents_inventory(metadata)
     files = metadata.get("files", [])
     procurement = metadata.get("procurement", {})
     procurement_manual_required = bool(metadata.get("manual_upload_required") or metadata.get("attachments_status") == "manual_upload_required" or not files)
@@ -2793,10 +3358,30 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
           </div>
 
           <div class="card">
+            <h2>Загруженные документы</h2>
+            {render_table(
+                ["Тип", "Файл", "Статус скачивания", "Статус текста", "Источник"],
+                [
+                    {
+                        "Тип": item["type"],
+                        "Файл": item["name"],
+                        "Статус скачивания": item["download_status"],
+                        "Статус текста": item["text_status"],
+                        "Источник": item["source"],
+                    }
+                    for item in downloaded_docs
+                ],
+            )}
+            {('<p class="muted">По закупке не найдены публичные вложения кроме электронного извещения. Анализ технической части ограничен.</p>' if len(downloaded_docs) <= 1 else '')}
+          </div>
+
+          <div class="card">
             <h2>Предварительный анализ закупки</h2>
             <ul>{list_html(preliminary_analysis.get('overview', [])) or "<li>Пока не удалось извлечь структурированные выводы из ТЗ.</li>"}</ul>
             {(
-                '<h3>Спецификация ТЗ</h3><div class="table-scroll">'
+                f"<h3>{html.escape(_preliminary_analysis_supply_section_title(preliminary_analysis))}</h3>"
+                + f"<p>{html.escape(preliminary_analysis.get('supply_section_note', 'Состав поставки собран по техническим документам.'))}</p>"
+                + '<div class="table-scroll">'
                 + render_table(
                     preliminary_analysis.get('spec_table', {}).get('columns', []),
                     preliminary_analysis.get('spec_table', {}).get('rows', []),
@@ -2815,7 +3400,18 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
 
           <div class="card">
             <h2>Извлечённые требования</h2>
-            <ul>{list_html([item['title'] for item in requirements['requirements']])}</ul>
+            {render_table(
+                ["Требование", "Тип", "Приоритет", "Источник"],
+                [
+                    {
+                        "Требование": item.get("title", ""),
+                        "Тип": item.get("type", "общее"),
+                        "Приоритет": item.get("priority", "medium"),
+                        "Источник": item.get("source", "не указан"),
+                    }
+                    for item in requirements['requirements']
+                ],
+            )}
           </div>
 
           <div class="card">
@@ -3159,7 +3755,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             contract_draft_text=contract_draft_text,
         )
 
-        profile = get_supplier_profile()
+        profile = None if metadata.get("mode") == "procurement_search_intake" else get_supplier_profile()
         doc_relevance = score_procurement_document_text(text=combined_text or "", profile=profile)
         metadata["document_relevance"] = doc_relevance
         append_demo_run_event(
@@ -3169,15 +3765,22 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             {"document_score": doc_relevance.get("document_score")},
         )
 
-        from src.modules.tender_operator_agent_demo.eis_notice_parser import build_notice_priority_prompt_section
+        from src.modules.tender_operator_agent_demo.eis_notice_parser import (
+            build_notice_priority_prompt_section,
+            build_technical_documents_prompt_section,
+        )
         procurement = metadata.get("procurement", {})
         priority_section = build_notice_priority_prompt_section(procurement)
         if priority_section and notice_text:
             notice_text = priority_section + "\n\n" + notice_text
+        technical_docs_section = build_technical_documents_prompt_section(metadata.get("files", []))
+        if technical_docs_section:
+            technical_spec_text = technical_docs_section + "\n\n" + (technical_spec_text or "")
 
         core_complete = bool(technical_spec_text and contract_draft_text and notice_text)
         if not technical_spec_text and combined_text:
             technical_spec_text = combined_text[:6000]
+            warnings.append("Технические документы не выделены отдельно; используется общий текст документов.")
         if not contract_draft_text:
             warnings.append("Contract draft text was not fully extracted; contract risks are partially inferred.")
 
@@ -3203,16 +3806,20 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
                 {"analysis_mode": analysis_mode, "resolved_provider": llm_result.get("resolved_provider")},
             )
         else:
-            pilot_runner = _import_runner_module()
-            requirements = pilot_runner._run_stub_requirements_extraction(notice_text, technical_spec_text, contract_draft_text)
-            calibrated_risks = pilot_runner._run_stub_calibrated_contract_risk(contract_draft_text or combined_text)
-            supplier_questions = pilot_runner._run_stub_supplier_questions()
+            requirements = {
+                "technical_requirements": [],
+                "document_requirements": [],
+                "qualification_requirements": [],
+                "evaluation_criteria": [],
+            }
+            calibrated_risks = []
+            supplier_questions = []
             rfq_draft = {}
-            analysis_mode = "controlled_runner_adapter" if core_complete else "fallback_deterministic_adapter"
+            analysis_mode = "fallback_deterministic_adapter"
             append_demo_run_event(
                 run_id,
                 "stub_analysis_fallback",
-                "LLM-анализ недоступен, используется детерминированный fallback.",
+                "LLM-анализ недоступен, используется документ-зависимый детерминированный fallback.",
                 {"core_complete": core_complete},
             )
 

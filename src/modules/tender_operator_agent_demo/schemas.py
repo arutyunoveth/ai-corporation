@@ -229,6 +229,12 @@ class ProcurementAttachmentManifestItem(APIModel):
     extension: str
     status: str
     note: str | None = None
+    source_url: str | None = None
+    source_type: str | None = None
+    document_kind: str | None = None
+    content_type: str | None = None
+    size_bytes: int | None = Field(default=None, ge=0)
+    error: str | None = None
 
 
 class ProcurementRunResponse(APIModel):
