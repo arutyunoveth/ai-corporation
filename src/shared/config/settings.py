@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "AI Corporation Sprint 1 API"
     debug: bool = False
+    app_env: str = "development"
     database_url: str = "sqlite:///./ai_corporation.db"
     site_public_root: str | None = None
     allowed_hosts: str = ""
@@ -85,6 +86,9 @@ class Settings(BaseSettings):
     public_search_page_size: int = 30
     public_search_no_proxy_domains: str = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru"
     allow_demo_discovery: bool = True
+    eis_docs_tls_verify: bool = False
+    eis_docs_ca_bundle: str | None = None
+    eis_allow_insecure_tls: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="AI_CORP_",
@@ -106,7 +110,10 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    if settings.app_env.lower() == "production" and (not settings.eis_docs_tls_verify or settings.eis_allow_insecure_tls):
+        raise RuntimeError("Production cannot run EIS docs client with insecure TLS enabled")
+    return settings
 
 
 def _split_csv(raw_value: str) -> list[str]:

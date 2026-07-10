@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 from src.shared.config.settings import get_settings
 from src.shared.db.diagnostics import get_database_diagnostics, masked_database_url
 from src.shared.db.base import Base
+from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.tender_research.config import load_config
+from src.tender_research.repository import TenderRepository
 from src.tender_research.rag.job_runner import submit_analyze_job, submit_prepare_job
 from src.tender_research.rag.job_schemas import JobListResponse, JobStatusResponse, StartJobResponse
 from src.tender_research.rag.job_service import create_job, get_job, list_jobs
@@ -225,6 +227,8 @@ _OLD_TABLE_COUNTS = [
     "procurement_tender_documents",
     "procurement_document_chunks",
     "procurement_document_embeddings",
+    "procurement_source_archives",
+    "eis_bulk_sync_cursors",
 ]
 
 
@@ -295,6 +299,28 @@ def tender_research_health() -> dict:
                     table_counts[table] = row
             except Exception:
                 table_counts[table] = -1
+    bulk_health = {}
+    if diag.get("can_connect"):
+        session = _get_session()
+        try:
+            repo = TenderRepository(session)
+            last_sync = repo.latest_tender_seen_at("eis_getdocs_bulk")
+            archive_count = repo.count_source_archives("eis_getdocs_bulk")
+            xml_count = repo.count_archives_xml("eis_getdocs_bulk")
+            record_count = repo.count_tenders_by_source("eis_getdocs_bulk")
+            bulk_health = {
+                "last_successful_bulk_sync": last_sync.isoformat() if last_sync else None,
+                "archive_count": archive_count,
+                "xml_count": xml_count,
+                "parsed_count": record_count,
+                "failed_count": None,
+                "db_record_count": record_count,
+                "freshness_seconds": None,
+                "stale": last_sync is None,
+            }
+        finally:
+            session.close()
+    soap_settings = get_zakupki_soap_settings()
     return {
         "status": "ok",
         "database_dialect": diag.get("database_dialect"),
@@ -304,6 +330,15 @@ def tender_research_health() -> dict:
         "migration_head": diag.get("migration_head"),
         "pgvector_extension_available": diag.get("pgvector_extension_available", False),
         "table_counts": table_counts,
+        "eis_bulk": {
+            **bulk_health,
+            "provider_status": "configured" if soap_settings.configured else "not_configured",
+            "token_configured": soap_settings.token_configured,
+            "insecure_tls": True,
+            "regions_covered": [],
+            "document_types_covered": ["epNotificationEF2020"],
+            "dates_covered": [],
+        },
     }
 
 

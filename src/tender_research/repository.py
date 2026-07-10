@@ -5,7 +5,7 @@ import json
 import re as _re
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from src.tender_research.dedupe import content_hash
@@ -14,9 +14,13 @@ from src.tender_research.models import (
     ProcurementCustomer,
     ProcurementDocumentChunk,
     ProcurementDocumentEmbedding,
+    EisBulkSyncCursor,
     ProcurementRawArtifact,
+    ProcurementSourceArchive,
+    ProcurementSyncRun,
     ProcurementTender,
     ProcurementTenderDocument,
+    ProcurementTenderVersion,
     ProcurementTenderSearchQuery,
     ProcurementWebPage,
     ProcurementWebSearchResult,
@@ -92,6 +96,52 @@ class TenderRepository:
         self._session.flush()
         return tender
 
+    def upsert_tender_with_version(self, data: dict, *, source_archive_id: str | None = None) -> tuple[ProcurementTender, str]:
+        source = data["source"]
+        external_id = data["external_id"]
+        content_hash_value = data.get("content_hash")
+        existing = self.get_tender_by_external(source, external_id)
+        if existing is None:
+            tender = self.upsert_tender(data)
+            if content_hash_value:
+                self.add_tender_version(tender.id, content_hash_value, data.get("raw_payload"), source_archive_id=source_archive_id)
+            return tender, "inserted"
+        if content_hash_value and existing.content_hash == content_hash_value:
+            existing.last_seen_at = datetime.now(timezone.utc)
+            existing.updated_at = existing.last_seen_at
+            self._session.flush()
+            return existing, "unchanged"
+        tender = self.upsert_tender(data)
+        if content_hash_value:
+            self.add_tender_version(tender.id, content_hash_value, data.get("raw_payload"), source_archive_id=source_archive_id)
+        return tender, "updated"
+
+    def add_tender_version(
+        self,
+        tender_id: str,
+        content_hash_value: str,
+        raw_payload: dict | None,
+        *,
+        source_archive_id: str | None = None,
+    ) -> ProcurementTenderVersion:
+        existing = self._session.execute(
+            select(ProcurementTenderVersion).where(
+                ProcurementTenderVersion.tender_id == tender_id,
+                ProcurementTenderVersion.content_hash == content_hash_value,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            return existing
+        version = ProcurementTenderVersion(
+            tender_id=tender_id,
+            source_archive_id=source_archive_id,
+            content_hash=content_hash_value,
+            raw_payload=raw_payload,
+        )
+        self._session.add(version)
+        self._session.flush()
+        return version
+
     def get_tender_by_id(self, tender_id: str) -> ProcurementTender | None:
         return self._session.get(ProcurementTender, tender_id)
 
@@ -110,6 +160,200 @@ class TenderRepository:
 
     def count_tenders(self) -> int:
         return self._session.execute(select(func.count(ProcurementTender.id))).scalar() or 0
+
+    def search_tenders(
+        self,
+        *,
+        query: str = "",
+        exact_phrase: str | None = None,
+        exclude_words: list[str] | None = None,
+        region: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        deadline_from: datetime | None = None,
+        deadline_to: datetime | None = None,
+        nmck_min: float | None = None,
+        nmck_max: float | None = None,
+        customer: str | None = None,
+        customer_inn: str | None = None,
+        procurement_method: str | None = None,
+        okpd2: str | None = None,
+        status: str | None = None,
+        source: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[ProcurementTender]:
+        stmt = select(ProcurementTender)
+        if source:
+            stmt = stmt.where(ProcurementTender.source == source)
+        if region:
+            stmt = stmt.where(ProcurementTender.region == region)
+        if date_from:
+            stmt = stmt.where(ProcurementTender.publication_date >= date_from)
+        if date_to:
+            stmt = stmt.where(ProcurementTender.publication_date <= date_to)
+        if deadline_from:
+            stmt = stmt.where(ProcurementTender.application_deadline >= deadline_from)
+        if deadline_to:
+            stmt = stmt.where(ProcurementTender.application_deadline <= deadline_to)
+        if nmck_min is not None:
+            stmt = stmt.where(ProcurementTender.nmck_amount >= nmck_min)
+        if nmck_max is not None:
+            stmt = stmt.where(ProcurementTender.nmck_amount <= nmck_max)
+        if customer:
+            stmt = stmt.where(func.lower(ProcurementTender.customer_name).like(f"%{customer.lower()}%"))
+        if customer_inn:
+            stmt = stmt.where(ProcurementTender.customer_inn == customer_inn)
+        if status:
+            stmt = stmt.where(func.lower(ProcurementTender.status).like(f"%{status.lower()}%"))
+        raw_payload = ProcurementTender.raw_payload
+        if procurement_method:
+            stmt = stmt.where(func.lower(func.coalesce(raw_payload["placing_way"].as_string(), "")).like(f"%{procurement_method.lower()}%"))
+        if okpd2:
+            stmt = stmt.where(func.coalesce(raw_payload["okpd2"].as_string(), "").like(f"%{okpd2}%"))
+
+        text_terms = [token.strip().lower() for token in query.split() if token.strip()]
+        if exact_phrase:
+            text_terms.append(exact_phrase.strip().lower())
+        for term in text_terms:
+            pattern = f"%{term}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(ProcurementTender.title).like(pattern),
+                    func.lower(func.coalesce(ProcurementTender.description, "")).like(pattern),
+                    func.lower(func.coalesce(ProcurementTender.customer_name, "")).like(pattern),
+                    func.lower(func.coalesce(raw_payload["okpd2"].as_string(), "")).like(pattern),
+                )
+            )
+        for word in exclude_words or []:
+            pattern = f"%{word.strip().lower()}%"
+            stmt = stmt.where(~func.lower(ProcurementTender.title).like(pattern))
+        return list(
+            self._session.execute(
+                stmt.order_by(ProcurementTender.publication_date.desc().nullslast()).limit(limit).offset(offset)
+            ).scalars().all()
+        )
+
+    def count_tenders_by_source(self, source: str) -> int:
+        return self._session.execute(
+            select(func.count(ProcurementTender.id)).where(ProcurementTender.source == source)
+        ).scalar() or 0
+
+    def latest_tender_seen_at(self, source: str | None = None) -> datetime | None:
+        stmt = select(func.max(ProcurementTender.last_seen_at))
+        if source:
+            stmt = stmt.where(ProcurementTender.source == source)
+        return self._session.execute(stmt).scalar_one_or_none()
+
+    def upsert_source_archive(self, data: dict) -> tuple[ProcurementSourceArchive, bool]:
+        existing = self._session.execute(
+            select(ProcurementSourceArchive).where(
+                ProcurementSourceArchive.source == data["source"],
+                ProcurementSourceArchive.archive_url_hash == data["archive_url_hash"],
+            )
+        ).scalar_one_or_none()
+        if existing is None and data.get("sha256"):
+            existing = self._session.execute(
+                select(ProcurementSourceArchive).where(
+                    ProcurementSourceArchive.source == data["source"],
+                    ProcurementSourceArchive.sha256 == data["sha256"],
+                )
+            ).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if existing:
+            for key in (
+                "archive_name",
+                "sha256",
+                "size_bytes",
+                "xml_count",
+                "downloaded_at",
+                "processed_at",
+                "status",
+                "error_summary",
+            ):
+                if key in data:
+                    setattr(existing, key, data[key])
+            existing.updated_at = now
+            self._session.flush()
+            return existing, False
+        archive = ProcurementSourceArchive(**data)
+        self._session.add(archive)
+        self._session.flush()
+        return archive, True
+
+    def get_source_archive_by_sha(self, source: str, sha256_value: str) -> ProcurementSourceArchive | None:
+        return self._session.execute(
+            select(ProcurementSourceArchive).where(
+                ProcurementSourceArchive.source == source,
+                ProcurementSourceArchive.sha256 == sha256_value,
+            )
+        ).scalar_one_or_none()
+
+    def count_source_archives(self, source: str | None = None) -> int:
+        stmt = select(func.count(ProcurementSourceArchive.id))
+        if source:
+            stmt = stmt.where(ProcurementSourceArchive.source == source)
+        return self._session.execute(stmt).scalar() or 0
+
+    def count_archives_xml(self, source: str | None = None) -> int:
+        stmt = select(func.coalesce(func.sum(ProcurementSourceArchive.xml_count), 0))
+        if source:
+            stmt = stmt.where(ProcurementSourceArchive.source == source)
+        return int(self._session.execute(stmt).scalar() or 0)
+
+    def upsert_eis_cursor(self, data: dict) -> EisBulkSyncCursor:
+        existing = self._session.execute(
+            select(EisBulkSyncCursor).where(
+                EisBulkSyncCursor.region_code == data["region_code"],
+                EisBulkSyncCursor.subsystem_type == data["subsystem_type"],
+                EisBulkSyncCursor.document_type == data["document_type"],
+            )
+        ).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if existing:
+            for key, value in data.items():
+                setattr(existing, key, value)
+            existing.updated_at = now
+            self._session.flush()
+            return existing
+        cursor = EisBulkSyncCursor(**data)
+        self._session.add(cursor)
+        self._session.flush()
+        return cursor
+
+    def create_sync_run(self, data: dict) -> ProcurementSyncRun:
+        sync_run = ProcurementSyncRun(**data)
+        self._session.add(sync_run)
+        self._session.flush()
+        return sync_run
+
+    def finish_sync_run(
+        self,
+        sync_run_id: str,
+        *,
+        status: str,
+        stats: dict | None = None,
+        error_summary: str | None = None,
+    ) -> ProcurementSyncRun | None:
+        sync_run = self._session.get(ProcurementSyncRun, sync_run_id)
+        if sync_run is None:
+            return None
+        now = datetime.now(timezone.utc)
+        sync_run.status = status
+        sync_run.stats = stats
+        sync_run.error_summary = error_summary
+        sync_run.finished_at = now
+        sync_run.updated_at = now
+        self._session.flush()
+        return sync_run
+
+    def latest_successful_sync_run(self, source: str) -> ProcurementSyncRun | None:
+        return self._session.execute(
+            select(ProcurementSyncRun)
+            .where(ProcurementSyncRun.source == source, ProcurementSyncRun.status == "success")
+            .order_by(ProcurementSyncRun.finished_at.desc().nullslast())
+            .limit(1)
+        ).scalar_one_or_none()
 
     def count_tenders_with_customer(self) -> int:
         return self._session.execute(

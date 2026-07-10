@@ -151,7 +151,7 @@ def test_getdocs_response_parser_handles_missing_archive_url():
     assert result.archive_url is None
 
 
-def test_getdocs_response_parser_handles_processing_error():
+def test_getdocs_response_parser_classifies_code_0_as_eis_processing_error():
     xml = """<?xml version="1.0" encoding="UTF-8"?>
     <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
       <soapenv:Body>
@@ -177,10 +177,63 @@ def test_getdocs_response_parser_handles_processing_error():
         expected_request_tag="getDocsByReestrNumberRequest",
     )
 
-    assert result.status == "processing_error"
+    assert result.status == "eis_processing_error"
     assert result.ref_id == "client-001"
     assert result.safe_diagnostic["error_code"] == "0"
     assert "Непредвиденная ошибка" in " ".join(result.warnings)
+
+
+def test_getdocs_response_parser_classifies_code_28_as_validation_error():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <ns2:getDocsByOrgRegionResponse xmlns:ns2="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+          <dataInfo>
+            <errorInfo>
+              <code>28</code>
+              <message>Ошибка валидации полученного запроса по интеграционной схеме.</message>
+            </errorInfo>
+          </dataInfo>
+        </ns2:getDocsByOrgRegionResponse>
+      </soapenv:Body>
+    </soapenv:Envelope>"""
+
+    result = parse_getdocs_response(
+        xml,
+        request_id="client-002",
+        expected_response_tag="getDocsByOrgRegionResponse",
+        expected_request_tag="getDocsByOrgRegionRequest",
+    )
+
+    assert result.status == "validation_error"
+    assert result.safe_diagnostic["error_code"] == "28"
+    assert "Ошибка валидации" in " ".join(result.warnings)
+
+
+def test_getdocs_response_parser_classifies_code_5_as_token_rejected():
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+      <soapenv:Body>
+        <ns2:getNsiResponse xmlns:ns2="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+          <dataInfo>
+            <errorInfo>
+              <code>5</code>
+              <message>Токены для сервисов отдачи отсутствуют в ЕИС:</message>
+            </errorInfo>
+          </dataInfo>
+        </ns2:getNsiResponse>
+      </soapenv:Body>
+    </soapenv:Envelope>"""
+
+    result = parse_getdocs_response(
+        xml,
+        request_id="client-003",
+        expected_response_tag="getNsiResponse",
+        expected_request_tag="getNsiRequest",
+    )
+
+    assert result.status == "token_rejected"
+    assert result.safe_diagnostic["error_code"] == "5"
 
 
 def test_download_archive_uses_individual_token_header(tmp_path):

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.shared.db.base import UUIDPrimaryKeyMixin, Base, utcnow
@@ -39,6 +39,7 @@ class ProcurementTender(UUIDPrimaryKeyMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     documents: Mapped[list[ProcurementTenderDocument]] = relationship(back_populates="tender", cascade="all, delete-orphan")
+    versions: Mapped[list[ProcurementTenderVersion]] = relationship(back_populates="tender", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("source", "external_id"),
@@ -47,6 +48,95 @@ class ProcurementTender(UUIDPrimaryKeyMixin, Base):
         Index("ix_procurement_tenders_publication_date", "publication_date"),
         Index("ix_procurement_tenders_application_deadline", "application_deadline"),
         Index("ix_procurement_tenders_content_hash", "content_hash"),
+    )
+
+
+class ProcurementSourceArchive(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "procurement_source_archives"
+
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    region_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    source_date: Mapped[date] = mapped_column(Date, nullable=False)
+    subsystem_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    archive_url_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    archive_name: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    xml_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("source", "archive_url_hash"),
+        UniqueConstraint("source", "sha256"),
+        Index("ix_procurement_source_archives_region_date", "region_code", "source_date"),
+        Index("ix_procurement_source_archives_status", "status"),
+    )
+
+
+class EisBulkSyncCursor(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "eis_bulk_sync_cursors"
+
+    region_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    subsystem_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    last_requested_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_archive_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="idle")
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("region_code", "subsystem_type", "document_type"),
+        Index("ix_eis_bulk_sync_cursors_next_retry_at", "next_retry_at"),
+        Index("ix_eis_bulk_sync_cursors_status", "status"),
+    )
+
+
+class ProcurementSyncRun(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "procurement_sync_runs"
+
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
+    mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    region_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    source_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    document_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_procurement_sync_runs_source_started_at", "source", "started_at"),
+        Index("ix_procurement_sync_runs_status", "status"),
+    )
+
+
+class ProcurementTenderVersion(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "procurement_tender_versions"
+
+    tender_id: Mapped[str] = mapped_column(String(36), ForeignKey("procurement_tenders.id"), nullable=False, index=True)
+    source_archive_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("procurement_source_archives.id"), nullable=True, index=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    raw_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    tender: Mapped[ProcurementTender] = relationship(back_populates="versions")
+
+    __table_args__ = (
+        UniqueConstraint("tender_id", "content_hash"),
+        Index("ix_procurement_tender_versions_content_hash", "content_hash"),
     )
 
 

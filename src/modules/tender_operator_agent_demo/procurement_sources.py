@@ -81,6 +81,13 @@ def get_procurement_source_descriptors() -> list[ProcurementSourceDescriptor]:
             note="Публичный fallback: открыть поиск ЕИС по капремонту, выбрать закупку и запустить обработку из интерфейса.",
         ),
         ProcurementSourceDescriptor(
+            code="eis_getdocs_bulk",
+            label="ЕИС GetDocsIP bulk (локальная официальная база)",
+            enabled=True,
+            read_only=True,
+            note="Официальные 44-ФЗ извещения, предварительно синхронизированные через getDocsByOrgRegion.",
+        ),
+        ProcurementSourceDescriptor(
             code="zakupki_gov_ru_getdocs_ip",
             label="zakupki_gov_ru_getdocs_ip",
             enabled=bool(zakupki_status["configured"]),

@@ -86,6 +86,14 @@ def _read_token_owner() -> TokenOwner:
     return "individual"
 
 
+def _validate_tls_guard() -> None:
+    app_env = os.environ.get("APP_ENV") or os.environ.get("AI_CORP_APP_ENV") or "development"
+    tls_verify = _read_bool("EIS_DOCS_TLS_VERIFY", False) or _read_bool("AI_CORP_EIS_DOCS_TLS_VERIFY", False)
+    allow_insecure = _read_bool("EIS_ALLOW_INSECURE_TLS", True) or _read_bool("AI_CORP_EIS_ALLOW_INSECURE_TLS", True)
+    if app_env.lower() == "production" and (not tls_verify or allow_insecure):
+        raise RuntimeError("Production cannot run GetDocsIP with insecure TLS enabled")
+
+
 @dataclass(frozen=True)
 class ZakupkiSoapSettings:
     enabled: bool = False
@@ -117,6 +125,7 @@ class ZakupkiSoapSettings:
     @classmethod
     def from_env(cls) -> "ZakupkiSoapSettings":
         _seed_env_from_local_files()
+        _validate_tls_guard()
         return cls(
             enabled=_read_bool("ZAKUPKI_GOV_RU_SOAP_ENABLED", False),
             token=os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN", "").strip(),

@@ -8,8 +8,120 @@
         name="getDocsIP" type="wsdl" soapVersion="1_1"
         bindingName="{http://zakupki.gov.ru/fz44/get-docs-ip/ws}GetDocsIPFacadeBinding">
         <con:settings/>
-        <con:definitionCache type="URL"
-            rootPart="file:///Users/master/Documents/AI-Corporation-live/tmp/soapui/wsdl/getDocsIP_stunnel.wsdl">
+        <con:definitionCache type="TEXT">
+            <con:definition><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:ip="http://zakupki.gov.ru/fz44/get-docs-ip/ws" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:ns="http://zakupki.gov.ru/oos/base/1" targetNamespace="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+	<wsdl:types>
+		<xsd:schema>
+			<xsd:import namespace="http://zakupki.gov.ru/fz44/get-docs-ip/ws" schemaLocation="https://int.zakupki.gov.ru/eis-integration/services/getDocsIP?xsd=getDocsIP-ws-api.xsd"/>
+		</xsd:schema>
+	</wsdl:types>
+	<wsdl:message name="getDocsByReestrNumberRequest">
+		<wsdl:part name="getDocsByReestrNumberRequest" element="ip:getDocsByReestrNumberRequest"/>
+	</wsdl:message>
+	<wsdl:message name="getDocsByReestrNumberResponse">
+		<wsdl:part name="getDocsByReestrNumberResponse" element="ip:getDocsByReestrNumberResponse"/>
+	</wsdl:message>
+	<wsdl:message name="getDocsByOrgRegionRequest">
+		<wsdl:part name="getDocsByOrgRegionRequest" element="ip:getDocsByOrgRegionRequest"/>
+	</wsdl:message>
+	<wsdl:message name="getDocsByOrgRegionResponse">
+		<wsdl:part name="getDocsByOrgRegionResponse" element="ip:getDocsByOrgRegionResponse"/>
+	</wsdl:message>
+	<wsdl:message name="getDocSignaturesByUrlRequest">
+		<wsdl:part name="getDocSignaturesByUrlRequest" element="ip:getDocSignaturesByUrlRequest"/>
+	</wsdl:message>
+	<wsdl:message name="getDocSignaturesByUrlResponse">
+		<wsdl:part name="getDocSignaturesByUrlResponse" element="ip:getDocSignaturesByUrlResponse"/>
+	</wsdl:message>
+	<wsdl:message name="getPreparedPartRequest">
+		<wsdl:part name="getPreparedPartRequest" element="ip:getPreparedPartRequest"/>
+	</wsdl:message>
+	<wsdl:message name="getPreparedPartResponse">
+		<wsdl:part name="getPreparedPartResponse" element="ip:getPreparedPartResponse"/>
+	</wsdl:message>
+	<wsdl:message name="getNsiRequest">
+		<wsdl:part name="getNsiOrgRequest" element="ip:getNsiRequest"/>
+	</wsdl:message>
+	<wsdl:message name="getNsiResponse">
+		<wsdl:part name="getNsiResponse" element="ip:getNsiResponse"/>
+	</wsdl:message>
+	<wsdl:portType name="GetDocsIPFacade">
+		<wsdl:operation name="getDocsByReestrNumber">
+			<wsdl:input name="getDocsByReestrNumberRequest" message="ip:getDocsByReestrNumberRequest"/>
+			<wsdl:output name="getDocsByReestrNumberResponse" message="ip:getDocsByReestrNumberResponse"/>
+		</wsdl:operation>
+		<wsdl:operation name="getDocsByOrgRegion">
+			<wsdl:input name="getDocsByOrgRegionRequest" message="ip:getDocsByOrgRegionRequest"/>
+			<wsdl:output name="getDocsByOrgRegionResponse" message="ip:getDocsByOrgRegionResponse"/>
+		</wsdl:operation>
+		<wsdl:operation name="getDocSignaturesByUrl">
+			<wsdl:input name="getDocSignaturesByUrlRequest" message="ip:getDocSignaturesByUrlRequest"/>
+			<wsdl:output name="getDocSignaturesByUrlResponse" message="ip:getDocSignaturesByUrlResponse"/>
+		</wsdl:operation>
+		<wsdl:operation name="getPreparedPart">
+			<wsdl:input name="getPreparedPartRequest" message="ip:getPreparedPartRequest"/>
+			<wsdl:output name="getPreparedPartResponse" message="ip:getPreparedPartResponse"/>
+		</wsdl:operation>
+		<wsdl:operation name="getNsi">
+			<wsdl:input name="getNsiRequest" message="ip:getNsiRequest"/>
+			<wsdl:output name="getNsiResponse" message="ip:getNsiResponse"/>
+		</wsdl:operation>
+	</wsdl:portType>
+	<wsdl:binding name="GetDocsIPFacadeBinding" type="ip:GetDocsIPFacade">
+		<soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+		<wsdl:operation name="getDocsByReestrNumber">
+			<soap:operation soapAction="http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"/>
+			<wsdl:input name="getDocsByReestrNumberRequest">
+				<soap:body use="literal"/>
+			</wsdl:input>
+			<wsdl:output name="getDocsByReestrNumberResponse">
+				<soap:body use="literal"/>
+			</wsdl:output>
+		</wsdl:operation>
+		<wsdl:operation name="getDocsByOrgRegion">
+			<soap:operation soapAction="http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"/>
+			<wsdl:input name="getDocsByOrgRegionRequest">
+				<soap:body use="literal"/>
+			</wsdl:input>
+			<wsdl:output name="getDocsByOrgRegionResponse">
+				<soap:body use="literal"/>
+			</wsdl:output>
+		</wsdl:operation>
+		<wsdl:operation name="getDocSignaturesByUrl">
+			<soap:operation soapAction="http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"/>
+			<wsdl:input name="getDocSignaturesByUrlRequest">
+				<soap:body use="literal"/>
+			</wsdl:input>
+			<wsdl:output name="getDocSignaturesByUrlResponse">
+				<soap:body use="literal"/>
+			</wsdl:output>
+		</wsdl:operation>
+		<wsdl:operation name="getPreparedPart">
+			<soap:operation soapAction="http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"/>
+			<wsdl:input name="getPreparedPartRequest">
+				<soap:body use="literal"/>
+			</wsdl:input>
+			<wsdl:output name="getPreparedPartResponse">
+				<soap:body use="literal"/>
+			</wsdl:output>
+		</wsdl:operation>
+		<wsdl:operation name="getNsi">
+			<soap:operation soapAction="http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"/>
+			<wsdl:input name="getNsiRequest">
+				<soap:body use="literal"/>
+			</wsdl:input>
+			<wsdl:output name="getNsiResponse">
+				<soap:body use="literal"/>
+			</wsdl:output>
+		</wsdl:operation>
+	</wsdl:binding>
+	<wsdl:service name="GetDocsIPFacadeService">
+		<wsdl:port name="GetDocIPFacadePort" binding="ip:GetDocsIPFacadeBinding">
+			<soap:address location="https://int.zakupki.gov.ru/eis-integration/services/getDocsIP"/>
+		</wsdl:port>
+	</wsdl:service>
+</wsdl:definitions>]]></con:definition>
         </con:definitionCache>
         <con:endpoints>
             <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
@@ -31,7 +143,7 @@
             <index>
                 <id>soapui-test-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
                 <subsystemType>PRIZ</subsystemType>
@@ -62,7 +174,7 @@
             <index>
                 <id>soapui-test-nsi-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
                 <nsiCode44>nsiAllList</nsiCode44>
@@ -93,14 +205,14 @@
             <index>
                 <id>soapui-test-region-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
-                <orgRegion>770000000000</orgRegion>
+                <orgRegion>${#Project#org_region}</orgRegion>
                 <subsystemType>PRIZ</subsystemType>
-                <documentType44>all</documentType44>
+                <documentType44>${#Project#doc_type}</documentType44>
                 <periodInfo>
-                    <exactDate>2026-07-10</exactDate>
+                    <exactDate>${#Project#exact_date}</exactDate>
                 </periodInfo>
             </selectionParams>
         </ws:getDocsByOrgRegionRequest>
@@ -128,10 +240,10 @@
             <index>
                 <id>soapui-test-sig-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
-                <signatureUrl>https://example.com/sig</signatureUrl>
+                <signatureUrl>${#Project#sig_url}</signatureUrl>
             </selectionParams>
         </ws:getDocSignaturesByUrlRequest>
     </soapenv:Body>
@@ -158,10 +270,10 @@
             <index>
                 <id>soapui-test-part-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
-                <partUrl>https://example.com/part</partUrl>
+                <partUrl>${#Project#part_url}</partUrl>
             </selectionParams>
         </ws:getPreparedPartRequest>
     </soapenv:Body>
@@ -178,13 +290,13 @@
         <con:runType>SEQUENTIAL</con:runType>
         <con:testCase id="327AB63D-9E92-4D16-9257-4D2A84395B1E" name="getDocsByReestrNumber">
             <con:settings/>
-            <con:testStep xsi:type="con:TestRequestStep" id="D7D74BD2-BAE7-4C25-BF83-D011CD7B9C34" name="getDocsByReestrNumber">
+            <con:testStep type="request" id="D7D74BD2-BAE7-4C25-BF83-D011CD7B9C34" name="getDocsByReestrNumber">
                 <con:settings/>
                 <con:config xsi:type="con:RequestStep" index="0">
                     <con:interface>getDocsIP</con:interface>
                     <con:operation>getDocsByReestrNumber</con:operation>
                     <con:request>
-                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:endpoint>${#Project#endpoint}</con:endpoint>
                         <con:encoding>UTF-8</con:encoding>
                         <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
@@ -196,7 +308,7 @@
             <index>
                 <id>soapui-test-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
                 <subsystemType>PRIZ</subsystemType>
@@ -215,13 +327,13 @@
         </con:testCase>
         <con:testCase id="042E3498-EA58-43A6-9245-8D0F38584128" name="getNsi">
             <con:settings/>
-            <con:testStep xsi:type="con:TestRequestStep" id="4C56D4DF-A1BA-48E0-BD8A-180E6C2EE6F7" name="getNsi">
+            <con:testStep type="request" id="4C56D4DF-A1BA-48E0-BD8A-180E6C2EE6F7" name="getNsi">
                 <con:settings/>
                 <con:config xsi:type="con:RequestStep" index="0">
                     <con:interface>getDocsIP</con:interface>
                     <con:operation>getNsi</con:operation>
                     <con:request>
-                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:endpoint>${#Project#endpoint}</con:endpoint>
                         <con:encoding>UTF-8</con:encoding>
                         <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
@@ -233,7 +345,7 @@
             <index>
                 <id>soapui-test-nsi-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
                 <nsiCode44>nsiAllList</nsiCode44>
@@ -252,13 +364,13 @@
         </con:testCase>
         <con:testCase id="05D2DFDE-967B-464E-B216-0189B973778E" name="getDocsByOrgRegion">
             <con:settings/>
-            <con:testStep xsi:type="con:TestRequestStep" id="8108EE0D-0B1D-4A91-8265-C80CB82E70AA" name="getDocsByOrgRegion">
+            <con:testStep type="request" id="8108EE0D-0B1D-4A91-8265-C80CB82E70AA" name="getDocsByOrgRegion">
                 <con:settings/>
                 <con:config xsi:type="con:RequestStep" index="0">
                     <con:interface>getDocsIP</con:interface>
                     <con:operation>getDocsByOrgRegion</con:operation>
                     <con:request>
-                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:endpoint>${#Project#endpoint}</con:endpoint>
                         <con:encoding>UTF-8</con:encoding>
                         <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
@@ -270,14 +382,14 @@
             <index>
                 <id>soapui-test-region-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
-                <orgRegion>770000000000</orgRegion>
+                <orgRegion>${#Project#org_region}</orgRegion>
                 <subsystemType>PRIZ</subsystemType>
-                <documentType44>all</documentType44>
+                <documentType44>${#Project#doc_type}</documentType44>
                 <periodInfo>
-                    <exactDate>2026-07-10</exactDate>
+                    <exactDate>${#Project#exact_date}</exactDate>
                 </periodInfo>
             </selectionParams>
         </ws:getDocsByOrgRegionRequest>
@@ -293,13 +405,13 @@
         </con:testCase>
         <con:testCase id="B673E125-D5C6-407F-B98D-88D5AE522948" name="getDocSignaturesByUrl">
             <con:settings/>
-            <con:testStep xsi:type="con:TestRequestStep" id="F090E1A0-B58A-4BFE-A5EA-CAF9F2560002" name="getDocSignaturesByUrl">
+            <con:testStep type="request" id="F090E1A0-B58A-4BFE-A5EA-CAF9F2560002" name="getDocSignaturesByUrl">
                 <con:settings/>
                 <con:config xsi:type="con:RequestStep" index="0">
                     <con:interface>getDocsIP</con:interface>
                     <con:operation>getDocSignaturesByUrl</con:operation>
                     <con:request>
-                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:endpoint>${#Project#endpoint}</con:endpoint>
                         <con:encoding>UTF-8</con:encoding>
                         <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
@@ -311,10 +423,10 @@
             <index>
                 <id>soapui-test-sig-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
-                <signatureUrl>https://example.com/sig</signatureUrl>
+                <signatureUrl>${#Project#sig_url}</signatureUrl>
             </selectionParams>
         </ws:getDocSignaturesByUrlRequest>
     </soapenv:Body>
@@ -329,13 +441,13 @@
         </con:testCase>
         <con:testCase id="912E9721-1E1A-4D13-9B1F-B3093C2363ED" name="getPreparedPart">
             <con:settings/>
-            <con:testStep xsi:type="con:TestRequestStep" id="67BF90AF-1C17-46F1-B819-ABA79A926320" name="getPreparedPart">
+            <con:testStep type="request" id="67BF90AF-1C17-46F1-B819-ABA79A926320" name="getPreparedPart">
                 <con:settings/>
                 <con:config xsi:type="con:RequestStep" index="0">
                     <con:interface>getDocsIP</con:interface>
                     <con:operation>getPreparedPart</con:operation>
                     <con:request>
-                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:endpoint>${#Project#endpoint}</con:endpoint>
                         <con:encoding>UTF-8</con:encoding>
                         <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
     xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
@@ -347,10 +459,10 @@
             <index>
                 <id>soapui-test-part-001</id>
                 <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
-                <mode>single</mode>
+                <mode>${#Project#mode}</mode>
             </index>
             <selectionParams>
-                <partUrl>https://example.com/part</partUrl>
+                <partUrl>${#Project#part_url}</partUrl>
             </selectionParams>
         </ws:getPreparedPartRequest>
     </soapenv:Body>
@@ -374,6 +486,46 @@
             <con:name>reestr_number</con:name>
             <con:value>0994800000725000013</con:value>
             <con:description>Reestr number for getDocsByReestrNumber tests</con:description>
+        </con:property>
+        <con:property>
+            <con:name>mode</con:name>
+            <con:value>PROD</con:value>
+            <con:description>SOAP mode: PROD (EIS data) or single (bus acknowledgment)</con:description>
+        </con:property>
+        <con:property>
+            <con:name>endpoint</con:name>
+            <con:value>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:value>
+            <con:description>SOAP endpoint URL (stunnel by default, switch to int.zakupki.gov.ru for direct)</con:description>
+        </con:property>
+        <con:property>
+            <con:name>org_region</con:name>
+            <con:value>77</con:value>
+            <con:description>2-char KLADR region code for getDocsByOrgRegion</con:description>
+        </con:property>
+        <con:property>
+            <con:name>doc_type</con:name>
+            <con:value>all</con:value>
+            <con:description>Document type44 filter (all, epNotificationEF2020, etc.)</con:description>
+        </con:property>
+        <con:property>
+            <con:name>exact_date</con:name>
+            <con:value>2026-07-10+03:00</con:value>
+            <con:description>Exact date with timezone offset for getDocsByOrgRegion</con:description>
+        </con:property>
+        <con:property>
+            <con:name>sig_url</con:name>
+            <con:value>https://example.com/sig</con:value>
+            <con:description>Signature URL for getDocSignaturesByUrl</con:description>
+        </con:property>
+        <con:property>
+            <con:name>part_url</con:name>
+            <con:value>https://example.com/part</con:value>
+            <con:description>Part URL for getPreparedPart</con:description>
+        </con:property>
+        <con:property>
+            <con:name>last_archive_url</con:name>
+            <con:value/>
+            <con:description>Extracted archive URL from last response (XPath transfer)</con:description>
         </con:property>
     </con:properties>
     <con:wssContainer/>

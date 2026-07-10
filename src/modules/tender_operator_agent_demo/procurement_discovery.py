@@ -14,6 +14,8 @@ from src.modules.tender_operator_agent_demo.procurement_sources import (
     get_demo_local_procurements,
     get_procurement_source_descriptors,
 )
+from src.shared.db.session import SessionLocal
+from src.tender_research.repository import TenderRepository
 from src.modules.tender_operator_agent_demo.procurement_schemas import (
     ProcurementAttachment,
     ProcurementDetails,
@@ -324,6 +326,95 @@ def _search_demo_local_v2(request: ProcurementSearchRequestV2) -> list[Procureme
     return records[: request.max_results]
 
 
+def _to_demo_search_result(record) -> ProcurementSearchResult:
+    return ProcurementSearchResult(
+        procurement_id=record.id,
+        source=record.source,
+        title=record.title,
+        procurement_number=record.purchase_number or record.registry_number or record.external_id,
+        customer_name=record.customer_name or "Не указан",
+        category=record.law_type or "44-ФЗ",
+        publication_date=record.publication_date.date().isoformat() if record.publication_date else None,
+        deadline=record.application_deadline.date().isoformat() if record.application_deadline else None,
+        initial_price=record.nmck_amount,
+        currency=record.currency,
+        region=record.region,
+        source_url=record.eis_url or "https://zakupki.gov.ru/",
+        attachments_status="available_via_getdocs_by_reestr_number",
+        attachments_count=0,
+        available_attachments_count=0,
+        summary=record.description,
+        source_note="Официальная карточка из локальной PostgreSQL базы, синхронизированной через ЕИС GetDocsIP bulk.",
+    )
+
+
+def _search_eis_getdocs_bulk_response(
+    *,
+    query: str,
+    max_results: int,
+    date_from: str | None,
+    date_to: str | None,
+    customer_name: str | None,
+    region: str | None,
+    price_from: float | None,
+    price_to: float | None,
+    descriptors,
+    customer_mode: bool = True,
+) -> ProcurementSearchResponse:
+    session = SessionLocal()
+    external_calls = 0
+    try:
+        repo = TenderRepository(session)
+        from src.tender_research.sync.local_search import search_official_44fz
+
+        records, decision = search_official_44fz(
+            session,
+            query=query,
+            customer_mode=customer_mode,
+            limit=max_results,
+            region=region,
+            date_from=_parse_iso_datetime(date_from),
+            date_to=_parse_iso_datetime(date_to),
+            nmck_min=price_from,
+            nmck_max=price_to,
+            customer=customer_name,
+        )
+        latest_sync = repo.latest_successful_sync_run("eis_getdocs_bulk")
+        warnings: list[str] = []
+        if decision.stale and records:
+            warnings.append("Локальная официальная база устарела; результат реальный, но freshness=stale.")
+        if not records and decision.status == "search_unavailable":
+            warnings.append("Официальные локальные данные недоступны; synthetic/demo данные в customer mode не используются.")
+        return ProcurementSearchResponse(
+            query=query,
+            source="eis_getdocs_bulk",
+            results=[_to_demo_search_result(item) for item in records],
+            sources=descriptors,
+            warnings=warnings,
+            total=len(records),
+            official_source=True,
+            freshness={"status": "stale" if decision.stale else "fresh", "max_age_seconds": 6 * 3600},
+            last_successful_sync_at=latest_sync.finished_at.isoformat() if latest_sync and latest_sync.finished_at else None,
+            stale=decision.stale,
+            synthetic_used=False,
+            filter_execution={"local_first": True, "external_calls": external_calls},
+            source_status={"status": decision.status, "customer_mode": customer_mode},
+        )
+    finally:
+        session.close()
+
+
+def _parse_iso_datetime(value: str | None):
+    if not value:
+        return None
+    from datetime import datetime, time
+
+    parsed = datetime.fromisoformat(value)
+    if len(value) == 10:
+        return datetime.combine(parsed.date(), time.min)
+    return parsed
+
+
 def search_procurements(
     request: ProcurementSearchRequestV2 | None = None,
     *,
@@ -343,6 +434,41 @@ def search_procurements(
             raise ValueError(f"Unknown procurement source: {request.source}")
         if request.source == "demo_local":
             return _search_demo_local_v2(request)
+        if request.source == "eis_getdocs_bulk":
+            response = _search_eis_getdocs_bulk_response(
+                query=request.query,
+                max_results=request.max_results,
+                date_from=request.date_from,
+                date_to=request.date_to,
+                customer_name=request.customer_name,
+                region=request.region,
+                price_from=request.price_from,
+                price_to=request.price_to,
+                descriptors=get_procurement_source_descriptors(),
+                customer_mode=True,
+            )
+            return [
+                ProcurementSearchResultV2(
+                    procurement_id=item.procurement_id,
+                    notice_number=item.procurement_number,
+                    registry_number=item.procurement_number,
+                    title=item.title,
+                    customer_name=item.customer_name,
+                    customer_inn=None,
+                    law="44-ФЗ",
+                    source=item.source,
+                    source_url=item.source_url,
+                    publication_date=item.publication_date,
+                    deadline=item.deadline,
+                    initial_price=item.initial_price,
+                    currency=item.currency,
+                    attachments_status=item.attachments_status,
+                    can_download_attachments=True,
+                    requires_manual_upload=False,
+                    warnings=response.warnings,
+                )
+                for item in response.results
+            ]
         source_status = sources[request.source]
         if not source_status.configured:
             raise RuntimeError(source_status.reason or "Источник поиска не настроен.")
@@ -360,6 +486,19 @@ def search_procurements(
     allowed_sources = {item.code: item for item in descriptors}
     if source not in allowed_sources:
         raise ValueError(f"Unknown procurement source: {source}")
+    if source in {"auto", "eis_getdocs_bulk"}:
+        return _search_eis_getdocs_bulk_response(
+            query=query,
+            max_results=max_results,
+            date_from=date_from,
+            date_to=date_to,
+            customer_name=customer_name,
+            region=region,
+            price_from=price_from,
+            price_to=price_to,
+            descriptors=descriptors,
+            customer_mode=True,
+        )
     if not allowed_sources[source].enabled:
         return ProcurementSearchResponse(
             query=query,
@@ -397,6 +536,10 @@ def search_procurements(
         results=records[: max(1, min(max_results, 20))],
         sources=descriptors,
         warnings=[],
+        total=len(records[: max(1, min(max_results, 20))]),
+        official_source=False,
+        synthetic_used=True,
+        source_status={"status": "demo_local"},
     )
 
 

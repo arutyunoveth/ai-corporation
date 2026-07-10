@@ -2019,7 +2019,32 @@ def _build_goods_economics_payload(
     economics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     if economics:
-        return economics
+        if economics.get("metrics"):
+            return economics
+        enriched = dict(economics)
+        enriched.setdefault("result", "Экономика требует ручной проверки")
+        enriched.setdefault(
+            "drivers",
+            [
+                f"Выбран поставщик: {economics.get('selected_supplier_name') or 'не определён'}.",
+                "Расчёт построен на локальных ТКП и операторских параметрах.",
+            ],
+        )
+        raw_manual_checks = enriched.get("manual_checks") or ["Проверить исходные ТКП и экономические допущения вручную."]
+        enriched["manual_checks"] = [item.get("message", "") if isinstance(item, dict) else str(item) for item in raw_manual_checks]
+        enriched.setdefault("warnings", [])
+        enriched.setdefault("limitations", [])
+        enriched.setdefault("assumptions", {})
+        enriched["metrics"] = [
+            {"label": "Минимальная закупочная стоимость", "value": economics.get("supplier_cost_min", "unknown")},
+            {"label": "Выбранная закупочная стоимость", "value": economics.get("supplier_cost_selected", "unknown")},
+            {"label": "Резерв логистики", "value": economics.get("logistics_reserve", "unknown")},
+            {"label": "Резерв риска", "value": economics.get("risk_reserve", "unknown")},
+            {"label": "Целевая маржа", "value": f"{economics.get('gross_margin_percent')}%" if economics.get("gross_margin_percent") is not None else "unknown"},
+            {"label": "Предварительная цена подачи", "value": economics.get("preliminary_bid_price", "unknown")},
+            {"label": "Оценка кассового разрыва", "value": economics.get("cash_gap_estimate", "unknown")},
+        ]
+        return enriched
     items = _collect_goods_supply_items_from_documents(documents)
     nmck = _extract_notice_price(metadata, _collect_role_text(documents, "technical_spec"), _collect_role_text(documents, "contract_draft"), _collect_role_text(documents, "notice"))
     total_quantity = sum(_parse_float(item.quantity) or 0 for item in items if (item.unit or "") == "м")

@@ -29,6 +29,11 @@ from src.modules.tender_operator_agent_demo.zakupki_soap_templates import (
     build_get_docs_by_reestr_number_envelope,
     build_search_envelope,
 )
+from src.tender_research.sync.eis_params import (
+    format_eis_create_datetime,
+    format_eis_exact_date,
+    normalize_eis_region_code,
+)
 
 
 SoapTransport = Callable[[str, str | None, int], str]
@@ -123,6 +128,8 @@ class ZakupkiSoapClient:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для getDocsIP.")
         request_id, created_time = _request_meta()
+        org_region = normalize_eis_region_code(org_region)
+        exact_date = format_eis_exact_date(exact_date, timezone="Europe/Moscow")
         envelope = build_get_docs_by_org_region_envelope(
             token=self.settings.token,
             namespace=self.settings.individual_namespace,
@@ -515,13 +522,15 @@ def parse_getdocs_response(
     if archive_name is None and archive_url:
         archive_name = Path(urlparse(archive_url).path or "").name or None
 
-    if _looks_like_validation_error(root, raw_summary):
+    if error_code == "28" or _looks_like_validation_error(root, raw_summary):
         status = "validation_error"
+        if error_message:
+            warnings.append(error_message)
     elif response_node is None and request_echo_node is not None:
         status = "echo_request_unprocessed"
         warnings.append("Ответ похож на echo request без обработанного response payload.")
     elif error_info is not None:
-        status = "processing_error"
+        status = _status_for_getdocs_error_code(error_code)
         if error_message:
             warnings.append(error_message)
         elif error_code:
@@ -595,7 +604,7 @@ def _diagnostics_dir() -> Path:
 
 
 def _request_meta() -> tuple[str, str]:
-    return str(uuid4()), datetime.now(UTC).replace(microsecond=0).isoformat()
+    return str(uuid4()), format_eis_create_datetime(datetime.now(UTC))
 
 
 def _build_http_opener(settings: ZakupkiSoapSettings, target_url: str):
@@ -673,6 +682,14 @@ def _looks_like_validation_error(root: ET.Element, raw_summary: str | None) -> b
             if any(token in text for token in ("validation", "валидац", "schema", "xsd", "order")):
                 return True
     return False
+
+
+def _status_for_getdocs_error_code(error_code: str | None) -> str:
+    if error_code == "5":
+        return "token_rejected"
+    if error_code == "0":
+        return "eis_processing_error"
+    return "processing_error"
 
 
 def _to_int(value: str | None) -> int | None:

@@ -141,7 +141,7 @@ def tender_operator_demo_report_download() -> Response:
 @router.get("/api/demo/tender-agent/procurements/search", response_model=ProcurementSearchResponse)
 def search_tender_operator_procurements(
     query: str = "",
-    source: str = "demo_local",
+    source: str = "eis_getdocs_bulk",
     max_results: int = 10,
     date_from: str | None = None,
     date_to: str | None = None,

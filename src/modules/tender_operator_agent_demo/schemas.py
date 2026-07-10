@@ -197,6 +197,14 @@ class ProcurementSearchResponse(APIModel):
     results: list[ProcurementSearchResult]
     sources: list[ProcurementSourceDescriptor]
     warnings: list[str] = Field(default_factory=list)
+    total: int | None = None
+    official_source: bool = False
+    freshness: dict[str, Any] = Field(default_factory=dict)
+    last_successful_sync_at: str | None = None
+    stale: bool = False
+    synthetic_used: bool = False
+    filter_execution: dict[str, Any] = Field(default_factory=dict)
+    source_status: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProcurementRunCreateRequest(APIModel):

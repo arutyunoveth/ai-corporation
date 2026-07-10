@@ -14,6 +14,8 @@ build/
 alembic.log
 .env
 .env.local
+.env.*
+!.env.example
 .env.*.local
 *.token
 ai_corporation.db
@@ -74,3 +76,8 @@ tmp/soapui/results/
 *.soapui-local.properties
 soapui-errors.log
 soapui.log
+
+# EIS live data and downloaded documents
+downloaded_eis/
+eis_archives/
+data/eis_bulk/
