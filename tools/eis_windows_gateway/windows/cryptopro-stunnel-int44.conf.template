@@ -1,0 +1,14 @@
+; Template only. Copy to %USERPROFILE%\Arvectum\EisServicesVbsTest\config\stunnel-int44.conf
+; Do not put tokens, PINs, private keys, or certificate container names here.
+
+foreground = yes
+debug = info
+output = %USERPROFILE%\Arvectum\EisServicesVbsTest\logs\stunnel-int44.log
+
+[services-vbs-int44]
+client = yes
+accept = 127.0.0.1:8110
+connect = int44.zakupki.gov.ru:443
+sni = int44.zakupki.gov.ru
+verifyChain = yes
+checkHost = int44.zakupki.gov.ru

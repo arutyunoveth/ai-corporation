@@ -72,6 +72,7 @@ tmp/*_context.json
 
 # SoapUI - local secrets, logs, and generated artifacts
 tools/soapui/local/
+tools/eis_windows_gateway/local/
 tmp/soapui/results/
 *.soapui-local.properties
 soapui-errors.log

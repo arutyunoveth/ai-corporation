@@ -1,0 +1,16 @@
+; Template only. Copy to %USERPROFILE%\Arvectum\EisServicesVbsTest\config\stunnel-ttls-cert.conf
+; Add certificate selection only according to the installed CryptoPro Stunnel syntax.
+; Never put a PIN or exported private key here.
+
+foreground = yes
+debug = info
+output = %USERPROFILE%\Arvectum\EisServicesVbsTest\logs\stunnel-ttls-cert.log
+
+[services-vbs-ttls-cert]
+client = yes
+accept = 127.0.0.1:8111
+connect = int44-ttls-cert.zakupki.gov.ru:443
+sni = int44-ttls-cert.zakupki.gov.ru
+verifyChain = yes
+checkHost = int44-ttls-cert.zakupki.gov.ru
+; certificate-from-store = <fill locally only if server requires client cert>
