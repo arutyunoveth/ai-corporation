@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<con:soapui-project id="E1BE7E34-7FE9-4773-B537-20EE46B75123" name="EIS-GetDocsIP-Diagnostics"
+    activeEnvironment="Stunnel" resourceRoot="${projectDir}"
+    xmlns:con="http://eviware.com/soapui/config"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <con:settings/>
+    <con:interface xsi:type="con:WsdlInterface" id="E041E0A3-40A5-4EC9-B0A4-D50E1D759DC2"
+        name="getDocsIP" type="wsdl" soapVersion="1_1"
+        bindingName="{http://zakupki.gov.ru/fz44/get-docs-ip/ws}GetDocsIPFacadeBinding">
+        <con:settings/>
+        <con:definitionCache type="URL"
+            rootPart="file:///Users/master/Documents/AI-Corporation-live/tmp/soapui/wsdl/getDocsIP_stunnel.wsdl">
+        </con:definitionCache>
+        <con:endpoints>
+            <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+            <con:endpoint>https://int.zakupki.gov.ru/eis-integration/services/getDocsIP</con:endpoint>
+        </con:endpoints>
+        <con:operation name="getDocsByReestrNumber">
+            <con:settings/>
+            <con:call name="Request 1">
+                <con:settings/>
+                <con:encoding>UTF-8</con:encoding>
+                <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getDocsByReestrNumberRequest>
+            <index>
+                <id>soapui-test-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <subsystemType>PRIZ</subsystemType>
+                <reestrNumber>${#Project#reestr_number}</reestrNumber>
+            </selectionParams>
+        </ws:getDocsByReestrNumberRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                <con:assertion type="SOAP Response"/>
+                <con:credentials>
+                    <con:authType>No Authorization</con:authType>
+                </con:credentials>
+            </con:call>
+        </con:operation>
+        <con:operation name="getNsi">
+            <con:settings/>
+            <con:call name="Request 1">
+                <con:settings/>
+                <con:encoding>UTF-8</con:encoding>
+                <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getNsiRequest>
+            <index>
+                <id>soapui-test-nsi-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <nsiCode44>nsiAllList</nsiCode44>
+                <nsiKind>all</nsiKind>
+            </selectionParams>
+        </ws:getNsiRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                <con:assertion type="SOAP Response"/>
+                <con:credentials>
+                    <con:authType>No Authorization</con:authType>
+                </con:credentials>
+            </con:call>
+        </con:operation>
+        <con:operation name="getDocsByOrgRegion">
+            <con:settings/>
+            <con:call name="Request 1">
+                <con:settings/>
+                <con:encoding>UTF-8</con:encoding>
+                <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getDocsByOrgRegionRequest>
+            <index>
+                <id>soapui-test-region-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <orgRegion>770000000000</orgRegion>
+                <subsystemType>PRIZ</subsystemType>
+                <documentType44>all</documentType44>
+                <periodInfo>
+                    <exactDate>2026-07-10</exactDate>
+                </periodInfo>
+            </selectionParams>
+        </ws:getDocsByOrgRegionRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                <con:assertion type="SOAP Response"/>
+                <con:credentials>
+                    <con:authType>No Authorization</con:authType>
+                </con:credentials>
+            </con:call>
+        </con:operation>
+        <con:operation name="getDocSignaturesByUrl">
+            <con:settings/>
+            <con:call name="Request 1">
+                <con:settings/>
+                <con:encoding>UTF-8</con:encoding>
+                <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getDocSignaturesByUrlRequest>
+            <index>
+                <id>soapui-test-sig-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <signatureUrl>https://example.com/sig</signatureUrl>
+            </selectionParams>
+        </ws:getDocSignaturesByUrlRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                <con:assertion type="SOAP Response"/>
+                <con:credentials>
+                    <con:authType>No Authorization</con:authType>
+                </con:credentials>
+            </con:call>
+        </con:operation>
+        <con:operation name="getPreparedPart">
+            <con:settings/>
+            <con:call name="Request 1">
+                <con:settings/>
+                <con:encoding>UTF-8</con:encoding>
+                <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getPreparedPartRequest>
+            <index>
+                <id>soapui-test-part-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <partUrl>https://example.com/part</partUrl>
+            </selectionParams>
+        </ws:getPreparedPartRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                <con:assertion type="SOAP Response"/>
+                <con:credentials>
+                    <con:authType>No Authorization</con:authType>
+                </con:credentials>
+            </con:call>
+        </con:operation>
+    </con:interface>
+    <con:testSuite id="D6D77D24-4A69-461D-81E1-AB1DFC007810" name="GetDocsIP-Operations">
+        <con:settings/>
+        <con:runType>SEQUENTIAL</con:runType>
+        <con:testCase id="327AB63D-9E92-4D16-9257-4D2A84395B1E" name="getDocsByReestrNumber">
+            <con:settings/>
+            <con:testStep xsi:type="con:TestRequestStep" id="D7D74BD2-BAE7-4C25-BF83-D011CD7B9C34" name="getDocsByReestrNumber">
+                <con:settings/>
+                <con:config xsi:type="con:RequestStep" index="0">
+                    <con:interface>getDocsIP</con:interface>
+                    <con:operation>getDocsByReestrNumber</con:operation>
+                    <con:request>
+                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:encoding>UTF-8</con:encoding>
+                        <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getDocsByReestrNumberRequest>
+            <index>
+                <id>soapui-test-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <subsystemType>PRIZ</subsystemType>
+                <reestrNumber>${#Project#reestr_number}</reestrNumber>
+            </selectionParams>
+        </ws:getDocsByReestrNumberRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                        <con:assertion type="SOAP Response"/>
+                        <con:credentials>
+                            <con:authType>No Authorization</con:authType>
+                        </con:credentials>
+                    </con:request>
+                </con:config>
+            </con:testStep>
+        </con:testCase>
+        <con:testCase id="042E3498-EA58-43A6-9245-8D0F38584128" name="getNsi">
+            <con:settings/>
+            <con:testStep xsi:type="con:TestRequestStep" id="4C56D4DF-A1BA-48E0-BD8A-180E6C2EE6F7" name="getNsi">
+                <con:settings/>
+                <con:config xsi:type="con:RequestStep" index="0">
+                    <con:interface>getDocsIP</con:interface>
+                    <con:operation>getNsi</con:operation>
+                    <con:request>
+                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:encoding>UTF-8</con:encoding>
+                        <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getNsiRequest>
+            <index>
+                <id>soapui-test-nsi-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <nsiCode44>nsiAllList</nsiCode44>
+                <nsiKind>all</nsiKind>
+            </selectionParams>
+        </ws:getNsiRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                        <con:assertion type="SOAP Response"/>
+                        <con:credentials>
+                            <con:authType>No Authorization</con:authType>
+                        </con:credentials>
+                    </con:request>
+                </con:config>
+            </con:testStep>
+        </con:testCase>
+        <con:testCase id="05D2DFDE-967B-464E-B216-0189B973778E" name="getDocsByOrgRegion">
+            <con:settings/>
+            <con:testStep xsi:type="con:TestRequestStep" id="8108EE0D-0B1D-4A91-8265-C80CB82E70AA" name="getDocsByOrgRegion">
+                <con:settings/>
+                <con:config xsi:type="con:RequestStep" index="0">
+                    <con:interface>getDocsIP</con:interface>
+                    <con:operation>getDocsByOrgRegion</con:operation>
+                    <con:request>
+                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:encoding>UTF-8</con:encoding>
+                        <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getDocsByOrgRegionRequest>
+            <index>
+                <id>soapui-test-region-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <orgRegion>770000000000</orgRegion>
+                <subsystemType>PRIZ</subsystemType>
+                <documentType44>all</documentType44>
+                <periodInfo>
+                    <exactDate>2026-07-10</exactDate>
+                </periodInfo>
+            </selectionParams>
+        </ws:getDocsByOrgRegionRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                        <con:assertion type="SOAP Response"/>
+                        <con:credentials>
+                            <con:authType>No Authorization</con:authType>
+                        </con:credentials>
+                    </con:request>
+                </con:config>
+            </con:testStep>
+        </con:testCase>
+        <con:testCase id="B673E125-D5C6-407F-B98D-88D5AE522948" name="getDocSignaturesByUrl">
+            <con:settings/>
+            <con:testStep xsi:type="con:TestRequestStep" id="F090E1A0-B58A-4BFE-A5EA-CAF9F2560002" name="getDocSignaturesByUrl">
+                <con:settings/>
+                <con:config xsi:type="con:RequestStep" index="0">
+                    <con:interface>getDocsIP</con:interface>
+                    <con:operation>getDocSignaturesByUrl</con:operation>
+                    <con:request>
+                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:encoding>UTF-8</con:encoding>
+                        <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getDocSignaturesByUrlRequest>
+            <index>
+                <id>soapui-test-sig-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <signatureUrl>https://example.com/sig</signatureUrl>
+            </selectionParams>
+        </ws:getDocSignaturesByUrlRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                        <con:assertion type="SOAP Response"/>
+                        <con:credentials>
+                            <con:authType>No Authorization</con:authType>
+                        </con:credentials>
+                    </con:request>
+                </con:config>
+            </con:testStep>
+        </con:testCase>
+        <con:testCase id="912E9721-1E1A-4D13-9B1F-B3093C2363ED" name="getPreparedPart">
+            <con:settings/>
+            <con:testStep xsi:type="con:TestRequestStep" id="67BF90AF-1C17-46F1-B819-ABA79A926320" name="getPreparedPart">
+                <con:settings/>
+                <con:config xsi:type="con:RequestStep" index="0">
+                    <con:interface>getDocsIP</con:interface>
+                    <con:operation>getPreparedPart</con:operation>
+                    <con:request>
+                        <con:endpoint>http://127.0.0.1:8099/eis-integration/services/getDocsIP</con:endpoint>
+                        <con:encoding>UTF-8</con:encoding>
+                        <con:request><![CDATA[<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:ws="http://zakupki.gov.ru/fz44/get-docs-ip/ws">
+    <soapenv:Header>
+        <individualPerson_token>${#Project#token}</individualPerson_token>
+    </soapenv:Header>
+    <soapenv:Body>
+        <ws:getPreparedPartRequest>
+            <index>
+                <id>soapui-test-part-001</id>
+                <createDateTime>2026-07-10T17:00:00+03:00</createDateTime>
+                <mode>single</mode>
+            </index>
+            <selectionParams>
+                <partUrl>https://example.com/part</partUrl>
+            </selectionParams>
+        </ws:getPreparedPartRequest>
+    </soapenv:Body>
+</soapenv:Envelope>]]></con:request>
+                        <con:assertion type="SOAP Response"/>
+                        <con:credentials>
+                            <con:authType>No Authorization</con:authType>
+                        </con:credentials>
+                    </con:request>
+                </con:config>
+            </con:testStep>
+        </con:testCase>
+    </con:testSuite>
+    <con:properties>
+        <con:property>
+            <con:name>token</con:name>
+            <con:value>CHANGE_ME_IN_LOCAL_PROPERTIES</con:value>
+            <con:description>IndividualPerson token from ZAKUPKI_GOV_RU_INDIVIDUAL_TOKEN</con:description>
+        </con:property>
+        <con:property>
+            <con:name>reestr_number</con:name>
+            <con:value>0994800000725000013</con:value>
+            <con:description>Reestr number for getDocsByReestrNumber tests</con:description>
+        </con:property>
+    </con:properties>
+    <con:wssContainer/>
+    <con:oAuth2ProfileContainer/>
+    <con:oAuth1ProfileContainer/>
+    <con:sensitiveInformation/>
+</con:soapui-project>

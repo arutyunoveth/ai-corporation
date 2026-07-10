@@ -67,3 +67,10 @@ tmp/*_context.json
 
 # Local proxy/PAC overrides and backups
 /local_config/
+
+# SoapUI - local secrets, logs, and generated artifacts
+tools/soapui/local/
+tmp/soapui/results/
+*.soapui-local.properties
+soapui-errors.log
+soapui.log

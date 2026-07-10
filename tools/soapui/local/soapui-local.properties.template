@@ -1,0 +1,9 @@
+# SoapUI local properties
+# Copy this file to soapui-local.properties and fill in your tokens.
+# DO NOT commit the real soapui-local.properties (it's in .gitignore).
+#
+# Individual token (int.zakupki.gov.ru/getDocsIP):
+EIS_INDIVIDUAL_TOKEN=replace_with_your_token
+#
+# Legal entity token (int44.zakupki.gov.ru/services-vbs, requires GOST):
+EIS_LEGAL_TOKEN=replace_with_your_token
