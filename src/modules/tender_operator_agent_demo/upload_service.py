@@ -2374,8 +2374,11 @@ def _build_preliminary_procurement_analysis(
         initial_price = _extract_notice_price(metadata, notice, contract_text)
         deadline = metadata.get("deadline") or _extract_notice_service_deadline(notice) or _extract_notice_delivery_deadline(notice)
         delivery_term = metadata.get("procurement", {}).get("delivery_term") if isinstance(metadata.get("procurement"), dict) else None
+        tender_title = metadata.get("tender_title") or _cleanup_tabular_value(
+            _match_first(combined, (r"Наименование работ:\s*(.+?)(?:\n|$)",))
+        ) or "не указан"
         overview = [
-            f"Предмет закупки: {metadata.get('tender_title') or _cleanup_tabular_value(_match_first(combined, (r'Наименование работ:\s*(.+?)(?:\n|$)',))) or 'не указан'}",
+            f"Предмет закупки: {tender_title}",
             f"НМЦК: {initial_price} руб." if initial_price else "",
             f"Тип закупки: {procurement_kind}.",
             f"Срок исполнения / подачи: {deadline}." if deadline else "",

@@ -26,4 +26,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: "! git grep -nE '(github_pat_|AKIA[0-9A-Z]{16}|BEGIN .*PRIVATE KEY)'"
+      - run: python scripts/ops/secret_scan.py
