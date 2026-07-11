@@ -2019,7 +2019,18 @@ def _build_goods_economics_payload(
     economics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     if economics:
-        return economics
+        payload = dict(economics)
+        payload.setdefault("analysis_mode", analysis_mode)
+        payload.setdefault("economics_status", "needs_review")
+        payload.setdefault("result", "Экономика требует ручной проверки")
+        payload.setdefault("drivers", ["Сопоставление ТКП требует ручного подтверждения."])
+        payload.setdefault("manual_checks", ["Проверить расчёт по исходным ТКП вручную."])
+        payload.setdefault("metrics", [
+            {"label": "Минимальная закупочная стоимость", "value": payload.get("supplier_cost_min", "не определена")},
+            {"label": "Предварительная цена подачи", "value": payload.get("preliminary_bid_price", "не определена")},
+            {"label": "Целевая маржа", "value": payload.get("gross_margin_percent", "не определена")},
+        ])
+        return payload
     items = _collect_goods_supply_items_from_documents(documents)
     nmck = _extract_notice_price(metadata, _collect_role_text(documents, "technical_spec"), _collect_role_text(documents, "contract_draft"), _collect_role_text(documents, "notice"))
     total_quantity = sum(_parse_float(item.quantity) or 0 for item in items if (item.unit or "") == "м")

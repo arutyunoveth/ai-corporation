@@ -896,8 +896,6 @@ def _filter_public_44fz_cards(
 ) -> list[dict]:
     filtered: list[dict] = []
     for card in cards:
-        if not _matches_public_card_status_consistency(card):
-            continue
         if not _matches_public_card_date_range(card.get("publication_date"), date_from, date_to):
             continue
         if not _matches_public_card_date_range(card.get("deadline"), deadline_from, deadline_to):
