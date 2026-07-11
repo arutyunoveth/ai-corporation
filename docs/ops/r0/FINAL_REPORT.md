@@ -23,6 +23,7 @@
 - Product focused reconciliation: 156 passed.
 - Security/middleware: 6 passed.
 - Site: `npm run check` passed; deploy ZIP verified with `unzip -t`.
+- Live site smoke: apex, redirect, health/API health, robots and sitemap passed; deployed `services/ai-tender-agent.html` is drifted from the current source check.
 - Runtime preflight: failed only because `8090` embeddings is unavailable; PostgreSQL remains on `5432`.
 
 ## External blockers
