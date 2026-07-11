@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "backup": "/Users/master/Documents/arvectum-r0-backups/20260711-145008",
+  "recovery_commit": "4041ac190e54bf2503ee11b003635f257d16227b",
+  "integrated": [
+    "Hermes internal analyser with disabled-by-default settings",
+    "upstream-compatible Tender Research/RAG baseline"
+  ],
+  "not_integrated": [
+    "EIS services-vbs gateway transport",
+    "reseller triage helper dependent on the gateway transport"
+  ],
+  "reason": "overlapping local variants were superseded by current origin/main call-site requirements; alternate sources remain in verified backup and recovery history"
+}

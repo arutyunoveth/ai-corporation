@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     tender_pilot_basic_auth_enabled: bool = False
     tender_pilot_basic_auth_username: str | None = None
     tender_pilot_basic_auth_password: str | None = None
+    pilot_auth_enabled: bool = False
+    pilot_auth_username: str | None = None
+    pilot_auth_password: str | None = None
+    pilot_auth_protected_prefixes: str = "/api,/demo,/pilot,/docs,/redoc,/openapi.json,/health/ready"
+    pilot_auth_public_paths: str = "/health"
     llm_provider: str = "stub"
     llm_model: str | None = None
     llm_timeout_seconds: int = 30
@@ -86,6 +91,11 @@ class Settings(BaseSettings):
     public_search_no_proxy_domains: str = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru"
     allow_demo_discovery: bool = True
 
+    # Recovered Hermes analyser remains opt-in and is never a required customer flow.
+    hermes_base_url: str = "http://127.0.0.1:8099"
+    hermes_timeout_seconds: int = 120
+    hermes_enabled: bool = False
+
     model_config = SettingsConfigDict(
         env_prefix="AI_CORP_",
         env_file=[".env", ".env.local"],
@@ -97,6 +107,16 @@ class Settings(BaseSettings):
 
     def cors_allow_origins_list(self) -> list[str]:
         return _split_csv(self.cors_allow_origins)
+
+    def pilot_auth_is_enabled(self) -> bool:
+        return self.pilot_auth_enabled or self.tender_pilot_basic_auth_enabled
+
+    def pilot_auth_credentials(self) -> tuple[str | None, str | None]:
+        return (self.pilot_auth_username or self.tender_pilot_basic_auth_username, self.pilot_auth_password or self.tender_pilot_basic_auth_password)
+
+    def pilot_auth_password_safe(self) -> bool:
+        password = self.pilot_auth_credentials()[1] or ""
+        return bool(password) and password.lower() not in {"change_me", "change_me_local_only", "replace_me", "replace_me_do_not_commit_real_password"}
 
     def site_public_root_path(self) -> Path | None:
         if not self.site_public_root:

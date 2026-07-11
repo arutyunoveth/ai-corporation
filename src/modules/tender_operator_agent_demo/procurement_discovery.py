@@ -5,7 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
@@ -634,6 +634,7 @@ def search_public_44fz(
             price_to=price_to,
             status_filter=local_status_filter,
             procedure_type=procedure_type,
+            status_grace_days=2,
         )
         newly_filtered = len(page_cards) - len(filtered)
         total_filtered_count += newly_filtered
@@ -871,7 +872,7 @@ def _matches_public_card_text(value: str | None, expected: str | None) -> bool:
     return needle in haystack
 
 
-def _matches_public_card_status_consistency(card: dict, *, today: date | None = None) -> bool:
+def _matches_public_card_status_consistency(card: dict, *, today: date | None = None, grace_days: int = 0) -> bool:
     status = (card.get("status") or "").strip().lower()
     if "подача заявок" not in status:
         return True
@@ -879,7 +880,7 @@ def _matches_public_card_status_consistency(card: dict, *, today: date | None = 
     if parsed_deadline is None:
         return True
     current_day = today or date.today()
-    return parsed_deadline >= current_day
+    return parsed_deadline >= current_day - timedelta(days=grace_days)
 
 
 def _filter_public_44fz_cards(
@@ -893,10 +894,12 @@ def _filter_public_44fz_cards(
     price_to: float | None = None,
     status_filter: str | None = None,
     procedure_type: str | None = None,
+    status_grace_days: int = 0,
 ) -> list[dict]:
     filtered: list[dict] = []
+    effective_status_grace_days = status_grace_days or (2 if status_filter else 0)
     for card in cards:
-        if not _matches_public_card_status_consistency(card):
+        if not _matches_public_card_status_consistency(card, grace_days=effective_status_grace_days):
             continue
         if not _matches_public_card_date_range(card.get("publication_date"), date_from, date_to):
             continue

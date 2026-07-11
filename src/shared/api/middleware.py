@@ -1,5 +1,5 @@
 import base64
-import secrets
+import hmac
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -11,22 +11,19 @@ from starlette.responses import Response
 
 from src.shared.config.settings import Settings
 
-
-TENDER_PILOT_ROUTE_PREFIXES = (
-    "/demo/tender-agent",
-    "/pilot/tender-agent",
-    "/api/demo/tender-agent",
-)
-
+DEFAULT_PROTECTED_PREFIXES = ("/demo/tender-agent", "/pilot/tender-agent", "/api/demo/tender-agent")
+DEFAULT_PUBLIC_PATHS = ("/health",)
 
 class TenderPilotBasicAuthMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, *, username: str, password: str) -> None:
+    def __init__(self, app, *, username: str, password: str, protected: tuple[str, ...] = DEFAULT_PROTECTED_PREFIXES, public: tuple[str, ...] = DEFAULT_PUBLIC_PATHS) -> None:
         super().__init__(app)
         self.username = username
         self.password = password
+        self.protected = protected
+        self.public = public
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if not _is_protected_tender_pilot_path(request.url.path):
+        if not _is_protected_path(request.url.path, self.protected, self.public):
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization")
@@ -44,12 +41,13 @@ class TenderPilotBasicAuthMiddleware(BaseHTTPMiddleware):
 
         username, _, password = decoded_credentials.partition(":")
         if not (
-            secrets.compare_digest(username, self.username)
-            and secrets.compare_digest(password, self.password)
+            hmac.compare_digest(username, self.username)
+            and hmac.compare_digest(password, self.password)
         ):
             return _build_unauthorized_response()
-
-        return await call_next(request)
+        response = await call_next(request)
+        response.headers.update({"Cache-Control": "no-store", "Pragma": "no-cache", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer"})
+        return response
 
 
 def install_runtime_middlewares(app: FastAPI, settings: Settings) -> None:
@@ -67,20 +65,25 @@ def install_runtime_middlewares(app: FastAPI, settings: Settings) -> None:
             allow_headers=["*"],
         )
 
-    if settings.tender_pilot_basic_auth_enabled:
-        if not settings.tender_pilot_basic_auth_username or not settings.tender_pilot_basic_auth_password:
+    if settings.pilot_auth_is_enabled():
+        username, password = settings.pilot_auth_credentials()
+        if not username or not settings.pilot_auth_password_safe():
             raise RuntimeError(
-                "Tender pilot basic auth is enabled, but username/password are not fully configured."
+                "Pilot auth is enabled but username/password are incomplete or placeholder values."
             )
         app.add_middleware(
             TenderPilotBasicAuthMiddleware,
-            username=settings.tender_pilot_basic_auth_username,
-            password=settings.tender_pilot_basic_auth_password,
+            username=username,
+            password=password,
+            protected=tuple(settings.pilot_auth_protected_prefixes.split(",")),
+            public=tuple(settings.pilot_auth_public_paths.split(",")),
         )
 
 
-def _is_protected_tender_pilot_path(path: str) -> bool:
-    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in TENDER_PILOT_ROUTE_PREFIXES)
+def _is_protected_path(path: str, protected: tuple[str, ...], public: tuple[str, ...]) -> bool:
+    if path in public:
+        return False
+    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in protected if prefix)
 
 
 def _build_unauthorized_response() -> JSONResponse:

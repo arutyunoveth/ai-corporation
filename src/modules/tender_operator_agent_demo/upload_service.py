@@ -2019,7 +2019,23 @@ def _build_goods_economics_payload(
     economics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     if economics:
-        return economics
+        payload = dict(economics)
+        payload.setdefault("analysis_mode", analysis_mode)
+        payload.setdefault("economics_status", "needs_review")
+        payload.setdefault("result", "Экономика требует ручной проверки")
+        payload.setdefault("drivers", ["Сопоставление ТКП требует ручного подтверждения."])
+        payload["manual_checks"] = [
+            item.get("message", item.get("code", "Проверить расчёт по исходным ТКП вручную."))
+            if isinstance(item, dict)
+            else str(item)
+            for item in payload.get("manual_checks", [])
+        ] or ["Проверить расчёт по исходным ТКП вручную."]
+        payload.setdefault("metrics", [
+            {"label": "Минимальная закупочная стоимость", "value": payload.get("supplier_cost_min", "не определена")},
+            {"label": "Предварительная цена подачи", "value": payload.get("preliminary_bid_price", "не определена")},
+            {"label": "Целевая маржа", "value": payload.get("gross_margin_percent", "не определена")},
+        ])
+        return payload
     items = _collect_goods_supply_items_from_documents(documents)
     nmck = _extract_notice_price(metadata, _collect_role_text(documents, "technical_spec"), _collect_role_text(documents, "contract_draft"), _collect_role_text(documents, "notice"))
     total_quantity = sum(_parse_float(item.quantity) or 0 for item in items if (item.unit or "") == "м")
@@ -2374,8 +2390,11 @@ def _build_preliminary_procurement_analysis(
         initial_price = _extract_notice_price(metadata, notice, contract_text)
         deadline = metadata.get("deadline") or _extract_notice_service_deadline(notice) or _extract_notice_delivery_deadline(notice)
         delivery_term = metadata.get("procurement", {}).get("delivery_term") if isinstance(metadata.get("procurement"), dict) else None
+        tender_title = metadata.get("tender_title") or _cleanup_tabular_value(
+            _match_first(combined, (r"Наименование работ:\s*(.+?)(?:\n|$)",))
+        ) or "не указан"
         overview = [
-            f"Предмет закупки: {metadata.get('tender_title') or _cleanup_tabular_value(_match_first(combined, (r'Наименование работ:\s*(.+?)(?:\n|$)',))) or 'не указан'}",
+            f"Предмет закупки: {tender_title}",
             f"НМЦК: {initial_price} руб." if initial_price else "",
             f"Тип закупки: {procurement_kind}.",
             f"Срок исполнения / подачи: {deadline}." if deadline else "",

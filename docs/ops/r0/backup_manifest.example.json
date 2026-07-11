@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-07-11T14:50:08Z",
+  "storage": "outside_git",
+  "git_bundle": "ai-corporation-all-refs.bundle",
+  "runtime_archive": "runtime-data.tar.gz",
+  "postgres_dumps": ["ai_corporation.dump", "tender_db.dump"],
+  "verification": {
+    "bundle": "verified",
+    "runtime_archive": "verified",
+    "postgres_restore_list": "verified"
+  },
+  "secrets": "env archives are mode 0600 and are not represented in Git"
+}

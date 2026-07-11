@@ -1,0 +1,13 @@
+{
+  "category": "general_goods",
+  "label": "Общие товары",
+  "signals": [],
+  "required_fields": ["name", "quantity", "unit"],
+  "recommended_fields": ["characteristics", "standards", "equivalent_allowed"],
+  "normalization_rules": {},
+  "quality_gates": [],
+  "nmck_mapping_settings": {
+    "match_by": ["name"],
+    "fuzzy_threshold": 0.6
+  }
+}
