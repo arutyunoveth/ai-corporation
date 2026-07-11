@@ -2024,7 +2024,12 @@ def _build_goods_economics_payload(
         payload.setdefault("economics_status", "needs_review")
         payload.setdefault("result", "Экономика требует ручной проверки")
         payload.setdefault("drivers", ["Сопоставление ТКП требует ручного подтверждения."])
-        payload.setdefault("manual_checks", ["Проверить расчёт по исходным ТКП вручную."])
+        payload["manual_checks"] = [
+            item.get("message", item.get("code", "Проверить расчёт по исходным ТКП вручную."))
+            if isinstance(item, dict)
+            else str(item)
+            for item in payload.get("manual_checks", [])
+        ] or ["Проверить расчёт по исходным ТКП вручную."]
         payload.setdefault("metrics", [
             {"label": "Минимальная закупочная стоимость", "value": payload.get("supplier_cost_min", "не определена")},
             {"label": "Предварительная цена подачи", "value": payload.get("preliminary_bid_price", "не определена")},
