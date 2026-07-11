@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import shutil
-import socket
+from urllib.request import urlopen
 from pathlib import Path
 
 from src.shared.config.settings import get_settings
@@ -10,10 +10,9 @@ from src.shared.config.settings import get_settings
 
 def _reachable(url: str) -> bool:
     try:
-        host_port = url.removeprefix("http://").removeprefix("https://").split("/", 1)[0]
-        host, port = host_port.rsplit(":", 1)
-        with socket.create_connection((host, int(port)), timeout=1):
-            return True
+        endpoint = url.rstrip("/") + "/models"
+        with urlopen(endpoint, timeout=3) as response:  # noqa: S310 - endpoint is local runtime configuration
+            return response.status == 200
     except (OSError, ValueError):
         return False
 
