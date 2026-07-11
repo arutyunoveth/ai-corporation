@@ -18,7 +18,7 @@ def _hash(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
-VALID_UUID = "4a32757d-e951-4088-95fe-9c8ae7300e07"
+VALID_UUID = "00000000-0000-4000-8000-000000000000"
 
 
 # ── 1. Token file is never printed ──────────────────────────────────────
