@@ -27,7 +27,7 @@ def test_r0_pilot_boundary_keeps_health_public_and_protects_api_and_ready() -> N
     def ready():
         return {"status": "ok"}
 
-    install_runtime_middlewares(app, Settings(pilot_auth_enabled=True, pilot_auth_username="pilot", pilot_auth_password="long-test-password"))
+    install_runtime_middlewares(app, Settings(pilot_auth_enabled=True, pilot_auth_username="pilot", pilot_auth_password="long-test-password", allowed_hosts="", cors_allow_origins=""))
     client = TestClient(app)
     assert client.get("/health").status_code == 200
     assert client.get("/api/example").status_code == 401
