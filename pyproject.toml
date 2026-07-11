@@ -25,7 +25,12 @@ dependencies = [
 dev = [
   "httpx>=0.27,<1.0",
   "pytest>=8.2,<9.0",
+  "ruff>=0.8,<1.0",
 ]
+
+[tool.ruff]
+target-version = "py311"
+exclude = [".venv", "data", "company_agent_runs"]
 
 [tool.setuptools]
 package-dir = {"" = "."}
