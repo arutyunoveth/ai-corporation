@@ -29,7 +29,6 @@ DEFAULT_SOAP_ACTION_URI = "http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"
 _ENV_FILES_SEEDED = False
 
 TokenOwner = Literal["individual", "legal_entity"]
-SoapTransportMode = Literal["direct", "gateway", "disabled"]
 
 
 def _settings_root() -> Path:
@@ -87,134 +86,6 @@ def _read_token_owner() -> TokenOwner:
     return "individual"
 
 
-def _read_transport_mode(key: str, default: str) -> SoapTransportMode:
-    value = os.environ.get(key, default).strip().lower()
-    if value in ("gateway", "gw"):
-        return "gateway"
-    if value in ("disabled", "off", "0", "false"):
-        return "disabled"
-    return "direct"
-
-
-@dataclass(frozen=True)
-class EisSoapGatewaySettings:
-    enabled: bool = False
-    gateway_base_url: str = ""
-    docs_endpoint: str = DEFAULT_INDIVIDUAL_BASE_URL
-    search_endpoint: str = DEFAULT_LEGACY_BASE_URL
-    docs_transport: SoapTransportMode = "direct"
-    search_transport: SoapTransportMode = "disabled"
-    individual_token: str = field(default="", repr=False)
-    legal_entity_token: str = field(default="", repr=False)
-    docs_namespace: str = DEFAULT_INDIVIDUAL_NAMESPACE
-    docs_token_header: str = DEFAULT_TOKEN_HEADER_NAME
-    allowed_hosts_raw: str = DEFAULT_ALLOWED_HOSTS
-    user_agent: str = DEFAULT_USER_AGENT
-    content_type: str = DEFAULT_CONTENT_TYPE
-    soap_action_uri: str = DEFAULT_SOAP_ACTION_URI
-    timeout_seconds: int = 30
-    max_results: int = 10
-    max_attachments: int = 20
-    max_download_mb: int = 200
-    debug: bool = False
-
-    @classmethod
-    def from_env(cls) -> EisSoapGatewaySettings:
-        _seed_env_from_local_files()
-        individual_token = os.environ.get("ZAKUPKI_GOV_RU_INDIVIDUAL_TOKEN", "").strip()
-        legal_entity_token = os.environ.get("ZAKUPKI_GOV_RU_LEGAL_ENTITY_TOKEN", "").strip()
-        if not individual_token:
-            individual_token = os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN", "").strip()
-        return cls(
-            enabled=_read_bool("EIS_SOAP_ENABLED", False) or _read_bool("ZAKUPKI_GOV_RU_SOAP_ENABLED", False),
-            gateway_base_url=os.environ.get("EIS_SOAP_GATEWAY_BASE_URL", "").strip(),
-            docs_endpoint=os.environ.get("EIS_DOCS_SOAP_ENDPOINT", DEFAULT_INDIVIDUAL_BASE_URL).strip()
-            or DEFAULT_INDIVIDUAL_BASE_URL,
-            search_endpoint=os.environ.get("EIS_SEARCH_SOAP_ENDPOINT", DEFAULT_LEGACY_BASE_URL).strip()
-            or DEFAULT_LEGACY_BASE_URL,
-            docs_transport=_read_transport_mode("EIS_DOCS_SOAP_TRANSPORT", "direct"),
-            search_transport=_read_transport_mode("EIS_SEARCH_SOAP_TRANSPORT", "disabled"),
-            individual_token=individual_token,
-            legal_entity_token=legal_entity_token,
-            docs_namespace=os.environ.get("EIS_DOCS_SOAP_NAMESPACE", DEFAULT_INDIVIDUAL_NAMESPACE).strip()
-            or DEFAULT_INDIVIDUAL_NAMESPACE,
-            docs_token_header=os.environ.get("EIS_DOCS_SOAP_TOKEN_HEADER", DEFAULT_TOKEN_HEADER_NAME).strip()
-            or DEFAULT_TOKEN_HEADER_NAME,
-            allowed_hosts_raw=os.environ.get("EIS_SOAP_ALLOWED_HOSTS", DEFAULT_ALLOWED_HOSTS).strip()
-            or DEFAULT_ALLOWED_HOSTS,
-            user_agent=os.environ.get("EIS_SOAP_USER_AGENT", DEFAULT_USER_AGENT).strip() or DEFAULT_USER_AGENT,
-            content_type=os.environ.get("EIS_SOAP_CONTENT_TYPE", DEFAULT_CONTENT_TYPE).strip() or DEFAULT_CONTENT_TYPE,
-            soap_action_uri=os.environ.get("EIS_DOCS_SOAP_ACTION", DEFAULT_SOAP_ACTION_URI).strip()
-            or DEFAULT_SOAP_ACTION_URI,
-            timeout_seconds=_read_int("EIS_SOAP_TIMEOUT_SECONDS", 30),
-            max_results=_read_int("EIS_SOAP_MAX_RESULTS", 10),
-            max_attachments=_read_int("EIS_SOAP_MAX_ATTACHMENTS", 20),
-            max_download_mb=_read_int("EIS_SOAP_MAX_DOWNLOAD_MB", 200),
-            debug=_read_bool("EIS_SOAP_DEBUG", False),
-        )
-
-    @property
-    def individual_token_configured(self) -> bool:
-        return self.individual_token.strip().lower() not in PLACEHOLDER_TOKENS
-
-    @property
-    def legal_entity_token_configured(self) -> bool:
-        return self.legal_entity_token.strip().lower() not in PLACEHOLDER_TOKENS
-
-    @property
-    def docs_available(self) -> bool:
-        if not self.enabled or not self.individual_token_configured or self.docs_transport == "disabled":
-            return False
-        if self.docs_transport == "gateway" and not self.gateway_base_url:
-            return False
-        return True
-
-    @property
-    def search_available(self) -> bool:
-        if not self.enabled or not self.legal_entity_token_configured or self.search_transport == "disabled":
-            return False
-        if self.search_transport == "gateway" and not self.gateway_base_url:
-            return False
-        return True
-
-    def search_url(self) -> str:
-        if self.search_transport == "gateway" and self.gateway_base_url:
-            return f"{self.gateway_base_url.rstrip('/')}/eis/search"
-        return self.search_endpoint
-
-    def docs_url(self) -> str:
-        if self.docs_transport == "gateway" and self.gateway_base_url:
-            return f"{self.gateway_base_url.rstrip('/')}/eis/docs"
-        return self.docs_endpoint
-
-    @property
-    def allowed_hosts(self) -> tuple[str, ...]:
-        return tuple(item.strip().lower() for item in self.allowed_hosts_raw.split(",") if item.strip())
-
-    def safe_status(self) -> dict[str, Any]:
-        return {
-            "source": "eis_soap",
-            "enabled": self.enabled,
-            "docs_available": self.docs_available,
-            "search_available": self.search_available,
-            "docs_transport": self.docs_transport,
-            "search_transport": self.search_transport,
-            "docs_endpoint_configured": bool(self.docs_endpoint),
-            "search_endpoint_configured": bool(self.search_endpoint),
-            "gateway_configured": bool(self.gateway_base_url),
-            "individual_token_configured": self.individual_token_configured,
-            "legal_entity_token_configured": self.legal_entity_token_configured,
-            "docs_url": self.docs_url(),
-            "search_url": self.search_url(),
-            "timeout_seconds": self.timeout_seconds,
-            "max_results": self.max_results,
-        }
-
-
-_token_not_configured_reason = "Токен не настроен. Добавьте ZAKUPKI_GOV_RU_INDIVIDUAL_TOKEN в .env.local"
-_search_not_available_reason = "Поиск через ЕИС недоступен. Требуется токен юрлица и services-vbs endpoint."
-
-
 @dataclass(frozen=True)
 class ZakupkiSoapSettings:
     enabled: bool = False
@@ -242,7 +113,6 @@ class ZakupkiSoapSettings:
     max_download_mb: int = 200
     trust_env_proxy: bool = False
     debug: bool = False
-    _gateway_settings: EisSoapGatewaySettings | None = None
 
     @classmethod
     def from_env(cls) -> "ZakupkiSoapSettings":
@@ -299,9 +169,6 @@ class ZakupkiSoapSettings:
 
     @property
     def active_docs_endpoint(self) -> str:
-        gw = get_eis_gateway_settings()
-        if gw.docs_available:
-            return gw.docs_url()
         return self.individual_base_url if self.individual_mode else self.base_url
 
     @property
@@ -347,10 +214,6 @@ class ZakupkiSoapSettings:
             "debug": self.debug,
             "legacy_mode_note": "services-vbs / legal entity mode / experimental",
         }
-
-
-def get_eis_gateway_settings() -> EisSoapGatewaySettings:
-    return EisSoapGatewaySettings.from_env()
 
 
 def is_zakupki_soap_configured(settings: ZakupkiSoapSettings | None = None) -> bool:

@@ -6,9 +6,11 @@ def test_procurement_search_tab_is_first(client):
 
     assert response.status_code == 200
     text = response.text
-    assert text.index("Быстрый разбор закупки") < text.index("Анализ по номеру") < text.index("Загрузка документов") < text.index("Демо-набор")
-    assert "Ключевое слово" in text
+    assert text.index("Найти закупку") < text.index("Получить документацию по номеру") < text.index("Загрузить документы") < text.index("Демо-набор")
+    assert "Поиск работает в безопасном read-only режиме" in text
+    assert "Диагностика ЕИС" in text
     assert "Токен выпущен как физическое лицо" in text
+    assert "Источник закупки" in text
     assert "Журнал работы агента" in text
 
 

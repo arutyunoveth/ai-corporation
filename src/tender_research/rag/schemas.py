@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+ANALYSIS_MODE_CHOICES = ("fast", "balanced", "detailed")
+DEFAULT_ANALYSIS_MODE = "balanced"
+
+
 @dataclass(frozen=True)
 class SourceCitation:
     chunk_id: str
@@ -32,12 +36,23 @@ class TenderAnalysisResult:
     sections: list[TenderAnalysisSection]
     sections_count: int
     sources_count: int
+    analysis_mode: str = DEFAULT_ANALYSIS_MODE
     report_markdown: str = ""
     report_path: str | None = None
     used_llm: bool = False
     llm_model: str | None = None
+    llm_endpoint: str | None = None
     retrieval_provider: str | None = None
     retrieval_model: str | None = None
+    retrieval_limit_used: int | None = None
+    run_id: str | None = None
+    duration_seconds: float | None = None
+    timings: dict = field(default_factory=dict)
+    per_section_timings: list[dict] = field(default_factory=list)
+    llm_calls_count: int = 0
+    total_context_chars: int = 0
+    max_section_context_chars: int = 0
+    avg_section_llm_seconds: float | None = None
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 

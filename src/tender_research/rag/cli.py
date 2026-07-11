@@ -20,8 +20,14 @@ from src.tender_research.config import load_config
 from src.tender_research.rag.embeddings import build_embedding_provider, probe_embedding_provider
 from src.tender_research.rag.indexer import DocumentChunkIndexer, DocumentEmbeddingIndexer
 from src.tender_research.rag.analysis_service import analyze_tender
+from src.tender_research.rag.history_service import (
+    get_analysis_run,
+    get_analysis_run_report,
+    list_analysis_runs,
+)
 from src.tender_research.rag.llm import LocalChatLlmClient, SourceCitation, build_source_citations
 from src.tender_research.rag.retriever import RagRetriever
+from src.tender_research.rag.schemas import DEFAULT_ANALYSIS_MODE
 from src.tender_research.rag.vector_store import JsonVectorStore
 from src.tender_research.repository import TenderRepository
 
@@ -252,7 +258,12 @@ def cmd_analyze_tender(args: argparse.Namespace) -> None:
         llm_model=args.llm_model,
         llm_timeout_seconds=args.llm_timeout_seconds,
         limit=args.limit,
+        analysis_mode=args.analysis_mode,
+        max_context_chars_per_section=args.max_context_chars_per_section,
+        max_chunks_per_section=args.max_chunks_per_section,
         save_report=True,
+        record_history=not getattr(args, "no_history", False),
+        history_source="cli",
     )
     if args.output:
         output_path = Path(args.output)
@@ -265,10 +276,20 @@ def cmd_analyze_tender(args: argparse.Namespace) -> None:
             "registry_number": result.registry_number,
             "sections_count": result.sections_count,
             "sources_count": result.sources_count,
+            "analysis_mode": result.analysis_mode,
             "used_llm": result.used_llm,
             "llm_model": result.llm_model,
+            "llm_endpoint": result.llm_endpoint,
             "retrieval_provider": result.retrieval_provider,
             "retrieval_model": result.retrieval_model,
+            "retrieval_limit_used": result.retrieval_limit_used,
+            "duration_seconds": result.duration_seconds,
+            "timings": result.timings,
+            "per_section_timings": result.per_section_timings,
+            "llm_calls_count": result.llm_calls_count,
+            "total_context_chars": result.total_context_chars,
+            "max_section_context_chars": result.max_section_context_chars,
+            "avg_section_llm_seconds": result.avg_section_llm_seconds,
             "report_path": result.report_path,
             "warnings": result.warnings,
             "errors": result.errors,
@@ -392,6 +413,58 @@ def cmd_eval(args: argparse.Namespace) -> None:
         print(f"{key}: {summary[key]}")
     session.close()
 
+def _get_session() -> Session:
+    settings = get_settings()
+    engine = create_engine(settings.database_url)
+    Base.metadata.create_all(engine)
+    from sqlalchemy.orm import sessionmaker
+    return sessionmaker(bind=engine)()
+
+
+def cmd_list_analysis_runs(args: argparse.Namespace) -> None:
+    session = _get_session()
+    try:
+        items, total = list_analysis_runs(
+            session,
+            registry_number=args.registry_number,
+            status=args.status,
+            limit=args.limit,
+            offset=args.offset,
+        )
+        data = [r.to_dict() for r in items]
+        print(json.dumps({"items": data, "limit": args.limit, "offset": args.offset, "total": total}, ensure_ascii=False, indent=2))
+    finally:
+        session.close()
+
+
+def cmd_show_analysis_run(args: argparse.Namespace) -> None:
+    session = _get_session()
+    try:
+        record = get_analysis_run(session, args.run_id)
+        if record is None:
+            print(json.dumps({"error": "Analysis run not found"}, indent=2))
+            return
+        print(json.dumps(record.to_dict(), ensure_ascii=False, indent=2))
+    finally:
+        session.close()
+
+
+def cmd_show_analysis_report(args: argparse.Namespace) -> None:
+    config = load_config()
+    session = _get_session()
+    try:
+        record, markdown, error = get_analysis_run_report(session, args.run_id, config.data_dir)
+        if record is None:
+            print(json.dumps({"error": error or "Analysis run not found"}, indent=2))
+            return
+        if markdown is None:
+            print(json.dumps({"error": error or "Report file is missing", "run_id": args.run_id}, indent=2))
+            return
+        print(markdown)
+    finally:
+        session.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Tender Research local RAG CLI")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -421,11 +494,32 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_analyze = sub.add_parser("analyze-tender", help="Build a structured RAG analysis report for one registry number")
     p_analyze.add_argument("--registry-number", required=True)
-    p_analyze.add_argument("--limit", type=int, default=8)
+    p_analyze.add_argument("--limit", type=int, default=None)
     p_analyze.add_argument("--use-llm", action="store_true")
+    p_analyze.add_argument(
+        "--analysis-mode",
+        choices=["fast", "balanced", "detailed"],
+        default=DEFAULT_ANALYSIS_MODE,
+        help="Latency/detail preset for tender analysis",
+    )
+    p_analyze.add_argument("--max-context-chars-per-section", type=int, default=None)
+    p_analyze.add_argument("--max-chunks-per-section", type=int, default=None)
     p_analyze.add_argument("--output", default=None, help="Optional markdown output path")
+    p_analyze.add_argument("--no-history", action="store_true", help="Skip saving to analysis history")
     _add_provider_args(p_analyze)
     _add_llm_args(p_analyze)
+
+    p_history_list = sub.add_parser("list-analysis-runs", help="List analysis history runs")
+    p_history_list.add_argument("--registry-number", default=None)
+    p_history_list.add_argument("--status", default=None)
+    p_history_list.add_argument("--limit", type=int, default=20)
+    p_history_list.add_argument("--offset", type=int, default=0)
+
+    p_history_show = sub.add_parser("show-analysis-run", help="Show details of a specific analysis run")
+    p_history_show.add_argument("--run-id", required=True)
+
+    p_history_report = sub.add_parser("show-analysis-report", help="Show report markdown for a specific analysis run")
+    p_history_report.add_argument("--run-id", required=True)
 
     p_check = sub.add_parser("check-embedding-server", help="Check embedding provider reachability and sample dimension")
     _add_provider_args(p_check)
@@ -458,6 +552,12 @@ def main() -> None:
             cmd_ask(args)
         elif args.command == "analyze-tender":
             cmd_analyze_tender(args)
+        elif args.command == "list-analysis-runs":
+            cmd_list_analysis_runs(args)
+        elif args.command == "show-analysis-run":
+            cmd_show_analysis_run(args)
+        elif args.command == "show-analysis-report":
+            cmd_show_analysis_report(args)
     finally:
         _RUNTIME_ARGS = None
 

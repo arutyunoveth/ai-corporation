@@ -110,6 +110,7 @@ def prepare_tender_for_analysis(
     rebuild_chunks: bool = False,
     rebuild_embeddings: bool = False,
     session: Session | None = None,
+    progress_callback=None,
 ) -> TenderPreparationResult:
     own_session = False
     if session is None:
@@ -121,6 +122,18 @@ def prepare_tender_for_analysis(
         warnings: list[str] = []
         errors: list[str] = []
         config = load_config()
+
+        def emit_progress(progress_percent: int, current_step: str, message: str = "") -> None:
+            if progress_callback is None:
+                return
+            progress_callback(
+                {
+                    "progress_percent": progress_percent,
+                    "current_step": current_step,
+                    "message": message,
+                    "steps": steps,
+                }
+            )
 
         if provider:
             object.__setattr__(config, "rag_embeddings_provider", provider)
@@ -137,6 +150,7 @@ def prepare_tender_for_analysis(
         if not tender:
             step = TenderPreparationStep("check_tender_exists", "in_progress", "Tender not found in database, attempting to ingest...")
             steps.append(step)
+            emit_progress(10, "check_tender_exists", step.message)
             try:
                 loader = EisTenderLoader(mode="real")
                 raw_tender = loader.fetch_by_registry_number(registry_number)
@@ -171,9 +185,11 @@ def prepare_tender_for_analysis(
                     session.commit()
                     step.status = "completed"
                     step.message = f"Tender {registry_number} ingested from EIS"
+                    emit_progress(25, "load_or_ingest_tender", step.message)
                 else:
                     step.status = "failed"
                     step.message = f"Could not ingest tender {registry_number} from EIS"
+                    emit_progress(10, "check_tender_exists", step.message)
                     errors.append(f"Tender {registry_number} not found in database and could not be ingested from EIS")
                     return TenderPreparationResult(
                         status="no_tender",
@@ -186,6 +202,7 @@ def prepare_tender_for_analysis(
                 logger.error("Failed to ingest tender %s: %s", registry_number, e)
                 step.status = "failed"
                 step.message = f"Ingestion failed: {e}"
+                emit_progress(10, "check_tender_exists", step.message)
                 errors.append(f"Cannot ingest tender: {e}")
                 return TenderPreparationResult(
                     status="failed",
@@ -196,12 +213,15 @@ def prepare_tender_for_analysis(
                 )
         else:
             steps.append(TenderPreparationStep("check_tender_exists", "completed", "Tender found in database"))
+            emit_progress(10, "check_tender_exists", "Tender found in database")
 
         step = TenderPreparationStep("load_or_ingest_tender", "completed", "Tender data loaded")
         steps.append(step)
+        emit_progress(25, "load_or_ingest_tender", step.message)
 
         step = TenderPreparationStep("download_documents", "in_progress", "Starting document download...")
         steps.append(step)
+        emit_progress(40, "download_documents", step.message)
         try:
             result = download_tender_documents(repo, tender, config)
             downloaded = result.get("downloaded", 0)
@@ -218,14 +238,17 @@ def prepare_tender_for_analysis(
             else:
                 step.status = "completed"
                 step.message = "Documents already downloaded"
+            emit_progress(40, "download_documents", step.message)
         except Exception as e:
             logger.error("Document download failed for %s: %s", registry_number, e)
             step.status = "failed"
             step.message = f"Download failed: {e}"
             warnings.append(f"Document download failed: {e}")
+            emit_progress(40, "download_documents", step.message)
 
         step = TenderPreparationStep("extract_text", "in_progress", "Checking extracted text...")
         steps.append(step)
+        emit_progress(55, "extract_text", step.message)
         docs_with_text = 0
         for doc in tender.documents:
             if doc.text_extraction_status == "extracted" and doc.extracted_text_path:
@@ -238,6 +261,7 @@ def prepare_tender_for_analysis(
             step.message = "No text extracted (documents may have unsupported formats)"
             if not any("document download" in w for w in warnings):
                 warnings.append("No documents have extracted text available")
+        emit_progress(55, "extract_text", step.message)
 
         emb_provider = build_embedding_provider(config)
         vector_store = JsonVectorStore(
@@ -248,6 +272,7 @@ def prepare_tender_for_analysis(
         chunk_indexer = DocumentChunkIndexer(repo, config)
         step = TenderPreparationStep("build_chunks", "in_progress", "Building chunks...")
         steps.append(step)
+        emit_progress(70, "build_chunks", step.message)
         chunks_existing = repo.count_chunks_by_tender(tender.id)
         if chunks_existing > 0 and not rebuild_chunks:
             step.status = "skipped"
@@ -274,10 +299,12 @@ def prepare_tender_for_analysis(
                 step.status = "failed"
                 step.message = f"Chunk build failed: {e}"
                 warnings.append(f"Chunk build failed: {e}")
+        emit_progress(70, "build_chunks", step.message)
 
         emb_indexer = DocumentEmbeddingIndexer(repo, config, emb_provider, vector_store)
         step = TenderPreparationStep("build_embeddings", "in_progress", "Building embeddings...")
         steps.append(step)
+        emit_progress(90, "build_embeddings", step.message)
         emb_existing = repo.count_embeddings_by_tender(emb_provider.provider_name, emb_provider.model_name, tender.id)
         chunks_count = repo.count_chunks_by_tender(tender.id)
         if emb_existing >= chunks_count and not rebuild_embeddings:
@@ -308,9 +335,11 @@ def prepare_tender_for_analysis(
                 step.status = "failed"
                 step.message = f"Embedding build failed: {e}"
                 warnings.append(f"Embedding build failed: {e}")
+        emit_progress(90, "build_embeddings", step.message)
 
         step = TenderPreparationStep("readiness_check", "in_progress", "Checking readiness...")
         steps.append(step)
+        emit_progress(100, "readiness_check", step.message)
         final_chunks = repo.count_chunks_by_tender(tender.id)
         final_embeddings = repo.count_embeddings_by_tender(emb_provider.provider_name, emb_provider.model_name, tender.id)
         final_docs_with_text = repo.count_extracted_documents_by_tender(tender.id)
@@ -331,6 +360,7 @@ def prepare_tender_for_analysis(
             step.status = "warning"
             step.message = f"Incomplete: chunks={final_chunks}, embeddings={final_embeddings}"
             warnings.append(f"Incomplete preparation: chunks={final_chunks}, embeddings={final_embeddings}")
+        emit_progress(100, "readiness_check", step.message)
 
         overall_status = "completed" if ready else "completed_with_warnings"
         if errors:

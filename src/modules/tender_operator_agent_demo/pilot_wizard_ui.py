@@ -189,6 +189,24 @@ def render_tender_operator_pilot_wizard_html() -> str:
             font-size: 13px;
             line-height: 1.45;
           }
+          .input-group {
+            display: flex;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            background: rgba(255,255,255,0.06);
+          }
+          .input-group input {
+            border: none;
+            background: none;
+            border-radius: 16px 0 0 16px;
+          }
+          .input-group .input-currency {
+            padding: 13px 14px 13px 0;
+            color: var(--muted);
+            font-size: 15px;
+            white-space: nowrap;
+          }
           input, textarea, select {
             width: 100%;
             border: 1px solid rgba(255,255,255,0.1);
@@ -347,6 +365,25 @@ def render_tender_operator_pilot_wizard_html() -> str:
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
+          }
+          .search-results-footer {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            padding: 4px 4px 0;
+          }
+          .search-results-pagination {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+          }
+          .search-results-count {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.4;
           }
           .search-list-head {
             display: grid;
@@ -605,9 +642,9 @@ def render_tender_operator_pilot_wizard_html() -> str:
             </div>
             <div class="hero-top">
               <div class="hero-copy">
-                <h1>Прогон тендера через формы, а не через `.md`</h1>
+                <h1>Поиск и анализ закупки</h1>
                 <p class="subtitle">
-                  Найдите закупку по фильтрам или вставьте ссылку ЕИС. Обработка запускается прямо из карточки результата поиска.
+                  Найдите закупку в ЕИС, выберите подходящую карточку и запустите обработку. Агент скачает доступные документы, извещение и подготовит предварительный отчёт с источниками.
                 </p>
                 <div class="hero-badges">
                   <span class="badge">44-ФЗ, 223-ФЗ и капремонт</span>
@@ -629,16 +666,11 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     человека.
                   </div>
                   <div class="field-grid" style="margin-bottom:14px">
-                    <div class="field-grid two" style="margin-bottom:0">
-                      <label>
-                        <span class="label-title">Ссылка на закупку в ЕИС или реестровый номер</span>
-                        <span class="label-hint">Поддерживается ссылка вида `zakupki.gov.ru/...regNumber=...` или просто номер закупки. Это поле используется как основной вход в сценарий.</span>
-                        <input name="procurement_url" placeholder="https://zakupki.gov.ru/epz/order/notice/ea44/view.html?regNumber=0888200000224000038" />
-                      </label>
-                      <div style="display:flex;align-items:center;padding-top:22px">
-                        <button class="button primary" id="lookup-by-number-button" type="button" style="flex:1">Найти закупку по номеру</button>
-                      </div>
-                    </div>
+                    <label>
+                      <span class="label-title">Ссылка на закупку в ЕИС или реестровый номер</span>
+                      <span class="label-hint">Поддерживается ссылка вида `zakupki.gov.ru/...regNumber=...` или просто номер закупки. Это поле используется как основной вход в сценарий.</span>
+                      <input name="procurement_url" placeholder="https://zakupki.gov.ru/epz/order/notice/ea44/view.html?regNumber=0888200000224000038" />
+                    </label>
                   </div>
                   <div id="selected-procurement" class="selected-procurement" style="display:none"></div>
                   <div class="search-grid">
@@ -694,29 +726,29 @@ def render_tender_operator_pilot_wizard_html() -> str:
                             </label>
                             <label>
                               <span class="label-title">Дата публикации: от</span>
-                              <input name="search_date_from" type="date" />
+                              <input name="search_date_from" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                             <label>
                               <span class="label-title">Дата публикации: до</span>
-                              <input name="search_date_to" type="date" />
+                              <input name="search_date_to" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                           </div>
                           <div class="search-toolbar-row tertiary">
                             <label>
                               <span class="label-title">Срок подачи: от</span>
-                              <input name="search_deadline_from" type="date" />
+                              <input name="search_deadline_from" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                             <label>
                               <span class="label-title">Срок подачи: до</span>
-                              <input name="search_deadline_to" type="date" />
+                              <input name="search_deadline_to" type="text" placeholder="дд.мм.гггг" autocomplete="off" />
                             </label>
                             <label>
-                              <span class="label-title">НМЦК: от</span>
-                              <input name="search_price_from" type="number" min="0" step="1" placeholder="Например: 500000" />
+                              <span class="label-title">НМЦК: от, ₽</span>
+                              <input name="search_price_from" type="text" inputmode="numeric" placeholder="1 000 000" autocomplete="off" />
                             </label>
                             <label>
-                              <span class="label-title">НМЦК: до</span>
-                              <input name="search_price_to" type="number" min="0" step="1" placeholder="Например: 5000000" />
+                              <span class="label-title">НМЦК: до, ₽</span>
+                              <input name="search_price_to" type="text" inputmode="numeric" placeholder="5 000 000" autocomplete="off" />
                             </label>
                           </div>
                         </div>
@@ -725,6 +757,9 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     <div id="search-flash" class="flash" style="display:none"></div>
                     <div id="search-results" class="search-results empty">
                       Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.
+                    </div>
+                    <div class="form-actions" style="margin-top:12px">
+                      <button class="button" id="search-demo-button" type="button">Открыть демо-закупку 0323100010326000013</button>
                     </div>
                   </div>
                 </section>
@@ -839,6 +874,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             warning: 'риск',
             blocked: 'заблокировано',
           };
+          const SEARCH_PAGE_SIZE = 10;
           const fileRolePrefixes = {
             notice: 'notice',
             technical: 'technical_spec',
@@ -846,6 +882,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             quote: 'tkp',
             supporting: 'supporting',
           };
+          let lastSearchBaseParams = null;
 
           function escapeHtml(value) {
             return String(value ?? '')
@@ -883,6 +920,40 @@ def render_tender_operator_pilot_wizard_html() -> str:
           function getTrimmedValue(name) {
             const field = document.querySelector(`[name="${name}"]`);
             return field ? field.value.trim() : '';
+          }
+
+          function normalizeDateRus(value) {
+            const cleaned = value.replace(/[^0-9.]/g, '');
+            const match = cleaned.match(/^(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})$/);
+            if (!match) return null;
+            const d = String(match[1]).padStart(2, '0');
+            const m = String(match[2]).padStart(2, '0');
+            const y = match[3];
+            return `${y}-${m}-${d}`;
+          }
+
+          function isValidDateRus(value) {
+            if (!value) return true;
+            return normalizeDateRus(value) !== null;
+          }
+
+          function formatDateRus(isoStr) {
+            if (!isoStr) return '';
+            const match = String(isoStr).match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+            if (match) return `${match[3]}.${match[2]}.${match[1]}`;
+            const rusMatch = String(isoStr).match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})/);
+            if (rusMatch) return isoStr;
+            return isoStr;
+          }
+
+          function formatPriceInput(value) {
+            const cleaned = value.replace(/[^\\d]/g, '');
+            if (!cleaned) return '';
+            return cleaned.replace(/\\B(?=(\\d{3})+(?!\\d))/g, ' ');
+          }
+
+          function normalizePrice(value) {
+            return value.replace(/\\s/g, '');
           }
 
           function hasManualFiles() {
@@ -979,6 +1050,12 @@ def render_tender_operator_pilot_wizard_html() -> str:
               source_url: procurementUrl,
               title: card?.title || null,
               customer_name: card?.customer_name || null,
+              initial_price: card?.initial_price ?? null,
+              publication_date: card?.publication_date || null,
+              deadline: card?.deadline || null,
+              currency: card?.currency || null,
+              status: card?.status || null,
+              procedure_type: card?.procedure_type || null,
               download_archive: true,
               analyze_after_download: false,
             };
@@ -1006,7 +1083,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             if (Number.isNaN(numeric)) {
               return escapeHtml(String(value));
             }
-            return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(numeric) + ' руб.';
+            return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(numeric) + ' ₽';
           }
 
           function renderSelectedProcurement(card) {
@@ -1016,6 +1093,9 @@ def render_tender_operator_pilot_wizard_html() -> str:
               node.innerHTML = '';
               return;
             }
+            const nmck = card.initial_price != null ? formatMoney(card.initial_price) : null;
+            const pubDate = card.publication_date ? formatDateRus(card.publication_date) : null;
+            const deadline = card.deadline ? formatDateRus(card.deadline) : null;
             node.style.display = 'block';
             node.innerHTML = `
               <strong>Выбрана закупка для прогона</strong>
@@ -1025,6 +1105,11 @@ def render_tender_operator_pilot_wizard_html() -> str:
                 <span class="search-badge">${escapeHtml(card.category || lawLabel(card.law || '44fz'))}</span>
                 ${card.procedure_type ? `<span class="search-badge">${escapeHtml(card.procedure_type)}</span>` : ''}
                 ${card.status ? `<span class="search-badge">${escapeHtml(card.status)}</span>` : ''}
+              </div>
+              <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">
+                ${nmck ? `<span style="font-size:15px;font-weight:700">${escapeHtml(nmck)}</span>` : ''}
+                ${pubDate ? `<span style="font-size:13px;color:var(--muted)">📅 ${escapeHtml(pubDate)}</span>` : ''}
+                ${deadline ? `<span style="font-size:13px;color:var(--muted)">⏰ ${escapeHtml(deadline)}</span>` : ''}
               </div>
             `;
           }
@@ -1037,24 +1122,167 @@ def render_tender_operator_pilot_wizard_html() -> str:
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }
 
-          function renderSearchResults(cards, eisSearchUrl = '') {
+          function searchStatusMessage(payload = {}) {
+            const outcome = String(payload.outcome || '');
+            const parserStatus = String(payload.parser_status || payload.status || '');
+            const error = String(payload.error || '').trim();
+            const details = error ? ` Причина: ${escapeHtml(error)}.` : '';
+            if (outcome === 'success_with_results') {
+              return payload.message || `Поиск завершен. Найдено карточек: ${String((payload.cards || []).length)}.`;
+            }
+            if (outcome === 'success_empty') {
+              return payload.message || 'Источник доступен, но закупки по заданным фильтрам не найдены.';
+            }
+            if (outcome === 'source_unavailable') {
+              if (parserStatus === 'js_heavy') {
+                return `ЕИС вернула JS-heavy страницу, поэтому автоматический поиск сейчас недоступен.${details}`;
+              }
+              return (payload.message || 'Публичный поиск ЕИС сейчас недоступен.') + details;
+            }
+            if (outcome === 'unsupported_search_mode') {
+              return (payload.message || 'Автоматический режим поиска для этого источника не поддерживается.') + details;
+            }
+            if (outcome === 'validation_error') {
+              return (payload.message || 'Проверьте запрос и параметры поиска.') + details;
+            }
+            return (payload.message || 'Поиск ЕИС завершился с ошибкой.') + details;
+          }
+
+          function buildSearchBaseParams() {
+            const params = new URLSearchParams();
+            params.set('query', getTrimmedValue('search_query'));
+            params.set('max_results', String(SEARCH_PAGE_SIZE));
+            params.set('page_size', String(SEARCH_PAGE_SIZE));
+            params.set('law', getTrimmedValue('search_law') || '44fz');
+            const region = getTrimmedValue('search_region');
+            const statusFilter = getTrimmedValue('search_status');
+            const procedureType = getTrimmedValue('search_procedure_type');
+            const dateFrom = getTrimmedValue('search_date_from');
+            const dateTo = getTrimmedValue('search_date_to');
+            const deadlineFrom = getTrimmedValue('search_deadline_from');
+            const deadlineTo = getTrimmedValue('search_deadline_to');
+            let priceFrom = getTrimmedValue('search_price_from');
+            let priceTo = getTrimmedValue('search_price_to');
+            if (region) params.set('region', region);
+            if (statusFilter) params.set('status_filter', statusFilter);
+            if (procedureType) params.set('procedure_type', procedureType);
+            if (dateFrom) {
+              const nd = normalizeDateRus(dateFrom);
+              if (nd) params.set('date_from', nd);
+            }
+            if (dateTo) {
+              const nd = normalizeDateRus(dateTo);
+              if (nd) params.set('date_to', nd);
+            }
+            if (deadlineFrom) {
+              const nd = normalizeDateRus(deadlineFrom);
+              if (nd) params.set('deadline_from', nd);
+            }
+            if (deadlineTo) {
+              const nd = normalizeDateRus(deadlineTo);
+              if (nd) params.set('deadline_to', nd);
+            }
+            if (priceFrom) {
+              priceFrom = normalizePrice(priceFrom);
+              if (priceFrom) params.set('price_from', priceFrom);
+            }
+            if (priceTo) {
+              priceTo = normalizePrice(priceTo);
+              if (priceTo) params.set('price_to', priceTo);
+            }
+            return params;
+          }
+
+          function buildSearchPageParams(page, cursor = null) {
+            const params = new URLSearchParams(lastSearchBaseParams ? lastSearchBaseParams.toString() : buildSearchBaseParams().toString());
+            params.set('page', String(Math.max(1, Number(page) || 1)));
+            params.set('page_size', String(SEARCH_PAGE_SIZE));
+            params.set('max_results', String(SEARCH_PAGE_SIZE));
+            if (cursor) {
+              params.set('cursor', cursor);
+            }
+            if (lastSeenRegistryNumbers.length > 0) {
+              params.set('seen_registry_numbers', JSON.stringify(lastSeenRegistryNumbers));
+            }
+            return params;
+          }
+
+          let lastSeenRegistryNumbers = [];
+
+          function searchResultsMeta(payload = {}, cards = []) {
+            const page = Math.max(1, Number(payload.page) || 1);
+            const pageSize = Math.max(1, Number(payload.page_size) || SEARCH_PAGE_SIZE);
+            const returnedCount = Math.max(0, Number(payload.returned_count) || cards.length);
+            const totalCount = Number.isInteger(payload.total_count) ? Number(payload.total_count) : null;
+            const exactTotal = payload.total_count_exact_for_displayed_filters === true;
+            const hasMore = payload.has_more === true;
+            const startIndex = returnedCount ? ((page - 1) * pageSize) + 1 : 0;
+            const endIndex = returnedCount ? startIndex + returnedCount - 1 : 0;
+            let countLine = '';
+            if (exactTotal && totalCount !== null) {
+              countLine = page === 1
+                ? `Показаны первые ${String(returnedCount)} карточек из ${String(totalCount)}.`
+                : `Показаны карточки ${String(startIndex)}-${String(endIndex)} из ${String(totalCount)}.`;
+            } else if (totalCount !== null) {
+              if (payload.local_post_filter_applied) {
+                countLine = `По данным ЕИС найдено ${String(totalCount)}. Показаны первые ${String(returnedCount)} актуальных карточек после проверки.`;
+              } else {
+                countLine = `Показаны первые ${String(returnedCount)} карточек. Есть ещё результаты.`;
+              }
+            } else if (returnedCount < pageSize) {
+              countLine = hasMore
+                ? `Показаны ${String(returnedCount)} карточек. Есть ещё результаты.`
+                : `Показаны ${String(returnedCount)} карточек. Больше результатов не найдено.`;
+            } else if (hasMore) {
+              countLine = page === 1
+                ? `Показаны первые ${String(returnedCount)} карточек. Есть ещё результаты.`
+                : `Показаны карточки ${String(startIndex)}-${String(endIndex)}. Есть ещё результаты.`;
+            } else if (returnedCount) {
+              countLine = `Показаны карточки ${String(startIndex)}-${String(endIndex)}.`;
+            }
+            return { page, pageSize, returnedCount, totalCount, startIndex, endIndex, countLine };
+          }
+
+          function renderSearchResults(payload = {}) {
+            const cards = payload.cards || [];
+            const eisSearchUrl = payload.eis_search_url || '';
+            const outcome = String(payload.outcome || '');
+            const hasMore = payload.has_more === true;
+            const nextCursor = payload.next_cursor || null;
             const node = document.getElementById('search-results');
             if (!cards?.length) {
               node.className = 'search-results empty';
-              node.innerHTML = eisSearchUrl
-                ? `Закупки не найдены. Можно открыть поиск в ЕИС: <a class="doc-link" href="${escapeHtml(eisSearchUrl)}" target="_blank" rel="noreferrer">перейти в ЕИС</a>.`
-                : 'Закупки не найдены. Уточните ключевые слова или фильтры.';
+              const needsManualLink = eisSearchUrl && outcome !== 'success_empty';
+              const emptyHint = outcome === 'success_empty'
+                ? 'Ничего не найдено по заданным фильтрам. Попробуйте упростить запрос или изменить диапазоны.'
+                : searchStatusMessage(payload);
+              node.innerHTML = `
+                <div>${emptyHint}</div>
+                ${needsManualLink ? `<div style="margin-top:10px"><a class="doc-link" href="${escapeHtml(eisSearchUrl)}" target="_blank" rel="noreferrer">Открыть поиск в ЕИС</a></div>` : ''}
+                <div style="margin-top:10px"><button class="button" id="search-results-demo-button" type="button">Открыть демо-закупку 0323100010326000013</button></div>
+              `;
+              const demoButton = document.getElementById('search-results-demo-button');
+              if (demoButton) {
+                demoButton.addEventListener('click', useDemoProcurement);
+              }
               return;
+            }
+            for (const card of cards) {
+              const regNum = card.notice_number || card.reestr_number || '';
+              if (regNum && !lastSeenRegistryNumbers.includes(regNum)) {
+                lastSeenRegistryNumbers.push(regNum);
+              }
             }
             node.className = 'search-results';
             const law = cards[0]?.law || getTrimmedValue('search_law') || '44fz';
+            const meta = searchResultsMeta(payload, cards);
             const resultWord = cards.length === 1 ? 'карточка' : (cards.length >= 2 && cards.length <= 4 ? 'карточки' : 'карточек');
             node.innerHTML = `
               <div class="search-results-board">
                 <div class="search-results-header">
                   <div class="search-results-headline">
-                    <div class="search-results-title">Результаты поиска: ${cards.length} ${resultWord}</div>
-                    <div class="search-results-note">${escapeHtml(lawLabel(law))} · обработка запускается прямо из строки результата</div>
+                    <div class="search-results-title">Результаты поиска: ${cards.length} ${resultWord} · страница ${String(meta.page)}</div>
+                    <div class="search-results-note">${escapeHtml(lawLabel(law))} · сортировка: сначала самые новые · обработка запускается прямо из строки результата</div>
                   </div>
                   <div class="search-results-tools">
                     ${eisSearchUrl ? `<a class="link-button" href="${escapeHtml(eisSearchUrl)}" target="_blank" rel="noreferrer">Открыть поиск в ЕИС</a>` : ''}
@@ -1081,8 +1309,8 @@ def render_tender_operator_pilot_wizard_html() -> str:
                       </div>
                     </div>
                     <div class="search-card-meta">
-                      <div class="search-meta-item"><span class="metric-label">Дата публикации</span><span class="metric-value">${escapeHtml(card.publication_date || 'не указана')}</span></div>
-                      <div class="search-meta-item"><span class="metric-label">Срок подачи</span><span class="metric-value">${escapeHtml(card.deadline || 'не указан')}</span></div>
+                      <div class="search-meta-item"><span class="metric-label">Дата публикации</span><span class="metric-value">${escapeHtml(formatDateRus(card.publication_date) || 'не указана')}</span></div>
+                      <div class="search-meta-item"><span class="metric-label">Срок подачи</span><span class="metric-value">${escapeHtml(formatDateRus(card.deadline) || 'не указан')}</span></div>
                       <div class="search-meta-item"><span class="metric-label">Заказчик</span><span class="metric-value">${escapeHtml(card.customer_name || 'не указан')}</span></div>
                       <div class="search-meta-item"><span class="metric-label">Номер</span><span class="metric-value">${escapeHtml(card.notice_number || card.reestr_number || 'не указан')}</span></div>
                     </div>
@@ -1099,10 +1327,35 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     </div>
                   </div>
                 `).join('')}
+                <div class="search-results-footer">
+                  <div class="search-results-count">${escapeHtml(meta.countLine || '')}</div>
+                  <div class="search-results-pagination">
+                    ${hasMore && nextCursor ? `<button class="button" id="search-next-page-button" type="button">Показать следующие 10</button>` : ''}
+                  </div>
+                </div>
               </div>
             `;
             for (const button of node.querySelectorAll('.search-process-button')) {
               button.addEventListener('click', () => processSearchCard(cards[Number(button.dataset.index)], button));
+            }
+            const nextPageButton = document.getElementById('search-next-page-button');
+            if (nextPageButton) {
+              nextPageButton.addEventListener('click', () => loadNextSearchPage(nextCursor));
+            }
+          }
+
+          async function runSearchPage(page = 1, cursor = null) {
+            const params = buildSearchPageParams(page, cursor);
+            const label = cursor ? 'Загружаем следующую страницу…' : (page > 1 ? `Загружаем страницу ${String(page)}…` : 'Ищем закупки по ключевым словам и фильтрам…');
+            setFlash(label, false, 'search-flash');
+            try {
+              const payload = await fetchJson(`/api/demo/tender-agent/procurement/public-44fz-search?${params.toString()}`, {
+                method: 'POST',
+              });
+              renderSearchResults(payload);
+              setFlash(searchStatusMessage(payload), payload.outcome !== 'success_with_results' && payload.outcome !== 'success_empty', 'search-flash');
+            } catch (error) {
+              setFlash(`Не удалось выполнить поиск: ${error.message}`, true, 'search-flash');
             }
           }
 
@@ -1113,39 +1366,33 @@ def render_tender_operator_pilot_wizard_html() -> str:
               setFlash('Введите ключевые слова для поиска закупок.', true, 'search-flash');
               return;
             }
-            const params = new URLSearchParams();
-            params.set('query', query);
-            params.set('max_results', '8');
-            params.set('law', getTrimmedValue('search_law') || '44fz');
-            const region = getTrimmedValue('search_region');
-            const statusFilter = getTrimmedValue('search_status');
-            const procedureType = getTrimmedValue('search_procedure_type');
-            const dateFrom = getTrimmedValue('search_date_from');
-            const dateTo = getTrimmedValue('search_date_to');
-            const deadlineFrom = getTrimmedValue('search_deadline_from');
-            const deadlineTo = getTrimmedValue('search_deadline_to');
-            const priceFrom = getTrimmedValue('search_price_from');
-            const priceTo = getTrimmedValue('search_price_to');
-            if (region) params.set('region', region);
-            if (statusFilter) params.set('status_filter', statusFilter);
-            if (procedureType) params.set('procedure_type', procedureType);
-            if (dateFrom) params.set('date_from', dateFrom);
-            if (dateTo) params.set('date_to', dateTo);
-            if (deadlineFrom) params.set('deadline_from', deadlineFrom);
-            if (deadlineTo) params.set('deadline_to', deadlineTo);
-            if (priceFrom) params.set('price_from', priceFrom);
-            if (priceTo) params.set('price_to', priceTo);
+            lastSearchBaseParams = buildSearchBaseParams();
+            lastSeenRegistryNumbers = [];
+            await runSearchPage(1);
+          }
 
-            setFlash('Ищем закупки по ключевым словам и фильтрам…', false, 'search-flash');
-            try {
-              const payload = await fetchJson(`/api/demo/tender-agent/procurement/public-44fz-search?${params.toString()}`, {
-                method: 'POST',
-              });
-              renderSearchResults(payload.cards || [], payload.eis_search_url || '');
-              setFlash(`Поиск завершен. Найдено карточек: ${String((payload.cards || []).length)}.`, false, 'search-flash');
-            } catch (error) {
-              setFlash(`Не удалось выполнить поиск: ${error.message}`, true, 'search-flash');
+          async function loadNextSearchPage(cursor) {
+            if (!lastSearchBaseParams) {
+              setFlash('Сначала выполните поиск с ключевыми словами.', true, 'search-flash');
+              return;
             }
+            await runSearchPage(1, cursor);
+          }
+
+          function useDemoProcurement() {
+            const demoRegistryNumber = '0323100010326000013';
+            document.querySelector('[name="procurement_url"]').value = demoRegistryNumber;
+            renderSelectedProcurement({
+              reestr_number: demoRegistryNumber,
+              notice_number: demoRegistryNumber,
+              title: 'Демо-закупка для безопасного показа сценария анализа',
+              customer_name: 'Демо-контур Tender Agent',
+              law: '44fz',
+              category: '44-ФЗ',
+              source: 'public_eis_html_44fz',
+            });
+            setFlash(`Подставлена демо-закупка ${demoRegistryNumber}. Можно сразу запускать обработку или продолжить поиск.`, false, 'search-flash');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
           }
 
           function resetSearchFilters() {
@@ -1173,6 +1420,8 @@ def render_tender_operator_pilot_wizard_html() -> str:
               lawField.value = '44fz';
             }
             clearFlash('search-flash');
+            lastSearchBaseParams = null;
+            lastSeenRegistryNumbers = [];
             const searchResults = document.getElementById('search-results');
             searchResults.className = 'search-results empty';
             searchResults.innerHTML = 'Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.';
@@ -1208,6 +1457,12 @@ def render_tender_operator_pilot_wizard_html() -> str:
             const reportLink = run.report_html_url
               ? `<a class="link-button primary" href="${escapeHtml(run.report_html_url)}" target="_blank" rel="noreferrer">Открыть HTML-отчёт</a>`
               : '';
+            const docxExportLink = run.run_id
+              ? `/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/docx`
+              : '';
+            const pdfExportLink = run.run_id
+              ? `/api/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}/export/pdf`
+              : '';
 
             document.getElementById('result-root').innerHTML = `
               <div class="result-shell">
@@ -1219,6 +1474,8 @@ def render_tender_operator_pilot_wizard_html() -> str:
                 </div>
                 <div class="actions">
                   ${reportLink}
+                  ${docxExportLink ? `<a class="link-button" href="${docxExportLink}" target="_blank" rel="noreferrer">Скачать DOCX</a>` : ''}
+                  ${pdfExportLink ? `<a class="link-button" href="${pdfExportLink}" target="_blank" rel="noreferrer">Скачать PDF</a>` : ''}
                   <a class="link-button" href="/demo/tender-agent/runs/${encodeURIComponent(run.run_id)}" target="_blank" rel="noreferrer">Открыть полный console view</a>
                 </div>
                 <div class="result-grid">
@@ -1254,20 +1511,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     </ul>
                   </div>
                 </div>
-                <div class="card" id="hermes-quality-block-${escapeHtml(run.run_id)}" style="margin-top:8px">
-                  <h3>Качество анализа (Hermes Runtime)</h3>
-                  <div class="metrics" id="hermes-quality-summary-${escapeHtml(run.run_id)}" style="margin-bottom:10px">
-                    <div class="metric"><span class="metric-label">Статус</span><span class="metric-value" id="hermes-status-${escapeHtml(run.run_id)}">—</span></div>
-                    <div class="metric"><span class="metric-label">Документов (исп./всего)</span><span class="metric-value" id="hermes-docs-count-${escapeHtml(run.run_id)}">—</span></div>
-                    <div class="metric"><span class="metric-label">Позиций спецификации</span><span class="metric-value" id="hermes-line-items-${escapeHtml(run.run_id)}">—</span></div>
-                    <div class="metric"><span class="metric-label">Проверки качества</span><span class="metric-value" id="hermes-needs-review-${escapeHtml(run.run_id)}">—</span></div>
-                  </div>
-                  <div id="hermes-quality-details-${escapeHtml(run.run_id)}" style="font-size:14px;color:rgba(255,255,255,0.7);"></div>
-                  <div class="actions" style="margin-top:10px">
-                    <button class="button primary" onclick="runWizardHermesQuality('${escapeHtml(run.run_id)}')">Запустить runtime-анализ Hermes</button>
-                  </div>
-                </div>
-                <div class="result-block" style="margin-top:8px">
+                <div class="result-block">
                   <h3>Шаги обработки</h3>
                   ${renderStepTimeline(run.steps || [])}
                 </div>
@@ -1362,121 +1606,25 @@ def render_tender_operator_pilot_wizard_html() -> str:
             searchResults.textContent = 'Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.';
           }
 
-          function runWizardHermesQuality(runId) {
-            const statusEl = document.getElementById('hermes-status-' + runId);
-            const docsEl = document.getElementById('hermes-docs-count-' + runId);
-            const itemsEl = document.getElementById('hermes-line-items-' + runId);
-            const reviewEl = document.getElementById('hermes-needs-review-' + runId);
-            const detailsEl = document.getElementById('hermes-quality-details-' + runId);
-            if (!statusEl) return;
-            statusEl.textContent = 'запуск runtime-анализа...';
-            fetch('/api/demo/tender-agent/runs/' + encodeURIComponent(runId) + '/runtime-analysis', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tender_id: runId })
-            })
-              .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-              .then(result => {
-                docsEl.textContent = (result.documents_used_count || 0) + ' / ' + (result.documents_total_count || 0);
-                itemsEl.textContent = (result.line_items || []).length;
-                const failedCount = (result.quality_checks || []).filter(c => c.status === 'failed').length;
-                reviewEl.innerHTML = failedCount;
-                statusEl.textContent = result.final_recommendation?.status || '—';
-                let html = '<div style="margin-top:8px;">';
-                html += '<div style="padding:4px 0;">📁 <strong>Категория:</strong> ' + (result.category_label || '—') + '</div>';
-                if (result.nmck_mapping) {
-                  const nmck = result.nmck_mapping;
-                  const nmckIcon = nmck.mapping_status === 'complete' ? '✅' : nmck.mapping_status === 'partial' ? '⚠️' : '❌';
-                  html += '<div style="padding:4px 0;">' + nmckIcon + ' <strong>НМЦК mapping:</strong> ' + nmck.mapped_count + '/' + nmck.total_nmck_lines + ' (' + nmck.mapping_status + ')</div>';
-                }
-                if (result.normalized_line_items && result.normalized_line_items.length) {
-                  html += '<div style="padding:4px 0;margin-top:4px;"><strong>🔍 Нормализованные позиции:</strong></div>';
-                  result.normalized_line_items.slice(0, 5).forEach((n, i) => {
-                    const mark = n.type_mark || '—';
-                    const section = n.cross_section_mm2 ? n.cross_section_mm2 + ' мм²' : '—';
-                    html += '<div style="padding:2px 0;font-size:13px;color:rgba(255,255,255,0.7);">' + (i+1) + '. ' + n.normalized_name + ' (' + mark + ', ' + section + ')</div>';
-                  });
-                  if (result.normalized_line_items.length > 5) {
-                    html += '<div style="padding:2px 0;font-size:12px;color:rgba(255,255,255,0.4);">... ещё ' + (result.normalized_line_items.length - 5) + '</div>';
-                  }
-                }
-                html += '<div style="padding:4px 0;">🧠 <strong>Применено воспоминаний:</strong> ' + (result.applied_memory_count || 0) + '</div>';
-                html += '<div style="padding:4px 0;">📊 <strong>Покрытие evidence:</strong> ' + (result.evidence_coverage_pct || 0) + '%</div>';
-                if (result.supplier_readiness_memo) {
-                  const memo = result.supplier_readiness_memo;
-                  html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);"><strong>Готовность к участию:</strong> ' + (memo.bid_decision || '—') + ' · балл: ' + (memo.supplier_readiness_score || 0) + '/100</div>';
-                }
-                if (result.quality_checks && result.quality_checks.length) {
-                  html += '<div style="margin-top:8px;"><strong>Проверки качества:</strong></div>';
-                  result.quality_checks.forEach(c => {
-                    const icon = c.status === 'passed' ? '✅' : c.status === 'warning' ? '⚠️' : '❌';
-                    html += '<div style="padding:2px 0;font-size:13px;">' + icon + ' ' + (c.check_name || '') + '</div>';
-                  });
-                }
-                html += '<div style="margin-top:6px;color:rgba(255,255,255,0.4);font-size:11px;">⌱ ' + (result.analysis_duration_ms || 0).toFixed(0) + ' ms</div>';
-                html += '</div>';
-                detailsEl.innerHTML = html;
-              })
-              .catch(err => {
-                statusEl.textContent = 'ошибка';
-                detailsEl.textContent = 'Не удалось выполнить runtime-анализ: ' + err.message;
-              });
+          for (const name of ['search_price_from', 'search_price_to']) {
+            const field = document.querySelector(`[name="${name}"]`);
+            if (!field) continue;
+            field.addEventListener('input', function () {
+              const cursor = this.selectionStart;
+              const oldLen = this.value.length;
+              const raw = this.value.replace(/[^\\d]/g, '');
+              const formatted = formatPriceInput(raw);
+              this.value = formatted;
+              const newLen = formatted.length;
+              this.setSelectionRange(cursor + (newLen - oldLen), cursor + (newLen - oldLen));
+            });
           }
 
-          async function findByNumber() {
-            clearFlash();
-            clearFlash('search-flash');
-            const procurementUrl = getTrimmedValue('procurement_url');
-            if (!procurementUrl) {
-              setFlash('Введите ссылку на закупку или реестровый номер.', true);
-              return;
-            }
-            const reestrNumber = extractReestrNumber(procurementUrl);
-            if (!reestrNumber) {
-              setFlash('Не удалось извлечь номер закупки. Вставьте ссылку ЕИС с regNumber или сам номер.', true);
-              return;
-            }
-            setFlash('Загружаем карточку закупки по номеру…');
-            try {
-              const payload = buildSearchResultPayload();
-              const result = await fetchJson('/api/demo/tender-agent/runs/from-search-result', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-              });
-              const run = await fetchJson(`/api/demo/tender-agent/runs/${encodeURIComponent(result.run_id)}`);
-              const card = {
-                title: run.tender_title,
-                notice_number: reestrNumber,
-                reestr_number: reestrNumber,
-                customer_name: run.customer_name,
-                source_url: procurementUrl,
-                law: guessLawFromValue(procurementUrl) || '44fz',
-              };
-              useSearchCard(card);
-              const searchNote = document.getElementById('search-results');
-              searchNote.className = 'search-results';
-              searchNote.innerHTML = `
-                <div class="search-results-board">
-                  <div class="search-results-header" style="padding:0">
-                    <div class="search-results-headline">
-                      <div class="search-results-title">Закупка найдена по номеру</div>
-                      <div class="search-results-note">${escapeHtml(reestrNumber)}</div>
-                    </div>
-                  </div>
-                  <div class="flash" style="margin-top:8px">Карточка подтянута. Проверьте данные и нажмите «Обработать тендер».</div>
-                </div>
-              `;
-            } catch (error) {
-              setFlash(`Не удалось получить закупку: ${error.message}`, true);
-            }
-          }
-
-          document.getElementById('lookup-by-number-button').addEventListener('click', findByNumber);
           document.getElementById('pilot-form').addEventListener('submit', processWizard);
           document.getElementById('reset-button').addEventListener('click', resetWizard);
           document.getElementById('search-button').addEventListener('click', searchProcurements);
           document.getElementById('search-reset-button').addEventListener('click', resetSearchFilters);
+          document.getElementById('search-demo-button').addEventListener('click', useDemoProcurement);
         </script>
       </body>
     </html>

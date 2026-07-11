@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     public_search_no_proxy_domains: str = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru"
     allow_demo_discovery: bool = True
 
+    # Recovered Hermes analyser remains opt-in and is never a required customer flow.
     hermes_base_url: str = "http://127.0.0.1:8099"
     hermes_timeout_seconds: int = 120
     hermes_enabled: bool = False

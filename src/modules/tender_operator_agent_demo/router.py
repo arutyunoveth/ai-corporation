@@ -8,8 +8,6 @@ from src.modules.tender_operator_agent_demo.schemas import (
     ProcurementRunResponse,
     ProcurementSearchResponse,
     PublicSearchUrlResponse,
-    ResellerSearchAndTriageResponse,
-    ResellerSearchRequest,
     SearchResultHandoffRequest,
     SearchResultHandoffResponse,
     TenderOperatorDemoReportResponse,
@@ -63,7 +61,6 @@ from src.modules.tender_operator_agent_demo.upload_service import (
     analyze_uploaded_demo_run,
     append_files_to_demo_run,
     create_uploaded_demo_run,
-    get_demo_runtime_analysis,
     get_uploaded_demo_archive_download,
     get_uploaded_demo_report,
     get_uploaded_demo_report_download,
@@ -73,9 +70,6 @@ from src.modules.tender_operator_agent_demo.upload_service import (
     get_uploaded_demo_run_steps,
     load_demo_run_events,
     list_uploaded_demo_runs,
-)
-from src.modules.tender_operator_agent_demo.reseller_triage_service import (
-    run_search_and_triage,
 )
 
 
@@ -142,11 +136,6 @@ def tender_operator_demo_report_download() -> Response:
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
     )
-
-
-@router.post("/api/demo/tender-agent/reseller/search-and-triage", response_model=ResellerSearchAndTriageResponse)
-def reseller_search_and_triage(payload: ResellerSearchRequest) -> ResellerSearchAndTriageResponse:
-    return run_search_and_triage(payload)
 
 
 @router.get("/api/demo/tender-agent/procurements/search", response_model=ProcurementSearchResponse)
@@ -363,11 +352,6 @@ def get_tender_operator_procurement_for_run(run_id: str) -> ProcurementRunDetail
 @router.post("/api/demo/tender-agent/runs/{run_id}/analyze", response_model=TenderOperatorUploadedRunAnalyzeResponse)
 def analyze_tender_operator_uploaded_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeResponse:
     return analyze_uploaded_demo_run(run_id)
-
-
-@router.post("/api/demo/tender-agent/runs/{run_id}/runtime-analysis")
-def tender_operator_uploaded_run_runtime_analysis(run_id: str) -> dict:
-    return get_demo_runtime_analysis(run_id)
 
 
 @router.get("/api/demo/tender-agent/runs/{run_id}/steps", response_model=TenderOperatorUploadedRunStepsResponse)

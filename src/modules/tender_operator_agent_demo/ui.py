@@ -432,10 +432,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div>
                 <div class="brand-lockup">
                   <img src="/demo/tender-agent/assets/arvectum-logo-block.svg" alt="Arvectum" />
-                  <div class="eyebrow">AI-агент для быстрого отбора закупок</div>
+                  <div class="eyebrow">Демонстрация тендерного агента</div>
                 </div>
                 <h1>Тендерный агент</h1>
-                <p class="subtitle">AI-агент для быстрого отбора закупок: найдите актуальные процедуры по ключевому слову, оцените объём выдачи и получите разбор самой свежей закупки с решением GO / NO-GO.</p>
+                <p class="subtitle">Как ИИ-агент разбирает закупку, готовит RFQ, показывает риски и оставляет критичные действия под контролем человека.</p>
                 <div class="header-actions">
                   <a class="link-button" href="/pilot/tender-agent">Пошаговый мастер</a>
                 </div>
@@ -449,29 +449,43 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
             <div class="content">
               <div class="tabs">
-                <button class="tab-button active" data-tab="triage" type="button">Быстрый разбор закупки</button>
-                <button class="tab-button" data-tab="search" type="button">Анализ по номеру</button>
-                <button class="tab-button" data-tab="upload" type="button">Загрузка документов</button>
+                <button class="tab-button active" data-tab="search" type="button">Найти закупку</button>
+                <button class="tab-button" data-tab="docs" type="button">Получить документацию по номеру</button>
+                <button class="tab-button" data-tab="upload" type="button">Загрузить документы</button>
                 <button class="tab-button" data-tab="dataset" type="button">Демо-набор</button>
                 <button class="tab-button" data-tab="profile" type="button">Профиль поставщика</button>
-                <button class="tab-button" data-tab="analysis" type="button">RAG-анализ</button>
+                <button class="tab-button" data-tab="analysis" type="button">Анализ закупки</button>
               </div>
 
-              <section id="tab-triage">
+              <section id="tab-search">
                 <div class="layout">
                   <aside class="stack">
                     <div class="card">
-                      <h2>Найти закупки</h2>
-                      <p>AI-агент для быстрого отбора закупок: найдите актуальные процедуры по ключевому слову, оцените объём выдачи и получите разбор самой свежей закупки с решением GO / NO-GO.</p>
-                      <div id="triage-flash" class="hidden"></div>
-                      <form id="triage-search-form">
+                      <h2>Найти закупку</h2>
+                      <p>Первый шаг controlled demo-сценария: найти закупку, выбрать карточку, безопасно получить публичную документацию или честно перейти к ручной загрузке.</p>
+                      <div id="procurement-flash" class="hidden"></div>
+                      <form id="procurement-search-form">
                         <label>
-                          Ключевое слово
-                          <input name="query" value="кабель" placeholder="Например: кабель, светильник, выключатель" />
+                          Поисковый запрос
+                          <input name="query" value="электротехническое оборудование" />
                         </label>
                         <div class="split">
                           <label>
-                            Закон / источник
+                            Источник
+                            <select name="source" id="procurement-source-select">
+                              <option value="demo_local">demo_local</option>
+                              <option value="public_eis_html_44fz">Публичный поиск ЕИС 44-ФЗ</option>
+                              <option value="public_eis_html_223fz">Публичный поиск ЕИС 223-ФЗ (fallback)</option>
+                            </select>
+                          </label>
+                          <label>
+                            Макс. результатов
+                            <input name="max_results" type="number" min="1" max="20" value="10" />
+                          </label>
+                        </div>
+                        <div class="split">
+                          <label>
+                            Закон
                             <select name="law">
                               <option value="">Все</option>
                               <option value="44-ФЗ">44-ФЗ</option>
@@ -479,18 +493,18 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                             </select>
                           </label>
                           <label>
-                            Регион
-                            <input name="region" placeholder="Необязательно" />
+                            ИНН заказчика
+                            <input name="customer_inn" placeholder="Необязательно" />
                           </label>
                         </div>
                         <div class="split">
                           <label>
-                            НМЦК от
-                            <input name="price_from" type="number" min="0" step="1000" placeholder="Необязательно" />
+                            Заказчик
+                            <input name="customer_name" placeholder="Необязательно" />
                           </label>
                           <label>
-                            НМЦК до
-                            <input name="price_to" type="number" min="0" step="1000" placeholder="Необязательно" />
+                            Регион
+                            <input name="region" placeholder="Необязательно" />
                           </label>
                         </div>
                         <div class="split">
@@ -503,51 +517,53 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                             <input name="date_to" type="date" />
                           </label>
                         </div>
+                        <div class="split">
+                          <label>
+                            Цена от
+                            <input name="price_from" type="number" min="0" step="1000" placeholder="Необязательно" />
+                          </label>
+                          <label>
+                            Цена до
+                            <input name="price_to" type="number" min="0" step="1000" placeholder="Необязательно" />
+                          </label>
+                        </div>
                         <div class="form-actions">
-                          <button class="button primary" type="submit">Найти и разобрать свежую закупку</button>
+                          <button class="button primary" type="submit">Найти закупки</button>
                         </div>
                       </form>
                     </div>
                     <div class="card">
-                      <h2>Как это работает</h2>
-                      <div style="display:grid;gap:10px">
-                        <div class="trace" style="padding:12px">
-                          <strong>1. Поиск:</strong> система ищет актуальные закупки по вашему ключевому слову.
-                        </div>
-                        <div class="trace" style="padding:12px">
-                          <strong>2. Выбор:</strong> для экономии времени анализируется одна закупка — самая свежая из результатов.
-                        </div>
-                        <div class="trace" style="padding:12px">
-                          <strong>3. Разбор:</strong> агент анализирует закупку и выдаёт решение GO / NO-GO / NEEDS REVIEW.
-                        </div>
+                      <h2>Диагностика ЕИС</h2>
+                      <div id="procurement-source-diagnostics" class="list">
+                        <div class="empty">Диагностика источника загрузится автоматически.</div>
                       </div>
                     </div>
                     <div class="card">
-                      <h2>Ограничения</h2>
+                      <h2>Безопасный режим</h2>
                       <div class="safety">
-                        <span>Только чтение</span>
-                        <span>Без подачи заявки</span>
-                        <span>Без ЭЦП</span>
+                        <span>Только чтение (поиск)</span>
+                        <span>Без логина и паролей</span>
+                        <span>Без обхода captcha</span>
+                        <span>Без подачи на площадку</span>
                         <span>Без писем поставщикам</span>
-                        <span>Предварительный анализ</span>
-                        <span>Не финальный расчёт маржи</span>
+                        <span>Требуется подтверждение человека</span>
                       </div>
-                      <p style="margin-top:14px">MVP не обещает автоподачу, участие в торгах, ЭЦП, финальный расчёт маржи или замену менеджера. Решение всегда требует подтверждения человека.</p>
+                      <p style="margin-top:14px">Поиск работает в безопасном read-only режиме. Система не входит в личный кабинет, не обходит captcha, не подаёт заявку. Система только получает публичную документацию и готовит анализ для человека.</p>
                     </div>
                   </aside>
 
                   <main class="stack">
-                    <div class="card" id="triage-search-results-card">
+                    <div class="card" id="procurement-results-card">
                       <h2>Результаты поиска</h2>
-                      <div id="triage-search-results" class="list">
-                        <div class="empty">Введите ключевое слово и нажмите «Найти и разобрать свежую закупку», чтобы получить разбор.</div>
+                      <div id="procurement-results" class="list">
+                        <div class="empty">Введите запрос и нажмите «Найти закупки», чтобы открыть первый шаг тендерного pipeline.</div>
                       </div>
                     </div>
-                    <div class="card hidden" id="triage-analysis-card">
-                      <h2>Результат анализа</h2>
-                      <div id="triage-analysis-result" class="list">
-                        <div class="empty">Анализ загрузки...</div>
-                      </div>
+                    <div class="card">
+                      <h2>Как это работает</h2>
+                      <p>Поиск закупки и получение документации объединены в один сценарий: найдите закупку по ключевому слову через публичный поиск ЕИС 44-ФЗ, выберите карточку, и система сама получит документацию через getDocsIP, распакует архив, создаст run и запустит анализ.</p>
+                      <p style="margin-top:8px">Если HTML поиска не парсится (captcha, JS-heavy или изменилась структура), интерфейс честно показывает кнопку «Откройте поиск в ЕИС» и позволяет вставить номер закупки вручную.</p>
+                      <div class="trace" style="margin-top:14px">Если автоматическое получение документации недоступно, интерфейс не притворяется автономным: создаётся run со статусом «нужна загрузка документов», а оператор вручную добавляет пакет и только потом запускает анализ.</div>
                     </div>
                   </main>
                 </div>
@@ -616,7 +632,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   <main class="stack">
                     <div class="card">
                       <h2>Сценарий работы</h2>
-                      <div class="trace">1. Найдите закупку через поиск по ключевому слову или публичный HTML-поиск ЕИС. 2. Скопируйте реестровый номер. 3. Запросите архив документации через getDocsIP. 4. Если архив получен, он скачивается и безопасно обрабатывается локально. 5. Если архив не получен, интерфейс переводит вас в ручную загрузку документов.</div>
+                      <div class="trace">1. Найдите закупку через `demo_local` или публичный HTML fallback. 2. Скопируйте реестровый номер. 3. Запросите архив документации через getDocsIP. 4. Если archiveUrl получен, архив скачивается и safely обрабатывается локально. 5. Если archiveUrl не получен, интерфейс честно переводит вас в ручной upload fallback.</div>
                     </div>
                     <div class="card" id="eis-docs-result-card">
                       <h2>Результат получения документации</h2>
@@ -777,8 +793,23 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           Реестровый номер
                           <input name="registry_number" required placeholder="Например: 0323100010326000013" />
                         </label>
+                        <label>
+                          Контур выполнения
+                          <select name="runtime_preset" id="analysis-runtime-preset">
+                            <option value="mac_mini_local" selected>Mac mini: локальная LLM + Qwen3 embeddings</option>
+                            <option value="local_hash_smoke">Быстрый тест без LLM / local hash</option>
+                          </select>
+                        </label>
+                        <label>
+                          Режим анализа
+                          <select name="analysis_mode">
+                            <option value="fast" selected>Быстрый</option>
+                            <option value="balanced">Сбалансированный</option>
+                            <option value="detailed">Подробный</option>
+                          </select>
+                        </label>
                         <label class="checkbox">
-                          <input name="use_llm" type="checkbox" />
+                          <input name="use_llm" type="checkbox" checked />
                           <span>Использовать локальную LLM (может работать долго)</span>
                         </label>
                         <label class="checkbox">
@@ -792,10 +823,20 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                         </div>
                       </form>
                     </div>
+                    <div class="card" id="analysis-runtime-card">
+                      <h2>Параметры анализа</h2>
+                      <div id="analysis-runtime-summary" class="list">
+                        <div class="empty">Выберите контур, чтобы увидеть runtime-параметры.</div>
+                      </div>
+                    </div>
                     <div class="card" id="analysis-preparation-card">
                       <h2>Состояние готовности</h2>
                       <div id="analysis-readiness-status" class="empty">Нажмите «Проверить готовность».</div>
                       <div id="analysis-preparation-steps" class="hidden" style="margin-top:12px;"></div>
+                    </div>
+                    <div class="card" id="analysis-job-card">
+                      <h2>Статус фоновой задачи</h2>
+                      <div id="analysis-job-status" class="empty">Запустите подготовку или анализ, чтобы увидеть progress и статус.</div>
                     </div>
                   </aside>
                   <main class="stack">
@@ -806,6 +847,17 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                     <div class="card" id="analysis-report-card" class="hidden">
                       <h2>Отчёт</h2>
                       <div id="analysis-report-content"></div>
+                    </div>
+                    <div class="card">
+                      <h2>История анализов</h2>
+                      <div class="form-actions" style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" class="button" id="history-refresh-btn">Обновить историю</button>
+                      </div>
+                      <div id="history-list" class="empty">Пока нет сохранённых анализов.</div>
+                      <div id="history-report-container" class="hidden" style="margin-top:12px;">
+                        <h3>Отчёт из истории</h3>
+                        <div id="history-report-content"></div>
+                      </div>
                     </div>
                   </main>
                 </div>
@@ -825,6 +877,43 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             uploadedRuns: [],
             selectedRunId: {initial_run_id},
             eventsPollTimer: null,
+            analysisJobPollTimer: null,
+            activeAnalysisJobId: null,
+            activeAnalysisJobStartedAt: null,
+            activeAnalysisRuntime: null,
+          }};
+
+          const ANALYSIS_PRESETS = {{
+            mac_mini_local: {{
+              key: 'mac_mini_local',
+              name: 'Mac mini: локальная LLM + Qwen3 embeddings',
+              contour_label: 'Mac mini local',
+              provider: 'llama_cpp',
+              model: 'Qwen3-Embedding-4B',
+              base_url: 'http://127.0.0.1:8090/v1',
+              use_llm: true,
+              llm_base_url: 'http://127.0.0.1:8088/v1',
+              llm_model: '/Users/master/models/Qwen2.5-14B-Instruct-Q4_K_M.gguf',
+              llm_model_label: 'Qwen2.5-14B local',
+              analysis_mode: 'fast',
+              limit: 8,
+              save_report: true,
+            }},
+            local_hash_smoke: {{
+              key: 'local_hash_smoke',
+              name: 'Быстрый тест без LLM / local hash',
+              contour_label: 'Smoke local hash',
+              provider: 'local_hash',
+              model: 'local-hash-v1',
+              base_url: null,
+              use_llm: false,
+              llm_base_url: null,
+              llm_model: null,
+              llm_model_label: 'LLM отключена',
+              analysis_mode: 'fast',
+              limit: 3,
+              save_report: true,
+            }},
           }};
 
           const STEP_STATUS_LABELS = {{
@@ -872,6 +961,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
 
           function analysisModeLabel(mode) {{
             return ANALYSIS_MODE_LABELS[mode] || mode || 'не определено';
+          }}
+
+          function getAnalysisPreset(presetKey) {{
+            return ANALYSIS_PRESETS[presetKey] || ANALYSIS_PRESETS.mac_mini_local;
           }}
 
           function attachmentsStatusLabel(status) {{
@@ -1100,6 +1193,250 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             node.textContent = '';
           }}
 
+          function stopAnalysisJobPolling() {{
+            if (state.analysisJobPollTimer) {{
+              window.clearInterval(state.analysisJobPollTimer);
+              state.analysisJobPollTimer = null;
+            }}
+            state.activeAnalysisJobId = null;
+            state.activeAnalysisJobStartedAt = null;
+          }}
+
+          function formatSeconds(value) {{
+            if (typeof value !== 'number' || !Number.isFinite(value)) {{
+              return '—';
+            }}
+            return value.toFixed(value >= 10 ? 1 : 2) + ' сек';
+          }}
+
+          function buildAnalysisRuntime() {{
+            const form = document.getElementById('analysis-form');
+            const presetKey = form?.querySelector('[name="runtime_preset"]')?.value || 'mac_mini_local';
+            const preset = getAnalysisPreset(presetKey);
+            const analysisMode = String(form?.querySelector('[name="analysis_mode"]')?.value || preset.analysis_mode || 'fast');
+            const useLlm = form?.querySelector('[name="use_llm"]')?.checked ?? preset.use_llm;
+            const saveReport = form?.querySelector('[name="save_report"]')?.checked ?? preset.save_report;
+            return {{
+              preset_key: preset.key,
+              preset_name: preset.name,
+              contour_label: preset.contour_label,
+              provider: preset.provider,
+              model: preset.model,
+              base_url: preset.base_url,
+              use_llm: useLlm,
+              llm_base_url: useLlm ? preset.llm_base_url : null,
+              llm_model: useLlm ? preset.llm_model : null,
+              llm_model_label: useLlm ? preset.llm_model_label : 'LLM отключена',
+              analysis_mode: analysisMode,
+              limit: preset.limit,
+              save_report: saveReport,
+            }};
+          }}
+
+          function renderAnalysisRuntimeSummary() {{
+            const runtime = buildAnalysisRuntime();
+            const node = document.getElementById('analysis-runtime-summary');
+            const embeddingEndpoint = runtime.base_url || 'не требуется';
+            const llmEndpoint = runtime.use_llm ? (runtime.llm_base_url || 'не задан') : 'LLM отключена';
+            const llmModelDebug = runtime.use_llm && runtime.llm_model
+              ? `<div class="note" style="margin-top:12px">Debug: llm_model=${{escapeHtml(runtime.llm_model)}}</div>`
+              : `<div class="note" style="margin-top:12px">Упрощённый smoke-контур без локальной LLM.</div>`;
+            node.innerHTML = `
+              <div class="metric"><span class="metric-label">Контур</span><span class="metric-value">${{escapeHtml(runtime.preset_name)}}</span></div>
+              <div class="metric"><span class="metric-label">Embeddings</span><span class="metric-value">${{escapeHtml(runtime.model)}} через ${{escapeHtml(runtime.provider)}}</span></div>
+              <div class="metric"><span class="metric-label">Embedding endpoint</span><span class="metric-value">${{escapeHtml(embeddingEndpoint)}}</span></div>
+              <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{runtime.use_llm ? escapeHtml(runtime.llm_model_label) : 'выключена'}}</span></div>
+              <div class="metric"><span class="metric-label">LLM endpoint</span><span class="metric-value">${{escapeHtml(llmEndpoint)}}</span></div>
+              <div class="metric"><span class="metric-label">Режим</span><span class="metric-value">${{escapeHtml(runtime.analysis_mode)}}</span></div>
+              <div class="metric"><span class="metric-label">Источники</span><span class="metric-value">до ${{runtime.limit}} фрагментов на раздел</span></div>
+              <div class="metric"><span class="metric-label">Отчёт</span><span class="metric-value">${{runtime.save_report ? 'сохраняется' : 'не сохраняется'}}</span></div>
+              ${{llmModelDebug}}
+            `;
+            node.className = 'list';
+            return runtime;
+          }}
+
+          function applyAnalysisPreset() {{
+            const form = document.getElementById('analysis-form');
+            const presetKey = form?.querySelector('[name="runtime_preset"]')?.value || 'mac_mini_local';
+            const preset = getAnalysisPreset(presetKey);
+            const analysisMode = form?.querySelector('[name="analysis_mode"]');
+            const useLlm = form?.querySelector('[name="use_llm"]');
+            const saveReport = form?.querySelector('[name="save_report"]');
+            if (analysisMode) {{
+              analysisMode.value = preset.analysis_mode;
+            }}
+            if (useLlm) {{
+              useLlm.checked = preset.use_llm;
+            }}
+            if (saveReport) {{
+              saveReport.checked = preset.save_report;
+            }}
+            renderAnalysisRuntimeSummary();
+          }}
+
+          function buildTimingSummary(payload) {{
+            const timings = payload.timings || {{}};
+            const slowest = (timings.slowest_sections || []).map(function(item) {{
+              return '<li>' + escapeHtml(item.section_title || item.section_id || 'section') + ': ' + escapeHtml(formatSeconds(item.duration_seconds)) + '</li>';
+            }}).join('');
+            return `
+              <div class="grid-2" style="margin-top:12px">
+                <div class="metric"><span class="metric-label">Длительность</span><span class="metric-value">${{escapeHtml(formatSeconds(payload.duration_seconds))}}</span></div>
+                <div class="metric"><span class="metric-label">Режим</span><span class="metric-value">${{escapeHtml(payload.analysis_mode || 'balanced')}}</span></div>
+                <div class="metric"><span class="metric-label">Retrieval</span><span class="metric-value">${{escapeHtml(formatSeconds(timings.retrieval_seconds))}}</span></div>
+                <div class="metric"><span class="metric-label">LLM вызовов</span><span class="metric-value">${{payload.llm_calls_count ?? 0}}</span></div>
+                <div class="metric"><span class="metric-label">Контекст</span><span class="metric-value">${{payload.total_context_chars ?? 0}} симв.</span></div>
+                <div class="metric"><span class="metric-label">Макс. секция</span><span class="metric-value">${{payload.max_section_context_chars ?? 0}} симв.</span></div>
+              </div>
+              ${{slowest ? '<div class="note" style="margin-top:12px"><strong>Самые медленные разделы:</strong><ul style="margin:8px 0 0 18px">' + slowest + '</ul></div>' : ''}}
+            `;
+          }}
+
+          function renderAnalysisResultPayload(payload, registryNumber) {{
+            const node = document.getElementById('analysis-result');
+            const runtime = state.activeAnalysisRuntime || buildAnalysisRuntime();
+            const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
+            const errorsHtml = (payload.errors || []).map(function(e) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(e) + '</div>'; }}).join('');
+            const analysisRunId = payload.analysis_run_id || payload.run_id || '';
+            const demoRunId = payload.run_id || '';
+            const isDemoAgentRun = !!(demoRunId && String(demoRunId).startsWith('toa-run-'));
+            const reportLink = analysisRunId
+              ? (isDemoAgentRun
+                  ? '/demo/tender-agent/runs/' + encodeURIComponent(demoRunId) + '/report'
+                  : '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/report')
+              : (payload.report_path ? '/api/tender-research/analyze/' + encodeURIComponent(registryNumber) + '/latest' : '');
+            const docxExportLink = analysisRunId
+              ? (isDemoAgentRun
+                  ? '/api/demo/tender-agent/runs/' + encodeURIComponent(demoRunId) + '/export/docx'
+                  : '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/docx')
+              : '';
+            const pdfExportLink = analysisRunId
+              ? (isDemoAgentRun
+                  ? '/api/demo/tender-agent/runs/' + encodeURIComponent(demoRunId) + '/export/pdf'
+                  : '/api/tender-research/analyze/history/' + encodeURIComponent(analysisRunId) + '/export/pdf')
+              : '';
+            const actions = [];
+            if (reportLink) {{
+              actions.push(`<a class="link-button" href="${{reportLink}}" target="_blank" rel="noreferrer">Открыть отчёт</a>`);
+            }}
+            if (docxExportLink) {{
+              actions.push(`<a class="link-button" href="${{docxExportLink}}" target="_blank" rel="noreferrer">Скачать DOCX</a>`);
+            }}
+            if (pdfExportLink) {{
+              actions.push(`<a class="link-button" href="${{pdfExportLink}}" target="_blank" rel="noreferrer">Скачать PDF</a>`);
+            }}
+            node.innerHTML = `
+              <div class="grid-2" style="margin-bottom:12px">
+                <div class="metric"><span class="metric-label">Контур</span><span class="metric-value">${{escapeHtml(runtime.preset_name || 'не определено')}}</span></div>
+                <div class="metric"><span class="metric-label">Embeddings</span><span class="metric-value">${{escapeHtml((payload.retrieval_model || runtime.model || '?') + ' / ' + (payload.retrieval_provider || runtime.provider || '?'))}}</span></div>
+                <div class="metric"><span class="metric-label">Embedding endpoint</span><span class="metric-value">${{escapeHtml(runtime.base_url || 'не требуется')}}</span></div>
+                <div class="metric"><span class="metric-label">LLM endpoint</span><span class="metric-value">${{escapeHtml(payload.llm_endpoint || runtime.llm_base_url || 'LLM отключена')}}</span></div>
+              </div>
+              <div class="grid-2">
+                <div class="metric"><span class="metric-label">Статус</span><span class="metric-value">${{escapeHtml(payload.status || 'unknown')}}</span></div>
+                <div class="metric"><span class="metric-label">Разделов</span><span class="metric-value">${{payload.sections_count ?? 0}}</span></div>
+                <div class="metric"><span class="metric-label">Источников</span><span class="metric-value">${{payload.sources_count ?? 0}}</span></div>
+                <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{payload.used_llm ? 'да' : 'нет'}}</span></div>
+              </div>
+              ${{buildTimingSummary(payload)}}
+              ${{payload.preview ? '<div class="note" style="margin-top:12px;white-space:pre-wrap">' + escapeHtml(payload.preview) + '</div>' : ''}}
+              ${{warningsHtml}}
+              ${{errorsHtml}}
+              ${{actions.length ? `<div class="form-actions" style="margin-top:14px">${{actions.join('')}}</div>` : ''}}
+            `;
+            node.className = '';
+          }}
+
+          function renderAnalysisJobStatus(job) {{
+            const node = document.getElementById('analysis-job-status');
+            if (!job) {{
+              node.innerHTML = '<div class="empty">Нет активной фоновой задачи.</div>';
+              node.className = 'empty';
+              return;
+            }}
+            const runtime = state.activeAnalysisRuntime || buildAnalysisRuntime();
+            const statusColor = job.status === 'completed' ? 'var(--success)' : job.status === 'completed_with_warnings' ? 'var(--warning)' : job.status === 'failed' ? 'var(--danger)' : 'var(--text)';
+            const stepsHtml = (job.steps || []).map(function(step) {{
+              const icon = step.status === 'completed' ? '✓' : step.status === 'skipped' ? '–' : step.status === 'warning' ? '⚠' : step.status === 'failed' ? '✗' : step.status === 'running' ? '…' : '·';
+              const color = step.status === 'completed' || step.status === 'skipped' ? 'var(--success)' : step.status === 'warning' ? 'var(--warning)' : step.status === 'failed' ? 'var(--danger)' : 'inherit';
+              return '<div style="padding:4px 0;color:' + color + '">' + icon + ' <strong>' + escapeHtml(step.title || step.name) + '</strong>' +
+                (step.message ? ' — ' + escapeHtml(step.message) : '') + '</div>';
+            }}).join('');
+            const warningsHtml = (job.warnings || []).map(function(item) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(item) + '</div>'; }}).join('');
+            const errorsHtml = (job.errors || []).map(function(item) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(item) + '</div>'; }}).join('');
+            node.innerHTML = `
+              <div class="grid-2">
+                <div class="metric"><span class="metric-label">Job ID</span><span class="metric-value" style="font-size:12px">${{escapeHtml(job.id)}}</span></div>
+                <div class="metric"><span class="metric-label">Тип</span><span class="metric-value">${{escapeHtml(job.job_type)}}</span></div>
+                <div class="metric"><span class="metric-label">Статус</span><span class="metric-value" style="color:${{statusColor}}">${{escapeHtml(job.status)}}</span></div>
+                <div class="metric"><span class="metric-label">Прогресс</span><span class="metric-value">${{job.progress_percent ?? 0}}%</span></div>
+                <div class="metric"><span class="metric-label">Шаг</span><span class="metric-value">${{escapeHtml(job.current_step || 'queued')}}</span></div>
+                <div class="metric"><span class="metric-label">Текущая секция</span><span class="metric-value">${{escapeHtml(job.current_section_title || '—')}}</span></div>
+                <div class="metric"><span class="metric-label">Источник</span><span class="metric-value">${{escapeHtml(job.source || 'api')}}</span></div>
+                <div class="metric"><span class="metric-label">Режим</span><span class="metric-value">${{escapeHtml(job.analysis_mode || 'balanced')}}</span></div>
+                <div class="metric"><span class="metric-label">Время</span><span class="metric-value">${{escapeHtml(formatSeconds(job.duration_seconds))}}</span></div>
+                <div class="metric"><span class="metric-label">Контур</span><span class="metric-value">${{escapeHtml(runtime.preset_name || 'не определено')}}</span></div>
+                <div class="metric"><span class="metric-label">Embeddings</span><span class="metric-value">${{escapeHtml(runtime.model + ' / ' + runtime.provider)}}</span></div>
+                <div class="metric"><span class="metric-label">LLM endpoint</span><span class="metric-value">${{escapeHtml(runtime.use_llm ? (runtime.llm_base_url || 'не задан') : 'LLM отключена')}}</span></div>
+                <div class="metric"><span class="metric-label">LLM model</span><span class="metric-value" style="font-size:12px">${{escapeHtml(runtime.use_llm ? (runtime.llm_model || runtime.llm_model_label || 'не задана') : 'LLM отключена')}}</span></div>
+              </div>
+              <div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <div style="height:10px;background:var(--panel)">
+                  <div style="height:100%;width:${{Math.max(0, Math.min(100, job.progress_percent || 0))}}%;background:linear-gradient(90deg, var(--accent), var(--success))"></div>
+                </div>
+              </div>
+              <div style="margin-top:10px">${{stepsHtml || '<div class="empty">Шаги ещё не доступны.</div>'}}</div>
+              ${{warningsHtml}}
+              ${{errorsHtml}}
+            `;
+            node.className = '';
+          }}
+
+          async function pollAnalysisJobOnce(jobId, registryNumber) {{
+            const job = await fetchJson('/api/tender-research/jobs/' + encodeURIComponent(jobId));
+            renderAnalysisJobStatus(job);
+            if (job.status === 'completed' || job.status === 'completed_with_warnings') {{
+              stopAnalysisJobPolling();
+              if (job.job_type === 'prepare') {{
+                setFlash('analysis-flash', `Подготовка завершена: статус «${{job.status}}».`);
+                await handleCheckReadiness();
+              }} else if (job.job_type === 'analyze') {{
+                renderAnalysisResultPayload(job.result || {{}}, registryNumber);
+                setFlash('analysis-flash', `Анализ завершён: статус «${{job.status}}», разделов: ${{job.result?.sections_count ?? 0}}, источников: ${{job.result?.sources_count ?? 0}}.`);
+                await handleRefreshHistory(registryNumber);
+              }}
+              return;
+            }}
+            if (job.status === 'failed' || job.status === 'cancelled') {{
+              stopAnalysisJobPolling();
+              setFlash('analysis-flash', 'Фоновая задача завершилась ошибкой: ' + escapeHtml((job.errors || []).join('; ') || job.status), true);
+              document.getElementById('prepare-tender-btn').disabled = false;
+            }}
+          }}
+
+          function startAnalysisJobPolling(jobId, registryNumber) {{
+            stopAnalysisJobPolling();
+            state.activeAnalysisJobId = jobId;
+            state.activeAnalysisJobStartedAt = Date.now();
+            pollAnalysisJobOnce(jobId, registryNumber).catch(function(error) {{
+              setFlash('analysis-flash', 'Ошибка получения статуса фоновой задачи: ' + escapeHtml(error.message), true);
+            }});
+            state.analysisJobPollTimer = window.setInterval(async function() {{
+              if (!state.activeAnalysisJobStartedAt || (Date.now() - state.activeAnalysisJobStartedAt) > 10 * 60 * 1000) {{
+                stopAnalysisJobPolling();
+                setFlash('analysis-flash', 'Задача выполняется дольше обычного. Можно продолжить проверку статуса позже.', true);
+                return;
+              }}
+              try {{
+                await pollAnalysisJobOnce(jobId, registryNumber);
+              }} catch (error) {{
+                stopAnalysisJobPolling();
+                setFlash('analysis-flash', 'Ошибка получения статуса фоновой задачи: ' + escapeHtml(error.message), true);
+              }}
+            }}, 1500);
+          }}
+
           function wireTabs() {{
             for (const button of document.querySelectorAll('.tab-button')) {{
               button.addEventListener('click', () => {{
@@ -1107,7 +1444,6 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   item.classList.toggle('active', item === button);
                 }}
                 const target = button.dataset.tab;
-                document.getElementById('tab-triage').classList.toggle('hidden', target !== 'triage');
                 document.getElementById('tab-search').classList.toggle('hidden', target !== 'search');
                 document.getElementById('tab-docs').classList.toggle('hidden', target !== 'docs');
                 document.getElementById('tab-dataset').classList.toggle('hidden', target !== 'dataset');
@@ -1184,6 +1520,52 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
           }}
 
+          async function loadProcurementSources() {{
+            state.procurementSources = await fetchJson('/api/demo/tender-agent/procurement/sources');
+            const select = document.getElementById('procurement-source-select');
+            select.innerHTML = state.procurementSources.filter((source) => ['demo_local', 'public_eis_html_44fz', 'public_eis_html_223fz'].includes(source.source)).map((source) => `
+              <option value="${{escapeHtml(source.source)}}"${{source.configured ? '' : ' disabled'}}>${{escapeHtml(source.label)}}${{source.configured ? '' : ` — ${{escapeHtml(source.reason || 'не настроен')}}`}}</option>
+            `).join('');
+            if (!state.procurementSources.some((source) => source.source === select.value && source.configured)) {{
+              select.value = 'demo_local';
+            }}
+            renderProcurementSourceDiagnostics(select.value);
+            renderEisDocsDiagnostics();
+            select.addEventListener('change', () => renderProcurementSourceDiagnostics(select.value));
+          }}
+
+          function renderProcurementSourceDiagnostics(selectedSource) {{
+            const node = document.getElementById('procurement-source-diagnostics');
+            const source = state.procurementSources.find((item) => item.source === selectedSource) || state.procurementSources[0];
+            if (!source) {{
+              node.innerHTML = `<div class="empty">Источник ещё не загружен.</div>`;
+              return;
+            }}
+            const diagnostics = source.safe_diagnostics || {{}};
+            const lastStatus = diagnostics.last_status || (source.configured ? 'configured' : 'not_configured');
+            const tokenState = diagnostics.token_present ? 'токен найден' : 'токен не найден';
+            const statusLabel = source.configured ? 'ЕИС настроена: токен найден' : (source.reason || 'ЕИС не настроена');
+            const structuredStatus = source.configured ? `настроен · ${{tokenState}}` : (source.reason || 'не настроен');
+            node.innerHTML = `
+              <div class="list-item">
+                <strong>${{escapeHtml(source.label)}}</strong>
+                <div class="run-meta">${{escapeHtml(statusLabel)}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Статус подключения</strong>
+                <div class="run-meta">${{escapeHtml(structuredStatus)}} · последний статус: ${{escapeHtml(String(lastStatus))}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Endpoint</strong>
+                <div class="run-meta">${{escapeHtml(displayValue(diagnostics.endpoint_host, 'не определён'))}}${{escapeHtml(displayValue(diagnostics.endpoint_path, ''))}}</div>
+              </div>
+              <div class="list-item">
+                <strong>Последняя диагностика</strong>
+                <div class="run-meta">${{escapeHtml(displayValue(diagnostics.last_error || source.reason, 'ошибок не зафиксировано'))}}</div>
+              </div>
+            `;
+          }}
+
           function renderEisDocsDiagnostics() {{
             const node = document.getElementById('eis-docs-diagnostics');
             const source = state.procurementSources.find((item) => item.source === 'zakupki_gov_ru_getdocs_ip');
@@ -1217,7 +1599,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           function renderProcurementResults() {{
             const node = document.getElementById('procurement-results');
             if (!state.procurementResults.length) {{
-              node.innerHTML = `<div class="empty">По текущему фильтру закупки не найдены. Уточните запрос или используйте поиск без дополнительных фильтров.</div>`;
+              node.innerHTML = `<div class="empty">По текущему фильтру закупки не найдены. Уточните запрос или используйте demo_local без дополнительных фильтров.</div>`;
               return;
             }}
             node.innerHTML = state.procurementResults.map((result) => `
@@ -1368,6 +1750,12 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             const reportLink = result.report_url
               ? `<a class="link-button" href="${{escapeHtml(result.report_url)}}" target="_blank" rel="noreferrer">Открыть report</a>`
               : '';
+            const docxExportLink = result.run_id
+              ? `<a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(result.run_id)}}/export/docx" target="_blank" rel="noreferrer">Скачать DOCX</a>`
+              : '';
+            const pdfExportLink = result.run_id
+              ? `<a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(result.run_id)}}/export/pdf" target="_blank" rel="noreferrer">Скачать PDF</a>`
+              : '';
             node.innerHTML = `
               <div class="grid-2">
                 <div class="metric"><span class="metric-label">Run ID</span><span class="metric-value">${{escapeHtml(result.run_id)}}</span></div>
@@ -1384,6 +1772,8 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               <div class="form-actions" style="margin-top:14px">
                 <a class="link-button" href="${{escapeHtml(result.run_url)}}" target="_blank" rel="noreferrer">Открыть run</a>
                 ${{reportLink}}
+                ${{docxExportLink}}
+                ${{pdfExportLink}}
                 ${{analyzeButton}}
               </div>
               <div class="note" style="margin-top:12px">Полный archive URL и ticket в интерфейсе не показываются. Отображаются только host/path summary.</div>
@@ -1421,7 +1811,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                   state.procurementResults = [];
                   document.getElementById('procurement-results').innerHTML = `
                     <div class="run-item">
-                      <strong>Публичный HTML-поиск</strong>
+                      <strong>Публичный HTML fallback</strong>
                       <p style="margin-top:10px">${{escapeHtml(searchUrlPayload.note)}}</p>
                       <div class="form-actions" style="margin-top:12px">
                         <a class="link-button" href="${{searchUrlPayload.eis_search_url}}" target="_blank" rel="noreferrer">Открыть поиск ЕИС</a>
@@ -1651,7 +2041,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
           function renderSelectedRun(run) {{
             const reportLinks = run.report_html_url
               ? `<a class="link-button" href="${{run.report_html_url}}" target="_blank" rel="noreferrer">Открыть HTML-отчёт</a>
-                 <a class="link-button" href="${{run.report_download_url}}">Скачать артефакт отчёта</a>`
+                 <a class="link-button" href="${{run.report_download_url}}">Скачать артефакт отчёта</a>
+                 <a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(run.run_id)}}/export/docx" target="_blank" rel="noreferrer">Скачать DOCX</a>
+                 <a class="link-button" href="/api/demo/tender-agent/runs/${{encodeURIComponent(run.run_id)}}/export/pdf" target="_blank" rel="noreferrer">Скачать PDF</a>`
               : `<span class="note">HTML-отчёт будет доступен после анализа.</span>`;
             const needsDocs = run.status === 'docs_required';
             const eisBlock = run.procurement_source === 'zakupki_gov_ru_getdocs_ip' ? `
@@ -1966,49 +2358,41 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             clearFlash('analysis-flash');
             const rn = document.querySelector('#analysis-form [name="registry_number"]').value.trim();
             if (!rn) {{ setFlash('analysis-flash', 'Введите реестровый номер.', true); return; }}
+            const runtime = renderAnalysisRuntimeSummary();
             const stepsNode = document.getElementById('analysis-preparation-steps');
             const statusNode = document.getElementById('analysis-readiness-status');
             stepsNode.classList.remove('hidden');
-            stepsNode.innerHTML = '<div class="note">Подготовка может занять несколько минут…</div>';
-            statusNode.innerHTML = '<div class="note">Запускаем подготовку…</div>';
+            stepsNode.innerHTML = '<div class="note">Подготовка будет выполнена в фоне…</div>';
+            statusNode.innerHTML = '<div class="note">Создаём background job…</div>';
             document.getElementById('prepare-tender-btn').disabled = true;
             try {{
-              const result = await fetchJson('/api/tender-research/prepare', {{
+              const job = await fetchJson('/api/tender-research/jobs/prepare', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
                 body: JSON.stringify({{
                   registry_number: rn,
+                  provider: runtime.provider,
+                  model: runtime.model,
+                  base_url: runtime.base_url,
                   rebuild_chunks: false,
                   rebuild_embeddings: false,
                 }}),
               }});
-              let stepsHtml = '<div style="margin-top:8px">';
-              for (const step of (result.steps || [])) {{
-                const icon = step.status === 'completed' ? '✓' : step.status === 'skipped' ? '–' : step.status === 'warning' ? '⚠' : step.status === 'failed' ? '✗' : '…';
-                const color = step.status === 'completed' || step.status === 'skipped' ? 'var(--success)' : step.status === 'warning' ? 'var(--warning)' : step.status === 'failed' ? 'var(--danger)' : 'inherit';
-                stepsHtml += '<div style="padding:4px 0;color:' + color + '">' + icon + ' <strong>' + escapeHtml(step.name) + '</strong>';
-                if (step.message) stepsHtml += ' — ' + escapeHtml(step.message);
-                if (step.details) stepsHtml += ' <span style="opacity:0.7">(' + escapeHtml(step.details) + ')</span>';
-                stepsHtml += '</div>';
-              }}
-              stepsHtml += '</div>';
-              stepsNode.innerHTML = stepsHtml;
-
-              if (result.ready_for_analysis) {{
-                statusNode.innerHTML = '<div class="note" style="color:var(--success)">✓ Закупка готова к анализу (чанков: ' + result.chunks_total + ', эмбеддингов: ' + result.embeddings_total + ')</div>';
-              }} else {{
-                let msg = '<div class="note" style="color:var(--warning)">⚠ Подготовка завершена с предупреждениями';
-                if (result.warnings && result.warnings.length) {{
-                  msg += '<ul>' + result.warnings.map(function(w) {{ return '<li>' + escapeHtml(w) + '</li>'; }}).join('') + '</ul>';
-                }}
-                msg += '</div>';
-                if (result.errors && result.errors.length) {{
-                  msg += '<div class="note" style="color:var(--danger)">✗ Ошибки:<ul>' + result.errors.map(function(e) {{ return '<li>' + escapeHtml(e) + '</li>'; }}).join('') + '</ul></div>';
-                }}
-                statusNode.innerHTML = msg;
-              }}
-              statusNode.className = '';
-              await handleCheckReadiness();
+              state.activeAnalysisRuntime = runtime;
+              renderAnalysisJobStatus({{
+                id: job.job_id,
+                job_type: job.job_type,
+                registry_number: job.registry_number,
+                status: job.status,
+                progress_percent: 0,
+                current_step: 'queued',
+                steps: [],
+                warnings: [],
+                errors: [],
+                source: 'api',
+              }});
+              statusNode.innerHTML = '<div class="note">Фоновая задача создана. Обновляем статус…</div>';
+              startAnalysisJobPolling(job.job_id, rn);
             }} catch (error) {{
               stepsNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ Ошибка подготовки: ' + escapeHtml(error.message) + '</div>';
               document.getElementById('prepare-tender-btn').disabled = false;
@@ -2025,338 +2409,141 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
               setFlash('analysis-flash', 'Введите реестровый номер.', true);
               return;
             }}
-            const useLlm = data.get('use_llm') === 'on';
-            const saveReport = data.get('save_report') === 'on';
-            setFlash('analysis-flash', `Запускаем анализ для ${{registryNumber}}…`);
+            const runtime = renderAnalysisRuntimeSummary();
+            setFlash('analysis-flash', `Создаём задачу анализа для ${{registryNumber}}…`);
             try {{
-              const payload = await fetchJson('/api/tender-research/analyze', {{
+              const payload = {{
+                registry_number: registryNumber,
+                provider: runtime.provider,
+                model: runtime.model,
+                base_url: runtime.base_url,
+                use_llm: runtime.use_llm,
+                analysis_mode: runtime.analysis_mode,
+                limit: runtime.limit,
+                save_report: runtime.save_report,
+              }};
+              if (runtime.use_llm) {{
+                payload.llm_base_url = runtime.llm_base_url;
+                payload.llm_model = runtime.llm_model;
+              }}
+              const job = await fetchJson('/api/tender-research/jobs/analyze', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{
-                  registry_number: registryNumber,
-                  use_llm: useLlm,
-                  save_report: saveReport,
-                  limit: 6,
-                }}),
+                body: JSON.stringify(payload),
               }});
-              const node = document.getElementById('analysis-result');
-              const warningsHtml = (payload.warnings || []).map(function(w) {{ return '<div class="note" style="color:var(--warning)">⚠ ' + escapeHtml(w) + '</div>'; }}).join('');
-              const errorsHtml = (payload.errors || []).map(function(e) {{ return '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(e) + '</div>'; }}).join('');
-              node.innerHTML = `
-                <div class="grid-2">
-                  <div class="metric"><span class="metric-label">Статус</span><span class="metric-value">${{escapeHtml(payload.status)}}</span></div>
-                  <div class="metric"><span class="metric-label">Разделов</span><span class="metric-value">${{payload.sections_count}}</span></div>
-                  <div class="metric"><span class="metric-label">Источников</span><span class="metric-value">${{payload.sources_count}}</span></div>
-                  <div class="metric"><span class="metric-label">LLM</span><span class="metric-value">${{payload.used_llm ? 'да' : 'нет'}}</span></div>
-                </div>
-                ${{warningsHtml}}
-                ${{errorsHtml}}
-                ${{payload.report_path ? `<div class="form-actions" style="margin-top:14px"><a class="link-button" href="/api/tender-research/analyze/${{encodeURIComponent(registryNumber)}}/latest" target="_blank" rel="noreferrer">Открыть отчёт</a></div>` : ''}}
-              `;
-              node.className = '';
-              setFlash('analysis-flash', `Анализ завершён: статус «${{payload.status}}», разделов: ${{payload.sections_count}}, источников: ${{payload.sources_count}}.`);
+              state.activeAnalysisRuntime = runtime;
+              renderAnalysisJobStatus({{
+                id: job.job_id,
+                job_type: job.job_type,
+                registry_number: job.registry_number,
+                status: job.status,
+                progress_percent: 0,
+                current_step: 'queued',
+                steps: [],
+                warnings: [],
+                errors: [],
+                source: 'api',
+              }});
+              document.getElementById('analysis-result').innerHTML = '<div class="empty">Фоновая задача анализа создана. Ожидаем результат…</div>';
+              document.getElementById('analysis-result').className = '';
+              startAnalysisJobPolling(job.job_id, registryNumber);
             }} catch (error) {{
               setFlash('analysis-flash', 'Ошибка анализа: ' + escapeHtml(error.message), true);
             }}
           }}
 
-          function renderTriageSearchResults(data) {{
-            const search = data.search;
-            const resultsNode = document.getElementById('triage-search-results');
-            const analysisCard = document.getElementById('triage-analysis-card');
-            const analysisNode = document.getElementById('triage-analysis-result');
-
-            if (data.status === 'search_unavailable') {{
-              resultsNode.innerHTML = `
-                <div class="empty error">
-                  <strong>Поиск недоступен</strong>
-                  <p style="margin-top:10px">Реальный поиск закупок сейчас недоступен. Проверьте подключение к интернету или повторите позже.</p>
-                  <p style="margin-top:6px;font-size:13px;color:var(--soft-gray)">Синтетические данные не используются в клиентском режиме.</p>
-                </div>
-              `;
-              analysisCard.classList.add('hidden');
-              return;
-            }}
-
-            if (data.status === 'no_results') {{
-              resultsNode.innerHTML = `
-                <div class="empty">
-                  <strong>Ничего не найдено</strong>
-                  <p style="margin-top:10px">По вашему запросу закупки не найдены. Попробуйте изменить ключевое слово или фильтры.</p>
-                  <p style="margin-top:6px;font-size:13px;color:var(--soft-gray)">Примеры запросов: кабель, светильник, автоматический выключатель, электротехническая продукция</p>
-                </div>
-              `;
-              analysisCard.classList.add('hidden');
-              return;
-            }}
-
-            const isFallback = search.is_fallback;
-            const fallbackLabel = search.fallback_label || '';
-            const sourceNotice = search.source_notice || '';
-            const sourceLabel = search.source_label || '';
-            const isLive = search.source_type === 'live';
-
-            let totalHtml = '';
-            if (isLive && !isFallback) {{
-              totalHtml = '<div class="flash" style="margin-bottom:12px;border-color:rgba(0,200,160,0.3)">Источник: реальный поиск закупок</div>';
-            }} else if (isFallback) {{
-              totalHtml = `<div class="flash" style="margin-bottom:12px">${{escapeHtml(fallbackLabel)}}</div>`;
-            }} else if (sourceNotice) {{
-              totalHtml = `<div class="flash" style="margin-bottom:12px">${{escapeHtml(sourceNotice)}}</div>`;
-            }}
-            totalHtml += `<div class="flash" style="margin-bottom:12px">${{escapeHtml(search.total_results_label || '')}}</div>`;
-
-            if (search.selection_reason === 'date_unavailable_first_result') {{
-              totalHtml += '<div class="note" style="margin-bottom:12px;color:var(--warning);font-size:13px">В результатах нет дат публикации, поэтому выбран первый результат из выдачи.</div>';
-            }}
-
-            const resultsHtml = (search.results || []).map(function(result) {{
-              const isFreshest = result.is_freshest;
-              const freshestBadge = isFreshest
-                ? '<span class="badge" style="margin-left:8px;font-size:11px;padding:4px 10px;background:rgba(0,200,160,0.2);border-color:rgba(120,250,230,0.4)">Выбрана для анализа</span>'
-                : '';
-              return `
-                <div class="run-item${{isFreshest ? ' active' : ''}}" style="${{isFreshest ? 'border-color:rgba(120,250,230,0.35)' : ''}}">
-                  <div class="step-top" style="margin-bottom:8px">
-                    <div>
-                      <strong>${{escapeHtml(result.title)}}</strong>${{freshestBadge}}
-                      <div class="run-meta">${{escapeHtml(result.procurement_id)}} · ${{escapeHtml(result.customer_name)}}${{result.law ? ' · ' + escapeHtml(result.law) : ''}}</div>
-                    </div>
-                  </div>
-                  <div class="grid-2">
-                    <div class="metric"><span class="metric-label">НМЦК</span><span class="metric-value">${{formatMoney(result.initial_price, result.currency || '')}}</span></div>
-                    <div class="metric"><span class="metric-label">Дата публикации</span><span class="metric-value">${{escapeHtml(displayValue(result.publication_date))}}</span></div>
-                    <div class="metric"><span class="metric-label">Дедлайн подачи</span><span class="metric-value">${{escapeHtml(displayValue(result.deadline))}}</span></div>
-                    <div class="metric"><span class="metric-label">Регион</span><span class="metric-value">${{escapeHtml(displayValue(result.region))}}</span></div>
-                  </div>
-                </div>
-              `;
-            }}).join('');
-
-            resultsNode.innerHTML = totalHtml + resultsHtml;
-
-            if (data.triage) {{
-              handleTriageReport(data.triage, analysisNode, analysisCard);
-            }}
-          }}
-
-          function handleTriageReport(triage, node, card) {{
-            card.classList.remove('hidden');
-
-            const decisionLabel = triage.decision_label;
-            let decisionColor = 'var(--mint-primary)';
-            let decisionBg = 'rgba(0,200,160,0.12)';
-            if (decisionLabel === 'NO_GO') {{
-              decisionColor = 'var(--danger)';
-              decisionBg = 'rgba(255,127,135,0.12)';
-            }} else if (decisionLabel === 'NEEDS_REVIEW') {{
-              decisionColor = 'var(--review)';
-              decisionBg = 'rgba(139,216,255,0.12)';
-            }} else if (decisionLabel === 'LOW_PRIORITY') {{
-              decisionColor = 'var(--warning)';
-              decisionBg = 'rgba(255,180,84,0.12)';
-            }}
-
-            const stopFactorsHtml = (triage.stop_factors || []).map(function(sf) {{
-              let severityColor = 'var(--soft-gray)';
-              if (sf.severity === 'critical') severityColor = 'var(--danger)';
-              else if (sf.severity === 'warning') severityColor = 'var(--warning)';
-              else if (sf.severity === 'info') severityColor = 'var(--review)';
-              return `
-                <div class="list-item" style="border-left:3px solid ${{severityColor}}">
-                  <strong>${{escapeHtml(sf.title)}}</strong>
-                  <div class="run-meta">${{escapeHtml(sf.evidence)}} · источник: ${{escapeHtml(sf.source)}}</div>
-                  <div style="margin-top:4px"><span class="status-chip" style="color:${{severityColor}};font-size:11px">${{escapeHtml(sf.severity)}}</span></div>
-                </div>
-              `;
-            }}).join('') || '<div class="empty" style="padding:12px">Стоп-факторы не выявлены.</div>';
-
-            const reasonsHtml = (triage.decision_reasons || []).map(function(r) {{
-              return '<li class="bullet-item">' + escapeHtml(r) + '</li>';
-            }}).join('');
-
-            const summaryHtml = triage.reseller_summary
-              ? '<div class="trace" style="padding:16px;margin-bottom:8px">' + escapeHtml(triage.reseller_summary) + '</div>'
-              : '';
-
-            const tc = triage.tender_card;
-            let tenderCardHtml = '';
-            if (tc) {{
-              tenderCardHtml = `
-                <div class="card" style="padding:18px">
-                  <div class="section-title">Карточка закупки</div>
-                  <div class="grid-2">
-                    <div class="metric"><span class="metric-label">Номер</span><span class="metric-value">${{escapeHtml(displayValue(tc.tender_id))}}</span></div>
-                    <div class="metric"><span class="metric-label">Предмет</span><span class="metric-value">${{escapeHtml(tc.title)}}</span></div>
-                    <div class="metric"><span class="metric-label">Заказчик</span><span class="metric-value">${{escapeHtml(displayValue(tc.customer))}}</span></div>
-                    <div class="metric"><span class="metric-label">Закон</span><span class="metric-value">${{escapeHtml(displayValue(tc.law_type))}}</span></div>
-                    <div class="metric"><span class="metric-label">НМЦК</span><span class="metric-value">${{formatMoney(tc.nmck, tc.currency || '')}}</span></div>
-                    <div class="metric"><span class="metric-label">Дата публикации</span><span class="metric-value">${{escapeHtml(displayValue(tc.publication_date))}}</span></div>
-                    <div class="metric"><span class="metric-label">Дедлайн подачи</span><span class="metric-value">${{escapeHtml(displayValue(tc.submission_deadline))}}</span></div>
-                    <div class="metric"><span class="metric-label">Регион</span><span class="metric-value">${{escapeHtml(displayValue(tc.region))}}</span></div>
-                    <div class="metric"><span class="metric-label">Место поставки</span><span class="metric-value">${{escapeHtml(displayValue(tc.delivery_place, 'не найдено'))}}</span></div>
-                    <div class="metric"><span class="metric-label">Срок поставки</span><span class="metric-value">${{escapeHtml(displayValue(tc.delivery_terms, 'не найдено'))}}</span></div>
-                  </div>
-                  ${{tc.source_url ? '<div style="margin-top:10px"><a class="link-button" href="' + escapeHtml(tc.source_url) + '" target="_blank" rel="noreferrer">Открыть в ЕИС</a></div>' : ''}}
-                </div>
-              `;
-            }}
-
-            const noLineItems = (triage.stop_factors || []).some(function(sf) {{ return sf.code === 'no_line_items'; }});
-            let lineItemsHtml = '';
-            if (triage.line_items && triage.line_items.length > 0) {{
-              lineItemsHtml = '<div class="card" style="padding:18px"><div class="section-title">Позиции поставки<div class="run-meta">извлечено: ' + triage.line_items_count + '</div></div><div class="list" style="gap:8px">' +
-                triage.line_items.map(function(li) {{
-                  return '<div class="list-item"><strong>' + escapeHtml(li.item_name) + '</strong>' +
-                    (li.quantity ? '<div class="run-meta">Количество: ' + escapeHtml(String(li.quantity)) + ' ' + escapeHtml(displayValue(li.unit)) + '</div>' : '') +
-                    (li.evidence ? '<div class="run-meta" style="font-size:12px">' + escapeHtml(li.evidence) + '</div>' : '') +
-                    '</div>';
-                }}).join('') + '</div></div>';
-            }} else if (noLineItems) {{
-              lineItemsHtml = '<div class="card" style="padding:18px;border-color:var(--warning)"><div class="section-title">Позиции поставки</div><p style="color:var(--warning);margin-top:8px">Позиции поставки не удалось извлечь автоматически. Требуется ручная проверка.</p></div>';
-            }}
-
-            const sourceBadge = triage.source_type === 'demo'
-              ? '<span class="status-chip" style="color:var(--warning)">Демо-набор</span>'
-              : '<span class="status-chip" style="color:var(--mint-primary)">Реальный поиск</span>';
-
-            const completenessLabels = {{
-              'search_only': 'Только данные поиска',
-              'details_loaded': 'Карточка загружена',
-              'documents_loaded': 'Документы загружены',
-              'documents_parsed': 'Документы разобраны',
-              'line_items_extracted': 'Позиции поставки извлечены',
-            }};
-            const completenessLabel = completenessLabels[triage.analysis_completeness] || triage.analysis_completeness;
-
-            let completenessHtml = '<div class="card" style="padding:18px"><div class="section-title">Полнота анализа</div><div class="grid-2">';
-            completenessHtml += '<div class="metric"><span class="metric-label">Статус</span><span class="metric-value">' + escapeHtml(completenessLabel) + '</span></div>';
-            if (triage.documents_count > 0) {{
-              completenessHtml += '<div class="metric"><span class="metric-label">Документов найдено</span><span class="metric-value">' + triage.documents_count + '</span></div>';
-            }}
-            if (triage.downloaded_documents_count > 0) {{
-              completenessHtml += '<div class="metric"><span class="metric-label">Документов скачано</span><span class="metric-value">' + triage.downloaded_documents_count + '</span></div>';
-            }}
-            if (triage.parsed_documents_count > 0) {{
-              completenessHtml += '<div class="metric"><span class="metric-label">Документов разобрано</span><span class="metric-value">' + triage.parsed_documents_count + '</span></div>';
-            }}
-            completenessHtml += '</div></div>';
-
-            node.innerHTML = `
-              <div style="display:grid;gap:16px">
-                <div class="step-top" style="gap:10px;margin-bottom:0">
-                  <div>${{sourceBadge}}</div>
-                  <div style="font-size:13px;color:var(--soft-gray)">${{escapeHtml(displayValue(triage.source_label))}}</div>
-                </div>
-
-                ${{summaryHtml}}
-
-                ${{completenessHtml}}
-
-                <div class="card" style="padding:18px;background:${{decisionBg}};border-color:${{decisionColor}}">
-                  <div class="summary-head" style="margin-bottom:0">
-                    <div>
-                      <div class="section-title">Решение</div>
-                      <h2 style="margin:4px 0 0;font-size:32px;color:${{decisionColor}}">${{escapeHtml(decisionLabel)}}</h2>
-                    </div>
-                    <div style="text-align:right">
-                      <div class="section-title">Скоринг</div>
-                      <div style="font-size:36px;font-weight:700;color:${{decisionColor}}">${{triage.decision_score}}/100</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="card" style="padding:18px">
-                  <div class="section-title">Причины решения</div>
-                  <ul class="list" style="gap:6px">${{reasonsHtml}}</ul>
-                </div>
-
-                <div class="card" style="padding:18px">
-                  <div class="section-title">Стоп-факторы</div>
-                  <div class="list" style="gap:8px">${{stopFactorsHtml}}</div>
-                </div>
-
-                ${{tenderCardHtml}}
-
-                ${{lineItemsHtml}}
-
-                <div class="trace" style="padding:16px">
-                  <div class="section-title">Рекомендация менеджеру</div>
-                  <p>${{escapeHtml(triage.manager_recommendation)}}</p>
-                </div>
-
-                <div class="note" style="color:var(--soft-gray);font-size:13px;line-height:1.5">
-                  ${{escapeHtml(triage.analysis_limit_notice)}}
-                </div>
-
-                <div class="note" style="color:var(--soft-gray);font-size:12px;line-height:1.4">
-                  Экспорт полного отчёта будет подключён после пилотного прогона.
-                </div>
-              </div>
-            `;
-          }}
-
-          async function handleTriageSearch(event) {{
-            event.preventDefault();
-            clearFlash('triage-flash');
-            const form = event.currentTarget;
-            const formData = new FormData(form);
-            const isDevMode = window.location.search.includes('dev=1');
-            const payload = {{
-              query: String(formData.get('query') || '').trim(),
-              customer_mode: !isDevMode,
-            }};
-            if (isDevMode) payload.source = 'demo_local';
-            const law = String(formData.get('law') || '').trim();
-            if (law) payload.law = law;
-            const region = String(formData.get('region') || '').trim();
-            if (region) payload.region = region;
-            const priceFrom = formData.get('price_from');
-            if (priceFrom && String(priceFrom).trim()) payload.price_from = Number(priceFrom);
-            const priceTo = formData.get('price_to');
-            if (priceTo && String(priceTo).trim()) payload.price_to = Number(priceTo);
-            const dateFrom = String(formData.get('date_from') || '').trim();
-            if (dateFrom) payload.date_from = dateFrom;
-            const dateTo = String(formData.get('date_to') || '').trim();
-            if (dateTo) payload.date_to = dateTo;
-
-            const resultsNode = document.getElementById('triage-search-results');
-            resultsNode.innerHTML = '<div class="loading" style="padding:20px;text-align:center">Поиск закупок...</div>';
-
+          async function handleRefreshHistory(registryNumber) {{
+            const rn = registryNumber || String(document.querySelector('#analysis-form [name=registry_number]').value || '').trim();
+            const listNode = document.getElementById('history-list');
+            const containerNode = document.getElementById('history-report-container');
+            containerNode.className = 'hidden';
             try {{
-              const data = await fetchJson('/api/demo/tender-agent/reseller/search-and-triage', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify(payload),
+              const url = '/api/tender-research/analyze/history?limit=20' + (rn ? '&registry_number=' + encodeURIComponent(rn) : '');
+              const data = await fetchJson(url);
+              if (!data.items || data.items.length === 0) {{
+                listNode.innerHTML = '<div class="empty">Пока нет сохранённых анализов.</div>';
+                listNode.className = '';
+                return;
+              }}
+              let html = '<table style="width:100%;border-collapse:collapse;font-size:0.9em">';
+              html += '<thead><tr style="border-bottom:1px solid var(--border)"><th>Дата</th><th>Номер</th><th>Статус</th><th>Разделов</th><th>Источников</th><th>LLM</th><th></th></tr></thead><tbody>';
+              for (const item of data.items) {{
+                const date = item.created_at ? new Date(item.created_at).toLocaleString('ru-RU') : '—';
+                const statusColor = item.status === 'completed' ? 'var(--success)' : 'var(--warning)';
+                const reportUrl = '/api/tender-research/analyze/history/' + encodeURIComponent(item.id) + '/report';
+                const docxUrl = '/api/tender-research/analyze/history/' + encodeURIComponent(item.id) + '/export/docx';
+                const pdfUrl = '/api/tender-research/analyze/history/' + encodeURIComponent(item.id) + '/export/pdf';
+                html += '<tr style="border-bottom:1px solid var(--border)">';
+                html += '<td style="padding:6px 8px">' + escapeHtml(date) + '</td>';
+                html += '<td style="padding:6px 8px">' + escapeHtml(item.registry_number) + '</td>';
+                html += '<td style="padding:6px 8px;color:' + statusColor + '">' + escapeHtml(item.status) + '</td>';
+                html += '<td style="padding:6px 8px;text-align:center">' + item.sections_count + '</td>';
+                html += '<td style="padding:6px 8px;text-align:center">' + item.sources_count + '</td>';
+                html += '<td style="padding:6px 8px;text-align:center">' + (item.used_llm ? 'да' : 'нет') + '</td>';
+                html += '<td style="padding:6px 8px"><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="button button-small history-open-report" data-run-id="' + escapeHtml(item.id) + '" data-report-url="' + escapeHtml(reportUrl) + '">Открыть отчёт</button><a class="link-button button-small" href="' + escapeHtml(docxUrl) + '" target="_blank" rel="noreferrer">Скачать DOCX</a><a class="link-button button-small" href="' + escapeHtml(pdfUrl) + '" target="_blank" rel="noreferrer">Скачать PDF</a></div></td>';
+                html += '</tr>';
+              }}
+              html += '</tbody></table>';
+              html += '<div style="margin-top:8px;font-size:0.85em;opacity:0.7">Всего записей: ' + data.total + '</div>';
+              listNode.innerHTML = html;
+              listNode.querySelectorAll('.history-open-report').forEach(function(button) {{
+                button.addEventListener('click', function() {{
+                  handleOpenHistoryReport(button.dataset.runId || '');
+                }});
               }});
-              renderTriageSearchResults(data);
+              listNode.className = '';
             }} catch (error) {{
-              resultsNode.innerHTML = '<div class="empty error">Ошибка поиска: ' + escapeHtml(error.message) + '</div>';
+              listNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ Ошибка загрузки истории: ' + escapeHtml(error.message) + '</div>';
+            }}
+          }}
+
+          async function handleOpenHistoryReport(runId) {{
+            const containerNode = document.getElementById('history-report-container');
+            const contentNode = document.getElementById('history-report-content');
+            containerNode.className = '';
+            contentNode.innerHTML = '<div class="empty">Загрузка отчёта…</div>';
+            try {{
+              const data = await fetchJson('/api/tender-research/analyze/history/' + encodeURIComponent(runId) + '/report');
+              if (!data.report_markdown) {{
+                contentNode.innerHTML = '<div class="note" style="color:var(--warning)">⚠ Метаданные запуска найдены, но файл отчёта недоступен.</div>';
+                return;
+              }}
+              contentNode.innerHTML = '<pre style="white-space:pre-wrap;font-size:0.85em;max-height:600px;overflow-y:auto;border:1px solid var(--border);padding:12px;border-radius:6px;">' + escapeHtml(data.report_markdown) + '</pre>';
+            }} catch (error) {{
+              contentNode.innerHTML = '<div class="note" style="color:var(--danger)">✗ ' + escapeHtml(error.message) + '</div>';
             }}
           }}
 
           async function bootstrap() {{
-            if (window.location.search.includes('dev=1')) {{
-              const banner = document.createElement('div');
-              banner.style.cssText = 'background:rgba(255,127,135,0.15);border:1px solid rgba(255,127,135,0.3);border-radius:12px;padding:14px 20px;margin-bottom:16px;font-size:14px;color:var(--danger)';
-              banner.textContent = 'Режим разработки: синтетические данные. Клиентский режим использует только реальные закупки.';
-              document.querySelector('.shell').prepend(banner);
-            }}
             wireTabs();
-            document.getElementById('triage-search-form').addEventListener('submit', handleTriageSearch);
             document.getElementById('check-readiness-btn').addEventListener('click', handleCheckReadiness);
             document.getElementById('prepare-tender-btn').addEventListener('click', handlePrepareTender);
             document.getElementById('analysis-form').addEventListener('submit', handleAnalysisForm);
+            document.getElementById('history-refresh-btn').addEventListener('click', function() {{ handleRefreshHistory(); }});
+            document.getElementById('analysis-runtime-preset').addEventListener('change', applyAnalysisPreset);
+            document.querySelector('#analysis-form [name="analysis_mode"]').addEventListener('change', renderAnalysisRuntimeSummary);
+            document.querySelector('#analysis-form [name="use_llm"]').addEventListener('change', renderAnalysisRuntimeSummary);
+            document.querySelector('#analysis-form [name="save_report"]').addEventListener('change', renderAnalysisRuntimeSummary);
+            document.querySelector('#analysis-form [name="registry_number"]').addEventListener('change', function(event) {{
+              handleRefreshHistory(event.currentTarget.value.trim());
+            }});
+            document.getElementById('procurement-search-form').addEventListener('submit', handleProcurementSearch);
             document.getElementById('eis-docs-form').addEventListener('submit', handleEisDocsArchive);
             document.getElementById('replay-dataset').addEventListener('click', replayDataset);
             document.getElementById('upload-form').addEventListener('submit', handleUpload);
             const resetBtn = document.getElementById('reset-supplier-profile');
             if (resetBtn) resetBtn.addEventListener('click', resetSupplierProfile);
+            applyAnalysisPreset();
+            await loadProcurementSources();
             await loadDataset();
             await loadRuns();
             if (state.selectedRunId) {{
               document.querySelector('[data-tab="upload"]').click();
             }}
+            await handleProcurementSearch({{
+              preventDefault() {{}},
+              currentTarget: document.getElementById('procurement-search-form'),
+            }});
           }}
 
           bootstrap().catch((error) => {{
