@@ -95,8 +95,9 @@ class ZakupkiSoapClient:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для getDocsIP.")
         request_id, created_time = _request_meta()
+        active_token = self.settings.active_token
         envelope = build_get_docs_by_reestr_number_envelope(
-            token=self.settings.token,
+            token=active_token,
             namespace=self.settings.individual_namespace,
             token_header_name=self.settings.token_header_name,
             request_id=request_id,
@@ -130,8 +131,9 @@ class ZakupkiSoapClient:
         request_id, created_time = _request_meta()
         org_region = normalize_eis_region_code(org_region)
         exact_date = format_eis_exact_date(exact_date, timezone="Europe/Moscow")
+        active_token = self.settings.active_token
         envelope = build_get_docs_by_org_region_envelope(
-            token=self.settings.token,
+            token=active_token,
             namespace=self.settings.individual_namespace,
             token_header_name=self.settings.token_header_name,
             request_id=request_id,
@@ -159,8 +161,9 @@ class ZakupkiSoapClient:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для getDocsIP.")
         request_id, created_time = _request_meta()
+        active_token = self.settings.active_token
         envelope = build_get_nsi_envelope(
-            token=self.settings.token,
+            token=active_token,
             namespace=self.settings.individual_namespace,
             token_header_name=self.settings.token_header_name,
             request_id=request_id,
@@ -229,7 +232,7 @@ class ZakupkiSoapClient:
         max_bytes = self.settings.max_download_mb * 1024 * 1024
         headers = {
             "User-Agent": self.settings.user_agent,
-            self.settings.token_header_name: self.settings.token,
+            self.settings.token_header_name: self.settings.active_token,
         }
         payload, content_type = self._http_get(
             archive_url,
@@ -266,13 +269,14 @@ class ZakupkiSoapClient:
     ) -> str:
         if not self.is_configured():
             raise RuntimeError("Источник ЕИС не настроен для SOAP-запросов.")
-        self._write_debug_artifact("last_request.xml", _sanitize_xml(envelope, self.settings.token))
+        redact_token = self.settings.active_token
+        self._write_debug_artifact("last_request.xml", _sanitize_xml(envelope, redact_token))
         try:
             if self._transport is not None:
                 xml = self._transport(envelope, soap_action, self.settings.timeout_seconds)
             else:
                 xml = self._default_transport(envelope, soap_action, endpoint_url)
-            self._write_debug_artifact("last_response.xml", _sanitize_xml(xml, self.settings.token))
+            self._write_debug_artifact("last_response.xml", _sanitize_xml(xml, redact_token))
             self._write_runtime_status(
                 last_status="ok",
                 soap_action=soap_action,
@@ -281,7 +285,7 @@ class ZakupkiSoapClient:
             )
             return xml
         except Exception as exc:  # noqa: BLE001
-            message = _sanitize_error(str(exc), self.settings.token)
+            message = _sanitize_error(str(exc), redact_token)
             self._write_debug_artifact("last_error.txt", message)
             self._write_runtime_status(
                 last_status="error",

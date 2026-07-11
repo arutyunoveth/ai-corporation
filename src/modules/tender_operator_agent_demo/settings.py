@@ -7,6 +7,11 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
 
+from src.modules.tender_operator_agent_demo.credential_resolver import (
+    CredentialOwner as CredOwner,
+    ResolvedCredential,
+    resolve_getdocsip_credential,
+)
 
 PLACEHOLDER_TOKENS = {
     "",
@@ -27,6 +32,8 @@ DEFAULT_USER_AGENT = "ArvectumTenderAgent/0.1 read-only"
 DEFAULT_CONTENT_TYPE = "text/xml; charset=utf-8"
 DEFAULT_SOAP_ACTION_URI = "http://zakupki.gov.ru/fz44/queue/ws/get-docs-ip"
 _ENV_FILES_SEEDED = False
+_ACTIVE_TOKEN_CACHE: dict[int, str] = {}
+_CREDENTIAL_OWNER_CACHE: dict[int, CredOwner] = {}
 
 TokenOwner = Literal["individual", "legal_entity"]
 
@@ -168,7 +175,7 @@ class ZakupkiSoapSettings:
 
     @property
     def token_configured(self) -> bool:
-        return self.token.strip().lower() not in PLACEHOLDER_TOKENS
+        return bool(self.active_token)
 
     @property
     def configured(self) -> bool:
@@ -183,23 +190,69 @@ class ZakupkiSoapSettings:
         return self.individual_base_url if self.individual_mode else self.base_url
 
     @property
+    def active_token(self) -> str:
+        if self.document_export_token and self.document_export_token.strip().lower() not in PLACEHOLDER_TOKENS:
+            return self.document_export_token
+        if self.token and self.token.strip().lower() not in PLACEHOLDER_TOKENS:
+            return self.token
+        cached = _ACTIVE_TOKEN_CACHE.get(id(self))
+        if cached is not None:
+            return cached
+        resolved = resolve_getdocsip_credential()
+        if resolved.configured:
+            _ACTIVE_TOKEN_CACHE[id(self)] = resolved.token
+            return resolved.token
+        resolved_legacy = resolve_getdocsip_credential(allow_legacy_fallback=True)
+        if resolved_legacy.configured:
+            _ACTIVE_TOKEN_CACHE[id(self)] = resolved_legacy.token
+            return resolved_legacy.token
+        _ACTIVE_TOKEN_CACHE[id(self)] = ""
+        return ""
+
+    @property
+    def credential_owner(self) -> CredOwner:
+        token_val = self.active_token
+        if not token_val:
+            return self.token_owner
+        if self.document_export_token and self.document_export_token.strip() == token_val:
+            return "document_export"
+        if self.token and self.token.strip() == token_val:
+            return "individual"
+        cached = _CREDENTIAL_OWNER_CACHE.get(id(self))
+        if cached is not None:
+            return cached
+        resolved = resolve_getdocsip_credential()
+        if resolved.configured and resolved.token == token_val:
+            _CREDENTIAL_OWNER_CACHE[id(self)] = resolved.credential_owner
+            return resolved.credential_owner
+        resolved_legacy = resolve_getdocsip_credential(allow_legacy_fallback=True)
+        if resolved_legacy.configured and resolved_legacy.token == token_val:
+            _CREDENTIAL_OWNER_CACHE[id(self)] = resolved_legacy.credential_owner
+            return resolved_legacy.credential_owner
+        return self.token_owner
+
+    @property
     def allowed_hosts(self) -> tuple[str, ...]:
         return tuple(item.strip().lower() for item in self.allowed_hosts_raw.split(",") if item.strip())
 
     def safe_status(self) -> dict[str, Any]:
         reason = None
-        if not self.token_configured:
-            reason = "Источник ЕИС не настроен: добавьте токен сервиса ЕИС в .env.local"
-        elif not self.enabled:
-            reason = "Источник ЕИС не включён: установите ZAKUPKI_GOV_RU_SOAP_ENABLED=1"
-        elif self.individual_mode:
-            reason = None
+        resolved = resolve_getdocsip_credential()
+        if not self.configured:
+            if not resolved.configured:
+                reason = "Источник ЕИС не настроен: добавьте токен сервиса ЕИС в .env.local / .env"
+            else:
+                reason = "Источник ЕИС не включён: установите ZAKUPKI_GOV_RU_SOAP_ENABLED=1"
         return {
             "source": "zakupki_gov_ru_getdocs_ip",
             "enabled": self.enabled,
             "configured": self.configured,
             "reason": reason,
             "token_owner": self.token_owner,
+            "credential_owner": resolved.credential_owner if resolved.configured else None,
+            "credential_source": resolved.source if resolved.configured else None,
+            "credential_legacy_fallback": resolved.legacy_fallback_used,
+            "credential_warnings": resolved.warnings,
             "token_header_name": self.token_header_name,
             "mode": self.mode,
             "disable_proxy_for_eis": self.disable_proxy_for_eis,
@@ -238,3 +291,11 @@ def get_zakupki_soap_settings() -> ZakupkiSoapSettings:
 
 def clear_zakupki_soap_settings_cache() -> None:
     get_zakupki_soap_settings.cache_clear()
+    _ACTIVE_TOKEN_CACHE.clear()
+    _CREDENTIAL_OWNER_CACHE.clear()
+
+
+def reload_active_token() -> None:
+    """Force re-read of credential on next active_token/credential_owner access."""
+    _ACTIVE_TOKEN_CACHE.clear()
+    _CREDENTIAL_OWNER_CACHE.clear()

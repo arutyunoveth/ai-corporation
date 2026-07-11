@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from src.shared.config.settings import get_settings
 from src.shared.db.diagnostics import get_database_diagnostics, masked_database_url
 from src.shared.db.base import Base
+from src.modules.tender_operator_agent_demo.credential_resolver import resolve_getdocsip_credential
 from src.modules.tender_operator_agent_demo.settings import get_zakupki_soap_settings
 from src.tender_research.config import load_config
 from src.tender_research.repository import TenderRepository
@@ -321,6 +322,21 @@ def tender_research_health() -> dict:
         finally:
             session.close()
     soap_settings = get_zakupki_soap_settings()
+    credential = resolve_getdocsip_credential()
+    credential_diag = {}
+    if credential.configured:
+        credential_diag = {
+            "configured": True,
+            "credential_owner": credential.credential_owner,
+            "source": credential.source,
+            "legacy_fallback": credential.legacy_fallback_used,
+            "warnings": credential.warnings,
+        }
+    else:
+        credential_diag = {
+            "configured": False,
+            "warnings": credential.warnings,
+        }
     return {
         "status": "ok",
         "database_dialect": diag.get("database_dialect"),
@@ -334,6 +350,7 @@ def tender_research_health() -> dict:
             **bulk_health,
             "provider_status": "configured" if soap_settings.configured else "not_configured",
             "token_configured": soap_settings.token_configured,
+            "credential": credential_diag,
             "insecure_tls": True,
             "regions_covered": [],
             "document_types_covered": ["epNotificationEF2020"],

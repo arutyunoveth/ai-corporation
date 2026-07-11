@@ -139,3 +139,37 @@ def _regions_for_mode(mode: SyncMode, regions: list[str] | None) -> list[str]:
     if mode == "nationwide":
         return list(ALL_RUSSIAN_REGIONS)
     return list(DEFAULT_TARGET_REGIONS)
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+
+    from src.shared.db.session import SessionLocal
+
+    parser = argparse.ArgumentParser(description="EIS bulk feed one-shot sync")
+    parser.add_argument("--regions", nargs="+", default=None, help="Region codes (e.g. 77 78)")
+    parser.add_argument("--date", type=str, default=None, help="Date YYYY-MM-DD (default: today)")
+    parser.add_argument("--mode", choices=["targeted", "nationwide", "backfill"], default="targeted")
+    parser.add_argument("--concurrency", type=int, default=2)
+    parser.add_argument("--max-archives", type=int, default=None)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    sync_date = date.fromisoformat(args.date) if args.date else date.today()
+
+    session = SessionLocal()
+    try:
+        result = sync_eis_bulk_feed(
+            session=session,
+            regions=args.regions,
+            dates=[sync_date],
+            mode=args.mode,
+            concurrency=args.concurrency,
+            max_archives=args.max_archives,
+            dry_run=args.dry_run,
+        )
+        output = result.to_dict()
+        print(json.dumps(output, ensure_ascii=False, indent=2, default=str))
+    finally:
+        session.close()

@@ -89,8 +89,9 @@ class BulkFetchResult:
 class EisGetDocsBulkProvider:
     def __init__(self, *, client: ZakupkiSoapClient | None = None, repository: TenderRepository | None = None):
         settings = get_zakupki_soap_settings()
-        if settings.token_owner != "individual":
-            raise ValueError("GetDocsIP bulk provider requires an individual token")
+        if not settings.configured:
+            raise ValueError("GetDocsIP bulk provider requires a configured credential (individual or document_export)")
+        self.settings = settings
         self.client = client or ZakupkiSoapClient(settings)
         self.repository = repository
 
@@ -166,13 +167,15 @@ class EisGetDocsBulkProvider:
                             result.errors.append({"file": item.file_name, "message": item.error})
                         continue
                     result.parsed_count += 1
-                    state = self._persist_tender(item.tender, source_archive_id=archive_record_id)
+                    state, tender_id = self._persist_tender(item.tender, source_archive_id=archive_record_id)
                     if state == "inserted":
                         result.records_inserted += 1
                     elif state == "updated":
                         result.records_updated += 1
                     else:
                         result.records_unchanged += 1
+                    if tender_id and item.tender:
+                        self._persist_documents(tender_id, item.tender.get("raw_payload") or {})
                 self._record_archive(
                     archive_url=archive_url,
                     payload=payload,
@@ -226,11 +229,30 @@ class EisGetDocsBulkProvider:
         )
         return archive.id
 
-    def _persist_tender(self, tender: dict, *, source_archive_id: str | None) -> str:
+    def _persist_tender(self, tender: dict, *, source_archive_id: str | None) -> tuple[str, str | None]:
         if self.repository is None:
-            return "unchanged"
-        _record, state = self.repository.upsert_tender_with_version(tender, source_archive_id=source_archive_id)
-        return state
+            return "unchanged", None
+        record, state = self.repository.upsert_tender_with_version(tender, source_archive_id=source_archive_id)
+        return state, record.id
+
+    def _persist_documents(self, tender_id: str, raw_payload: dict) -> int:
+        if self.repository is None:
+            return 0
+        count = 0
+        for att in raw_payload.get("attachments") or []:
+            if not att.get("file_name") and not att.get("file_url"):
+                continue
+            self.repository.upsert_document({
+                "tender_id": tender_id,
+                "source_document_id": att.get("file_url") or att.get("file_name"),
+                "file_name": att["file_name"] or f"attachment-{count + 1}",
+                "file_url": att.get("file_url"),
+                "content_type": att.get("content_type"),
+                "size_bytes": att.get("size_bytes"),
+                "raw_meta": att,
+            })
+            count += 1
+        return count
 
 
 def process_zip_payload(payload: bytes) -> list[ParsedXmlResult]:
@@ -272,6 +294,7 @@ def parse_ep_notification_xml(xml_bytes: bytes, *, file_name: str = "") -> dict:
     if not purchase_number:
         raise ValueError("purchaseNumber not found")
     title = _first_text(root, "purchaseObjectInfo")
+    attachments = _extract_attachments_from_xml(root)
     raw = {
         "file_name": file_name,
         "purchase_number": purchase_number,
@@ -288,6 +311,7 @@ def parse_ep_notification_xml(xml_bytes: bytes, *, file_name: str = "") -> dict:
         "scheme_version": root.find(".//*").attrib.get("schemeVersion") if root.find(".//*") is not None else None,
         "version_number": _first_text(root, "versionNumber"),
         "modification_date": _first_text(root, "modificationDate", "updateDate", "publishDTInEIS"),
+        "attachments": attachments,
     }
     normalized = {
         "source": PROVIDER,
@@ -310,6 +334,64 @@ def parse_ep_notification_xml(xml_bytes: bytes, *, file_name: str = "") -> dict:
     }
     normalized["content_hash"] = content_hash(json.dumps(raw, sort_keys=True, ensure_ascii=False))
     return normalized
+
+
+ALLOWED_EIS_ATTACHMENT_HOSTS = frozenset({
+    "zakupki.gov.ru",
+    "www.zakupki.gov.ru",
+    "int.zakupki.gov.ru",
+    "int44.zakupki.gov.ru",
+})
+
+FORBIDDEN_URL_SCHEMES = frozenset({"javascript:", "file:", "data:", "vbscript:"})
+
+KNOWN_ATTACHMENT_INFO_TAGS = frozenset({"attachmentInfo", "attachmentinfo"})
+
+
+def _extract_attachments_from_xml(root: ET.Element) -> list[dict[str, str | None]]:
+    attachments: list[dict[str, str | None]] = []
+    seen_urls: set[str] = set()
+    for node in root.iter():
+        local = _local_name(node.tag)
+        if local not in KNOWN_ATTACHMENT_INFO_TAGS:
+            continue
+        name = _first_text(node, "fileName", "docName", "name", "documentName")
+        url = _first_text(node, "url", "downloadUrl", "fileUrl", "href")
+        if url:
+            url = url.strip()
+            if _is_forbidden_url(url) or not _is_allowed_eis_attachment_host(url):
+                continue
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+        if not url and not name:
+            continue
+        attachments.append({
+            "file_name": name,
+            "file_url": url,
+            "content_type": _first_text(node, "contentType", "mimeType", "content_type", "MIME"),
+            "size_bytes": _to_int(_first_text(node, "size", "sizeBytes", "fileSize")),
+        })
+    return attachments
+
+
+def _is_forbidden_url(url: str) -> bool:
+    lower = url.strip().lower()
+    for scheme in FORBIDDEN_URL_SCHEMES:
+        if lower.startswith(scheme):
+            return True
+    return False
+
+
+def _is_allowed_eis_attachment_host(url: str) -> bool:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return True
+    for allowed in ALLOWED_EIS_ATTACHMENT_HOSTS:
+        if host == allowed or host.endswith("." + allowed):
+            return True
+    return False
 
 
 def _local_name(tag: str) -> str:
@@ -361,6 +443,15 @@ def _placing_way(root: ET.Element) -> str | None:
         if _local_name(node.tag) == "placingWay":
             return _first_text(node, "name", "code")
     return None
+
+
+def _to_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(float(value.replace(" ", "").replace(",", ".")))
+    except ValueError:
+        return None
 
 
 def _sha256_text(value: str) -> str:
