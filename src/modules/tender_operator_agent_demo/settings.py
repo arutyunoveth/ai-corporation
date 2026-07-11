@@ -98,6 +98,7 @@ def _validate_tls_guard() -> None:
 class ZakupkiSoapSettings:
     enabled: bool = False
     token: str = field(default="", repr=False)
+    document_export_token: str = field(default="", repr=False)
     token_owner: TokenOwner = "individual"
     base_url: str = DEFAULT_LEGACY_BASE_URL
     individual_base_url: str = DEFAULT_INDIVIDUAL_BASE_URL
@@ -129,6 +130,7 @@ class ZakupkiSoapSettings:
         return cls(
             enabled=_read_bool("ZAKUPKI_GOV_RU_SOAP_ENABLED", False),
             token=os.environ.get("ZAKUPKI_GOV_RU_SOAP_TOKEN", "").strip(),
+            document_export_token=os.environ.get("ZAKUPKI_GOV_RU_DOCUMENT_EXPORT_TOKEN", "").strip(),
             token_owner=_read_token_owner(),
             base_url=os.environ.get("ZAKUPKI_GOV_RU_SOAP_BASE_URL", DEFAULT_LEGACY_BASE_URL).strip()
             or DEFAULT_LEGACY_BASE_URL,

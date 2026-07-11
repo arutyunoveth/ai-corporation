@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from pathlib import Path
+
+
+_RTF_UUID_PATTERN = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
 
 
 class TokenMetadata:
@@ -11,6 +17,8 @@ class TokenMetadata:
         self.byte_size = byte_size
         self._whitespace_removed = False
         self._quotes_removed = False
+        self._rtf_detected = False
+        self._uuid_extracted_from_rtf = False
         self._normalized = self._normalize(token)
 
     def _normalize(self, raw: str) -> str:
@@ -26,6 +34,12 @@ class TokenMetadata:
         self._whitespace_removed = bool(s != s.strip())
         s = s.strip()
         s = s.replace("\r\n", "").replace("\r", "").replace("\n", "")
+        self._rtf_detected = bool(re.search(r"\\rtf1?", s[:50]))
+        if self._rtf_detected:
+            found = _RTF_UUID_PATTERN.findall(s)
+            if found:
+                self._uuid_extracted_from_rtf = True
+                s = found[0]
         return s
 
     @property
@@ -57,6 +71,14 @@ class TokenMetadata:
         return bool(self._quotes_removed)
 
     @property
+    def rtf_detected(self) -> bool:
+        return bool(self._rtf_detected)
+
+    @property
+    def uuid_extracted_from_rtf(self) -> bool:
+        return bool(self._uuid_extracted_from_rtf)
+
+    @property
     def sha256(self) -> str:
         return hashlib.sha256(self._normalized.encode("utf-8")).hexdigest()
 
@@ -72,6 +94,8 @@ class TokenMetadata:
             "uuid_like": self.uuid_like,
             "whitespace_removed": self.contains_whitespace,
             "quotes_removed": self.quotes_removed,
+            "rtf_detected": self.rtf_detected,
+            "uuid_extracted_from_rtf": self.uuid_extracted_from_rtf,
             "sha256": self.sha256,
         }
 
