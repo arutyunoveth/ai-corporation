@@ -6,9 +6,9 @@ Stage: closed design-partner pilot baseline. The MVP supports controlled tender 
 
 ## Runtime
 
-Canonical integration checkout: `/Users/master/Documents/AI-Corporation-r0` on `codex/r0-sync-2026-07-11`. Target ports are backend `8001`, PostgreSQL `55432`, LLM `8088`, embeddings `8090`.
+Canonical runtime checkout: `/Users/master/arvectum-runtime/AI-Corporation` on `codex/r0-sync-2026-07-11`. Runtime ports are backend `8001`, PostgreSQL `55432`, Ollama OpenAI-compatible LLM `11434`, and embeddings `8090`.
 
-Actual preflight: local PostgreSQL remains on `5432`; LLM `8088` is listening; embeddings `8090` is unavailable; backend `8001` is not running. The runtime is therefore **not deployed**. Backup: `/Users/master/Documents/arvectum-r0-backups/20260711-145008`.
+Actual baseline: Docker pgvector PostgreSQL is healthy on host port `55432`; the unrelated `5432` PostgreSQL remains untouched. Backend and embeddings are launchd-managed and healthy on `8001` and `8090`; Ollama on `11434` is the canonical LLM owner. Port `8088` is an unrelated HTTP service and is not used. Backup: `/Users/master/Documents/arvectum-r0-backups/20260711-145008`.
 
 ## Capability matrix
 
