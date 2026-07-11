@@ -64,7 +64,8 @@ def test_tender_operator_demo_page_shows_both_modes(client):
     response = client.get("/demo/tender-agent")
 
     assert response.status_code == 200
-    assert "Найти закупку" in response.text
+    assert "Быстрый разбор закупки" in response.text
+    assert "Анализ по номеру" in response.text
     assert "Демо-набор" in response.text
     assert "Загрузка и анализ" in response.text
 

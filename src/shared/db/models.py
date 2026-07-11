@@ -1,7 +1,13 @@
 from src.modules.action_queue.models import ActionQueueApproval, ActionQueueRecord, ActionQueueSet
 from src.modules.agent_registry.models import AgentRegistryRecord, AgentRegistrySet
+from src.modules.hermes_agent.models import (
+    AgentMemory,
+    AnalysisQualityCheck,
+    DocumentEvidenceSpan,
+    TenderAnalysisFeedback,
+    TenderEvalCase,
+)
 from src.tender_research.models import (
-    TenderAnalysisJob,
     ProcurementCustomer,
     ProcurementDocumentChunk,
     ProcurementDocumentEmbedding,
@@ -9,7 +15,6 @@ from src.tender_research.models import (
     ProcurementTender,
     ProcurementTenderDocument,
     ProcurementTenderSearchQuery,
-    TenderAnalysisRun,
     ProcurementWebPage,
     ProcurementWebSearchResult,
 )
@@ -270,9 +275,11 @@ __all__ = [
     "ActionQueueApproval",
     "ActionQueueRecord",
     "ActionQueueSet",
+    "AgentMemory",
     "AgentPromptLink",
     "AgentRegistryRecord",
     "AgentRegistrySet",
+    "AnalysisQualityCheck",
     "ActionConsoleItem",
     "ActionConsoleRecord",
     "ActionConsoleSet",
@@ -353,6 +360,7 @@ __all__ = [
     "DocumentRequirementRow",
     "DocumentRequirementSet",
     "DocumentArtifact",
+    "DocumentEvidenceSpan",
     "DocumentIngestionRun",
     "DocumentSet",
     "DocumentSetItem",
@@ -498,6 +506,8 @@ __all__ = [
     "SubmissionArchiveItem",
     "SubmissionArchiveRecord",
     "SubmissionArchiveSet",
+    "TenderAnalysisFeedback",
+    "TenderEvalCase",
     "TenderScreeningRecord",
     "TenderImportEvent",
     "TenderImportPayload",

@@ -173,20 +173,3 @@ def test_local_chat_llm_client_retries_with_fewer_contexts_on_context_limit(monk
     assert answer.error is None
     assert observed_inputs == [2, 1]
     assert answer.used_chunks_count == 1
-
-
-def test_local_chat_llm_client_reports_prompt_metrics() -> None:
-    client = LocalChatLlmClient(
-        base_url="http://127.0.0.1:8088/v1",
-        model_name="qwen-local",
-    )
-
-    metrics = client.build_prompt_metrics(
-        "Какие требования к составу заявки?",
-        _hits(),
-        registry_number="123",
-        analysis_mode="fast",
-    )
-
-    assert metrics["context_chars"] > 0
-    assert metrics["prompt_chars"] >= metrics["user_prompt_chars"]

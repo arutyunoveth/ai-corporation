@@ -128,15 +128,7 @@ def test_analyze_tender_use_llm_with_mocked_client(tmp_path, monkeypatch, capsys
     observed_questions: list[str] = []
 
     class FakeClient:
-        def build_prompt_metrics(self, question, contexts, registry_number=None, analysis_mode="balanced"):
-            return {
-                "context_chars": 1200,
-                "system_prompt_chars": 200,
-                "user_prompt_chars": 300,
-                "prompt_chars": 500,
-            }
-
-        def generate_answer(self, question, contexts, registry_number=None, analysis_mode="balanced"):
+        def generate_answer(self, question, contexts, registry_number=None):
             observed_questions.append(question)
             return RagAnswer(
                 answer=(
@@ -151,7 +143,7 @@ def test_analyze_tender_use_llm_with_mocked_client(tmp_path, monkeypatch, capsys
 
     monkeypatch.setattr(
         "src.tender_research.rag.analysis_service.LocalChatLlmClient",
-        lambda base_url, model_name, timeout_seconds, max_context_chars: FakeClient(),
+        lambda base_url, model_name, timeout_seconds: FakeClient(),
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -218,15 +210,7 @@ def test_analyze_tender_llm_unavailable_falls_back_to_retrieval(tmp_path, monkey
     _prepare_index(tmp_path, monkeypatch, capsys)
 
     class FakeClient:
-        def build_prompt_metrics(self, question, contexts, registry_number=None, analysis_mode="balanced"):
-            return {
-                "context_chars": 1200,
-                "system_prompt_chars": 200,
-                "user_prompt_chars": 300,
-                "prompt_chars": 500,
-            }
-
-        def generate_answer(self, question, contexts, registry_number=None, analysis_mode="balanced"):
+        def generate_answer(self, question, contexts, registry_number=None):
             return RagAnswer(
                 answer="",
                 sources=build_source_citations(contexts),
@@ -237,7 +221,7 @@ def test_analyze_tender_llm_unavailable_falls_back_to_retrieval(tmp_path, monkey
 
     monkeypatch.setattr(
         "src.tender_research.rag.analysis_service.LocalChatLlmClient",
-        lambda base_url, model_name, timeout_seconds, max_context_chars: FakeClient(),
+        lambda base_url, model_name, timeout_seconds: FakeClient(),
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -277,4 +261,5 @@ def test_analyze_tender_every_section_has_sources_or_insufficient_info(tmp_path,
     for sid in expected_ids:
         assert f"## {sid}." in out
     assert out.count("**Источники:**") >= 1
+
 

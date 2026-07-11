@@ -33,11 +33,8 @@ class TestAnalyzeEndpoint:
             sections=[mock_section],
             sections_count=1,
             sources_count=5,
-            analysis_mode="fast",
             report_markdown="# Test Report",
             used_llm=False,
-            duration_seconds=4.2,
-            timings={"total_seconds": 4.2},
             warnings=[],
             errors=[],
         )
@@ -61,8 +58,6 @@ class TestAnalyzeEndpoint:
             assert data["status"] == "completed"
             assert data["sections_count"] == 1
             assert data["sources_count"] == 5
-            assert data["analysis_mode"] == "fast"
-            assert data["duration_seconds"] == 4.2
             assert data["report_markdown"] == "# Test Report"
             assert data["used_llm"] is False
 
@@ -79,7 +74,7 @@ class TestAnalyzeEndpoint:
         with patch(
             "src.tender_research.api.analyze_tender",
             return_value=mock_result,
-        ) as mock_analyze:
+        ):
             response = client.post(
                 "/api/tender-research/analyze",
                 json={
@@ -87,12 +82,10 @@ class TestAnalyzeEndpoint:
                     "use_llm": True,
                     "llm_base_url": "http://127.0.0.1:8088/v1",
                     "llm_model": "qwen2.5-14b",
-                    "analysis_mode": "fast",
                 },
             )
             assert response.status_code == 200
             assert response.json()["used_llm"] is True
-            assert mock_analyze.call_args.kwargs["analysis_mode"] == "fast"
 
     def test_analyze_internal_error(self):
         """POST /api/tender-research/analyze returns 500 on service error."""
@@ -155,13 +148,9 @@ class TestLatestReportEndpoint:
 
         with patch(
             "src.tender_research.api.load_config"
-        ) as mock_load_config, patch(
-            "src.tender_research.api.get_latest_report"
-        ) as mock_get:
+        ) as mock_load_config:
             mock_config = mock_load_config.return_value
             mock_config.data_dir = str(tmp_path)
-            mock_record = type("MockRecord", (), {"registry_number": registry_number, "report_path": "", "created_at": None})()
-            mock_get.return_value = (mock_record, "# Test Report Content", None)
             response = client.get(
                 f"/api/tender-research/analyze/{registry_number}/latest"
             )

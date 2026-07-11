@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from src.modules.action_queue.router import router as action_queue_router
 from src.modules.agent_registry.router import router as agent_registry_router
 from src.modules.agent_registry.internal_router import router as internal_company_agents_router
+from src.modules.hermes_agent.internal_router import router as hermes_agent_router
 from src.modules.action_console.router import router as action_console_router
 from src.modules.acceptance_control.router import router as acceptance_control_router
 from src.modules.archive_export.router import router as archive_export_router
@@ -105,6 +106,7 @@ register_exception_handlers(app)
 app.include_router(deals_router)
 app.include_router(agent_registry_router)
 app.include_router(internal_company_agents_router)
+app.include_router(hermes_agent_router)
 app.include_router(dashboard_snapshots_router)
 app.include_router(archive_export_router)
 app.include_router(workflow_runs_router)

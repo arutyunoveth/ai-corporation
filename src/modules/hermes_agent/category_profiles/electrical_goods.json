@@ -1,0 +1,93 @@
+{
+  "category": "electrical_goods",
+  "label": "Электротехническая продукция",
+  "signals": [
+    "кабель", "провод", "сип", "аввг", "ввг", "кг", "кввг",
+    "гост 31996", "кв", "сечение", "жила", "изоляция",
+    "кабельно-проводниковая", "кпп"
+  ],
+  "required_fields": ["raw_name", "normalized_name", "quantity", "unit", "source_document", "source_quote"],
+  "recommended_fields": [
+    "type_mark", "cores_count", "cross_section_mm2", "voltage",
+    "conductor_material", "insulation_material", "standard",
+    "equivalent_allowed"
+  ],
+  "normalization_rules": {
+    "type_mark": {
+      "patterns": [
+        "(?:кабель|провод)?\\s*(аввг|ввг|сип|кг|кввг|квббшв|пвс|шввп|вббшв|пвббшв|ас|аск|тпж|пвпг|пввг|ппг|пув|пугв|нум|nym|nyby|nyy|нрг|апвпг|апввг|аппг|апвпуг)\\b",
+        "(?:кабель|провод)?\\s*(авббшв|апвббшв|пвпу|пугвп|ппгнг|ввгнг|нг\\-ls|lsloh|frls)\\b"
+      ],
+      "extract_group": 1
+    },
+    "cores_count": {
+      "patterns": [
+        "(\\d+)\\s*(?:[хx]|жил)\\s*(?:\\d+(?:\\.\\d+)?)",
+        "(\\d+)[-\\s]жильный",
+        "(\\d+)[-\\s]жильн"
+      ],
+      "extract_group": 1
+    },
+    "cross_section_mm2": {
+      "patterns": [
+        "(\\d+(?:\\.\\d+)?)\\s*(?:мм[²2]|кв\\.?\\s*мм|квадратных\\s*миллиметров)",
+        "сечением\\s*(\\d+(?:\\.\\d+)?)",
+        "(\\d+(?:\\.\\d+)?)\\s*[хx]\\s*(\\d+(?:\\.\\d+)?)"
+      ],
+      "extract_group": 2
+    },
+    "voltage": {
+      "patterns": [
+        "(\\d+(?:\\.\\d+)?)\\s*(?:кв|киловольт)",
+        "напряжением\\s*(\\d+(?:\\.\\d+)?)",
+        "(\\d+(?:\\.\\d+)?)\\s*кв"
+      ],
+      "extract_group": 1
+    },
+    "standard": {
+      "patterns": [
+        "(гост\\s*\\d+(?:[.-]\\d+)*)",
+        "(ту\\s*\\d+(?:[.-]\\d+)*)"
+      ],
+      "extract_group": 1
+    },
+    "equivalent_allowed": {
+      "patterns": [
+        "(?:аналог|эквивалент|или\\s+эквивалент|не\\s+допускается\\s+аналог)",
+        "эквивалент[а-я]+"
+      ],
+      "equivalent_match": true
+    }
+  },
+  "quality_gates": [
+    {
+      "name": "electrical_required_fields_present",
+      "severity": "fail",
+      "condition": "missing_required_fields"
+    },
+    {
+      "name": "electrical_quantity_unit_required",
+      "severity": "fail",
+      "condition": "missing_quantity_or_unit"
+    },
+    {
+      "name": "electrical_cable_type_mark_required",
+      "severity": "fail",
+      "condition": "cable_without_type_mark"
+    },
+    {
+      "name": "electrical_standard_recommended",
+      "severity": "warning",
+      "condition": "missing_standard_for_cable"
+    },
+    {
+      "name": "electrical_nmck_mapping_complete",
+      "severity": "fail",
+      "condition": "nmck_mapping_failed_with_nmck"
+    }
+  ],
+  "nmck_mapping_settings": {
+    "match_by": ["normalized_name", "type_mark"],
+    "fuzzy_threshold": 0.7
+  }
+}

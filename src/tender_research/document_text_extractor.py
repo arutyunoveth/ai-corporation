@@ -69,27 +69,11 @@ def _extract_docx(content: bytes) -> str:
             xml_content = z.read("word/document.xml")
         root = ElementTree.fromstring(xml_content)
         ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-        body = root.find("w:body", ns)
-        if body is None:
-            return ""
-
-        blocks: list[str] = []
-        for child in body:
-            tag = child.tag.rsplit("}", 1)[-1]
-            if tag == "p":
-                paragraph_text = "".join(t.text or "" for t in child.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")).strip()
-                if paragraph_text:
-                    blocks.append(paragraph_text)
-            elif tag == "tbl":
-                for row in child.findall("w:tr", ns):
-                    cells: list[str] = []
-                    for cell in row.findall("w:tc", ns):
-                        cell_text = "".join(t.text or "" for t in cell.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")).strip()
-                        cells.append(cell_text)
-                    normalized_cells = [cell for cell in cells if cell]
-                    if normalized_cells:
-                        blocks.append("\t".join(normalized_cells))
-        return "\n".join(blocks)
+        texts = []
+        for t in root.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+            if t.text:
+                texts.append(t.text)
+        return " ".join(texts)
     except Exception:
         return ""
 
