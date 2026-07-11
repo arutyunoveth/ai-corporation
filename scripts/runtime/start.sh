@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root=$(git rev-parse --show-toplevel)
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
 env_file=${ARVECTUM_ENV_FILE:-"$root/.env.local"}
 [[ -f "$env_file" ]] || { echo "missing $env_file" >&2; exit 2; }
 set -a; source "$env_file"; set +a
