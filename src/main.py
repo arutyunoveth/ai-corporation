@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from src.modules.action_queue.router import router as action_queue_router
 from src.modules.agent_registry.router import router as agent_registry_router
 from src.modules.agent_registry.internal_router import router as internal_company_agents_router
+from src.modules.hermes_agent.internal_router import router as hermes_agent_router
 from src.modules.action_console.router import router as action_console_router
 from src.modules.acceptance_control.router import router as acceptance_control_router
 from src.modules.archive_export.router import router as archive_export_router
@@ -85,6 +86,7 @@ from src.modules.tender_screening.router import router as tender_screening_route
 from src.modules.tender_import.router import router as tender_import_router
 from src.modules.tender_intake.router import router as tender_intake_router
 from src.modules.tender_operator_agent_demo.router import router as tender_operator_agent_demo_router
+from src.tender_research.api import router as tender_research_router
 from src.modules.tender_normalization.router import router as tender_normalization_router
 from src.modules.tender_summary.router import router as tender_summary_router
 from src.modules.vendor_connectors.router import router as vendor_connectors_router
@@ -104,6 +106,7 @@ register_exception_handlers(app)
 app.include_router(deals_router)
 app.include_router(agent_registry_router)
 app.include_router(internal_company_agents_router)
+app.include_router(hermes_agent_router)
 app.include_router(dashboard_snapshots_router)
 app.include_router(archive_export_router)
 app.include_router(workflow_runs_router)
@@ -191,6 +194,7 @@ app.include_router(shipping_acceptance_router)
 app.include_router(incident_register_router)
 app.include_router(supplier_fulfillment_router)
 app.include_router(supplier_progress_router)
+app.include_router(tender_research_router)
 
 
 @app.get("/health")

@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     yandex_api_key: str | None = None
     yandex_iam_token: str | None = None
     yandex_base_url: str = "https://ai.api.cloud.yandex.net/v1"
+    yandex_search_api_key: str | None = None
+    yandex_search_folder_id: str | None = None
     cloudru_api_key: str | None = None
     cloudru_base_url: str = "https://foundation-models.api.cloud.ru/v1"
     gigachat_auth_key: str | None = None
@@ -32,9 +34,65 @@ class Settings(BaseSettings):
     gigachat_oauth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
     gigachat_base_url: str = "https://gigachat.devices.sberbank.ru/api/v1"
 
+    arvectum_data_dir: str = "./data"
+    tender_research_enabled: bool = True
+    tender_research_batch_limit: int = 10
+    tender_research_eis_mode: str = "demo"
+    tender_research_eis_discovery_mode: str = "registry_numbers"
+    tender_research_eis_seed_file: str = "data/eis_seed/registry_numbers.txt"
+    web_search_enabled: bool = False
+    web_search_provider: str = "duckduckgo_html"
+    web_search_max_queries_per_tender: int = 8
+    web_search_max_results_per_query: int = 10
+    web_search_delay_seconds: float = 3.0
+    web_search_timeout_seconds: int = 20
+    web_fetch_enabled: bool = True
+    web_fetch_max_pages_per_tender: int = 20
+    web_fetch_delay_seconds: float = 2.0
+    web_fetch_timeout_seconds: int = 30
+    web_fetch_max_file_size_mb: int = 25
+    web_use_playwright: bool = False
+    web_save_screenshots: bool = False
+    web_deny_domains: str = ""
+    web_allow_domains: str = ""
+    document_download_max_size_mb: int = 100
+    document_extract_max_chars: int = 2_000_000
+    rag_chunk_size_chars: int = 1500
+    rag_chunk_overlap_chars: int = 200
+    rag_min_chunk_chars: int = 120
+    rag_embeddings_provider: str = "hashing"
+    rag_embeddings_model: str = "local-hash-v1"
+    rag_embeddings_base_url: str = "http://127.0.0.1:8090/v1"
+    rag_embeddings_timeout_seconds: int = 60
+    rag_embeddings_batch_size: int = 16
+    rag_embeddings_dimension: str | int | None = None
+    rag_vector_store: str = "json"
+    rag_vector_store_path: str | None = None
+    rag_embedding_dimension: str | int | None = 256
+    rag_use_llm: bool = False
+    local_llm_base_url: str = "http://127.0.0.1:8088/v1"
+    local_llm_model: str = "qwen2.5-14b"
+    local_llm_timeout_seconds: int = 120
+
+    registry_discovery_source: str = "auto"
+    registry_discovery_days_back: int = 3
+    registry_discovery_limit: int = 10
+    public_search_enabled: bool = True
+    public_search_use_playwright: bool = False
+    public_search_delay_seconds: float = 3.0
+    public_search_timeout_seconds: int = 30
+    public_search_bypass_proxy: bool = False
+    public_search_page_size: int = 30
+    public_search_no_proxy_domains: str = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru"
+    allow_demo_discovery: bool = True
+
+    hermes_base_url: str = "http://127.0.0.1:8099"
+    hermes_timeout_seconds: int = 120
+    hermes_enabled: bool = False
+
     model_config = SettingsConfigDict(
         env_prefix="AI_CORP_",
-        env_file=".env",
+        env_file=[".env", ".env.local"],
         extra="ignore",
     )
 

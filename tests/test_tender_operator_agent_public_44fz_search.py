@@ -129,10 +129,10 @@ def test_source_urls_available(client):
 def test_ui_contains_public_44fz_source_label(client):
     response = client.get("/demo/tender-agent")
     assert response.status_code == 200
-    assert "Публичный поиск ЕИС 44-ФЗ" in response.text
-    assert "Без обхода captcha" in response.text
     assert "Только чтение" in response.text
-    assert "Без подачи на площадку" in response.text
+    assert "Без подачи заявки" in response.text
+    assert "Без ЭЦП" in response.text
+    assert "GO / NO-GO" in response.text
 
 
 def test_ui_search_results_handoff_flow_text(client):

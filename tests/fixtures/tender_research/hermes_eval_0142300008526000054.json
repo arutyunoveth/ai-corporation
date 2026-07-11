@@ -1,0 +1,35 @@
+{
+  "tender_number": "0142300008526000054",
+  "fixture_name": "eval_0142300008526000054_cable_supply",
+  "description": "Закупка кабельной продукции: АВВГ-П, СИП-4. Самарская область, г. Кинель.",
+  "must_include_json": {
+    "line_items": [
+      {
+        "name": "АВВГ-П",
+        "quantity": "200",
+        "unit": "м"
+      },
+      {
+        "name": "СИП-4",
+        "quantity": "1300",
+        "unit": "м"
+      },
+      {
+        "name": "СИП-4",
+        "quantity": "700",
+        "unit": "м"
+      }
+    ],
+    "summary.delivery_address": "Самарская область, г. Кинель",
+    "summary.delivery_term": "31.12.2026"
+  },
+  "must_not_include_json": {
+    "summary.subject": "поставка электротехнической продукции"
+  },
+  "expected_line_items_count_min": 3,
+  "checks": [
+    "line_items_required_for_goods",
+    "line_items_required_if_specification_exists",
+    "summary_subject_not_too_generic"
+  ]
+}

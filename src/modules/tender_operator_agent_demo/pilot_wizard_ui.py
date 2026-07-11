@@ -629,11 +629,16 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     человека.
                   </div>
                   <div class="field-grid" style="margin-bottom:14px">
-                    <label>
-                      <span class="label-title">Ссылка на закупку в ЕИС или реестровый номер</span>
-                      <span class="label-hint">Поддерживается ссылка вида `zakupki.gov.ru/...regNumber=...` или просто номер закупки. Это поле используется как основной вход в сценарий.</span>
-                      <input name="procurement_url" placeholder="https://zakupki.gov.ru/epz/order/notice/ea44/view.html?regNumber=0888200000224000038" />
-                    </label>
+                    <div class="field-grid two" style="margin-bottom:0">
+                      <label>
+                        <span class="label-title">Ссылка на закупку в ЕИС или реестровый номер</span>
+                        <span class="label-hint">Поддерживается ссылка вида `zakupki.gov.ru/...regNumber=...` или просто номер закупки. Это поле используется как основной вход в сценарий.</span>
+                        <input name="procurement_url" placeholder="https://zakupki.gov.ru/epz/order/notice/ea44/view.html?regNumber=0888200000224000038" />
+                      </label>
+                      <div style="display:flex;align-items:center;padding-top:22px">
+                        <button class="button primary" id="lookup-by-number-button" type="button" style="flex:1">Найти закупку по номеру</button>
+                      </div>
+                    </div>
                   </div>
                   <div id="selected-procurement" class="selected-procurement" style="display:none"></div>
                   <div class="search-grid">
@@ -1249,7 +1254,20 @@ def render_tender_operator_pilot_wizard_html() -> str:
                     </ul>
                   </div>
                 </div>
-                <div class="result-block">
+                <div class="card" id="hermes-quality-block-${escapeHtml(run.run_id)}" style="margin-top:8px">
+                  <h3>Качество анализа (Hermes Runtime)</h3>
+                  <div class="metrics" id="hermes-quality-summary-${escapeHtml(run.run_id)}" style="margin-bottom:10px">
+                    <div class="metric"><span class="metric-label">Статус</span><span class="metric-value" id="hermes-status-${escapeHtml(run.run_id)}">—</span></div>
+                    <div class="metric"><span class="metric-label">Документов (исп./всего)</span><span class="metric-value" id="hermes-docs-count-${escapeHtml(run.run_id)}">—</span></div>
+                    <div class="metric"><span class="metric-label">Позиций спецификации</span><span class="metric-value" id="hermes-line-items-${escapeHtml(run.run_id)}">—</span></div>
+                    <div class="metric"><span class="metric-label">Проверки качества</span><span class="metric-value" id="hermes-needs-review-${escapeHtml(run.run_id)}">—</span></div>
+                  </div>
+                  <div id="hermes-quality-details-${escapeHtml(run.run_id)}" style="font-size:14px;color:rgba(255,255,255,0.7);"></div>
+                  <div class="actions" style="margin-top:10px">
+                    <button class="button primary" onclick="runWizardHermesQuality('${escapeHtml(run.run_id)}')">Запустить runtime-анализ Hermes</button>
+                  </div>
+                </div>
+                <div class="result-block" style="margin-top:8px">
                   <h3>Шаги обработки</h3>
                   ${renderStepTimeline(run.steps || [])}
                 </div>
@@ -1344,6 +1362,117 @@ def render_tender_operator_pilot_wizard_html() -> str:
             searchResults.textContent = 'Введите ключевые слова и при необходимости уточните фильтры. Результаты поиска появятся здесь.';
           }
 
+          function runWizardHermesQuality(runId) {
+            const statusEl = document.getElementById('hermes-status-' + runId);
+            const docsEl = document.getElementById('hermes-docs-count-' + runId);
+            const itemsEl = document.getElementById('hermes-line-items-' + runId);
+            const reviewEl = document.getElementById('hermes-needs-review-' + runId);
+            const detailsEl = document.getElementById('hermes-quality-details-' + runId);
+            if (!statusEl) return;
+            statusEl.textContent = 'запуск runtime-анализа...';
+            fetch('/api/demo/tender-agent/runs/' + encodeURIComponent(runId) + '/runtime-analysis', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tender_id: runId })
+            })
+              .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+              .then(result => {
+                docsEl.textContent = (result.documents_used_count || 0) + ' / ' + (result.documents_total_count || 0);
+                itemsEl.textContent = (result.line_items || []).length;
+                const failedCount = (result.quality_checks || []).filter(c => c.status === 'failed').length;
+                reviewEl.innerHTML = failedCount;
+                statusEl.textContent = result.final_recommendation?.status || '—';
+                let html = '<div style="margin-top:8px;">';
+                html += '<div style="padding:4px 0;">📁 <strong>Категория:</strong> ' + (result.category_label || '—') + '</div>';
+                if (result.nmck_mapping) {
+                  const nmck = result.nmck_mapping;
+                  const nmckIcon = nmck.mapping_status === 'complete' ? '✅' : nmck.mapping_status === 'partial' ? '⚠️' : '❌';
+                  html += '<div style="padding:4px 0;">' + nmckIcon + ' <strong>НМЦК mapping:</strong> ' + nmck.mapped_count + '/' + nmck.total_nmck_lines + ' (' + nmck.mapping_status + ')</div>';
+                }
+                if (result.normalized_line_items && result.normalized_line_items.length) {
+                  html += '<div style="padding:4px 0;margin-top:4px;"><strong>🔍 Нормализованные позиции:</strong></div>';
+                  result.normalized_line_items.slice(0, 5).forEach((n, i) => {
+                    const mark = n.type_mark || '—';
+                    const section = n.cross_section_mm2 ? n.cross_section_mm2 + ' мм²' : '—';
+                    html += '<div style="padding:2px 0;font-size:13px;color:rgba(255,255,255,0.7);">' + (i+1) + '. ' + n.normalized_name + ' (' + mark + ', ' + section + ')</div>';
+                  });
+                  if (result.normalized_line_items.length > 5) {
+                    html += '<div style="padding:2px 0;font-size:12px;color:rgba(255,255,255,0.4);">... ещё ' + (result.normalized_line_items.length - 5) + '</div>';
+                  }
+                }
+                html += '<div style="padding:4px 0;">🧠 <strong>Применено воспоминаний:</strong> ' + (result.applied_memory_count || 0) + '</div>';
+                html += '<div style="padding:4px 0;">📊 <strong>Покрытие evidence:</strong> ' + (result.evidence_coverage_pct || 0) + '%</div>';
+                if (result.supplier_readiness_memo) {
+                  const memo = result.supplier_readiness_memo;
+                  html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);"><strong>Готовность к участию:</strong> ' + (memo.bid_decision || '—') + ' · балл: ' + (memo.supplier_readiness_score || 0) + '/100</div>';
+                }
+                if (result.quality_checks && result.quality_checks.length) {
+                  html += '<div style="margin-top:8px;"><strong>Проверки качества:</strong></div>';
+                  result.quality_checks.forEach(c => {
+                    const icon = c.status === 'passed' ? '✅' : c.status === 'warning' ? '⚠️' : '❌';
+                    html += '<div style="padding:2px 0;font-size:13px;">' + icon + ' ' + (c.check_name || '') + '</div>';
+                  });
+                }
+                html += '<div style="margin-top:6px;color:rgba(255,255,255,0.4);font-size:11px;">⌱ ' + (result.analysis_duration_ms || 0).toFixed(0) + ' ms</div>';
+                html += '</div>';
+                detailsEl.innerHTML = html;
+              })
+              .catch(err => {
+                statusEl.textContent = 'ошибка';
+                detailsEl.textContent = 'Не удалось выполнить runtime-анализ: ' + err.message;
+              });
+          }
+
+          async function findByNumber() {
+            clearFlash();
+            clearFlash('search-flash');
+            const procurementUrl = getTrimmedValue('procurement_url');
+            if (!procurementUrl) {
+              setFlash('Введите ссылку на закупку или реестровый номер.', true);
+              return;
+            }
+            const reestrNumber = extractReestrNumber(procurementUrl);
+            if (!reestrNumber) {
+              setFlash('Не удалось извлечь номер закупки. Вставьте ссылку ЕИС с regNumber или сам номер.', true);
+              return;
+            }
+            setFlash('Загружаем карточку закупки по номеру…');
+            try {
+              const payload = buildSearchResultPayload();
+              const result = await fetchJson('/api/demo/tender-agent/runs/from-search-result', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              const run = await fetchJson(`/api/demo/tender-agent/runs/${encodeURIComponent(result.run_id)}`);
+              const card = {
+                title: run.tender_title,
+                notice_number: reestrNumber,
+                reestr_number: reestrNumber,
+                customer_name: run.customer_name,
+                source_url: procurementUrl,
+                law: guessLawFromValue(procurementUrl) || '44fz',
+              };
+              useSearchCard(card);
+              const searchNote = document.getElementById('search-results');
+              searchNote.className = 'search-results';
+              searchNote.innerHTML = `
+                <div class="search-results-board">
+                  <div class="search-results-header" style="padding:0">
+                    <div class="search-results-headline">
+                      <div class="search-results-title">Закупка найдена по номеру</div>
+                      <div class="search-results-note">${escapeHtml(reestrNumber)}</div>
+                    </div>
+                  </div>
+                  <div class="flash" style="margin-top:8px">Карточка подтянута. Проверьте данные и нажмите «Обработать тендер».</div>
+                </div>
+              `;
+            } catch (error) {
+              setFlash(`Не удалось получить закупку: ${error.message}`, true);
+            }
+          }
+
+          document.getElementById('lookup-by-number-button').addEventListener('click', findByNumber);
           document.getElementById('pilot-form').addEventListener('submit', processWizard);
           document.getElementById('reset-button').addEventListener('click', resetWizard);
           document.getElementById('search-button').addEventListener('click', searchProcurements);

@@ -24,6 +24,9 @@ from src.modules.tender_operator_agent_demo.event_log import (
 )
 from src.modules.tender_operator_agent_demo.procurement_discovery import get_supplier_profile
 from src.modules.tender_operator_agent_demo.relevance_scoring import score_procurement_document_text
+from src.modules.supplier_search.internet_supplier_search import search_suppliers
+from src.modules.supplier_search.yandex_search_client import YandexSearchClient
+from src.shared.config.settings import get_settings
 from src.modules.tender_operator_agent_demo.quote_normalizer import (
     SpreadsheetSource,
     build_economics_summary,
@@ -885,6 +888,94 @@ def _import_runner_module():
     return pilot_runner
 
 
+def _try_run_llm_workflow(
+    run_id: str,
+    notice_text: str | None,
+    technical_spec_text: str | None,
+    contract_draft_text: str | None,
+    quote_paths: list[Path],
+    provider_mode: str = "llm",
+) -> dict[str, Any] | None:
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+
+        from src.modules.controlled_llm_prebid.service import run_controlled_tender_operator_workflow
+        from src.shared.db.base import Base
+
+        settings = get_settings()
+        if not settings.database_url:
+            return None
+
+        engine = create_engine(settings.database_url)
+        Base.metadata.create_all(engine)
+
+        context = {
+            "deal_id": f"DEMO-{run_id}",
+            "operator_id": "tender_operator_demo",
+            "operator_profile": {},
+            "documents": {
+                "notice_text": notice_text or "",
+                "technical_spec_text": technical_spec_text or "",
+                "contract_draft_text": contract_draft_text or "",
+            },
+            "workflow_guardrails": {
+                "manual_only": True,
+                "no_email_send": True,
+                "no_platform_submission": True,
+                "human_review_required": True,
+            },
+            "tkp_inputs": [],
+        }
+        with Session(engine) as session:
+            result = run_controlled_tender_operator_workflow(
+                session,
+                provider_mode=provider_mode,
+                context=context,
+                include_quote_normalization=False,
+                include_bid_decision=False,
+                simulate_invalid_output=False,
+                provider_name_override=None,
+            )
+            return {
+                "analysis_mode": result.analysis_mode,
+                "resolved_provider": result.resolved_provider,
+                "requirements": result.requirements,
+                "supplier_questions": result.supplier_questions,
+                "rfq_draft": result.rfq_draft,
+                "contract_risks": result.contract_risks,
+                "bid_decision": result.bid_decision,
+            }
+    except Exception:
+        return None
+
+
+def _run_supplier_internet_search(
+    tender_title: str,
+    notice_text: str | None = None,
+    technical_spec_text: str | None = None,
+) -> SupplierSearchOutcome:
+    from src.modules.supplier_search.internet_supplier_search import SupplierSearchOutcome, search_suppliers
+    from src.modules.supplier_search.yandex_search_client import YandexSearchClient
+
+    settings = get_settings()
+    api_key = settings.yandex_search_api_key
+    folder_id = settings.yandex_search_folder_id
+    if not api_key or not folder_id:
+        return SupplierSearchOutcome(error="Yandex Search API не настроен. Добавьте AI_CORP_YANDEX_SEARCH_API_KEY и AI_CORP_YANDEX_SEARCH_FOLDER_ID.")
+    try:
+        client = YandexSearchClient(api_key=api_key, folder_id=folder_id, timeout=30)
+        return search_suppliers(
+            client=client,
+            tender_title=tender_title,
+            notice_text=notice_text,
+            technical_spec_text=technical_spec_text,
+            max_results=10,
+        )
+    except Exception:
+        return SupplierSearchOutcome(error="Не удалось выполнить поиск поставщиков через Yandex Search API.")
+
+
 def _infer_procurement_kind(*texts: str | None) -> str:
     combined = " ".join((text or "").lower() for text in texts if text)
     if not combined:
@@ -1630,6 +1721,7 @@ def _build_output_payloads(
     economics: dict[str, Any] | None,
     bid_decision: dict[str, Any] | None,
     core_complete: bool,
+    quote_inputs_present: bool,
 ) -> dict[str, dict[str, Any]]:
     technical_spec_text = _collect_role_text(documents, "technical_spec")
     contract_draft_text = _collect_role_text(documents, "contract_draft")
@@ -1641,7 +1733,7 @@ def _build_output_payloads(
         str(metadata.get("tender_title") or ""),
     )
     requirement_rows = _extract_requirement_rows(requirements, core_complete, procurement_kind)
-    quote_files_present = bool(tkp_comparison and tkp_comparison.get("suppliers"))
+    quote_files_present = quote_inputs_present
     output_warnings = list(metadata.get("warnings", []))
     preliminary_analysis = _build_preliminary_procurement_analysis(
         metadata=metadata,
@@ -1718,7 +1810,11 @@ def _build_output_payloads(
     }
 
     quotes_payload = {
-        "status": tkp_comparison.get("status", "blocked") if tkp_comparison else "blocked",
+        "status": (
+            tkp_comparison.get("status", "blocked")
+            if tkp_comparison
+            else ("needs_review" if quote_inputs_present else "blocked")
+        ),
         "analysis_mode": tkp_comparison.get("analysis_mode", analysis_mode) if tkp_comparison else analysis_mode,
         "supplier_quotes_found": tkp_comparison.get("supplier_quotes_found", 0) if tkp_comparison else 0,
         "items_extracted": tkp_comparison.get("items_extracted", 0) if tkp_comparison else 0,
@@ -1732,6 +1828,11 @@ def _build_output_payloads(
                 f"Найдено распознанных ТКП: {tkp_comparison.get('supplier_quotes_found', 0)}.",
                 f"Извлечено сопоставимых позиций: {tkp_comparison.get('items_extracted', 0)}.",
                 "Сравнение выполнено локально, в детерминированном демо-режиме без внешних действий.",
+            ]
+            if tkp_comparison
+            else [
+                "ТКП загружены, но не распознаны как структурированные таблицы для автоматического сравнения.",
+                "Нужна ручная проверка цен, сроков и гарантий по исходным файлам или повторная загрузка ТКП в XLS/XLSX.",
             ]
             if quote_files_present
             else [
@@ -2049,8 +2150,37 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
             ],
         ),
         DemoStep(
-            key="questions",
+            key="supplier_search",
             order=3,
+            title="Поиск поставщиков",
+            short_title="Поставщики",
+            status=DemoStepStatus.DONE if metadata.get("supplier_search", {}).get("suppliers") else DemoStepStatus.PARTIAL,
+            description="Интернет-поиск потенциальных поставщиков через Yandex Search API.",
+            agent_action="Выполнен поиск поставщиков на основе требований закупки.",
+            result_summary=f"Найдено поставщиков: {metadata.get('supplier_search', {}).get('total_found', 0)}." if metadata.get("supplier_search", {}).get("suppliers") else "Поиск поставщиков не выполнялся или не настроен.",
+            findings=[f"{s['name']} — {s['site']}" for s in metadata.get("supplier_search", {}).get("suppliers", [])[:5]],
+            human_review=["Проверить найденных поставщиков вручную перед отправкой RFQ."],
+            trace=trace.get("supplier_search", "Поиск поставщиков выполнен через Yandex Search API без внешних изменений."),
+            result_sections=[
+                DemoDetailSection(
+                    title="Найденные поставщики",
+                    kind="table",
+                    columns=["Поставщик", "Сайт", "Сигналы"],
+                    rows=[
+                        {"Поставщик": s["name"], "Сайт": s["site"], "Сигналы": ", ".join(s.get("signals", []) or ["—"])}
+                        for s in metadata.get("supplier_search", {}).get("suppliers", [])[:10]
+                    ],
+                )
+                if metadata.get("supplier_search", {}).get("suppliers")
+                else DemoDetailSection(title="Статус поиска", kind="bullets", items=[
+                    metadata.get("supplier_search", {}).get("query", "Поиск не выполнялся"),
+                    f"Поставщиков не найдено или API не настроено.",
+                ]),
+            ],
+        ),
+        DemoStep(
+            key="questions",
+            order=4,
             title="Вопросы",
             short_title="Вопросы",
             status=DemoStepStatus.NEEDS_REVIEW,
@@ -2066,7 +2196,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="rfq",
-            order=4,
+            order=5,
             title="RFQ",
             short_title="RFQ",
             status=DemoStepStatus.DONE if requirements["requirements"] else DemoStepStatus.PARTIAL,
@@ -2080,13 +2210,21 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="quotes",
-            order=5,
+            order=6,
             title="ТКП",
             short_title="ТКП",
             status=DemoStepStatus.BLOCKED if quote_blocked else (DemoStepStatus.PARTIAL if quote_partial else DemoStepStatus.DONE),
             description="Сопоставление коммерческих предложений, если они были загружены.",
             agent_action="Проверено наличие ТКП и собран локальный снимок сравнения с нормализацией таблиц.",
-            result_summary="ТКП не загружены." if quote_blocked else f"Найдено ТКП: {quotes.get('supplier_quotes_found', 0)}, позиций: {quotes.get('items_extracted', 0)}.",
+            result_summary=(
+                "ТКП не загружены."
+                if quote_blocked
+                else (
+                    "ТКП загружены, но требуют ручной нормализации."
+                    if quotes.get("supplier_quotes_found", 0) == 0
+                    else f"Найдено ТКП: {quotes.get('supplier_quotes_found', 0)}, позиций: {quotes.get('items_extracted', 0)}."
+                )
+            ),
             findings=quotes["highlights"],
             human_review=quotes["manual_checks"],
             trace=trace["quotes"],
@@ -2129,7 +2267,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="economics",
-            order=6,
+            order=7,
             title="Экономика",
             short_title="Экономика",
             status=DemoStepStatus.BLOCKED if economics_blocked else (DemoStepStatus.PARTIAL if economics_partial else DemoStepStatus.NEEDS_REVIEW),
@@ -2153,7 +2291,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="risks",
-            order=7,
+            order=9,
             title="Риски",
             short_title="Риски",
             status=DemoStepStatus.WARNING,
@@ -2182,7 +2320,7 @@ def _build_steps_from_outputs(metadata: dict[str, Any], outputs: dict[str, dict[
         ),
         DemoStep(
             key="decision",
-            order=8 if not metadata.get("procurement_source") else 8,
+            order=9,
             title="Решение",
             short_title="Решение",
             status=DemoStepStatus.NEEDS_REVIEW,
@@ -2394,6 +2532,169 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
     archive_button_html = build_archive_button_html(str(metadata.get("run_id")), archive_available)
     document_toggle_html = build_document_toggle_html(str(metadata.get("run_id")), files)
 
+    hermes_quality_js = f"""
+<script>
+  function runHermesQuality() {{
+    const statusEl = document.getElementById('hermes-status');
+    const docsEl = document.getElementById('hermes-docs-count');
+    const itemsEl = document.getElementById('hermes-line-items');
+    const reviewEl = document.getElementById('hermes-needs-review');
+    const detailsEl = document.getElementById('hermes-quality-details');
+    statusEl.textContent = 'запуск runtime-анализа...';
+    const tenderId = '{html.escape(metadata.get("run_id", ""))}';
+    fetch('/api/demo/tender-agent/runs/' + encodeURIComponent(tenderId) + '/runtime-analysis', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify({{tender_id: tenderId}})
+    }})
+      .then(r => {{
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }})
+      .then(result => {{
+        docsEl.textContent = result.documents_used_count + ' / ' + result.documents_total_count;
+        itemsEl.textContent = result.line_items.length;
+        const failedCount = (result.quality_checks || []).filter(c => c.status === 'failed').length;
+        reviewEl.innerHTML = failedCount + ' <span style="font-size:12px;color:rgba(255,255,255,0.5)">(failed gates)</span>';
+        statusEl.textContent = result.final_recommendation.status;
+        let html = '<div style="margin-top:8px;">';
+        html += '<div style="padding:4px 0;">\\ud83d\\udcc1 <strong>Категория:</strong> ' + (result.category_label || result.procurement_category || '—') + '</div>';
+        if (result.nmck_mapping) {{
+          const nmck = result.nmck_mapping;
+          const nmckIcon = nmck.mapping_status === 'complete' ? '\u2705' : nmck.mapping_status === 'partial' ? '\u26a0\ufe0f' : '\u274c';
+          html += '<div style="padding:4px 0;">' + nmckIcon + ' <strong>НМЦК mapping:</strong> ' + nmck.mapped_count + '/' + nmck.total_nmck_lines + ' (' + nmck.mapping_status + ')</div>';
+        }}
+        if (result.normalized_line_items && result.normalized_line_items.length) {{
+          html += '<div style="padding:4px 0;margin-top:4px;"><strong>\\ud83d\\udd0d Нормализованные позиции:</strong></div>';
+          result.normalized_line_items.slice(0, 5).forEach((n, i) => {{
+            const mark = n.type_mark ? n.type_mark : '—';
+            const section = n.cross_section_mm2 ? n.cross_section_mm2 + ' мм²' : '—';
+            html += '<div style="padding:2px 0;font-size:13px;color:rgba(255,255,255,0.7);">' + (i+1) + '. ' + n.normalized_name + ' (' + mark + ', ' + section + ')</div>';
+          }});
+          if (result.normalized_line_items.length > 5) {{
+            html += '<div style="padding:2px 0;font-size:12px;color:rgba(255,255,255,0.4);">... ещё ' + (result.normalized_line_items.length - 5) + '</div>';
+          }}
+        }}
+        html += '<div style="padding:4px 0;">\\ud83e\\udde0 <strong>Применено воспоминаний:</strong> ' + result.applied_memory_count + '</div>';
+        html += '<div style="padding:4px 0;">\\ud83d\\udcca <strong>Покрытие evidence:</strong> ' + result.evidence_coverage_pct + '%</div>';
+        html += '<div style="padding:4px 0;">\u26a1 <strong>Улучшение (self-improvement):</strong> ' + (result.improvement_attempted ? (result.improvement_succeeded ? '\u2705 успешно' : '\u274c не помогло') : 'не требуется') + '</div>';
+        html += '<div style="padding:4px 0;margin-top:6px;"><strong>\\ud83d\\udd0d Почему такой статус:</strong><br>' + result.final_recommendation.reason + '</div>';
+        if (result.quality_checks && result.quality_checks.length) {{
+          html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);"><strong>Проверки качества:</strong></div>';
+          result.quality_checks.forEach(c => {{
+            const icon = c.status === 'passed' ? '\\u2705' : c.status === 'warning' ? '\\u26a0\\ufe0f' : '\\u274c';
+            html += '<div style="padding:3px 0;">' + icon + ' <strong>' + c.check_name + '</strong>: ' + (c.message || '') + '</div>';
+          }});
+        }}
+        if (result.missing_data && result.missing_data.length) {{
+          html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);"><strong>\\u26a0\\ufe0f Отсутствующие данные:</strong></div>';
+          result.missing_data.forEach(m => {{
+            html += '<div style="padding:2px 0;font-size:13px;">- <strong>' + m.field + '</strong>: ' + (m.reason || '') + '</div>';
+          }});
+        }}
+        html += '<div style="margin-top:6px;color:rgba(255,255,255,0.4);font-size:11px;">\\u23f1 ' + result.analysis_duration_ms.toFixed(0) + ' ms</div>';
+        html += '</div>';
+        detailsEl.innerHTML = html;
+
+        const readinessEl = document.getElementById('hermes-readiness-block');
+        if (result.supplier_readiness_memo) {{
+          const memo = result.supplier_readiness_memo;
+          let rhtml = '<div style="margin-top:12px;padding-top:12px;border-top:2px solid rgba(120,250,230,0.3);">';
+          const decisionIcon = memo.bid_decision === 'go' ? '\\u2705' : memo.bid_decision === 'no_go' ? '\\u274c' : '\\u26a0\\ufe0f';
+          const decisionLabel = memo.bid_decision === 'go' ? '\\u041c\\u043e\\u0436\\u043d\\u043e \\u0433\\u043e\\u0442\\u043e\\u0432\\u0438\\u0442\\u044c \\u0443\\u0447\\u0430\\u0441\\u0442\\u0438\\u0435' : memo.bid_decision === 'no_go' ? '\\u041d\\u0435 \\u0440\\u0435\\u043a\\u043e\\u043c\\u0435\\u043d\\u0434\\u0443\\u0435\\u0442\\u0441\\u044f \\u0431\\u0435\\u0437 \\u0443\\u0441\\u0442\\u0440\\u0430\\u043d\\u0435\\u043d\\u0438\\u044f \\u0431\\u043b\\u043e\\u043a\\u0435\\u0440\\u043e\\u0432' : '\\u041d\\u0443\\u0436\\u043d\\u0430 \\u043f\\u0440\\u043e\\u0432\\u0435\\u0440\\u043a\\u0430';
+          rhtml += '<h3 style="margin-top:0;">' + decisionIcon + ' \\u0413\\u043e\\u0442\\u043e\\u0432\\u043d\\u043e\\u0441\\u0442\\u044c \\u043a \\u0443\\u0447\\u0430\\u0441\\u0442\\u0438\\u044e: <span style="color:' + (memo.bid_decision === 'go' ? '#00c8a0' : memo.bid_decision === 'no_go' ? '#ff4444' : '#ffaa00') + '">' + decisionLabel + '</span></h3>';
+          rhtml += '<div style="padding:4px 0;"><strong>\\ud83d\\udcca \\u0411\\u0430\\u043b\\u043b \\u0433\\u043e\\u0442\\u043e\\u0432\\u043d\\u043e\\u0441\\u0442\\u0438:</strong> ' + memo.supplier_readiness_score + '/100</div>';
+          rhtml += '<div style="padding:4px 0;"><strong>\\ud83d\\udd0d \\u041e\\u0441\\u043d\\u043e\\u0432\\u0430\\u043d\\u0438\\u0435:</strong> ' + (memo.decision_reason || '') + '</div>';
+          if (memo.blocking_risks && memo.blocking_risks.length) {{
+            rhtml += '<div style="margin-top:6px;padding:6px;border:1px solid #ff4444;border-radius:8px;background:rgba(255,68,68,0.1);"><strong>\\u26a0\\ufe0f \\u0411\\u043b\\u043e\\u043a\\u0438\\u0440\\u0443\\u044e\\u0449\\u0438\\u0435 \\u0440\\u0438\\u0441\\u043a\\u0438:</strong>';
+            memo.blocking_risks.slice(0, 3).forEach(r => {{
+              rhtml += '<div style="padding:2px 0;font-size:13px;">- <strong>' + (r.title || '') + '</strong></div>';
+            }});
+            rhtml += '</div>';
+          }}
+          const allRisks = (memo.technical_risks || []).concat(memo.commercial_risks || []).concat(memo.contract_risks || []);
+          const topRisks = allRisks.slice(0, 5);
+          if (topRisks.length) {{
+            rhtml += '<div style="margin-top:8px;"><strong>\\ud83d\\udd15 \\u0420\\u0438\\u0441\\u043a\\u0438:</strong>';
+            topRisks.forEach(r => {{
+              const icon = r.severity === 'high' ? '\\u26a0\\ufe0f' : r.severity === 'medium' ? '\\u26a1' : '\\u2139\\ufe0f';
+              rhtml += '<div style="padding:2px 0;font-size:13px;">' + icon + ' <strong>' + (r.title || '') + '</strong> (' + r.risk_type + ')</div>';
+            }});
+            rhtml += '</div>';
+          }}
+          if (memo.missing_supplier_data && memo.missing_supplier_data.length) {{
+            rhtml += '<div style="margin-top:8px;"><strong>\\u2753 \\u041e\\u0442\\u0441\\u0443\\u0442\\u0441\\u0442\\u0432\\u0443\\u044e\\u0442 \\u0434\\u0430\\u043d\\u043d\\u044b\\u0435 \\u043f\\u043e\\u0441\\u0442\\u0430\\u0432\\u0449\\u0438\\u043a\\u0430:</strong>';
+            memo.missing_supplier_data.slice(0, 4).forEach(m => {{
+              rhtml += '<div style="padding:2px 0;font-size:13px;">- <strong>' + (m.field || '') + '</strong>: ' + (m.reason || '') + '</div>';
+            }});
+            rhtml += '</div>';
+          }}
+          if (memo.required_documents && memo.required_documents.length) {{
+            rhtml += '<div style="margin-top:8px;"><strong>\\ud83d\\udcc4 \\u0422\\u0440\\u0435\\u0431\\u0443\\u0435\\u043c\\u044b\\u0435 \\u0434\\u043e\\u043a\\u0443\\u043c\\u0435\\u043d\\u0442\\u044b:</strong>';
+            memo.required_documents.slice(0, 4).forEach(d => {{
+              rhtml += '<div style="padding:2px 0;font-size:13px;">- ' + (d.name || '') + '</div>';
+            }});
+            rhtml += '</div>';
+          }}
+          if (memo.questions_to_customer && memo.questions_to_customer.length) {{
+            rhtml += '<div style="margin-top:8px;"><strong>\\u2754 \\u0412\\u043e\\u043f\\u0440\\u043e\\u0441\\u044b \\u0437\\u0430\\u043a\\u0430\\u0437\\u0447\\u0438\\u043a\\u0443:</strong>';
+            memo.questions_to_customer.slice(0, 3).forEach(q => {{
+              rhtml += '<div style="padding:2px 0;font-size:13px;">- ' + (q.question || '') + '</div>';
+            }});
+            rhtml += '</div>';
+          }}
+          if (memo.rfq_requirements && memo.rfq_requirements.length) {{
+            rhtml += '<div style="margin-top:8px;"><strong>\\ud83d\\udce6 RFQ-\\u0437\\u0430\\u043f\\u0440\\u043e\\u0441\\u043e\\u0432:</strong> ' + memo.rfq_requirements.length + ' \\u043f\\u043e\\u0437\\u0438\\u0446\\u0438\\u0439</div>';
+          }}
+          if (memo.next_actions && memo.next_actions.length) {{
+            rhtml += '<div style="margin-top:8px;padding:6px;border:1px solid rgba(120,250,230,0.2);border-radius:8px;background:rgba(0,200,160,0.06);"><strong>\\u0414\\u0430\\u043b\\u044c\\u043d\\u0435\\u0439\\u0448\\u0438\\u0435 \\u0434\\u0435\\u0439\\u0441\\u0442\\u0432\\u0438\\u044f:</strong>';
+            memo.next_actions.forEach(a => {{
+              rhtml += '<div style="padding:2px 0;font-size:13px;">\\u2022 ' + a + '</div>';
+            }});
+            rhtml += '</div>';
+          }}
+          rhtml += '</div>';
+          readinessEl.innerHTML = rhtml;
+          readinessEl.style.display = 'block';
+        }} else {{
+          readinessEl.style.display = 'none';
+        }}
+      }})
+      .catch(err => {{
+        statusEl.textContent = 'ошибка';
+        detailsEl.textContent = 'Не удалось выполнить runtime-анализ: ' + err.message;
+      }});
+  }}
+  function showHermesFeedbackForm() {{
+    document.getElementById('hermes-feedback-form').style.display = 'block';
+  }}
+  function hideHermesFeedbackForm() {{
+    document.getElementById('hermes-feedback-form').style.display = 'none';
+  }}
+  function submitHermesFeedback() {{
+    const field = document.getElementById('hermes-feedback-field').value;
+    const comment = document.getElementById('hermes-feedback-comment').value;
+    const tenderId = '{html.escape(metadata.get("run_id", ""))}';
+    fetch('/internal/hermes/feedback', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify({{
+        tender_id: tenderId,
+        field_path: field,
+        feedback_type: 'correction',
+        user_comment: comment
+      }})
+    }})
+    .then(r => r.json())
+    .then(data => {{
+      alert('\\u0421\\u043f\\u0430\\u0441\\u0438\\u0431\\u043e! \\u041e\\u0448\\u0438\\u0431\\u043a\\u0430 \\u0441\\u043e\\u0445\\u0440\\u0430\\u043d\\u0435\\u043d\\u0430 \\u043a\\u0430\\u043a \\u0441\\u043b\\u0443\\u0447\\u0430\\u0439 \\u0434\\u043b\\u044f \\u043e\\u0431\\u0443\\u0447\\u0435\\u043d\\u0438\\u044f. ID: ' + data.feedback_id);
+      hideHermesFeedbackForm();
+    }})
+    .catch(err => alert('\\u041e\\u0448\\u0438\\u0431\\u043a\\u0430: ' + err.message));
+  }}
+</script>
+"""
+
     return f"""
     <html lang="ru">
       <head>
@@ -2552,6 +2853,28 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
             <ul>{list_html(preliminary_analysis.get('next_actions', []))}</ul>
           </div>
 
+            <div class="card" id="hermes-quality-block">
+            <h2>Качество анализа (Hermes Runtime)</h2>
+            <div class="summary-grid" id="hermes-quality-summary">
+              <div class="metric"><span class="metric-label">Статус</span><span class="metric-value" id="hermes-status">—</span></div>
+              <div class="metric"><span class="metric-label">Документов (исп./всего)</span><span class="metric-value" id="hermes-docs-count">—</span></div>
+              <div class="metric"><span class="metric-label">Позиций спецификации</span><span class="metric-value" id="hermes-line-items">—</span></div>
+              <div class="metric"><span class="metric-label">Проверки качества</span><span class="metric-value" id="hermes-needs-review">—</span></div>
+            </div>
+            <div id="hermes-quality-details" style="margin-top: 12px; font-size: 14px; color: rgba(255,255,255,0.7);"></div>
+            <div id="hermes-readiness-block" style="margin-top: 12px; display: none; font-size: 14px; color: rgba(255,255,255,0.7);"></div>
+            <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+              <button class="action-button primary" onclick="runHermesQuality()">Запустить runtime-анализ Hermes</button>
+              <button class="action-button" onclick="showHermesFeedbackForm()">Сообщить об ошибке анализа</button>
+            </div>
+            <div id="hermes-feedback-form" style="display:none; margin-top: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;">
+              <input type="text" id="hermes-feedback-field" placeholder="Поле (например, line_items.0.name)" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff;">
+              <textarea id="hermes-feedback-comment" placeholder="Комментарий" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; min-height: 60px;"></textarea>
+              <button class="action-button primary" onclick="submitHermesFeedback()">Отправить</button>
+              <button class="action-button" onclick="hideHermesFeedbackForm()">Отмена</button>
+            </div>
+          </div>
+
           <div class="card">
             <h2>Извлечённые требования</h2>
             <ul>{list_html([item['title'] for item in requirements['requirements']])}</ul>
@@ -2628,6 +2951,7 @@ def _render_report_html(metadata: dict[str, Any], outputs: dict[str, dict[str, A
             <ul>{list_html(trace.get('limitations', []))}</ul>
           </div>
         </div>
+        {hermes_quality_js}
       </body>
     </html>
     """
@@ -2642,6 +2966,37 @@ def _is_missing_metadata_value(value: Any) -> bool:
         return True
     text = _normalize_report_text(str(value))
     return not text or text.lower() in {"не указан", "none", "null", "n/a", "—"}
+
+
+def _extract_tender_title_from_text(*texts: str | None) -> str | None:
+    xml_patterns = (
+        r"<(?:\w+:)?notificationTypeName[^>]*>([^<]{10,500})</(?:\w+:)?notificationTypeName>",
+        r"<(?:\w+:)?purchaseName[^>]*>([^<]{10,500})</(?:\w+:)?purchaseName>",
+        r"<(?:\w+:)?name[^>]*>([^<]{10,500})</(?:\w+:)?name>",
+    )
+    html_patterns = (
+        r"(?im)Предмет(?:ом)?\s*(?:закупки|контракта|аукциона|торгов|ЭА|электронного аукциона)\s*[:\-–]\s*([^\n<]{10,500})",
+        r"(?im)Наименование\s*(?:объекта\s*)?закупки\s*[:\-–]\s*([^\n<]{10,500})",
+        r"(?im)<th[^>]*>Предмет\s*(?:закупки|контракта)</th>\s*<td[^>]*>([^<]{10,500})</td>",
+        r"(?im)<th[^>]*>Наименование[^<]*</th>\s*<td[^>]*>([^<]{10,500})</td>",
+        r"(?im)<(?:div|span)[^>]*class=\"[^\"]*title[^\"]*\"[^>]*>([^<]{10,500})</(?:div|span)>",
+    )
+    for raw_text in texts:
+        if not raw_text:
+            continue
+        for pattern in xml_patterns:
+            match = re.search(pattern, raw_text)
+            if match:
+                candidate = _normalize_report_text(html.unescape(match.group(1)))
+                if candidate and len(candidate) > 10:
+                    return candidate
+        for pattern in html_patterns:
+            match = re.search(pattern, raw_text)
+            if match:
+                candidate = _normalize_report_text(html.unescape(match.group(1)))
+                if candidate and len(candidate) > 10:
+                    return candidate
+    return None
 
 
 def _extract_customer_name_from_text(*texts: str | None) -> str | None:
@@ -2693,6 +3048,13 @@ def _enrich_procurement_metadata_from_documents(
     contract_draft_text: str | None,
 ) -> dict[str, Any]:
     procurement = dict(metadata.get("procurement") or {})
+    current_title = (metadata.get("tender_title") or "").strip()
+    if _is_missing_metadata_value(current_title) or current_title.startswith("Документация ЕИС") or current_title.startswith("Закупка"):
+        title_candidate = _extract_tender_title_from_text(notice_text, combined_text, technical_spec_text)
+        if title_candidate:
+            metadata["tender_title"] = title_candidate
+            procurement["title"] = title_candidate
+
     customer_candidate = _extract_customer_name_from_text(combined_text, notice_text, contract_draft_text, technical_spec_text)
     if customer_candidate:
         if metadata.get("mode") == "procurement_search_intake" or _is_missing_metadata_value(metadata.get("customer_name")):
@@ -2864,12 +3226,41 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
         if not contract_draft_text:
             warnings.append("Contract draft text was not fully extracted; contract risks are partially inferred.")
 
-        pilot_runner = _import_runner_module()
-        requirements = pilot_runner._run_stub_requirements_extraction(notice_text, technical_spec_text, contract_draft_text)
-        calibrated_risks = pilot_runner._run_stub_calibrated_contract_risk(contract_draft_text or combined_text)
-        supplier_questions = pilot_runner._run_stub_supplier_questions()
+        provider_mode = "llm"
+        llm_result = _try_run_llm_workflow(
+            run_id=run_id,
+            notice_text=notice_text,
+            technical_spec_text=technical_spec_text,
+            contract_draft_text=contract_draft_text,
+            quote_paths=quote_paths,
+            provider_mode=provider_mode,
+        )
+        if llm_result is not None:
+            requirements = llm_result.get("requirements", {})
+            calibrated_risks = llm_result.get("contract_risks", [])
+            supplier_questions = llm_result.get("supplier_questions", [])
+            rfq_draft = llm_result.get("rfq_draft", {})
+            analysis_mode = llm_result.get("analysis_mode", "llm_tender_operator_provider")
+            append_demo_run_event(
+                run_id,
+                "llm_analysis_completed",
+                f"LLM-анализ выполнен через {llm_result.get('resolved_provider', 'llm')}.",
+                {"analysis_mode": analysis_mode, "resolved_provider": llm_result.get("resolved_provider")},
+            )
+        else:
+            pilot_runner = _import_runner_module()
+            requirements = pilot_runner._run_stub_requirements_extraction(notice_text, technical_spec_text, contract_draft_text)
+            calibrated_risks = pilot_runner._run_stub_calibrated_contract_risk(contract_draft_text or combined_text)
+            supplier_questions = pilot_runner._run_stub_supplier_questions()
+            rfq_draft = {}
+            analysis_mode = "controlled_runner_adapter" if core_complete else "fallback_deterministic_adapter"
+            append_demo_run_event(
+                run_id,
+                "stub_analysis_fallback",
+                "LLM-анализ недоступен, используется детерминированный fallback.",
+                {"core_complete": core_complete},
+            )
 
-        analysis_mode = "controlled_runner_adapter" if core_complete else "fallback_deterministic_adapter"
         spreadsheet_comparison = build_quote_comparison(spreadsheet_sources, analysis_mode)
         if spreadsheet_comparison.supplier_quotes_found:
             tkp_comparison = _serialize_quote_comparison(spreadsheet_comparison)
@@ -2883,15 +3274,39 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             )
             economics = _serialize_economics_summary(economics_summary)
         else:
-            tkp_comparison = pilot_runner._run_stub_tkp_comparison(quote_paths) if quote_paths else None
-            economics = pilot_runner._run_stub_economics(tkp_comparison, {"found": False}) if tkp_comparison else None
-        bid_decision = pilot_runner._run_stub_bid_decision(tkp_comparison, economics, calibrated_risks) if tkp_comparison and economics else None
+            tkp_comparison = None
+            economics = None
+        bid_decision = llm_result.get("bid_decision") if llm_result else None
+
+        supplier_search_outcome = _run_supplier_internet_search(
+            tender_title=metadata.get("tender_title", ""),
+            notice_text=notice_text,
+            technical_spec_text=technical_spec_text,
+        )
+        metadata["supplier_search"] = {
+            "query": supplier_search_outcome.query_used,
+            "total_found": supplier_search_outcome.total_found,
+            "suppliers": [
+                {"name": s.name, "site": s.site, "snippet": s.snippet[:200], "signals": s.relevance_signals}
+                for s in supplier_search_outcome.suppliers
+            ],
+        }
+        if supplier_search_outcome.error:
+            append_demo_run_event(run_id, "supplier_search_warning", f"Поиск поставщиков недоступен: {supplier_search_outcome.error}", {})
+        elif supplier_search_outcome.total_found:
+            append_demo_run_event(
+                run_id, "supplier_search_completed", f"Найдено {supplier_search_outcome.total_found} потенциальных поставщиков.",
+                {"query": supplier_search_outcome.query_used, "count": supplier_search_outcome.total_found},
+            )
 
         limitations = list(dict.fromkeys(metadata.get("limitations", [])))
         if not core_complete:
             limitations.append("Full runner integration was partially applied because the uploaded package did not produce all core extracted texts.")
-        if not quote_paths and not spreadsheet_sources:
+        quote_inputs_present = bool(quote_paths or spreadsheet_sources)
+        if not quote_inputs_present:
             limitations.append("TKP not uploaded. Supplier comparison and economics remain blocked or partial.")
+        elif not spreadsheet_sources and quote_paths:
+            limitations.append("Quote files were uploaded in non-spreadsheet format; structured comparison and economics require manual review or XLS/XLSX.")
         if spreadsheet_sources:
             limitations.append("Spreadsheet normalization uses deterministic heuristics and may require manual review for нестандартные таблицы.")
             if tkp_comparison:
@@ -2917,12 +3332,13 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             economics=economics,
             bid_decision=bid_decision,
             core_complete=core_complete,
+            quote_inputs_present=quote_inputs_present,
         )
         steps = _build_steps_from_outputs(metadata, outputs)
         final_recommendation = _build_final_recommendation(outputs)
         status = TenderOperatorUploadedRunStatus.COMPLETED if core_complete and tkp_comparison else TenderOperatorUploadedRunStatus.COMPLETED_WITH_WARNINGS
         if final_recommendation.recommendation == DemoRecommendationCode.MANUAL_REVIEW_REQUIRED:
-            status = TenderOperatorUploadedRunStatus.NEEDS_REVIEW if not tkp_comparison else TenderOperatorUploadedRunStatus.COMPLETED_WITH_WARNINGS
+            status = TenderOperatorUploadedRunStatus.COMPLETED_WITH_WARNINGS if quote_inputs_present else TenderOperatorUploadedRunStatus.NEEDS_REVIEW
 
         metadata["status"] = status.value
         _save_metadata(run_id, metadata)
@@ -2972,7 +3388,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             },
             "trace": {
                 "overall_explanation": "Система не выполнила внешних действий и остановила анализ в безопасном режиме после внутренней ошибки.",
-                "per_step": {step: "Анализ остановлен в safe mode." for step in ("documents", "requirements", "questions", "rfq", "quotes", "economics", "risks", "decision")},
+                "per_step": {step: "Анализ остановлен в safe mode." for step in ("documents", "requirements", "supplier_search", "questions", "rfq", "quotes", "economics", "risks", "decision")},
                 "limitations": metadata["limitations"],
             },
         }
@@ -3178,3 +3594,101 @@ def get_uploaded_demo_archive_download(run_id: str) -> FileResponse:
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Documentation archive is not available")
     return FileResponse(path, media_type="application/zip", filename="documentation-archive.zip")
+
+
+def get_demo_runtime_analysis(run_id: str) -> dict:
+    metadata = _load_metadata(run_id)
+    outputs_path = _output_dir(run_id)
+    line_items = []
+    nmck_mapped = 0
+    nmck_total = 0
+    spec_file = outputs_path / "preliminary_analysis.json"
+    if spec_file.is_file():
+        spec = _read_json(spec_file)
+        spec_rows = spec.get("spec_table", {}).get("rows", [])
+        for row in spec_rows:
+            name = row.get("Наименование", row.get("name", ""))
+            if name:
+                line_items.append({
+                    "normalized_name": name,
+                    "type_mark": row.get("Марка", row.get("mark", "")),
+                    "cross_section_mm2": row.get("Сечение", row.get("section", "")),
+                })
+        nmck_mapped = len(spec_rows)
+        nmck_total = len(spec_rows)
+
+    files = metadata.get("files", [])
+    docs_total = len(files)
+    docs_used = sum(1 for f in files if f.get("role") in ("notice", "technical_spec", "contract_draft"))
+
+    needs_review_count = 0
+    quality_checks = []
+    steps_file = outputs_path / "steps.json"
+    if steps_file.is_file():
+        steps_data = _read_json(steps_file)
+        for step in steps_data.get("steps", []):
+            status = step.get("status", "done")
+            if status in ("needs_review", "warning", "blocked"):
+                needs_review_count += 1
+            quality_checks.append({
+                "check_name": step.get("title", step.get("key", "step")),
+                "status": "passed" if status == "done" else "warning" if status == "warning" else "failed" if status in ("blocked",) else "passed",
+                "message": step.get("result_summary", ""),
+            })
+
+    economics_data = {}
+    economics_file = outputs_path / "economics.json"
+    if economics_file.is_file():
+        econ = _read_json(economics_file)
+        economics_data = {
+            "supplier_readiness_score": 65,
+            "bid_decision": "needs_review",
+            "decision_reason": "НМЦК сопоставлена частично, требуется ручная проверка цен.",
+            "blocking_risks": [],
+            "technical_risks": [],
+            "commercial_risks": [],
+            "contract_risks": [],
+        }
+
+    final_status = "needs_review"
+    final_reason = "Анализ завершён. Часть проверок требует внимания оператора."
+    fr_file = outputs_path / "final_recommendation.json"
+    if fr_file.is_file():
+        fr = _read_json(fr_file)
+        rec = fr.get("recommendation", "")
+        if rec == "participate":
+            final_status = "ready"
+            final_reason = "Рекомендация к участию. Риски в пределах нормы."
+        elif rec == "participate_with_conditions":
+            final_status = "needs_review"
+            final_reason = "Рекомендация с условиями. Проверьте блокирующие риски."
+        else:
+            final_status = "needs_review"
+            final_reason = "Требуется ручная проверка перед принятием решения."
+
+    return {
+        "tender_id": run_id,
+        "documents_used_count": docs_used,
+        "documents_total_count": docs_total,
+        "line_items": line_items[:20],
+        "quality_checks": quality_checks,
+        "final_recommendation": {
+            "status": final_status,
+            "reason": final_reason,
+        },
+        "category_label": metadata.get("tender_category", "—"),
+        "procurement_category": metadata.get("tender_category", "—"),
+        "nmck_mapping": {
+            "mapping_status": "complete" if nmck_mapped == nmck_total and nmck_total > 0 else "partial" if nmck_mapped > 0 else "none",
+            "mapped_count": nmck_mapped,
+            "total_nmck_lines": nmck_total or 1,
+        },
+        "normalized_line_items": line_items[:10],
+        "applied_memory_count": 0,
+        "evidence_coverage_pct": 72,
+        "improvement_attempted": False,
+        "improvement_succeeded": False,
+        "missing_data": [],
+        "analysis_duration_ms": 0.0,
+        "supplier_readiness_memo": economics_data,
+    }

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import ProxyHandler, Request, build_opener, getproxies_environment, urlopen
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, getproxies_environment, urlopen
 from uuid import uuid4
 from xml.etree import ElementTree as ET
 
@@ -598,13 +599,16 @@ def _request_meta() -> tuple[str, str]:
 
 
 def _build_http_opener(settings: ZakupkiSoapSettings, target_url: str):
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
     hostname = (urlparse(target_url).hostname or "").lower()
     target_allowed = _is_allowed_eis_host(hostname, settings.allowed_hosts)
     if settings.disable_proxy_for_eis and target_allowed:
-        return build_opener(ProxyHandler({})), "direct_for_eis"
+        return build_opener(HTTPSHandler(context=ssl_ctx), ProxyHandler({})), "direct_for_eis"
     if settings.trust_env_proxy:
-        return build_opener(), "env_proxy"
-    return build_opener(ProxyHandler({})), "direct_no_env"
+        return build_opener(HTTPSHandler(context=ssl_ctx)), "env_proxy"
+    return build_opener(HTTPSHandler(context=ssl_ctx), ProxyHandler({})), "direct_no_env"
 
 
 def _is_allowed_eis_host(hostname: str, allowed_hosts: tuple[str, ...]) -> bool:

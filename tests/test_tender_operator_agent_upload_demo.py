@@ -58,7 +58,8 @@ def test_tender_operator_demo_page_shows_both_modes(client):
     response = client.get("/demo/tender-agent")
 
     assert response.status_code == 200
-    assert "Найти закупку" in response.text
+    assert "Быстрый разбор закупки" in response.text
+    assert "Анализ по номеру" in response.text
     assert "Демо-набор" in response.text
     assert "Загрузка и анализ" in response.text
 
@@ -145,10 +146,11 @@ def test_analyze_uploaded_run_returns_completed_and_report_endpoints_work(client
     assert steps_response.status_code == 200
     steps_payload = steps_response.json()
     assert steps_payload["run_id"] == run_id
-    assert len(steps_payload["steps"]) == 8
+    assert len(steps_payload["steps"]) == 9
     assert {step["key"] for step in steps_payload["steps"]} == {
         "documents",
         "requirements",
+        "supplier_search",
         "questions",
         "rfq",
         "quotes",

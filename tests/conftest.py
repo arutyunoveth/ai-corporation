@@ -3,16 +3,78 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
+from pytest_optional_profiles import (
+    OPTIONAL_PROFILE_MARKERS,
+    infer_optional_test_markers,
+    profile_skip_reason,
+)
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+_original_database_url = os.environ.get("AI_CORP_DATABASE_URL")
+if _original_database_url:
+    os.environ.setdefault("AI_CORP_ORIGINAL_DATABASE_URL", _original_database_url)
 os.environ["AI_CORP_DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
 from src.main import app
 from src.shared.api.dependencies import get_db_session
 from src.shared.db.base import Base
 from src.shared.db import models  # noqa: F401
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    group = parser.getgroup("ai-corporation test profiles")
+    group.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="Run integration tests that are skipped in the default offline profile.",
+    )
+    group.addoption(
+        "--run-postgres",
+        action="store_true",
+        default=False,
+        help="Run PostgreSQL/pgvector tests that are skipped by default.",
+    )
+    group.addoption(
+        "--run-network",
+        action="store_true",
+        default=False,
+        help="Run tests that require live network access.",
+    )
+    group.addoption(
+        "--run-llama-cpp",
+        action="store_true",
+        default=False,
+        help="Run llama.cpp-specific tests that are skipped by default.",
+    )
+    group.addoption(
+        "--run-live-smoke",
+        action="store_true",
+        default=False,
+        help="Run live smoke tests for the Mac mini/runtime contour.",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    enabled_profiles = {
+        "integration": config.getoption("--run-integration"),
+        "postgres": config.getoption("--run-postgres"),
+        "network": config.getoption("--run-network"),
+        "llama_cpp": config.getoption("--run-llama-cpp"),
+        "live_smoke": config.getoption("--run-live-smoke"),
+    }
+    for item in items:
+        explicit_markers = {marker.name for marker in item.iter_markers()}
+        optional_markers = infer_optional_test_markers(item.nodeid, explicit_markers)
+        for marker_name in OPTIONAL_PROFILE_MARKERS:
+            if marker_name in optional_markers:
+                item.add_marker(getattr(pytest.mark, marker_name))
+
+        skip_reason = profile_skip_reason(optional_markers, enabled_profiles)
+        if skip_reason:
+            item.add_marker(pytest.mark.skip(reason=skip_reason))
 
 
 @pytest.fixture()
@@ -39,4 +101,3 @@ def client(session: Session) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-
