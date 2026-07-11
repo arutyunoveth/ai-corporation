@@ -1,3 +1,6 @@
+from datetime import UTC, datetime
+from pathlib import Path
+
 from fastapi import FastAPI
 
 from src.modules.action_queue.router import router as action_queue_router
@@ -200,6 +203,13 @@ app.include_router(tender_research_router)
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def readiness() -> dict[str, object]:
+    data_dir = Path(settings.arvectum_data_dir)
+    writable = data_dir.exists() and data_dir.is_dir()
+    return {"status": "ok" if writable else "degraded", "data_writable": writable, "timestamp": datetime.now(UTC).isoformat()}
 
 
 install_optional_site_mount(app, settings)

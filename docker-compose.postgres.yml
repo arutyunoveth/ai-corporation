@@ -1,3 +1,4 @@
+name: arvectum-postgres
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -7,9 +8,9 @@ services:
     environment:
       POSTGRES_DB: ${ARVECTUM_POSTGRES_DB:-arvectum}
       POSTGRES_USER: ${ARVECTUM_POSTGRES_USER:-arvectum}
-      POSTGRES_PASSWORD: ${ARVECTUM_POSTGRES_PASSWORD:-change_me_local_only}
+      POSTGRES_PASSWORD: ${ARVECTUM_POSTGRES_PASSWORD:?set in .env.local}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
       - arvectum_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +18,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
 volumes:
   arvectum_postgres_data:
