@@ -25,14 +25,15 @@ class TokenMetadata:
         s = raw
         if s.startswith("\ufeff"):
             s = s.removeprefix("\ufeff")
+        self._whitespace_removed = bool(s != s.strip())
+        s = s.strip()
         self._quotes_removed = False
         if (s.startswith('"') and s.endswith('"')) or (
             s.startswith("'") and s.endswith("'")
         ):
             s = s[1:-1]
             self._quotes_removed = True
-        self._whitespace_removed = bool(s != s.strip())
-        s = s.strip()
+            s = s.strip()
         s = s.replace("\r\n", "").replace("\r", "").replace("\n", "")
         self._rtf_detected = bool(re.search(r"\\rtf1?", s[:50]))
         if self._rtf_detected:

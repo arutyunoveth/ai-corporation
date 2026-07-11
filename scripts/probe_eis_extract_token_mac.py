@@ -385,7 +385,7 @@ def probe_operation(
     }
 
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="EIS Document Export Token Probe (macOS, no Rutoken)",
     )
@@ -430,6 +430,11 @@ def main() -> None:
         default=None,
         help="Exact date with timezone (default: yesterday Moscow time)",
     )
+    return parser
+
+
+def main() -> None:
+    parser = _build_parser()
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir).expanduser().resolve()
