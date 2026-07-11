@@ -2,7 +2,7 @@
 
 ## Executive result
 
-`R0_RUNTIME_COMPLETE_EXTERNAL_DEPLOYMENT_PENDING`. Product and site R0 branches contain the verified runtime baseline, backup, security boundary, CI, runtime/deploy artifacts, and documentation. Release publication remains pending the final GitHub CI/merge sequence.
+`R0_RUNTIME_COMPLETE_EXTERNAL_DEPLOYMENT_PENDING`. Product CI is green on the R0.09 baseline; the branch is ready for merge and tagging. Production ingress and hosting deployment remain external actions.
 
 ## Sprint result
 
@@ -16,7 +16,7 @@
 | R0.06 site package | DONE_LOCAL_NOT_DEPLOYED |
 | R0.07 docs | DONE |
 | R0.08 validation/release | superseded by R0.09 |
-| R0.09 operational closure | runtime DONE; CI/merge in progress |
+| R0.09 operational closure | runtime DONE; product CI green |
 
 ## Checks
 
