@@ -1,0 +1,1 @@
+{"overall_status":"R0_LOCAL_COMPLETE_EXTERNAL_ACTIONS_PENDING","sprints":{"R0.01":"DONE","R0.02":"DONE","R0.03":"DONE_LOCAL_NOT_DEPLOYED","R0.04":"DONE_LOCAL_NOT_DEPLOYED","R0.05":"DONE_LOCAL_NOT_PUBLISHED","R0.06":"DONE_LOCAL_NOT_DEPLOYED","R0.07":"DONE","R0.08":"DONE_LOCAL_WITH_BLOCKERS"},"backup_verified":true,"release_tag_created":false,"blockers":["B-01","B-02","B-03"]}
