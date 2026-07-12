@@ -55,16 +55,6 @@ def install_runtime_middlewares(app: FastAPI, settings: Settings) -> None:
     if allowed_hosts:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
-    cors_allow_origins = settings.cors_allow_origins_list()
-    if cors_allow_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=cors_allow_origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-
     if settings.pilot_auth_is_enabled():
         username, password = settings.pilot_auth_credentials()
         if not username or not settings.pilot_auth_password_safe():
@@ -77,6 +67,19 @@ def install_runtime_middlewares(app: FastAPI, settings: Settings) -> None:
             password=password,
             protected=tuple(settings.pilot_auth_protected_prefixes.split(",")),
             public=tuple(settings.pilot_auth_public_paths.split(",")),
+        )
+
+    # Keep CORS outermost so browser preflight OPTIONS requests can complete
+    # before auth evaluates the protected API route. Actual requests remain
+    # protected by the auth middleware below it.
+    cors_allow_origins = settings.cors_allow_origins_list()
+    if cors_allow_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_allow_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
         )
 
 
