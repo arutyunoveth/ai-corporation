@@ -72,6 +72,44 @@ def test_install_runtime_middlewares_accepts_csv_settings() -> None:
     ]
 
 
+def test_runtime_cors_preflight_is_allowed_without_bypassing_auth() -> None:
+    app = FastAPI()
+
+    @app.get("/api/demo/tender-agent/run")
+    def protected_route() -> dict[str, str]:
+        return {"status": "protected"}
+
+    settings = Settings(
+        allowed_hosts="127.0.0.1,localhost,mac-mini-master.tail786c4b.ts.net",
+        cors_allow_origins="https://arvectum.com",
+        pilot_auth_enabled=True,
+        pilot_auth_username="pilot",
+        pilot_auth_password="long-test-password",
+    )
+    install_runtime_middlewares(app, settings)
+    client = TestClient(app)
+    preflight_headers = {
+        "Origin": "https://arvectum.com",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "Authorization,Content-Type",
+    }
+
+    allowed = client.options("/api/demo/tender-agent/run", headers=preflight_headers)
+    assert allowed.status_code == 200
+    assert allowed.headers["access-control-allow-origin"] == "https://arvectum.com"
+    assert allowed.headers["access-control-allow-credentials"] == "true"
+
+    attacker_headers = {**preflight_headers, "Origin": "https://attacker.invalid"}
+    rejected = client.options("/api/demo/tender-agent/run", headers=attacker_headers)
+    assert "access-control-allow-origin" not in rejected.headers
+
+    unauthenticated = client.get(
+        "/api/demo/tender-agent/run",
+        headers={"Origin": "https://arvectum.com"},
+    )
+    assert unauthenticated.status_code == 401
+
+
 def test_optional_site_mount_serves_static_site(tmp_path: Path) -> None:
     index_file = tmp_path / "index.html"
     index_file.write_text("<html><body>Arvectum Site</body></html>", encoding="utf-8")
