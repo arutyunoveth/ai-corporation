@@ -1,23 +1,15 @@
-# External blockers
+# Known limitations
 
-## B-02 — Production hosting credentials and publication
+## PUBLIC_RELIABILITY_LIMITED_NOT_PROVEN
 
-- Status: `BLOCKED_EXTERNAL`
-- Sprint: R0.03/R0.06
-- Local work: protected backend boundary and reproducible hosting archive are complete.
-- Prerequisite: approved ingress/hosting deployment integration and credentials.
-- Classification: `DETECTED_EXPECTED_PRE_DEPLOY`; live drift does not block merge.
-- Next action: deploy the generated archive atomically after credentials are available.
+- Status: `KNOWN_LIMITATION`, not a functional R0 blocker.
+- CloudPub ingress `https://punctually-ubiquitous-aphid.cloudpub.ru` passed desktop, mobile, LTE/5G, and reboot recovery checks, but no long-term SLA/reliability gate is established.
+- This limitation blocks declaring CloudPub permanent production infrastructure and blocks a mass external pilot.
 
-## B-03 — Production TLS ingress
+## Operational notes
 
-- Status: `BLOCKED_EXTERNAL`
-- No Tailscale Funnel or public backend exposure was configured in R0.10.
-- Next action: configure one approved TLS ingress during the separate publication step.
+- After reboot, user `master` must log in and Docker Desktop must start before runtime services are available.
+- PostgreSQL is owned by Docker context `desktop-linux` on `127.0.0.1:55432`.
+- `completed_with_warnings` remains possible when legacy DOC content is only partially extractable.
 
-## B-04 — GitHub branch protection permissions
-
-- Status: `BLOCKED_EXTERNAL_BRANCH_PROTECTION_PERMISSION`
-- Safe protection updates were attempted; GitHub permissions/plan do not allow the required ruleset update.
-- Required capability: repository administration permission and a plan supporting protected private branches/rulesets.
-- Product required checks: `quality`, `migrations`, `security`; site required check: `CI`.
+These are documented limitations, not unresolved R0 implementation blockers.
