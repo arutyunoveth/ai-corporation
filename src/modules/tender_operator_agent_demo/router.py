@@ -194,22 +194,22 @@ def get_tender_operator_public_search_url(
 
 @router.post("/api/demo/tender-agent/procurement/public-44fz-search", response_model=PublicProcurementSearchResponse)
 def search_tender_operator_public_44fz(
-    query: str = "",
-    law: str = "44fz",
-    region: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    price_from: float | None = None,
-    price_to: float | None = None,
-    deadline_from: str | None = None,
-    deadline_to: str | None = None,
-    status_filter: str | None = None,
-    procedure_type: str | None = None,
-    page: int = 1,
-    page_size: int = 10,
-    max_results: int = 10,
-    cursor: str | None = None,
-    seen_registry_numbers: str | None = None,
+    query: str = Form(""),
+    law: str = Form("44fz"),
+    region: str | None = Form(None),
+    date_from: str | None = Form(None),
+    date_to: str | None = Form(None),
+    price_from: float | None = Form(None),
+    price_to: float | None = Form(None),
+    deadline_from: str | None = Form(None),
+    deadline_to: str | None = Form(None),
+    status_filter: str | None = Form(None),
+    procedure_type: str | None = Form(None),
+    page: int = Form(1),
+    page_size: int = Form(10),
+    max_results: int = Form(10),
+    cursor: str | None = Form(None),
+    seen_registry_numbers: str | None = Form(None),
 ):
     parsed_seen: list[str] = []
     if seen_registry_numbers:
