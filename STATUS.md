@@ -2,13 +2,13 @@
 
 ## Product snapshot
 
-Stage: `R0_CODE_AND_RUNTIME_COMPLETE_PRODUCTION_PUBLICATION_PENDING`. The MVP supports controlled tender intake, read-only `getDocsIP` documentation retrieval where configured, manual upload/extraction, RAG-assisted analysis, local-model integration, and export with human review. It does not submit bids, sign documents, provide SaaS/multi-tenancy, mobile, OCR, 223-FZ, or new autonomous agents.
+Stage: `R0_CLOSED_FUNCTIONALLY`. Product functional SHA is `2578d114074685ddb072736839b6023897105bcd`; site production SHA is `9b87212500b48ec918973f0e38351a5ad14b2603`. The MVP supports controlled tender intake, read-only `getDocsIP`, extraction, RAG-assisted analysis, local-model integration, and human-reviewed DOCX/PDF export.
 
 ## Runtime
 
-Canonical runtime checkout: `/Users/master/arvectum-runtime/AI-Corporation` on `main`. Runtime ports are backend `8001`, PostgreSQL `55432`, Ollama OpenAI-compatible LLM `11434`, and embeddings `8090`.
+Canonical runtime checkout: `/Users/master/arvectum-runtime/AI-Corporation` on `main`. Runtime user is `master`; backend is `127.0.0.1:8001`, PostgreSQL is `127.0.0.1:55432` in Docker context `desktop-linux` (`arvectum-postgres`, `unless-stopped`), embeddings are `127.0.0.1:8090` (`com.arvectum.embeddings`), and Ollama is `127.0.0.1:11434`.
 
-Actual baseline: Docker pgvector PostgreSQL is healthy on host port `55432`; the unrelated `5432` PostgreSQL remains untouched. Backend and embeddings are launchd-managed and healthy on `8001` and `8090`; Ollama on `11434` is the canonical LLM owner. Port `8088` is an unrelated HTTP service and is not used. Backup: `/Users/master/Documents/arvectum-r0-backups/20260711-145008`.
+Actual baseline: Docker pgvector PostgreSQL is healthy on host port `55432`; the unrelated `5432` PostgreSQL remains untouched. Backend and embeddings are launchd-managed and healthy. Temporary ingress is `https://punctually-ubiquitous-aphid.cloudpub.ru`; public site is `https://arvectum.com`.
 
 ## Capability matrix
 
@@ -23,8 +23,8 @@ Actual baseline: Docker pgvector PostgreSQL is healthy on host port `55432`; the
 
 ## Known limitations
 
-Runtime cutover, embeddings, backend auth, and launchd ownership are complete and verified. Hosting deployment and TLS ingress credentials were not available. `getDocsIP` is separate from the experimental legal-entity bus and needs live credential validation.
+Functional acceptance, LTE/5G, cookie consent, and post-reboot autostart are PASS. CloudPub is temporary and its long-term public reliability/SLA is not proven (`PUBLIC_RELIABILITY_LIMITED_NOT_PROVEN`). After reboot, login of `master` and Docker Desktop startup are required. `completed_with_warnings` remains possible for legacy DOC extraction.
 
 ## Next milestone
 
-Production publication and TLS ingress remain external steps; no pilot was started in R0.10.
+R0 is functionally closed. Next stage is limited to extraction quality, analysis quality, report structure, and evidence coverage; no mass external pilot is authorized by this baseline.

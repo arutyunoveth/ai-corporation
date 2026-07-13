@@ -1,1 +1,30 @@
-{"overall_status":"R0_CODE_AND_RUNTIME_COMPLETE_PRODUCTION_PUBLICATION_PENDING","sprints":{"R0.01":"DONE","R0.02":"DONE","R0.03":"DONE","R0.04":"DONE","R0.05":"DONE","R0.06":"DONE_LOCAL_NOT_DEPLOYED","R0.07":"DONE","R0.08":"SUPERSEDED_BY_R0.09","R0.09":"DONE","R0.10":"DONE_SITE_MERGED_DOCS_PENDING"},"backup_verified":true,"product_merge_sha":"6afd2364fbd03db36d3d155c65f481b9c70a22b8","product_release_tag":"r0-sync-2026-07-11","site_merge_sha":"707e6f0176b8568fa73c01a98e94db17a2c68768","site_ci":"success","production_drift":"DETECTED_EXPECTED_PRE_DEPLOY","production_hosting_deployed":false,"blockers":["B-02","B-03","B-04"]}
+{
+  "overall_status": "R0_CLOSED_FUNCTIONALLY",
+  "sprints": {
+    "R0.01": "DONE",
+    "R0.02": "DONE",
+    "R0.03": "DONE",
+    "R0.04": "DONE",
+    "R0.05": "DONE",
+    "R0.06": "DONE",
+    "R0.07": "DONE",
+    "R0.08": "SUPERSEDED_BY_R0.09",
+    "R0.09": "DONE",
+    "R0.10": "DONE"
+  },
+  "acceptance": {
+    "R0_FUNCTIONAL_ACCEPTANCE": "PASS",
+    "LIVE_PROCUREMENT_ANALYSIS_MANUAL": "PASS",
+    "CROSS_BROWSER_ACCEPTANCE": "PASS",
+    "REAL_LTE_ACCEPTANCE": "PASS",
+    "POST_REBOOT_AUTOSTART": "PASS",
+    "COOKIE_CONSENT_WEBKIT": "PASS"
+  },
+  "product_functional_sha": "2578d114074685ddb072736839b6023897105bcd",
+  "site_production_sha": "9b87212500b48ec918973f0e38351a5ad14b2603",
+  "product_release_tag": "r0-sync-2026-07-11",
+  "backup_verified": true,
+  "production_drift": "DETECTED_EXPECTED_PRE_DEPLOY",
+  "public_reliability": "PUBLIC_RELIABILITY_LIMITED_NOT_PROVEN",
+  "blockers": ["PUBLIC_RELIABILITY_LIMITED_NOT_PROVEN"]
+}

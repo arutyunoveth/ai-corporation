@@ -49,3 +49,9 @@ Verification checks the Git bundle, data archive, PostgreSQL dump indexes, and f
 ## R0.01 verified backup
 
 `/Users/master/Documents/arvectum-r0-backups/20260711-145008` was verified on 2026-07-11 with `git bundle verify`, `tar -tzf`, and `pg_restore --list`. Its local environment archive is permission-restricted and intentionally omitted from Git.
+
+## Final R0 backups
+
+- PostgreSQL dump: `/Users/master/arvectum-backups/postgres/20260713T141620Z/arvectum-postgres.dump`; size 1,092,244 bytes; SHA256 `4300f65a26afa3babbbfd40a1ba1dfe55b0b5a932f78c7a96e44c056d90df5d7`.
+- Site backup: `/Users/master/arvectum-backups/reg-ru/cookie-hotfix-20260713T144750Z/document-root.tgz`.
+- Previous site backup: `/Users/master/arvectum-backups/reg-ru/20260712T113741Z/document-root.tgz`; remote `/var/www/u3542630/data/backups/arvectum-site/20260712T113741Z/document-root.tgz`; SHA256 `6c507a1b6a90292e4bdd58af5eeceeb5fe7c8f8daf2b37c13f2ba81e95ac6c3a`.
