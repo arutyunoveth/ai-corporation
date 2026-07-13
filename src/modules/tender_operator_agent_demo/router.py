@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from src.modules.tender_operator_agent_demo.schemas import (
@@ -194,23 +194,55 @@ def get_tender_operator_public_search_url(
 
 @router.post("/api/demo/tender-agent/procurement/public-44fz-search", response_model=PublicProcurementSearchResponse)
 def search_tender_operator_public_44fz(
-    query: str = "",
-    law: str = "44fz",
-    region: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    price_from: float | None = None,
-    price_to: float | None = None,
-    deadline_from: str | None = None,
-    deadline_to: str | None = None,
-    status_filter: str | None = None,
-    procedure_type: str | None = None,
-    page: int = 1,
-    page_size: int = 10,
-    max_results: int = 10,
-    cursor: str | None = None,
-    seen_registry_numbers: str | None = None,
+    query: str | None = Form(None),
+    law: str | None = Form(None),
+    region: str | None = Form(None),
+    date_from: str | None = Form(None),
+    date_to: str | None = Form(None),
+    price_from: float | None = Form(None),
+    price_to: float | None = Form(None),
+    deadline_from: str | None = Form(None),
+    deadline_to: str | None = Form(None),
+    status_filter: str | None = Form(None),
+    procedure_type: str | None = Form(None),
+    page: int | None = Form(None),
+    page_size: int | None = Form(None),
+    max_results: int | None = Form(None),
+    cursor: str | None = Form(None),
+    seen_registry_numbers: str | None = Form(None),
+    query_q: str | None = Query(None, alias="query"),
+    law_q: str | None = Query(None, alias="law"),
+    region_q: str | None = Query(None, alias="region"),
+    date_from_q: str | None = Query(None, alias="date_from"),
+    date_to_q: str | None = Query(None, alias="date_to"),
+    price_from_q: float | None = Query(None, alias="price_from"),
+    price_to_q: float | None = Query(None, alias="price_to"),
+    deadline_from_q: str | None = Query(None, alias="deadline_from"),
+    deadline_to_q: str | None = Query(None, alias="deadline_to"),
+    status_filter_q: str | None = Query(None, alias="status_filter"),
+    procedure_type_q: str | None = Query(None, alias="procedure_type"),
+    page_q: int | None = Query(None, alias="page"),
+    page_size_q: int | None = Query(None, alias="page_size"),
+    max_results_q: int | None = Query(None, alias="max_results"),
+    cursor_q: str | None = Query(None, alias="cursor"),
+    seen_registry_numbers_q: str | None = Query(None, alias="seen_registry_numbers"),
 ):
+    query = query if query is not None else query_q or ""
+    law = law if law is not None else law_q or "44fz"
+    region = region if region is not None else region_q
+    date_from = date_from if date_from is not None else date_from_q
+    date_to = date_to if date_to is not None else date_to_q
+    price_from = price_from if price_from is not None else price_from_q
+    price_to = price_to if price_to is not None else price_to_q
+    deadline_from = deadline_from if deadline_from is not None else deadline_from_q
+    deadline_to = deadline_to if deadline_to is not None else deadline_to_q
+    status_filter = status_filter if status_filter is not None else status_filter_q
+    procedure_type = procedure_type if procedure_type is not None else procedure_type_q
+    page = page if page is not None else page_q or 1
+    page_size = page_size if page_size is not None else page_size_q or 10
+    max_results = max_results if max_results is not None else max_results_q or 10
+    cursor = cursor if cursor is not None else cursor_q
+    seen_registry_numbers = seen_registry_numbers if seen_registry_numbers is not None else seen_registry_numbers_q
     parsed_seen: list[str] = []
     if seen_registry_numbers:
         try:

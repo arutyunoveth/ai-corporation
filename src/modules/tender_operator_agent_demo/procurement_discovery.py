@@ -443,6 +443,7 @@ def search_public_44fz(
     max_results: int = 10,
     cursor: str | None = None,
     seen_registry_numbers: list[str] | None = None,
+    reference_date: date | None = None,
 ) -> dict:
     normalized_law = normalize_public_eis_law(law)
     page_num = max(page, 1)
@@ -635,6 +636,7 @@ def search_public_44fz(
             status_filter=local_status_filter,
             procedure_type=procedure_type,
             status_grace_days=2,
+            reference_date=reference_date,
         )
         newly_filtered = len(page_cards) - len(filtered)
         total_filtered_count += newly_filtered
@@ -895,11 +897,17 @@ def _filter_public_44fz_cards(
     status_filter: str | None = None,
     procedure_type: str | None = None,
     status_grace_days: int = 0,
+    reference_date: date | None = None,
 ) -> list[dict]:
     filtered: list[dict] = []
     effective_status_grace_days = status_grace_days or (2 if status_filter else 0)
     for card in cards:
-        if not _matches_public_card_status_consistency(card, grace_days=effective_status_grace_days):
+        # Explicit deadline ranges are authoritative. Otherwise retain the
+        # normal active-status expiry check, with the caller-selected grace
+        # period (the search path uses a small ingestion grace window).
+        if not (deadline_from or deadline_to) and not _matches_public_card_status_consistency(
+            card, today=reference_date, grace_days=effective_status_grace_days
+        ):
             continue
         if not _matches_public_card_date_range(card.get("publication_date"), date_from, date_to):
             continue

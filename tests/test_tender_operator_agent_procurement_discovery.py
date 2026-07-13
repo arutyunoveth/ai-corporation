@@ -922,7 +922,14 @@ def test_public_44fz_search_returns_pagination_fields_and_date_desc(monkeypatch)
         ],
     )
 
-    result = search_public_44fz(query="тест", law="44fz", page=2, page_size=10, max_results=10)
+    result = search_public_44fz(
+        query="тест",
+        law="44fz",
+        page=2,
+        page_size=10,
+        max_results=10,
+        reference_date=date(2026, 7, 6),
+    )
 
     assert result["page"] == 2
     assert result["page_size"] == 10
