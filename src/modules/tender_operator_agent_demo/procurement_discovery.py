@@ -899,11 +899,10 @@ def _filter_public_44fz_cards(
     filtered: list[dict] = []
     effective_status_grace_days = status_grace_days or (2 if status_filter else 0)
     for card in cards:
-        # Apply implicit expiry filtering only for an explicit status search.
-        # Date-bounded searches and unfiltered pagination must preserve the
-        # source cards; otherwise historical fixtures and requested ranges
-        # are silently discarded based on today's date.
-        if status_filter and not (deadline_from or deadline_to) and not _matches_public_card_status_consistency(
+        # Explicit deadline ranges are authoritative. Otherwise retain the
+        # normal active-status expiry check, with the caller-selected grace
+        # period (the search path uses a small ingestion grace window).
+        if not (deadline_from or deadline_to) and not _matches_public_card_status_consistency(
             card, grace_days=effective_status_grace_days
         ):
             continue
