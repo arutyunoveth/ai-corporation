@@ -30,4 +30,4 @@ fresh_b5_e2e:
   run_2: tmp/r1/release-candidate/b5-e2e-v2-run-2-20260714T143608827375/end_to_end_result.json
   determinism: tmp/r1/release-candidate/b5-e2e-v2-determinism.json
   focused_result: tmp/r1/release-candidate/b5-focused-result.json
-  result: B5_E2E_V2_EVIDENCE_CONTRACT_BLOCKED
+  result: B5_E2E_V3_PASS_HUMAN_REREVIEW_REQUIRED

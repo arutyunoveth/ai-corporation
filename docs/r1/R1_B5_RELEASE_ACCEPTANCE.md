@@ -43,6 +43,6 @@ Tested code SHA: `7634780bd6a19735a745f1191513a6bd818164f5`; tested tree: `7d337
 
 Each run regenerated extraction, analysis, canonical JSON, HTML, DOCX and PDF; all three evaluator exit codes are zero. Both source validations passed, produced 43/43 service rows with 100% evidence, retained `quantity=null`/`not_specified`, disclosed the missing contract, and returned `needs_review`. `tmp/r1/release-candidate/b5-e2e-v2-determinism.json` is PASS with no unexpected semantic differences. Focused acceptance is `tmp/r1/release-candidate/b5-focused-result.json` (50 collected / 50 passed / 0 failed); secret scan is clean and customer-artifact local-path leakage is zero.
 
-Evidence caveat: the artifact manifest contains the hash of `end_to_end_result.json`, while that result is also required to contain the raw hash of the manifest. This is a SHA-256 cycle and has not yet been assigned an explicit canonicalization rule. The runs and evaluator outputs are useful diagnostics, but the raw-hash cross-reference is not a complete machine-verifiable contract.
+V1 and V2 remain rejected; V2 used a cyclic raw-SHA contract. V3 replaces it with the acyclic chain documented in `R1_B5_EVIDENCE_CONTRACT_V3.md`. Fresh bundles are `tmp/r1/release-candidate/b5-e2e-v3-run-1-20260714T144601583065/` and `tmp/r1/release-candidate/b5-e2e-v3-run-2-20260714T144601598454/`; release index: `tmp/r1/release-candidate/b5-release-evidence-index.json`.
 
-Final B5 status: `B5_E2E_V2_EVIDENCE_CONTRACT_BLOCKED`. This does not authorize merge, deploy, tag, production access, or B6 approval.
+Final B5 status: `B5_E2E_V3_PASS_HUMAN_REREVIEW_REQUIRED`. This does not authorize merge, deploy, tag, or production access.
