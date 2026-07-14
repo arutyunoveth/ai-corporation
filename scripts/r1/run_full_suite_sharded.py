@@ -23,7 +23,7 @@ def main():
   for i,items in enumerate(shards,1): d=root/f"shard-{i:02d}";d.mkdir(exist_ok=True);(d/'nodeids.txt').write_text('\n'.join(items)+'\n')
   (root/'collection_manifest.json').write_text(json.dumps({"collected_count":len(ids),"unique_count":len(set(ids)),"shards":a.shards,"python_version":sys.version,"platform":platform.platform()},indent=2));return
  if a.shard:
- d=root/f"shard-{a.shard:02d}";ids=(d/'nodeids.txt').read_text().splitlines();start=time.time()
+  d=root/f"shard-{a.shard:02d}";ids=(d/'nodeids.txt').read_text().splitlines();start=time.time()
   cmd=["/usr/bin/time","-l",py,"-m","pytest","-q","--tb=short","--durations=50",*ids]
   runtime=d/'runtime';tmp=runtime/'tmp';runs=runtime/'demo-runs';tmp.mkdir(parents=True,exist_ok=True);runs.mkdir(parents=True,exist_ok=True)
   env={**os.environ,"PYTHONFAULTHANDLER":"1","PYTHONUNBUFFERED":"1","TMPDIR":str(tmp),"AI_CORP_TENDER_OPERATOR_DEMO_RUNS_DIR":str(runs),"R1_TEST_RUN_ID":root.name,"R1_SHARD_ID":str(a.shard)}
