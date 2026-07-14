@@ -16,4 +16,4 @@ Web used the mutable `outputs` payload directly, while DOCX/PDF independently co
 - Runtime artifacts: `tmp/r1/golden-report/0352300080626000109/`.
 - The report explicitly discloses missing draft contract, unknown volume, absent supplier profile and unavailable profitability calculation.
 
-RPT-001 is closed only after the committed test and evaluator results; extraction and analysis behavior were not altered.
+RPT-001 remains open pending a green full-suite run. The first B4 parallel sharded run exposed pre-existing shared runtime-state failures in upload/intake tests; it is not a valid full-suite PASS. Extraction and analysis behavior were not altered.
