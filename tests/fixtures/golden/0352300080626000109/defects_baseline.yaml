@@ -10,7 +10,10 @@ defects:
     business_impact: A bidder cannot see the actual service catalogue or validate pricing scope.
     formal_requirement: Preserve DOCX table rows and form service procurement items without inventing fixed quantities.
     acceptance_test: test_golden_0352300080626000109_has_service_items
-    status: open
+    status: resolved
+    resolved_by_commit: pending_b2_commit
+    actual_result: 43 source-backed service rows; no fixed quantity or item total inferred.
+    regression_tests: [tests/r1/test_service_table_extraction.py]
   - defect_id: ANL-001
     title: Current analysis misstates the subject as a generic document package
     defect_type: classification_error

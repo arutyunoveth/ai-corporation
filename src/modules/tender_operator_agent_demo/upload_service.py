@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import os
 import re
@@ -146,6 +147,12 @@ class SupplyItem:
     unit_price: str | None = None
     total_price: str | None = None
     source_documents: list[str] = field(default_factory=list)
+    item_type: str = "goods"
+    quantity_status: str = "specified"
+    pricing_basis: str = "unknown"
+    source_row_number: int | None = None
+    evidence_id: str | None = None
+    unit_original: str | None = None
 
 
 def get_demo_runs_root() -> Path:
@@ -1689,6 +1696,77 @@ def _extract_supply_items_from_xlsx_text(text: str, source_document: str) -> lis
     return items
 
 
+def _extract_service_items_from_nmck_text(text: str, source_document: str) -> list[SupplyItem]:
+    """Extract unit-priced services from DOCX/XLSX NMCK table text.
+
+    The document extractor preserves DOCX rows as tab-separated text.  Unlike
+    goods specifications, an NMCK service list can have no row number and no
+    quantity: its rows are name, unit and comparable unit prices.  This parser
+    deliberately does not infer a fixed volume or a contract total.
+    """
+    if not text:
+        return []
+    rows: list[SupplyItem] = []
+    seen: set[tuple[str, str]] = set()
+    pending_name: list[str] = []
+    for row_number, raw_line in enumerate(text.splitlines(), start=1):
+        cells = [_cleanup_tabular_value(cell) or "" for cell in raw_line.split("\t")]
+        meaningful = [cell for cell in cells if cell]
+        if len(meaningful) < 3:
+            pending_lower = meaningful[0].lower() if meaningful else ""
+            if len(meaningful) == 1 and "\t" not in raw_line and meaningful[0] and not any(
+                marker in pending_lower for marker in ("обоснование", "используемый метод", "коммерческое предложение", "начальная", "под одной")
+            ):
+                pending_name.append(meaningful[0])
+            continue
+        lowered = " ".join(meaningful).lower()
+        if any(marker in lowered for marker in (
+            "наименование услуг", "коммерческое предложение", "используемый метод",
+            "начальная сумма", "итого", "всего", "максимальное значение цены",
+            "под одной условной единицей",
+        )):
+            continue
+        unit_index = next((i for i, value in enumerate(meaningful) if re.fullmatch(r"(?:условная\s+единица|нормо[ -]?час(?:а|ов)?)", value, re.IGNORECASE)), None)
+        if unit_index is None or unit_index == 0:
+            continue
+        raw_name = " ".join([*pending_name, *meaningful[:unit_index]]).strip()
+        pending_name = []
+        prices = [_parse_float(value) for value in meaningful[unit_index + 1:]]
+        prices = [value for value in prices if value is not None]
+        if not raw_name or not prices:
+            continue
+        name = _normalize_supply_name(raw_name)
+        key = (_normalize_supply_name_key(name), meaningful[unit_index].lower())
+        if not key[0] or key in seen:
+            continue
+        seen.add(key)
+        evidence_seed = f"{source_document}|service-table|{row_number}|{name}".encode("utf-8")
+        evidence_id = f"ev-{hashlib.sha256(evidence_seed).hexdigest()[:16]}"
+        rows.append(SupplyItem(
+            item_no=None,
+            name=name,
+            quantity=None,
+            unit=_normalize_supply_unit(meaningful[unit_index]),
+            characteristics=[],
+            gost=[],
+            equivalent_allowed=None,
+            source_document=source_document,
+            source_kind="nmck_service_table",
+            confidence="high",
+            raw_fragment=raw_line,
+            unit_price=_format_decimal_price(prices[-1]),
+            total_price=None,
+            source_documents=[source_document],
+            item_type="service",
+            quantity_status="not_specified",
+            pricing_basis="conditional_unit_price" if "условн" in meaningful[unit_index].lower() else "hourly_rate",
+            source_row_number=row_number,
+            evidence_id=evidence_id,
+            unit_original=meaningful[unit_index],
+        ))
+    return rows
+
+
 def _extract_legacy_goods_spec_rows(technical_spec_text: str) -> list[dict[str, str]]:
     if not technical_spec_text:
         return []
@@ -1803,6 +1881,7 @@ def _collect_supply_items(documents: list[AnalyzedDocument]) -> list[SupplyItem]
             extracted.extend(_extract_supply_items_from_spec_text(text, doc.display_name))
         if doc.extension in {".xlsx", ".xls"} or "нмцк" in lowered_name or "обоснование" in lowered_name:
             extracted.extend(_extract_supply_items_from_xlsx_text(text, doc.display_name))
+            extracted.extend(_extract_service_items_from_nmck_text(text, doc.display_name))
     return _merge_supply_items(extracted)
 
 
