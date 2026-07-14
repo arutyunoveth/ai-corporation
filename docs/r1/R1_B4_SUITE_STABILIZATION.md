@@ -22,4 +22,10 @@ Those values are now mapped once into `compatibility_sections` of the canonical 
 - Focused B4 report/export tests pass.
 - A combined six-shard diagnostic run exceeded the external monolithic command limit before producing a pytest summary; it is not counted as PASS.
 
-The full two-run sharded acceptance remains pending and RPT-001 remains open.
+## Resumable acceptance
+
+The runner now supplies every shard its own `TMPDIR` and demo-run root. Two frozen 32-micro-shard runs completed on commit `08527c1`: each collected/scheduled/executed 1,550 unique node IDs, with 1,365 passed and 185 skipped; there were no failed, nonzero, crashed, missing or duplicate nodes. Their manifest SHA-256 values match: `b88f8f702f427ca337f48b131a62cdeac1dd0bcfbdb0d068c446540e47548b53`.
+
+Runtime evidence: `tmp/r1/test-runtime/b4-final-run-1-20260714T151221/aggregate_result.json` and `tmp/r1/test-runtime/b4-final-run-2-20260714T151412/aggregate_result.json`.
+
+RPT-001 is resolved, subject to human review of the generated report.
