@@ -17,7 +17,7 @@ def summary(text):
     return {"summary_present":bool(m),"passed":int(m.group(1)) if m else 0,"skipped":int(m.group(2) or 0) if m else 0}
 def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def main():
- p=argparse.ArgumentParser();p.add_argument("--output",type=Path,required=True);p.add_argument("--shards",type=int,default=8);p.add_argument("--shard",type=int);p.add_argument("--prepare",action="store_true");p.add_argument("--aggregate",action="store_true");a=p.parse_args();root=a.output;py=sys.executable
+ p=argparse.ArgumentParser();p.add_argument("--output",type=Path,required=True);p.add_argument("--result",type=Path);p.add_argument("--shards",type=int,default=8);p.add_argument("--shard",type=int);p.add_argument("--prepare",action="store_true");p.add_argument("--aggregate",action="store_true");a=p.parse_args();root=a.output;py=sys.executable
  if a.prepare:
   ids,c=nodeids(py);root.mkdir(parents=True,exist_ok=True);(root/'collected_tests.txt').write_text('\n'.join(ids)+'\n');(root/'collection_stdout.log').write_text(c.stdout);(root/'collection_stderr.log').write_text(c.stderr)
   shards=[ids[i::a.shards] for i in range(a.shards)]
@@ -41,6 +41,16 @@ def main():
   result={"schema_version":"2.0","shard":a.shard,"planned_nodeids":ids,"terminal_nodeids":ids if complete else [],"scheduled_count":len(ids),"exit_code":r.returncode,"duration_seconds":round(time.time()-start,3),**s,"result_complete":complete,"result_status":"passed" if complete and r.returncode==0 else "incomplete","last_nodeid":ids[-1] if ids else None}
   tmp_result=d/'result.json.tmp';tmp_result.write_text(json.dumps(result,indent=2));tmp_result.replace(d/'result.json');print(json.dumps(result));return
  if a.aggregate:
+  result_path=a.result or root/'aggregate_result.json'
+  if not (root/'shard_plan.json').is_file():
+   observed=[]
+   for x in root.glob('shard-*/result.json'):
+    try: observed.append(json.loads(x.read_text()))
+    except json.JSONDecodeError: pass
+   collected_count=len((root/'collected_tests.txt').read_text().splitlines()) if (root/'collected_tests.txt').is_file() else None
+   executed=sum(r.get('passed',0)+r.get('skipped',0) for r in observed)
+   result={"runtime_format_version":None,"detected_runtime_format":"legacy_pre_frozen_plan","required_files":["collection_manifest.json","shard_plan.json"],"missing_required_files":["shard_plan.json"],"malformed_required_files":[],"structural_errors":[{"code":"missing_frozen_shard_plan","path":"shard_plan.json","message":"Exact scheduled and assigned node sets cannot be verified."}],"legacy_runtime_format":True,"exact_accounting_possible":False,"status":"invalid","reason_code":"missing_frozen_shard_plan","missing_nodeids":None,"missing_nodeids_known":False,"exact_missing_nodeids_unavailable_reason":"missing_frozen_shard_plan","collected_count":collected_count,"scheduled_count":collected_count,"executed_count":executed,"unique_executed_count":executed,"count_deficit":(collected_count-executed) if collected_count is not None else None,"exit_code":2}
+   result_path.parent.mkdir(parents=True,exist_ok=True);result_path.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result));return 2
   ids=(root/'collected_tests.txt').read_text().splitlines();plan=json.loads((root/'shard_plan.json').read_text());expected={x['shard']:x['nodeids'] for x in plan['shards']}; results={int(x.parent.name.split('-')[-1]):json.loads(x.read_text()) for x in root.glob('shard-*/result.json')}
   missing_shards=sorted(set(expected)-set(results)); incomplete=sorted(i for i,r in results.items() if not r.get('result_complete'))
   terminal=[n for i,r in results.items() if i in expected and r.get('result_complete') for n in r.get('terminal_nodeids',[])]; scheduled=[n for nodes in expected.values() for n in nodes]
@@ -48,5 +58,5 @@ def main():
   passed=sum(r.get('passed',0) for r in results.values());skipped=sum(r.get('skipped',0) for r in results.values())
   ok=not (missing_shards or incomplete or missing or unexpected or duplicates) and len(ids)==len(scheduled)==len(terminal)==len(set(terminal)) and all(r['exit_code']==0 for r in results.values())
   result={"status":"passed" if ok else "invalid","reason":None if ok else "incomplete_node_execution","collected_count":len(ids),"scheduled_count":len(scheduled),"shard_assigned_count":len(scheduled),"executed_count":len(terminal),"unique_executed_count":len(set(terminal)),"missing_nodeids":missing,"unexpected_nodeids":unexpected,"duplicate_nodeids":duplicates,"missing_shards":missing_shards,"incomplete_shards":incomplete,"passed":passed,"skipped":skipped,"crashed_shards":[i for i,r in results.items() if not r.get('summary_present')],"nonzero_exit_shards":[i for i,r in results.items() if r['exit_code']!=0]}
-  (root/'aggregate_result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result));
-if __name__=='__main__': main()
+  result_path.write_text(json.dumps(result,indent=2));print(json.dumps(result));return 0 if ok else 2
+if __name__=='__main__': raise SystemExit(main())
