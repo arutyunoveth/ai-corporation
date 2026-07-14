@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from io import BytesIO
@@ -1767,6 +1768,64 @@ def _extract_service_items_from_nmck_text(text: str, source_document: str) -> li
     return rows
 
 
+def _extract_supply_items_from_notification_xml(text: str, source_document: str) -> list[SupplyItem]:
+    """Extract purchaseObject rows from the notification XML returned by EIS.
+
+    EIS notification XML is source-backed and contains the canonical item name,
+    OKEI, price and quantity.  It is commonly classified as a supporting file,
+    so it must be parsed independently of the human-readable attachments.
+    """
+    if not text or "purchaseObject" not in text:
+        return []
+    rows: list[SupplyItem] = []
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return []
+    objects = [element for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "purchaseObject"]
+    for row_number, element in enumerate(objects, start=1):
+        children = {child.tag.rsplit("}", 1)[-1]: " ".join(child.itertext()).strip() for child in element}
+
+        def value(tag: str) -> str:
+            return html.unescape(children.get(tag, "")).strip()
+
+        name = _normalize_supply_name(value("name"))
+        raw_type = value("type").upper()
+        price = _parse_float(value("price"))
+        total = _parse_float(value("sum"))
+        quantity_raw = value("quantity")
+        quantity = _normalize_quantity_value(quantity_raw) if re.search(r"\d", quantity_raw) else None
+        okei_parts = value("OKEI").split()
+        unit = _normalize_supply_unit(okei_parts[1] if len(okei_parts) > 1 else None)
+        if not name or price is None and total is None:
+            continue
+        item_type = "service" if raw_type in {"SERVICE", "WORK"} else "goods"
+        evidence_seed = f"{source_document}|notification-xml|{row_number}|{name}".encode("utf-8")
+        rows.append(SupplyItem(
+            item_no=None,
+            name=name,
+            quantity=quantity,
+            unit=unit,
+            characteristics=[],
+            gost=_extract_gost_tokens(" ".join(element.itertext())),
+            equivalent_allowed=None,
+            source_document=source_document,
+            source_kind="notification_xml",
+            confidence="high",
+            raw_fragment=" ".join(element.itertext()).strip(),
+            unit_price=_format_decimal_price(price),
+            total_price=_format_decimal_price(total),
+            source_documents=[source_document],
+            item_type=item_type,
+            quantity_status="specified" if quantity is not None else "not_specified",
+            pricing_basis="unit_price",
+            source_row_number=row_number,
+            evidence_id=f"ev-{hashlib.sha256(evidence_seed).hexdigest()[:16]}",
+            unit_original=unit,
+        ))
+    return rows
+
+
 def _service_subject_from_sources(metadata: dict[str, Any], notice_text: str, documents: list[AnalyzedDocument]) -> str:
     """Return a source-backed service subject, never a demo/report title."""
     subject = _match_first_dotall(
@@ -1960,6 +2019,8 @@ def _merge_supply_items(items: list[SupplyItem]) -> list[SupplyItem]:
     merged: dict[str, SupplyItem] = {}
     for item in items:
         key = _normalize_supply_name_key(item.name)
+        if item.source_kind == "notification_xml":
+            key = f"{item.source_document}|xml|{item.source_row_number}"
         if not key:
             continue
         existing = merged.get(key)
@@ -2011,6 +2072,8 @@ def _collect_supply_items(documents: list[AnalyzedDocument]) -> list[SupplyItem]
         if doc.extension in {".xlsx", ".xls"} or "нмцк" in lowered_name or "обоснование" in lowered_name:
             extracted.extend(_extract_supply_items_from_xlsx_text(text, doc.display_name))
             extracted.extend(_extract_service_items_from_nmck_text(text, doc.display_name))
+        if doc.extension == ".xml" or "purchasenotice" in text.lower() or "epnotification" in text.lower() or "purchaseobject" in text.lower():
+            extracted.extend(_extract_supply_items_from_notification_xml(text, doc.display_name))
     return _merge_supply_items(extracted)
 
 
@@ -2608,6 +2671,11 @@ def _build_preliminary_procurement_analysis(
     notice = notice_text or ""
     combined = "\n".join(part for part in (tz_text, contract_text, notice) if part)
     procurement_kind = _infer_procurement_kind(tz_text, contract_text, notice, str(metadata.get("tender_title") or ""))
+    extracted_service_items = [item for item in _collect_supply_items(documents) if item.item_type == "service"]
+    if extracted_service_items:
+        procurement_kind = "services"
+    elif _collect_supply_items(documents):
+        procurement_kind = "goods"
     if procurement_kind == "goods":
         return _build_goods_preliminary_analysis(
             metadata=metadata,
@@ -2973,6 +3041,10 @@ def _build_output_payloads(
         notice_text,
         str(metadata.get("tender_title") or ""),
     )
+    if any(item.item_type == "service" for item in _collect_supply_items(documents)):
+        procurement_kind = "services"
+    elif _collect_supply_items(documents):
+        procurement_kind = "goods"
     grounded_requirement_rows = _build_document_grounded_requirements(documents, procurement_kind)
     requirement_rows = grounded_requirement_rows or _extract_requirement_rows(requirements, core_complete, procurement_kind)
     quote_files_present = quote_inputs_present
