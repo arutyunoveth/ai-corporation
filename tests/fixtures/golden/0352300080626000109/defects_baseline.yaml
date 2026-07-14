@@ -45,7 +45,7 @@ defects:
     root_cause: canonical model initially omitted legacy-compatible report sections
     implementation_commit: c5a6edb
     regression_fix_commit: 4ebef8f
-    acceptance_commit: pending_b4_2_acceptance
+    acceptance_commit: a94657f3cc79eea4b86020acce276b0eda821ec2
     focused_result: 16/16 original failing-node repeats passed; combined 8-node invocation passed
     final_suite_run_1: tmp/r1/test-runtime/b4-final-run-1-20260714T151221/aggregate_result.json
     final_suite_run_2: tmp/r1/test-runtime/b4-final-run-2-20260714T151412/aggregate_result.json
