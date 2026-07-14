@@ -1,0 +1,49 @@
+defects:
+  - defect_id: EXTR-001
+    title: NMCK service table is lost as structured positions
+    defect_type: document_loss
+    layer: extraction
+    severity: S0 critical
+    observed_behavior: Current output has zero structured supply/service rows.
+    expected_behavior: At least 41 service rows with source locators, units and unit prices are extracted from nmck-docx.
+    source_of_truth: [ev-nmck-table, ev-nmck-unit]
+    business_impact: A bidder cannot see the actual service catalogue or validate pricing scope.
+    formal_requirement: Preserve DOCX table rows and form service procurement items without inventing fixed quantities.
+    acceptance_test: test_golden_0352300080626000109_has_service_items
+    status: open
+  - defect_id: ANL-001
+    title: Current analysis misstates the subject as a generic document package
+    defect_type: classification_error
+    layer: analysis
+    severity: S1 high
+    observed_behavior: Report calls the subject Документация ЕИС по номеру.
+    expected_behavior: Identify services using notice subject and OKPD2 45.20.
+    source_of_truth: [ev-notice-subject, ev-notice-okpd2]
+    business_impact: Wrong type routes the report to a supply-oriented workflow.
+    formal_requirement: Use evidence-backed procurement type and subject.
+    acceptance_test: test_services_type_detected_from_repair_diagnostics_procurement
+    status: open
+  - defect_id: RPT-001
+    title: Report omits service catalogue
+    defect_type: omission
+    layer: report
+    severity: S0 critical
+    observed_behavior: Report says structured supply was not extracted and has no service table.
+    expected_behavior: Render Какие услуги требуется оказать with service positions and evidence.
+    source_of_truth: [ev-nmck-table]
+    business_impact: Core procurement subject is absent from user output.
+    formal_requirement: Type-specific canonical report section.
+    acceptance_test: test_golden_services_report_contains_services_section
+    status: open
+  - defect_id: ANL-002
+    title: Report introduces unsupported education/integration claims
+    defect_type: unsupported_claim
+    layer: analysis
+    severity: S0 critical
+    observed_behavior: Current output refers to training, SMEV/ERN integration, lecturers and classrooms.
+    expected_behavior: Do not render unsupported inference as a procurement fact.
+    source_of_truth: [ev-notice-subject, ev-nmck-table]
+    business_impact: User can make decisions on unrelated requirements.
+    formal_requirement: Every factual requirement has source evidence.
+    acceptance_test: test_prohibited_claims_are_not_rendered
+    status: open

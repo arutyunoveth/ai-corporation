@@ -1,0 +1,1 @@
+{"type":"object","required":["procurement_identity","financial_terms","line_items"],"properties":{"line_items":{"type":"object"}}}

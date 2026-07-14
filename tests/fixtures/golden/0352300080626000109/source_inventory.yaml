@@ -1,0 +1,58 @@
+case_id: '0352300080626000109'
+source_run_id: toa-run-20260714090052-5eb0fd
+source_archive:
+  source_system: getDocsIP
+  original_filename: documentation-archive.zip
+  sha256: 4f0de135b41863e387c3bc480226085a48f27de84fb3a2fd3cafd10fe5aeb4b1
+  primary_source: true
+  processing_status: downloaded
+documents:
+  - document_id: notice-xml
+    source_system: getDocsIP
+    original_filename: epNotificationEF2020_0352300080626000109_1_019F597B57E37F54AD1D3090A2B027AD.xml
+    normalized_filename: 01-epnotificationef2020_0352300080626000109_1_019f597b57e37f54a.xml
+    role: notice
+    format: xml
+    mime_type: application/xml
+    size_bytes: 173603
+    sha256: 9cb5ebab2c46c3ea9cb99a19894723ff816040ec8d92258775bd566e9d3c1205
+    parent_archive: documentation-archive.zip
+    processing_status: parsed
+    parser_used: xml_text_extractor
+    extraction_status: extracted_text
+    primary_source: true
+    included_in_current_analysis: true
+  - document_id: nmck-docx
+    source_system: EIS_notice_attachment
+    source_reference: uid=019F59779BCD75DBBB753494300AAF20
+    original_filename: Обоснование НМЦК.docx
+    normalized_filename: 01-attachment-1.docx
+    role: nmck_calculation
+    format: docx
+    mime_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    size_bytes: 25397
+    sha256: dd54b694a1294e3f466ba9b1b8b8c910fae4692c850d66d84d014b6f669d7dbc
+    processing_status: partially_parsed
+    parser_used: docx_text_extractor
+    extraction_status: text_extracted_table_structure_lost
+    warnings: [TABLE_ROWS_FLATTENED]
+    primary_source: true
+    included_in_current_analysis: true
+  - document_id: application-requirements-docx
+    source_system: EIS_notice_attachment
+    source_reference: uid=019F59779DD3767ABFF7DFF3F95A9E8F
+    original_filename: Требования.docx
+    normalized_filename: 04-attachment-4.docx
+    role: application_requirements
+    format: docx
+    size_bytes: 26275
+    sha256: 1bc40d174bfb05e9e1271854a346ad061e23320ca45f7658a3d58e4095524368
+    processing_status: parsed
+    parser_used: docx_text_extractor
+    extraction_status: extracted_text
+    primary_source: true
+    included_in_current_analysis: true
+missing_documents:
+  - role: draft_contract
+    status: missing
+    notes: XML refers to a project contract, but no binary project contract was present in the acquired run.

@@ -1,0 +1,47 @@
+status: candidate_human_review_required
+procurement_identity:
+  procurement_number: '0352300080626000109'
+  law: 44-ФЗ
+  subject: Оказание услуг по диагностике, техническому обслуживанию и текущему ремонту автотранспортных средств, находящихся в оперативном управлении Заказчика
+  procurement_type: services
+  type_evidence: [ev-notice-subject, ev-notice-okpd2]
+financial_terms:
+  nmck: 500000
+  currency: RUB
+  nmck_evidence: [ev-nmck-limit]
+  application_security: {status: unknown, reason: not verified from acquired documents, checked_sources: [notice-xml, application-requirements-docx]}
+  contract_security: {status: unknown, reason: project contract missing, checked_sources: [notice-xml]}
+delivery_and_execution:
+  delivery_place: {status: unknown, reason: not verified from acquired documents, checked_sources: [notice-xml, nmck-docx]}
+  delivery_period: {status: unknown, reason: project contract missing, checked_sources: [notice-xml]}
+line_items:
+  source_document_id: nmck-docx
+  expected_item_type: service
+  expected_minimum_count: 41
+  quantity_policy:
+    quantity: null
+    quantity_status: not_defined_in_procurement
+    missing_reason: Unit-price list; services are ordered during contract execution and no fixed per-service volume is established in the NMCK table.
+  unit: Условная единица
+  unit_evidence_ids: [ev-nmck-unit]
+  must_include:
+    - stable_item_id: svc-apparatnaya-promyvka
+      original_name: Аппаратная промывка системы охлаждения
+      unit_price: 1900.00
+      source_evidence_ids: [ev-nmck-table]
+    - stable_item_id: svc-balance-wheels
+      original_name: Балансировка колес
+      unit_price: 1900.00
+      source_evidence_ids: [ev-nmck-table]
+    - stable_item_id: svc-repair-engine
+      original_name: Ремонт двигателя
+      unit_price: 1900.00
+      source_evidence_ids: [ev-nmck-table]
+    - stable_item_id: svc-spare-parts
+      original_name: Запасные части используемые для ремонта
+      unit_price: 37046613.00
+      source_evidence_ids: [ev-nmck-table]
+unknowns:
+  - field: draft_contract_terms
+    status: unknown
+    reason: Draft contract binary was absent from the real acquired bundle.

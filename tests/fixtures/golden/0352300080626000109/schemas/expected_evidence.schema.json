@@ -1,0 +1,1 @@
+{"type":"object","required":["evidence"],"properties":{"evidence":{"type":"array"}}}
