@@ -11,7 +11,7 @@ defects:
     formal_requirement: Preserve DOCX table rows and form service procurement items without inventing fixed quantities.
     acceptance_test: test_golden_0352300080626000109_has_service_items
     status: resolved
-    resolved_by_commit: pending_b2_commit
+    resolved_by_commit: 7b27f11
     actual_result: 43 source-backed service rows; no fixed quantity or item total inferred.
     regression_tests: [tests/r1/test_service_table_extraction.py]
   - defect_id: ANL-001
