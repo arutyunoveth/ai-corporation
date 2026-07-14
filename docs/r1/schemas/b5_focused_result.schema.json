@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"B5 focused test result","type":"object","required":["tested_commit_sha","tested_tree_sha","command","manifest_sha256","collected","passed","failed","errors","exit_code","status"],"properties":{"status":{"const":"PASS"},"exit_code":{"const":0},"failed":{"const":0},"errors":{"const":0}}}

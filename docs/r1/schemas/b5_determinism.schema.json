@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"B5 determinism","type":"object","required":["run_1_result_path","run_2_result_path","unexpected_difference_paths","status"],"properties":{"status":{"const":"PASS"},"unexpected_difference_paths":{"const":[]}}}

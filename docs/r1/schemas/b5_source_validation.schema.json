@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"B5 source validation","type":"object","required":["source_inventory_path","source_inventory_sha256","source_inventory_record_count","validated_record_count","records","overall_status"],"properties":{"overall_status":{"const":"PASS"}}}

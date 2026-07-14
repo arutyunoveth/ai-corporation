@@ -22,7 +22,12 @@ deployment_status: not_deployed
 rollback: revert the R1 commit range; no data migration required
 approval_status: human_review_required
 fresh_b5_e2e:
-  tested_code_sha: 63e1c68a14576385d2f234395b7b3743d5e0b94c
-  run_1: tmp/r1/release-candidate/b5-e2e-run-1-20260714T163335/end_to_end_result.json
-  run_2: tmp/r1/release-candidate/b5-e2e-run-2-20260714T163336/end_to_end_result.json
-  result: PASS
+  tested_code_sha: 7634780bd6a19735a745f1191513a6bd818164f5
+  tested_tree_sha: 7d337851d2dfdc679c16735b41173ec0006d4cdf
+  source_inventory: tests/fixtures/golden/0352300080626000109/source_inventory.yaml
+  source_inventory_sha256: 2d0190d957bafb30f87aff51d7c0efd19e5d5a233f1b31dcaf2147896fced758
+  run_1: tmp/r1/release-candidate/b5-e2e-v2-run-1-20260714T143608263012/end_to_end_result.json
+  run_2: tmp/r1/release-candidate/b5-e2e-v2-run-2-20260714T143608827375/end_to_end_result.json
+  determinism: tmp/r1/release-candidate/b5-e2e-v2-determinism.json
+  focused_result: tmp/r1/release-candidate/b5-focused-result.json
+  result: B5_E2E_V2_PASS_HUMAN_REREVIEW_REQUIRED

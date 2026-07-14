@@ -30,11 +30,17 @@ Runtime manifests:
 
 `AUTO_GATES_PASS_HUMAN_REVIEW_REQUIRED`. The candidate does not authorize production deployment or automatic merge. Human review must confirm the source documents and rendered customer artifacts.
 
-## Fresh B5 offline E2E evidence
+## Rejected prior B5 evidence
 
-Tested code SHA: `63e1c68a14576385d2f234395b7b3743d5e0b94c`. Two fresh isolated runs used the preserved real notice XML and NMCK DOCX only; network, production ingest and production DB were not used.
+The older `b5-e2e-run-*` directories remain untouched and are rejected as incomplete evidence: they lacked the tested-tree digest, complete source-inventory validation, extraction-evaluator output, timing and machine determinism.
 
-- Run 1: `tmp/r1/release-candidate/b5-e2e-run-1-20260714T163335/end_to_end_result.json`
-- Run 2: `tmp/r1/release-candidate/b5-e2e-run-2-20260714T163336/end_to_end_result.json`
+## Fresh B5 offline E2E evidence v2
 
-Each run regenerated extraction, analysis, canonical JSON, HTML, DOCX and PDF; analysis and report evaluators passed. Both source validations passed, produced 43/43 service rows with full row evidence, retained `quantity=null`/`not_specified`, disclosed the missing contract, and returned `needs_review`. Semantic gates match; binary hashes may differ only because each run has a new runtime ID.
+Tested code SHA: `7634780bd6a19735a745f1191513a6bd818164f5`; tested tree: `7d337851d2dfdc679c16735b41173ec0006d4cdf`. Source inventory: `tests/fixtures/golden/0352300080626000109/source_inventory.yaml` (SHA-256 `2d0190d957bafb30f87aff51d7c0efd19e5d5a233f1b31dcaf2147896fced758`).
+
+- Run 1: `tmp/r1/release-candidate/b5-e2e-v2-run-1-20260714T143608263012/end_to_end_result.json` — PASS, SHA-256 `fd712c4db34b4dc0bcf4878c3603f1a1397c9970588736ff4556848dbe745e93`.
+- Run 2: `tmp/r1/release-candidate/b5-e2e-v2-run-2-20260714T143608827375/end_to_end_result.json` — PASS, SHA-256 `367eb415966e438bfc007972c7eac90be9f319b53bc3b1b5acf6523cefff4010`.
+
+Each run regenerated extraction, analysis, canonical JSON, HTML, DOCX and PDF; all three evaluator exit codes are zero. Both source validations passed, produced 43/43 service rows with 100% evidence, retained `quantity=null`/`not_specified`, disclosed the missing contract, and returned `needs_review`. `tmp/r1/release-candidate/b5-e2e-v2-determinism.json` is PASS with no unexpected semantic differences. Focused acceptance is `tmp/r1/release-candidate/b5-focused-result.json` (50 collected / 50 passed / 0 failed); secret scan is clean and customer-artifact local-path leakage is zero.
+
+Final B5 status: `B5_E2E_V2_PASS_HUMAN_REREVIEW_REQUIRED`. This does not authorize merge, deploy, tag, or production access.

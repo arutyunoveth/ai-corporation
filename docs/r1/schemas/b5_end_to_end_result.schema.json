@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "B5 offline E2E result",
+  "type": "object",
+  "required": ["schema_version", "run_id", "overall_status", "tested_commit_sha", "tested_tree_sha", "source_inventory_path", "source_inventory_sha256", "extraction_artifact_path", "analysis_artifact_path", "canonical_report_path", "web_artifact_path", "docx_artifact_path", "pdf_artifact_path", "timing_path", "commands_path"],
+  "properties": {"overall_status": {"const": "PASS"}, "offline": {"const": true}, "tested_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "tested_tree_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}}
+}

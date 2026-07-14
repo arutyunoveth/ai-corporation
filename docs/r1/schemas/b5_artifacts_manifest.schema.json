@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"B5 artifact manifest","type":"object","required":["schema_version","artifacts"],"properties":{"artifacts":{"type":"array","minItems":14}}}
