@@ -17,12 +17,13 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import ListFlowable, ListItem, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import ListFlowable, ListItem, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from src.modules.tender_operator_agent_demo.upload_service import (
     _load_metadata,
     get_uploaded_demo_report,
     get_uploaded_demo_report_html,
+    get_demo_run_output_dir,
 )
 from src.tender_research.rag.export_service import (
     DOCX_CONTENT_TYPE,
@@ -244,6 +245,51 @@ def _build_pdf_from_parts(
     doc.build(story)
 
 
+def _load_canonical_report(run_id: str) -> dict | None:
+    path = get_demo_run_output_dir(run_id) / "canonical_report.json"
+    if not path.is_file():
+        return None
+    import json
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _build_docx_from_canonical(model: dict, title: str, output_path: Path) -> None:
+    document = Document(); document.add_heading(title, 0)
+    summary, passport = model["executive_summary"], model["procurement_passport"]
+    for line in (f"Предмет: {summary['subject']}", f"НМЦК (максимальная цена закупки): {summary['nmck']} {summary['currency']}", f"Решение: {summary['decision']}", f"ОКПД2: {passport.get('okpd2')}"):
+        document.add_paragraph(line)
+    document.add_heading("Перечень услуг и единичных расценок", 1)
+    table = document.add_table(rows=1, cols=6); table.style = "Table Grid"
+    for cell, label in zip(table.rows[0].cells, ("№", "Услуга", "Единица", "Единичная цена", "Объём", "Источник")): cell.text = label
+    for row in model["service_catalog"]:
+        cells = table.add_row().cells
+        values = (row["sequence"], row["original_name"], row["unit_original"], f"{row['unit_price']} RUB", row["quantity_display"], f"{row['source_document_id']}, {row['source_row']} [{', '.join(row['evidence_ids'])}]")
+        for cell, value in zip(cells, values): cell.text = str(value)
+    document.add_heading("Ограничения анализа", 1)
+    for item in model["missing_data"]: document.add_paragraph(item["description"], style="List Bullet")
+    for item in model["limitations"]: document.add_paragraph(item, style="List Bullet")
+    document.add_heading("Evidence map", 1)
+    for item in model["evidence_map"]: document.add_paragraph(f"[{item['evidence_id']}] {item['document']}, строка {item['row']}: {item['short_excerpt']}", style="List Bullet")
+    document.save(output_path)
+
+
+def _build_pdf_from_canonical(model: dict, title: str, output_path: Path) -> None:
+    font_name = _ensure_pdf_font_registered(); styles = _pdf_styles(font_name)
+    summary, passport = model["executive_summary"], model["procurement_passport"]
+    story = [Paragraph(html_escape(title), styles["title"]), Paragraph(_pdf_inline_markup(f"Предмет: {summary['subject']}"), styles["body"]), Paragraph(_pdf_inline_markup(f"НМЦК (максимальная цена закупки): {summary['nmck']} {summary['currency']}; ОКПД2: {passport.get('okpd2')}"), styles["body"]), Paragraph(_pdf_inline_markup(f"Решение: {summary['decision']}"), styles["body"]), Paragraph("Перечень услуг и единичных расценок", styles["h1"])]
+    data = [[Paragraph(value, styles["body"]) for value in ("№", "Услуга", "Ед.", "Цена", "Объём", "Источник")]]
+    for row in model["service_catalog"]:
+        data.append([Paragraph(_pdf_inline_markup(str(value)), styles["body"]) for value in (row["sequence"], row["original_name"], row["unit_original"], f"{row['unit_price']} RUB", row["quantity_display"], f"[{', '.join(row['evidence_ids'])}]")])
+    table = Table(data, colWidths=[8*mm, 58*mm, 25*mm, 22*mm, 30*mm, 27*mm], repeatRows=1)
+    table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), .25, HexColor("#b9c8d0")), ("BACKGROUND", (0,0), (-1,0), HexColor("#e9f7f5")), ("VALIGN", (0,0), (-1,-1), "TOP")]))
+    story += [table, Paragraph("Ограничения анализа", styles["h1"])]
+    story += [Paragraph(_pdf_inline_markup(item["description"]), styles["body"]) for item in model["missing_data"]]
+    story += [Paragraph(_pdf_inline_markup(item), styles["body"]) for item in model["limitations"]]
+    story.append(Paragraph("Evidence map", styles["h1"]))
+    story += [Paragraph(_pdf_inline_markup(f"[{item['evidence_id']}] {item['document']}, строка {item['row']}: {item['short_excerpt']}"), styles["body"]) for item in model["evidence_map"]]
+    doc = SimpleDocTemplate(str(output_path), pagesize=A4, leftMargin=12*mm, rightMargin=12*mm, topMargin=14*mm, bottomMargin=14*mm, title=title); doc.build(story)
+
+
 def export_demo_agent_report_docx(run_id: str) -> ExportedDemoReport:
     run_id = _validate_run_id(run_id)
     metadata = _load_metadata(run_id)
@@ -257,8 +303,11 @@ def export_demo_agent_report_docx(run_id: str) -> ExportedDemoReport:
     root = _safe_output_dir()
     file_name = _build_export_file_name(registry_number, run_id, "docx")
     output_path = _safe_output_path(root, file_name)
-
-    _build_docx_from_parts(title, metadata_lines, report_markdown, output_path)
+    canonical = _load_canonical_report(run_id)
+    if canonical:
+        _build_docx_from_canonical(canonical, title, output_path)
+    else:
+        _build_docx_from_parts(title, metadata_lines, report_markdown, output_path)
 
     return ExportedDemoReport(
         run_id=run_id,
@@ -286,8 +335,11 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
     root = _safe_output_dir()
     file_name = _build_export_file_name(registry_number, run_id, "pdf")
     output_path = _safe_output_path(root, file_name)
-
-    _build_pdf_from_parts(title, metadata_lines, report_markdown, output_path)
+    canonical = _load_canonical_report(run_id)
+    if canonical:
+        _build_pdf_from_canonical(canonical, title, output_path)
+    else:
+        _build_pdf_from_parts(title, metadata_lines, report_markdown, output_path)
 
     return ExportedDemoReport(
         run_id=run_id,

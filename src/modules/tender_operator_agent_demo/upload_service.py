@@ -4394,13 +4394,43 @@ def _enrich_procurement_metadata_from_documents(
     return metadata
 
 
+def _render_canonical_report_html(model: dict[str, Any]) -> str:
+    """Presentation-only web renderer for the canonical report model."""
+    def esc(value: Any) -> str:
+        return html.escape(str(value if value not in (None, "") else "Данных недостаточно — требуется проверка"))
+    summary, passport, meta = model["executive_summary"], model["procurement_passport"], model["metadata"]
+    rows = "".join(
+        f"<tr><td>{row['sequence']}</td><td>{esc(row['original_name'])}</td><td>{esc(row['unit_original'])}</td><td>{esc(row['unit_price'])} RUB</td><td>{esc(row['quantity_display'])}</td><td>{esc(row['source_document_id'])}, {row['source_row']} [{esc(', '.join(row['evidence_ids']))}]</td></tr>"
+        for row in model["service_catalog"]
+    )
+    risks = "".join(f"<li><strong>{esc(risk.get('status', 'Требует проверки'))}</strong>: {esc(risk.get('risk'))}. {esc(risk.get('impact'))}</li>" for risk in model["risks"])
+    evidence = "".join(f"<li id='{esc(item['evidence_id'])}'><strong>[{esc(item['evidence_id'])}]</strong> {esc(item['document'])}, строка {esc(item['row'])}: {esc(item['short_excerpt'])}</li>" for item in model["evidence_map"])
+    bullets = lambda values: "".join(f"<li>{esc(value)}</li>" for value in values) or "<li>Не применимо — подтверждённых данных нет.</li>"
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Анализ закупки {esc(meta.get('procurement_number'))}</title><style>
+body{{margin:0;background:#f5f8fa;color:#10243e;font:16px Arial,sans-serif}}main{{max-width:1180px;margin:auto;padding:24px}}section{{background:#fff;border:1px solid #dce5eb;border-radius:12px;padding:20px;margin:16px 0}}h1,h2{{color:#003b5c}}.decision{{border-left:6px solid #d08300}}.scroll{{overflow-x:auto}}table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom:1px solid #dce5eb;padding:9px;text-align:left;vertical-align:top}}th{{background:#e9f7f5}}.label{{font-weight:bold;color:#006b66}}@media print{{body{{background:#fff}}section{{break-inside:avoid}}}}@media(max-width:700px){{main{{padding:12px}}section{{padding:14px}}}}</style></head><body><main>
+<section><h1>Анализ закупки {esc(meta.get('procurement_number'))}</h1><p class="label">Версия: {esc(meta.get('report_version'))}; полнота источников: {esc(meta.get('completeness_status'))}</p></section>
+<section><h2>Резюме для принятия решения</h2><p><strong>{esc(summary['subject'])}</strong></p><p>НМЦК (максимальная цена закупки): {esc(summary['nmck'])} {esc(summary['currency'])}</p><p>Проанализировано услуг: {esc(summary['service_item_count'])}/{esc(summary['analyzed_item_count'])}</p><div class="decision"><strong>{esc(summary['decision'])}</strong><ul>{bullets(summary['blockers'])}</ul><p>Следующее действие: {esc(summary['next_action'])}</p></div></section>
+<section><h2>Паспорт закупки</h2><ul><li>Категория: {esc(passport.get('category'))}</li><li>ОКПД2: {esc(passport.get('okpd2'))}</li><li>Заказчик: {esc(passport.get('customer'))}</li></ul></section>
+<section><h2>Перечень услуг и единичных расценок</h2><p>Фиксированный объём не указан документацией; единичные цены не суммируются в стоимость контракта.</p><div class="scroll"><table><thead><tr><th>№</th><th>Услуга</th><th>Единица</th><th>Единичная цена</th><th>Количество/объём</th><th>Источник и evidence</th></tr></thead><tbody>{rows}</tbody></table></div></section>
+<section><h2>Недостающие данные и ограничения</h2><ul>{bullets([item['description'] + ': ' + item['required_action'] for item in model['missing_data']] + model['limitations'])}</ul></section>
+<section><h2>Риски</h2><ul>{risks}</ul></section><section><h2>Вопросы заказчику/внутренней команде</h2><ul>{bullets(model['customer_questions'])}</ul></section><section><h2>Evidence map</h2><ul>{evidence}</ul></section>
+</main></body></html>'''
+
+
 def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, dict[str, Any]], steps: list[DemoStep]) -> None:
+    from src.modules.tender_operator_agent_demo.report_model import (
+        build_procurement_report_model,
+        canonical_report_to_markdown,
+    )
     output_dir = _output_dir(run_id)
     output_dir.mkdir(parents=True, exist_ok=True)
     for name, payload in outputs.items():
         _write_json(output_dir / f"{name}.json", payload)
 
-    report_html = _render_report_html(metadata, outputs)
+    canonical_report = build_procurement_report_model(metadata, outputs)
+    canonical_markdown = canonical_report_to_markdown(canonical_report)
+    _write_json(output_dir / "canonical_report.json", canonical_report)
+    report_html = _render_canonical_report_html(canonical_report)
     (output_dir / "report.html").write_text(report_html, encoding="utf-8")
     report_json = {
         "run_id": run_id,
@@ -4414,7 +4444,7 @@ def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, d
             {"title": step.title, "kind": "bullets", "items": step.findings}
             for step in steps
         ],
-        "report_markdown": _build_report_markdown(metadata, outputs),
+        "report_markdown": canonical_markdown,
     }
     _write_json(output_dir / "report.json", report_json)
     _write_json(output_dir / "steps.json", {"steps": [item.model_dump(mode="json") for item in steps]})
