@@ -1,0 +1,23 @@
+release_id: r1-rc1-2026-07-14
+release_name: R1 Quality and Product Readiness
+repository: github.com/arutyunoveth/ai-corporation
+base_main_sha: bc5194600b9b17bd89b2bc02ce92577708a23c35
+accepted_rc_sha: 9ca83c31cce6968ca44858aa5b55434c749c6654
+branch: codex/r1-b5-release-acceptance
+golden_case: '0352300080626000109'
+resolved_defects: [EXTR-001, ANL-001, ANL-002, RPT-001]
+known_limitations:
+  - Candidate facts require human primary-document review.
+  - Missing draft contract prevents unconditional GO.
+test_results:
+  exact_nodes: 1550
+  passed: 1365
+  skipped: 185
+  full_runs: 2
+suite_manifest_sha: b88f8f702f427ca337f48b131a62cdeac1dd0bcfbdb0d068c446540e47548b53
+security_scan: clean
+migration_status: none
+db_change_status: none
+deployment_status: not_deployed
+rollback: revert the R1 commit range; no data migration required
+approval_status: human_review_required
