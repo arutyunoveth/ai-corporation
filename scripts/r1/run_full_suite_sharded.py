@@ -23,16 +23,22 @@ def main():
  if a.prepare:
   from full_suite_binding import build_execution_binding
   b=build_execution_binding(cwd=Path.cwd(),tested_commit=a.tested_commit_sha,tested_tree=a.tested_tree_sha,expected_remote=a.expected_remote_sha,remote_ref=a.remote_ref,runner=Path(__file__),verifier=Path(__file__).with_name('verify_full_suite_aggregate.py'))
-  root.mkdir(parents=True,exist_ok=True);(root/'execution_binding.json').write_text(json.dumps(b,sort_keys=True,indent=2)+'\n')
+  from full_suite_binding import atomic_write_json, sha256_file
+  root.mkdir(parents=True,exist_ok=True); atomic_write_json(root/'execution_binding.json',b)
   if b['status']!='PASS': print(json.dumps(b)); return 2
  if a.prepare:
   ids,c=nodeids(py);root.mkdir(parents=True,exist_ok=True);(root/'collected_tests.txt').write_text('\n'.join(ids)+'\n');(root/'collection_stdout.log').write_text(c.stdout);(root/'collection_stderr.log').write_text(c.stderr)
   shards=[ids[i::a.shards] for i in range(a.shards)]
   for i,items in enumerate(shards,1): d=root/f"shard-{i:02d}";d.mkdir(exist_ok=True);(d/'nodeids.txt').write_text('\n'.join(items)+'\n')
-  manifest={"collected_count":len(ids),"unique_count":len(set(ids)),"shards":a.shards,"python_version":sys.version,"platform":platform.platform()}
-  (root/'collection_manifest.json').write_text(json.dumps(manifest,indent=2))
-  plan={"shards":[{"shard":i,"nodeids":items} for i,items in enumerate(shards,1)]}
-  (root/'shard_plan.json').write_text(json.dumps(plan,indent=2));return
+  binding_sha=sha256_file(root/'execution_binding.json')
+  metadata={"schema_version":"1.0","runtime_format_version":"3.0","run_id":root.name,"repository_identity":b.get('repository_identity'),"branch":b.get('branch'),"remote_ref":a.remote_ref,"tested_commit_sha":a.tested_commit_sha,"tested_tree_sha":a.tested_tree_sha,"expected_remote_sha":a.expected_remote_sha,"main_sha":None,"execution_binding_path":"execution_binding.json","execution_binding_sha256":binding_sha,"runner_path":str(Path(__file__)) ,"runner_sha256":sha256_file(Path(__file__)),"verifier_path":str(Path(__file__).with_name('verify_full_suite_aggregate.py')),"verifier_sha256":sha256_file(Path(__file__).with_name('verify_full_suite_aggregate.py')),"python_version":sys.version,"pytest_version":None,"created_at":time.time(),"status":"PASS"}
+  atomic_write_json(root/'run_metadata.json',metadata); metadata_sha=sha256_file(root/'run_metadata.json')
+  manifest={"schema_version":"1.0","runtime_format_version":"3.0","run_id":root.name,"tested_commit_sha":a.tested_commit_sha,"tested_tree_sha":a.tested_tree_sha,"expected_remote_sha":a.expected_remote_sha,"execution_binding_sha256":binding_sha,"run_metadata_sha256":metadata_sha,"runner_sha256":sha256_file(Path(__file__)),"verifier_sha256":sha256_file(Path(__file__).with_name('verify_full_suite_aggregate.py')),"ordered_nodeids":ids,"collected_count":len(ids),"unique_count":len(set(ids)),"node_set_sha256":hashlib.sha256(('\n'.join(ids)+'\n').encode()).hexdigest(),"collection_command":[py,"-m","pytest","--collect-only","-q"],"collection_exit_code":c.returncode,"collection_stdout_path":"collection_stdout.log","collection_stdout_sha256":digest(root/'collection_stdout.log'),"collection_stderr_path":"collection_stderr.log","collection_stderr_sha256":digest(root/'collection_stderr.log'),"created_at":time.time(),"status":"PASS"}
+  atomic_write_json(root/'collection_manifest.json',manifest); collection_sha=sha256_file(root/'collection_manifest.json')
+  plan={"schema_version":"1.0","runtime_format_version":"3.0","run_id":root.name,"tested_commit_sha":a.tested_commit_sha,"tested_tree_sha":a.tested_tree_sha,"expected_remote_sha":a.expected_remote_sha,"execution_binding_sha256":binding_sha,"run_metadata_sha256":metadata_sha,"collection_manifest_sha256":collection_sha,"node_set_sha256":manifest['node_set_sha256'],"runner_sha256":sha256_file(Path(__file__)),"verifier_sha256":sha256_file(Path(__file__).with_name('verify_full_suite_aggregate.py')),"planner_version":"1.0","planning_parameters":{"shards":a.shards},"expected_shard_ids":list(range(1,a.shards+1)),"shards":[{"shard_id":i,"ordered_nodeids":items,"node_count":len(items)} for i,items in enumerate(shards,1)],"total_assigned_count":len(ids),"created_at":time.time(),"status":"PASS"}
+  for item in plan['shards']:
+   item['shard']=item['shard_id']; item['nodeids']=item['ordered_nodeids']
+  atomic_write_json(root/'shard_plan.json',plan);return
  if a.shard:
   d=root/f"shard-{a.shard:02d}";ids=(d/'nodeids.txt').read_text().splitlines();start=time.time()
   cmd=["/usr/bin/time","-l",py,"-m","pytest","-q","--tb=short","--durations=50",*ids]
