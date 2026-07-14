@@ -1,0 +1,28 @@
+evidence:
+  - evidence_id: ev-notice-subject
+    document_id: notice-xml
+    file_name: epNotificationEF2020_0352300080626000109_1_019F597B57E37F54AD1D3090A2B027AD.xml
+    sha256: 9cb5ebab2c46c3ea9cb99a19894723ff816040ec8d92258775bd566e9d3c1205
+    xml_path: purchaseObjectInfo
+    short_excerpt: Оказание услуг по диагностике, техническому обслуживанию и текущему ремонту автотранспортных средств
+    normalized_fact: procurement_type=services
+  - evidence_id: ev-notice-okpd2
+    document_id: notice-xml
+    xml_path: OKPD2Info/OKPDCode
+    short_excerpt: '45.20'
+    normalized_fact: OKPD2 vehicle maintenance and repair services
+  - evidence_id: ev-nmck-table
+    document_id: nmck-docx
+    table: 0
+    short_excerpt: Наименование услуг; Единица измерения; Начальная(минимальная) цена единицы услуги
+    normalized_fact: unit-price service list
+  - evidence_id: ev-nmck-unit
+    document_id: nmck-docx
+    table: 0
+    short_excerpt: Под одной условной единицей понимается один норма/час
+    normalized_fact: unit=conditional unit / norm-hour
+  - evidence_id: ev-nmck-limit
+    document_id: nmck-docx
+    table: 0
+    short_excerpt: 'Максимальное значение цены контракта: 500 000 руб.'
+    normalized_fact: contract maximum=500000 RUB

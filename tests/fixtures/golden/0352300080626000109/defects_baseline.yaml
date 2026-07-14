@@ -1,0 +1,76 @@
+defects:
+  - defect_id: EXTR-001
+    title: NMCK service table is lost as structured positions
+    defect_type: document_loss
+    layer: extraction
+    severity: S0 critical
+    observed_behavior: Current output has zero structured supply/service rows.
+    expected_behavior: At least 41 service rows with source locators, units and unit prices are extracted from nmck-docx.
+    source_of_truth: [ev-nmck-table, ev-nmck-unit]
+    business_impact: A bidder cannot see the actual service catalogue or validate pricing scope.
+    formal_requirement: Preserve DOCX table rows and form service procurement items without inventing fixed quantities.
+    acceptance_test: test_golden_0352300080626000109_has_service_items
+    status: resolved
+    resolved_by_commit: 7b27f11
+    actual_result: 43 source-backed service rows; no fixed quantity or item total inferred.
+    regression_tests: [tests/r1/test_service_table_extraction.py]
+  - defect_id: ANL-001
+    title: Current analysis misstates the subject as a generic document package
+    defect_type: classification_error
+    layer: analysis
+    severity: S1 high
+    observed_behavior: Report calls the subject Документация ЕИС по номеру.
+    expected_behavior: Identify services using notice subject and OKPD2 45.20.
+    source_of_truth: [ev-notice-subject, ev-notice-okpd2]
+    business_impact: Wrong type routes the report to a supply-oriented workflow.
+    formal_requirement: Use evidence-backed procurement type and subject.
+    acceptance_test: test_services_type_detected_from_repair_diagnostics_procurement
+    status: resolved
+    resolved_by_commit: 17617e8433b40050f47fa114a20bcb1a9b494b47
+    root_cause: Services were routed into a legacy training-oriented fallback instead of a source-backed service analysis profile.
+    actual_result: Notice subject and OKPD2 are carried into the analysis context; all extracted service rows are analyzed with explicit coverage.
+    regression_tests: [tests/r1/test_vehicle_service_analysis.py]
+  - defect_id: RPT-001
+    title: Report omits service catalogue
+    defect_type: omission
+    layer: report
+    severity: S0 critical
+    observed_behavior: Report says structured supply was not extracted and has no service table.
+    expected_behavior: Render Какие услуги требуется оказать with service positions and evidence.
+    source_of_truth: [ev-nmck-table]
+    business_impact: Core procurement subject is absent from user output.
+    formal_requirement: Type-specific canonical report section.
+    acceptance_test: test_golden_services_report_contains_services_section
+    status: resolved
+    root_cause: canonical model initially omitted legacy-compatible report sections
+    implementation_commit: c5a6edb
+    regression_fix_commit: 4ebef8f
+    acceptance_commit: a94657f3cc79eea4b86020acce276b0eda821ec2
+    focused_result: 16/16 original failing-node repeats passed; combined 8-node invocation passed
+    final_suite_run_1: tmp/r1/test-runtime/b4-final-run-1-20260714T151221/aggregate_result.json
+    final_suite_run_2: tmp/r1/test-runtime/b4-final-run-2-20260714T151412/aggregate_result.json
+    node_manifest_sha256: b88f8f702f427ca337f48b131a62cdeac1dd0bcfbdb0d068c446540e47548b53
+    golden_report_result: passed
+    parity_result: passed
+    artifact_hashes:
+      canonical_report_json: 72a3f80a16072eaa491e0f8e14915ccd1db38e2c75f735a4cde74ce237592a64
+      web_html: d482c97d3a30be7b032d686e6dc36a7a5a4b8eaf9a948a1f4023e3391c3b5ce9
+      docx: bad4b77972ec74078702bc56045ee29d4fbe46bebbbc52cb722f012d6a523d90
+      pdf: 6b6ab4dc9866e07ef7df6c63dcda3acae82d32775d75fbe2ce8fa36feebbb20c
+    visual_review_result: automated_visual_smoke_pass_human_review_required
+  - defect_id: ANL-002
+    title: Report introduces unsupported education/integration claims
+    defect_type: unsupported_claim
+    layer: analysis
+    severity: S0 critical
+    observed_behavior: Current output refers to training, SMEV/ERN integration, lecturers and classrooms.
+    expected_behavior: Do not render unsupported inference as a procurement fact.
+    source_of_truth: [ev-notice-subject, ev-nmck-table]
+    business_impact: User can make decisions on unrelated requirements.
+    formal_requirement: Every factual requirement has source evidence.
+    acceptance_test: test_prohibited_claims_are_not_rendered
+    status: resolved
+    resolved_by_commit: 17617e8433b40050f47fa114a20bcb1a9b494b47
+    root_cause: Generic non-goods fallback inserted education and IT integration assumptions without source evidence.
+    actual_result: Vehicle-maintenance services use a domain-safe deterministic profile; unsupported training and integration claims are rejected by regression tests and evaluator.
+    regression_tests: [tests/r1/test_vehicle_service_analysis.py, scripts/r1/evaluate_golden_analysis.py]

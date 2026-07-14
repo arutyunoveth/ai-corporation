@@ -115,7 +115,7 @@ def test_retriever_returns_expected_chunks_and_filters(tmp_path):
     repo._session.commit()
 
     retriever = RagRetriever(repo, provider, store)
-    hits = retriever.search_documents("состав заявки", limit=5)
+    hits = retriever.search_all_documents("состав заявки", limit=5)
     filtered = retriever.search_documents("условия оплаты", registry_number="002", limit=5)
 
     assert hits
@@ -128,7 +128,7 @@ def test_retriever_handles_empty_index_gracefully(tmp_path):
     repo = _repo()
     retriever = RagRetriever(repo, FakeEmbeddingProvider(), JsonVectorStore(Path(tmp_path) / "empty.json", dimension=2))
 
-    assert retriever.search_documents("что-нибудь", limit=5) == []
+    assert retriever.search_all_documents("что-нибудь", limit=5) == []
 
 
 def test_retriever_falls_back_to_lexical_search_when_vector_search_is_empty(tmp_path):

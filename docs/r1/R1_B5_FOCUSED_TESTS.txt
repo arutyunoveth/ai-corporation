@@ -1,0 +1,23 @@
+# B5 focused acceptance manifest v2
+# tested_commit_sha: 7634780bd6a19735a745f1191513a6bd818164f5
+# tested_tree_sha: 7d337851d2dfdc679c16735b41173ec0006d4cdf
+# created_at: 2026-07-14T14:32:00+00:00
+# command: .venv/bin/python -m pytest -q --tb=short tests/r1/test_service_table_extraction.py tests/r1/test_vehicle_service_analysis.py tests/r1/test_golden_report_model.py tests/test_tender_operator_agent_report_export.py tests/test_tender_operator_agent_upload_demo.py tests/test_tender_operator_agent_getdocs_ip_intake.py
+# environment: PYTHONUNBUFFERED=1; network is not required; production DB is not used.
+# expected: collected >= 50; failed=0; errors=0; exit_code=0.
+# result_path: tmp/r1/release-candidate/b5-focused-result.json
+# stdout_path: tmp/r1/release-candidate/b5-focused-stdout.log
+# stderr_path: tmp/r1/release-candidate/b5-focused-stderr.log
+# purposes:
+# - service table: real-source NMCK rows, stable evidence, no totals/invented quantity;
+# - service analysis: source-backed category, 43 rows, missing contract semantics;
+# - canonical report: service model and Web parity;
+# - exports: canonical DOCX/PDF paths and renderer behavior;
+# - upload/getDocsIP intake: isolated archive/document ownership behavior.
+
+tests/r1/test_service_table_extraction.py
+tests/r1/test_vehicle_service_analysis.py
+tests/r1/test_golden_report_model.py
+tests/test_tender_operator_agent_report_export.py
+tests/test_tender_operator_agent_upload_demo.py
+tests/test_tender_operator_agent_getdocs_ip_intake.py

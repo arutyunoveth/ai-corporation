@@ -1,0 +1,19 @@
+claims:
+  - claim_id: PC-001
+    prohibited_claim_pattern: Economic feasibility or margin is positive.
+    reason: Cost, logistics, tax, security and financing inputs are absent.
+    required_inputs: [supplier_cost, logistics_cost, tax_model, security_cost, financing_cost, expected_margin]
+    severity: S1 high
+    expected_behavior: needs_review
+  - claim_id: PC-002
+    prohibited_claim_pattern: A supplier complies with participant requirements.
+    reason: No supplier profile or evidence was acquired.
+    required_inputs: [supplier_profile, licenses, declarations]
+    severity: S1 high
+    expected_behavior: unknown
+  - claim_id: PC-003
+    prohibited_claim_pattern: Training, SMEV/ERN integration, licence transfer or education resources are procurement requirements.
+    reason: No acquired source evidence supports these claims.
+    required_inputs: [source evidence]
+    severity: S0 critical
+    expected_behavior: do_not_render_as_fact

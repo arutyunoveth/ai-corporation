@@ -46,11 +46,47 @@ class RagRetriever:
         customer_name: str | None = None,
         limit: int = 10,
     ) -> list[RagSearchHit]:
+        return self._search_documents(
+            query,
+            tender_id=tender_id,
+            registry_number=registry_number,
+            customer_name=customer_name,
+            limit=limit,
+            allow_unscoped=False,
+        )
+
+    def search_all_documents(self, query: str, *, limit: int = 10) -> list[RagSearchHit]:
+        """Explicit index-inspection search; procurement analysis must not call this."""
+        return self._search_documents(query, limit=limit, allow_unscoped=True)
+
+    def _search_documents(
+        self,
+        query: str,
+        *,
+        tender_id: str | None = None,
+        registry_number: str | None = None,
+        customer_name: str | None = None,
+        limit: int = 10,
+        allow_unscoped: bool,
+    ) -> list[RagSearchHit]:
         if not query.strip():
             return []
 
+        # Procurement analysis is a tenant-scoped operation.  A caller that
+        # needs cross-tender research must opt into a separate API; silently
+        # falling back to the global vector collection is never safe here.
+        if not tender_id and registry_number:
+            tender = self._repo.get_tender_by_registry_number(registry_number)
+            tender_id = str(tender.id) if tender else None
+            if not tender_id:
+                # An unknown registry number has no owned chunks; returning an
+                # empty result is safe and avoids any global fallback.
+                return []
+        if not tender_id and not allow_unscoped:
+            raise ValueError("tender_id (or a resolvable registry_number) is required for procurement document retrieval")
+
         allowed_chunk_ids = None
-        if tender_id or registry_number or customer_name:
+        if tender_id:
             allowed = self._repo.list_chunk_ids_for_filters(
                 tender_id=tender_id,
                 registry_number=registry_number,

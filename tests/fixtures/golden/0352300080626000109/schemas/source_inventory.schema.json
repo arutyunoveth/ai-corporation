@@ -1,0 +1,1 @@
+{"type":"object","required":["case_id","documents"],"properties":{"case_id":{"type":"string"},"documents":{"type":"array"}}}

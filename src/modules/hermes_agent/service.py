@@ -161,7 +161,16 @@ class HermesProcurementAnalysisService:
     def persist_analysis_with_evidence(
         self, tender_id: str, analysis: HermesAnalysisResponse
     ) -> str:
+        from src.tender_research.models import ProcurementTenderDocument
+
         analysis_id = str(import_uuid4())
+        owned_documents = {
+            str(doc.id): doc
+            for doc in self.session.query(ProcurementTenderDocument).filter(
+                ProcurementTenderDocument.tender_id == tender_id
+            )
+        }
+        owned_by_name = {doc.file_name: doc for doc in owned_documents.values() if doc.file_name}
 
         for check in analysis.quality_checks:
             qc = AnalysisQualityCheckModel(
@@ -174,10 +183,16 @@ class HermesProcurementAnalysisService:
             self.session.add(qc)
 
         for item in analysis.line_items:
-            if item.source_document and item.source_quote:
+            document = owned_documents.get(item.source_document_id) or owned_by_name.get(item.source_document)
+            if item.source_document_id and document is None:
+                raise ValueError("Evidence document does not belong to the current tender")
+            if item.confidence > 0.5 and (document is None or not item.source_quote):
+                raise ValueError("High-confidence line item requires owned document evidence")
+            if document and item.source_quote:
                 span = DocumentEvidenceSpan(
                     tender_id=tender_id,
-                    document_ref=item.source_document,
+                    document_id=document.id,
+                    document_ref=document.file_name,
                     field_path=f"line_items.{item.position_no or item.name}",
                     quote=item.source_quote,
                     start_offset=0,
@@ -277,8 +292,9 @@ class HermesProcurementAnalysisService:
         self.session.commit()
         return memory
 
-    def build_runtime_context(self, tender_id: str) -> dict:
+    def build_runtime_context(self, tender_id: str, *, run_id: str = "") -> dict:
         ctx = self.build_context(tender_id)
+        ctx["run_id"] = run_id
         for doc in ctx.get("documents", []):
             doc_id = doc.get("id", "")
             doc["text"] = self.get_document_text(doc_id)
@@ -289,9 +305,12 @@ class HermesProcurementAnalysisService:
         memories: list[dict] = []
         tender_id = context.get("tender", {}).get("id", "")
 
+        # Feedback is factual procurement memory. It is valid only for the
+        # tender it originated from, never as global prompt context.
         feedback_memories = self.search_memory(HermesMemorySearchRequest(
             memory_type="feedback_error_case",
             scope="procurement_analysis",
+            source_tender_id=tender_id or None,
             limit=10,
         ))
         for m in feedback_memories:
@@ -330,12 +349,26 @@ class HermesProcurementAnalysisService:
                     "category": m.category,
                     "payload_json": m.payload_json,
                 })
-        return memories
+        return [memory for memory in memories if self._memory_is_safe_for_context(memory, tender_id)]
 
-    def run_runtime_analysis(self, tender_id: str) -> HermesRuntimeAnalysisResult:
+    @staticmethod
+    def _memory_is_safe_for_context(memory: dict, tender_id: str) -> bool:
+        """Allow global rules, but never global tender facts into an analysis."""
+        if memory.get("memory_type") == "extraction_rule":
+            return True
+        payload = memory.get("payload_json") or {}
+        factual_keys = {
+            "line_items", "quantity", "unit", "price", "address", "deadline",
+            "customer", "nmck", "characteristics", "evidence", "source_quote",
+        }
+        if any(key in payload for key in factual_keys):
+            return False
+        return bool(tender_id and memory.get("source_tender_id", tender_id) == tender_id)
+
+    def run_runtime_analysis(self, tender_id: str, *, run_id: str = "") -> HermesRuntimeAnalysisResult:
         start_time = time.time()
 
-        context = self.build_runtime_context(tender_id)
+        context = self.build_runtime_context(tender_id, run_id=run_id)
         documents = context.get("documents", [])
         document_roles = context.get("document_roles", [])
 
@@ -354,6 +387,8 @@ class HermesProcurementAnalysisService:
         analysis = client.analyze_procurement(context, relevant_memory)
 
         analysis.tender_id = tender_id
+        analysis.registry_number = context.get("tender", {}).get("registry_number", "") or ""
+        analysis.run_id = run_id
         analysis.document_roles = document_roles
         if not analysis.summary.subject and context.get("tender", {}).get("title"):
             analysis.summary.subject = context["tender"]["title"]

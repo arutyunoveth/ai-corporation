@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import os
 import re
@@ -146,6 +147,12 @@ class SupplyItem:
     unit_price: str | None = None
     total_price: str | None = None
     source_documents: list[str] = field(default_factory=list)
+    item_type: str = "goods"
+    quantity_status: str = "specified"
+    pricing_basis: str = "unknown"
+    source_row_number: int | None = None
+    evidence_id: str | None = None
+    unit_original: str | None = None
 
 
 def get_demo_runs_root() -> Path:
@@ -1689,6 +1696,206 @@ def _extract_supply_items_from_xlsx_text(text: str, source_document: str) -> lis
     return items
 
 
+def _extract_service_items_from_nmck_text(text: str, source_document: str) -> list[SupplyItem]:
+    """Extract unit-priced services from DOCX/XLSX NMCK table text.
+
+    The document extractor preserves DOCX rows as tab-separated text.  Unlike
+    goods specifications, an NMCK service list can have no row number and no
+    quantity: its rows are name, unit and comparable unit prices.  This parser
+    deliberately does not infer a fixed volume or a contract total.
+    """
+    if not text:
+        return []
+    rows: list[SupplyItem] = []
+    seen: set[tuple[str, str]] = set()
+    pending_name: list[str] = []
+    for row_number, raw_line in enumerate(text.splitlines(), start=1):
+        cells = [_cleanup_tabular_value(cell) or "" for cell in raw_line.split("\t")]
+        meaningful = [cell for cell in cells if cell]
+        if len(meaningful) < 3:
+            pending_lower = meaningful[0].lower() if meaningful else ""
+            if len(meaningful) == 1 and "\t" not in raw_line and meaningful[0] and not any(
+                marker in pending_lower for marker in ("обоснование", "используемый метод", "коммерческое предложение", "начальная", "под одной")
+            ):
+                pending_name.append(meaningful[0])
+            continue
+        lowered = " ".join(meaningful).lower()
+        if any(marker in lowered for marker in (
+            "наименование услуг", "коммерческое предложение", "используемый метод",
+            "начальная сумма", "итого", "всего", "максимальное значение цены",
+            "под одной условной единицей",
+        )):
+            continue
+        unit_index = next((i for i, value in enumerate(meaningful) if re.fullmatch(r"(?:условная\s+единица|нормо[ -]?час(?:а|ов)?)", value, re.IGNORECASE)), None)
+        if unit_index is None or unit_index == 0:
+            continue
+        raw_name = " ".join([*pending_name, *meaningful[:unit_index]]).strip()
+        pending_name = []
+        prices = [_parse_float(value) for value in meaningful[unit_index + 1:]]
+        prices = [value for value in prices if value is not None]
+        if not raw_name or not prices:
+            continue
+        name = _normalize_supply_name(raw_name)
+        key = (_normalize_supply_name_key(name), meaningful[unit_index].lower())
+        if not key[0] or key in seen:
+            continue
+        seen.add(key)
+        evidence_seed = f"{source_document}|service-table|{row_number}|{name}".encode("utf-8")
+        evidence_id = f"ev-{hashlib.sha256(evidence_seed).hexdigest()[:16]}"
+        rows.append(SupplyItem(
+            item_no=None,
+            name=name,
+            quantity=None,
+            unit=_normalize_supply_unit(meaningful[unit_index]),
+            characteristics=[],
+            gost=[],
+            equivalent_allowed=None,
+            source_document=source_document,
+            source_kind="nmck_service_table",
+            confidence="high",
+            raw_fragment=raw_line,
+            unit_price=_format_decimal_price(prices[-1]),
+            total_price=None,
+            source_documents=[source_document],
+            item_type="service",
+            quantity_status="not_specified",
+            pricing_basis="conditional_unit_price" if "условн" in meaningful[unit_index].lower() else "hourly_rate",
+            source_row_number=row_number,
+            evidence_id=evidence_id,
+            unit_original=meaningful[unit_index],
+        ))
+    return rows
+
+
+def _service_subject_from_sources(metadata: dict[str, Any], notice_text: str, documents: list[AnalyzedDocument]) -> str:
+    """Return a source-backed service subject, never a demo/report title."""
+    subject = _match_first_dotall(
+        notice_text,
+        (r"<(?:\w+:)?purchaseObjectInfo>\s*([^<]+?)\s*</(?:\w+:)?purchaseObjectInfo>",),
+    )
+    if subject:
+        return _cleanup_tabular_value(subject) or subject
+    for document in documents:
+        if document.role != "notice" or not document.text:
+            continue
+        subject = _match_first_dotall(
+            document.text,
+            (r"<(?:\w+:)?purchaseObjectInfo>\s*([^<]+?)\s*</(?:\w+:)?purchaseObjectInfo>",),
+        )
+        if subject:
+            return _cleanup_tabular_value(subject) or subject
+    return str(metadata.get("tender_title") or "Предмет закупки не извлечён")
+
+
+def _service_okpd2_from_sources(notice_text: str, documents: list[AnalyzedDocument]) -> str | None:
+    source_text = "\n".join([notice_text, *(doc.text or "" for doc in documents if doc.role == "notice")])
+    return _match_first_dotall(
+        source_text,
+        (r"<(?:\w+:)?OKPDCode>\s*([\d.]+)\s*</(?:\w+:)?OKPDCode>",),
+    )
+
+
+def _is_vehicle_maintenance_services(subject: str, okpd2: str | None, service_items: list[SupplyItem]) -> bool:
+    corpus = " ".join([subject, *(item.name for item in service_items)]).lower()
+    return bool(
+        (okpd2 or "").startswith("45.20")
+        or ("автотранспорт" in corpus and any(token in corpus for token in ("диагност", "ремонт", "техническ")))
+    )
+
+
+def _service_item_analysis_rows(items: list[SupplyItem]) -> list[dict[str, Any]]:
+    """Serialize extracted rows without converting an unspecified volume to zero."""
+    return [
+        {
+            "stable_item_id": item.evidence_id or f"service-{index}",
+            "original_name": item.name,
+            "normalized_name": item.name,
+            "unit": item.unit_original or item.unit,
+            "unit_price": item.unit_price,
+            "pricing_basis": item.pricing_basis,
+            "quantity": item.quantity,
+            "quantity_status": item.quantity_status,
+            "technical_requirements": item.characteristics,
+            "evidence_ids": [item.evidence_id] if item.evidence_id else [],
+            "source_document": item.source_document,
+            "source_row_number": item.source_row_number,
+        }
+        for index, item in enumerate(items, start=1)
+    ]
+
+
+def _build_services_preliminary_analysis(
+    *,
+    metadata: dict[str, Any],
+    documents: list[AnalyzedDocument],
+    notice_text: str,
+    contract_draft_text: str,
+) -> dict[str, Any]:
+    """Deterministic, domain-safe analysis for a unit-priced service catalogue."""
+    service_items = [item for item in _collect_supply_items(documents) if item.item_type == "service"]
+    subject = _service_subject_from_sources(metadata, notice_text, documents)
+    okpd2 = _service_okpd2_from_sources(notice_text, documents)
+    profile = "vehicle_maintenance_services" if _is_vehicle_maintenance_services(subject, okpd2, service_items) else "general_services"
+    initial_price = _extract_notice_price(metadata, notice_text, contract_draft_text)
+    contract_missing = not bool(contract_draft_text.strip())
+    rows = [
+        {
+            "№": str(index),
+            "Наименование услуги": item.name,
+            "Объём/количество": "не определён документацией" if item.quantity is None else item.quantity,
+            "Единица": item.unit_original or item.unit or "не извлечено — требуется проверка",
+            "Цена единицы, руб.": item.unit_price or "не извлечено — требуется проверка",
+            "Источник": item.source_document,
+            "Evidence": item.evidence_id or "не извлечено — требуется проверка",
+        }
+        for index, item in enumerate(service_items, start=1)
+    ]
+    coverage = {
+        "extracted_item_count": len(service_items),
+        "analyzed_item_count": len(service_items),
+        "ignored_item_count": 0,
+        "item_evidence_coverage": 1.0 if service_items and all(item.evidence_id for item in service_items) else 0.0,
+        "grouping_coverage": 1.0 if service_items else 0.0,
+    }
+    return {
+        "overview": [
+            f"Предмет закупки: {subject}",
+            f"ОКПД2: {okpd2}." if okpd2 else "ОКПД2 не извлечён — требуется проверка.",
+            f"НМЦК: {initial_price} руб." if initial_price else "НМЦК не извлечена — требуется проверка.",
+            f"Извлечено и проанализировано позиций услуг: {len(service_items)}.",
+            "В документации указаны единичные расценки; фиксированный объём отдельных услуг не определён.",
+        ],
+        "compliance_highlights": [
+            "Необходимо подтвердить наличие специалистов, оборудования и ремонтной базы для перечня услуг до решения об участии."
+        ],
+        "delivery_model": [
+            "Объём услуг определяется потребностью заказчика; единичные расценки не образуют подтверждённую сумму по каждой операции."
+        ],
+        "contract_highlights": (
+            ["Проект контракта отсутствует в доступном наборе документов; оплата, приемка, ответственность и обеспечение не оценены."]
+            if contract_missing else ["Проект контракта доступен и требует отдельной документальной проверки."]
+        ),
+        "next_actions": [
+            "Получить проект контракта и проверить оплату, приемку, ответственность, обеспечение и сроки.",
+            "Сопоставить единичные расценки с внутренней стоимостью нормо-часа и иными подтверждёнными затратами.",
+            "Подтвердить возможность выполнения полного перечня услуг: специалистов, оборудование и ремонтную базу.",
+            "Уточнить порядок учета запасных частей и материалов, если он не раскрыт первичными документами.",
+        ],
+        "extracted_fields": ["предмет закупки", "ОКПД2" if okpd2 else "", "НМЦК" if initial_price else "", "единичные расценки", "объём услуг не определён"],
+        "procurement_kind": "services",
+        "domain_profile": profile,
+        "service_items": _service_item_analysis_rows(service_items),
+        "item_coverage": coverage,
+        "source_completeness": "partial" if contract_missing else "partial",
+        "missing_documents": ["draft_contract"] if contract_missing else [],
+        "supply_section_note": "Перечень услуг и единичные расценки собраны из таблицы обоснования НМЦК; фиксированный объём по строкам не заявлен.",
+        "spec_table": {
+            "columns": ["№", "Наименование услуги", "Объём/количество", "Единица", "Цена единицы, руб.", "Источник", "Evidence"],
+            "rows": rows,
+        },
+    }
+
+
 def _extract_legacy_goods_spec_rows(technical_spec_text: str) -> list[dict[str, str]]:
     if not technical_spec_text:
         return []
@@ -1803,6 +2010,7 @@ def _collect_supply_items(documents: list[AnalyzedDocument]) -> list[SupplyItem]
             extracted.extend(_extract_supply_items_from_spec_text(text, doc.display_name))
         if doc.extension in {".xlsx", ".xls"} or "нмцк" in lowered_name or "обоснование" in lowered_name:
             extracted.extend(_extract_supply_items_from_xlsx_text(text, doc.display_name))
+            extracted.extend(_extract_service_items_from_nmck_text(text, doc.display_name))
     return _merge_supply_items(extracted)
 
 
@@ -2148,6 +2356,16 @@ def _build_document_grounded_questions(procurement_kind: str, documents: list[An
         ]
     if procurement_kind == "goods":
         return _build_goods_questions(documents)
+    service_text = "\n".join(doc.text or "" for doc in documents)
+    if procurement_kind == "services" and _is_vehicle_maintenance_services(service_text, _service_okpd2_from_sources(service_text, documents), _collect_supply_items(documents)):
+        return [
+            "Предоставьте проект контракта для проверки оплаты, приемки, ответственности, обеспечения, сроков и расторжения.",
+            "Какова подтверждённая внутренняя стоимость нормо-часа и какие затраты включены в нее?",
+            "Какие услуги из перечня выполняются собственными силами, а для каких требуется подрядчик?",
+            "Подтверждены ли специалисты, оборудование и ремонтная база для полного перечня операций?",
+            "Как учитываются запасные части и материалы, если это не раскрыто документацией?",
+            "Можно ли сопоставить каждую релевантную единичную расценку с подтверждённой себестоимостью?",
+        ]
     return [
         "Подтверждаете ли вы исполнение требований технического задания в полном объеме?",
         "Какие сроки исполнения и ограничения по поставке/работам вы видите?",
@@ -2171,6 +2389,19 @@ def _build_document_grounded_risks(procurement_kind: str, documents: list[Analyz
             {"clause": "Риск по сроку поставки", "classification": "market_standard_harsh_term", "impact": "Товар может не уложиться в срок 15 рабочих дней по заявке.", "mitigation": "Подтвердить складской остаток, срок отгрузки и логистику до адреса заказчика."},
             {"clause": "Логистика и разгрузка не включены в цену", "classification": "market_standard_harsh_term", "impact": "Маржа может снизиться, если доставка, барабаны и разгрузка не учтены.", "mitigation": "Уточнить состав цены и включение доставки/разгрузки в КП."},
             {"clause": "Неполный пакет документов качества", "classification": "market_standard_harsh_term", "impact": "Без сертификатов, деклараций или паспорта качества приемка может быть заблокирована.", "mitigation": "Получить комплект документов качества до подачи или до заключения контракта."},
+        ]
+    service_text = "\n".join(doc.text or "" for doc in documents)
+    if procurement_kind == "services" and _is_vehicle_maintenance_services(
+        service_text, _service_okpd2_from_sources(service_text, documents), _collect_supply_items(documents)
+    ):
+        service_items = [item for item in _collect_supply_items(documents) if item.item_type == "service"]
+        evidence = ", ".join(item.evidence_id for item in service_items[:3] if item.evidence_id)
+        return [
+            {"risk_id": "risk-service-volume", "category": "financial/commercial", "clause": "Неопределённый фактический объём услуг", "classification": "deal_breaker_candidate", "impact": "Единичные расценки не позволяют заранее определить выручку, загрузку и полную себестоимость.", "mitigation": "Получить проект контракта и уточнить порядок заявок; считать экономику только после ввода объёмов и себестоимости.", "evidence_ids": evidence},
+            {"risk_id": "risk-service-economics", "category": "financial/commercial", "clause": "Недостаточно данных для расчёта экономики", "classification": "deal_breaker_candidate", "impact": "Нет подтверждённых затрат на труд, материалы, логистику, финансирование и фактический объём.", "mitigation": "Собрать внутреннюю стоимость нормо-часа и коммерческие входы по релевантным операциям.", "evidence_ids": evidence},
+            {"risk_id": "risk-service-contract", "category": "source_completeness", "clause": "Неполнота договорного анализа", "classification": "deal_breaker_candidate", "impact": "Без проекта контракта нельзя оценить оплату, приемку, штрафы, обеспечение и часть ответственности.", "mitigation": "Получить и проверить проект контракта до безусловного решения.", "evidence_ids": ""},
+            {"risk_id": "risk-service-capability", "category": "operational", "clause": "Операционная возможность требует проверки", "classification": "market_standard_harsh_term", "impact": "Доступные документы не подтверждают наличие специалистов, оборудования и ремонтной базы исполнителя.", "mitigation": "Провести due diligence исполнителя по полному перечню операций.", "evidence_ids": evidence},
+            {"risk_id": "risk-service-pricing", "category": "financial/commercial", "clause": "Ценовой риск единичных расценок", "classification": "market_standard_harsh_term", "impact": "Без сравнения с внутренней себестоимостью нельзя оценить выгодность единичных расценок.", "mitigation": "Сопоставить цены строк с подтверждённой себестоимостью до формирования цены заявки.", "evidence_ids": evidence},
         ]
     return [
         {"clause": "Недостаточно предметных данных", "classification": "market_standard_harsh_term", "impact": "Часть рисков требует ручной проверки документов.", "mitigation": "Проверить ТЗ и проект контракта вручную."}
@@ -2384,6 +2615,17 @@ def _build_preliminary_procurement_analysis(
             technical_spec_text=technical_spec_text,
             contract_draft_text=contract_draft_text,
             notice_text=notice_text,
+        )
+    # Keep the established education-services profile for its documented
+    # training inputs; all other services must not inherit those assumptions.
+    training_markers = ("обучени", "слушател", "учебн", "повышени[яе] квалификац")
+    is_training_service = any(re.search(marker, combined, re.IGNORECASE) for marker in training_markers)
+    if procurement_kind == "services" and not is_training_service:
+        return _build_services_preliminary_analysis(
+            metadata=metadata,
+            documents=documents,
+            notice_text=notice,
+            contract_draft_text=contract_text,
         )
     if procurement_kind in {"mixed", "software_modification", "integration", "license", "works"}:
         work_rows = _build_software_work_rows(documents)
@@ -2775,6 +3017,26 @@ def _build_output_payloads(
     requirements_payload = {
         "requirements": requirement_rows,
         "preliminary_analysis": preliminary_analysis,
+        "analysis_context": {
+            "procurement_number": metadata.get("procurement_id"),
+            "procurement_subject": (preliminary_analysis.get("overview") or [metadata.get("tender_title")])[0].removeprefix("Предмет закупки: "),
+            "procurement_category": procurement_kind,
+            "domain": preliminary_analysis.get("domain_profile", "unknown"),
+            "law": metadata.get("law"),
+            "okpd2": _service_okpd2_from_sources(notice_text, documents) if procurement_kind == "services" else None,
+            "nmck": _extract_notice_price(metadata, notice_text, contract_draft_text),
+            "currency": "RUB",
+            "service_items": preliminary_analysis.get("service_items", []),
+            "document_inventory": [doc.display_name for doc in documents],
+            "document_coverage": "partial" if procurement_kind == "services" and not contract_draft_text else "available",
+            "missing_documents": preliminary_analysis.get("missing_documents", []),
+            "extraction_warnings": output_warnings,
+            "known_contract_terms": preliminary_analysis.get("contract_highlights", []) if contract_draft_text else [],
+            "unknown_contract_terms": (["payment", "acceptance", "penalties", "security", "liability"] if not contract_draft_text else []),
+            "supplier_profile": None,
+            "commercial_inputs": economics or {},
+            "evidence_map": [item.get("evidence_ids", []) for item in preliminary_analysis.get("service_items", [])],
+        },
         "manual_review_points": [
             "Проверить корректность распределения документов по ролям.",
             "Подтвердить ключевые требования по исходным документам перед внешними действиями.",
@@ -2787,7 +3049,7 @@ def _build_output_payloads(
         "ambiguities": (
             [
                 "Полный LLM-анализ не выполнялся; вопросы собраны детерминированно из документов.",
-                "Нужно проверить недостающие доступы, интеграции и лицензионные условия вручную.",
+                "Нужно проверить недостающие первичные документы и коммерческие входы вручную.",
             ]
             if analysis_mode == "fallback_deterministic_adapter"
             else [
@@ -2864,6 +3126,39 @@ def _build_output_payloads(
 
     if procurement_kind == "goods":
         economics_payload = _build_goods_economics_payload(metadata, documents, analysis_mode, economics)
+    elif procurement_kind == "services" and not economics:
+        service_items = preliminary_analysis.get("service_items", [])
+        economics_payload = {
+            "analysis_mode": analysis_mode,
+            "currency": "RUB",
+            "economics_status": "insufficient_data",
+            "supplier_cost_min": None,
+            "supplier_cost_selected": None,
+            "expected_revenue": None,
+            "preliminary_bid_price": None,
+            "gross_margin_amount": None,
+            "gross_margin_percent": None,
+            "logistics_reserve": None,
+            "risk_reserve": None,
+            "payment_delay_days": None,
+            "cash_gap_estimate": None,
+            "selected_supplier_name": None,
+            "result": "Экономика не рассчитана: отсутствуют фактический объём и подтверждённые коммерческие входы.",
+            "status": "blocked",
+            "metrics": [
+                {"label": "НМЦК", "value": _extract_notice_price(metadata, technical_spec_text, contract_draft_text, notice_text) or "не указана"},
+                {"label": "Единичные расценки", "value": f"извлечено строк: {len(service_items)}"},
+                {"label": "Фактический объём", "value": "не определён документацией"},
+                {"label": "Что запросить", "value": "внутренняя стоимость нормо-часа и стоимость релевантных операций"},
+                {"label": "Что запросить", "value": "подход к учёту материалов, запасных частей и логистики"},
+                {"label": "Что запросить", "value": "проект контракта и условия оплаты/обеспечения"},
+            ],
+            "drivers": ["НМЦК и единичные расценки не являются прибылью или ожидаемой выручкой без объёма услуг."],
+            "manual_checks": ["Собрать коммерческие входы и сопоставить расценки с себестоимостью до финансового решения."],
+            "warnings": ["Экономические результаты, маржа и рентабельность не рассчитывались."],
+            "limitations": ["Фактический объём, себестоимость, поставщик и проект контракта отсутствуют."],
+            "assumptions": {},
+        }
     else:
         economics_payload = {
             "analysis_mode": economics.get("analysis_mode", analysis_mode) if economics else analysis_mode,
@@ -2894,11 +3189,8 @@ def _build_output_payloads(
                 [
                     {"label": "НМЦК", "value": _extract_notice_price(metadata, technical_spec_text, contract_draft_text, notice_text) or "не указана"},
                     {"label": "Закупочная себестоимость", "value": "не определена, требуется ТКП/оценка подрядчика"},
-                    {"label": "Что запросить", "value": "оценка трудозатрат по функциональным блокам"},
-                    {"label": "Что запросить", "value": "стоимость интеграции СМЭВ/ЕРН"},
-                    {"label": "Что запросить", "value": "стоимость разработки СЭМД / доработок модуля"},
-                    {"label": "Что запросить", "value": "стоимость лицензии/передачи прав"},
-                    {"label": "Что запросить", "value": "стоимость тестирования, внедрения и резерва на интеграционные риски"},
+                    {"label": "Что запросить", "value": "оценка трудозатрат по предмету закупки"},
+                    {"label": "Что запросить", "value": "коммерческие входы, подтверждающие себестоимость и риски"},
                 ]
                 if not economics
                 else [
@@ -2921,7 +3213,7 @@ def _build_output_payloads(
                 else ["Без КП и оценки трудозатрат экономика ограничивается НМЦК и перечнем данных, которые нужно запросить."]
             ),
             "manual_checks": ([item.get("message", "") for item in economics.get("manual_checks", [])] if economics else [])
-            or ["Запросить КП/оценку подрядчика по функциональным блокам, интеграциям, лицензии и тестированию."],
+            or ["Запросить КП/оценку подрядчика по подтверждённому предмету закупки."],
             "warnings": economics.get("warnings", []) if economics else [],
             "limitations": economics.get("limitations", []) if economics else [],
             "assumptions": economics.get("assumptions", {}) if economics else {},
@@ -2936,6 +3228,10 @@ def _build_output_payloads(
                 "severity": "needs_review" if risk.get("classification") == "deal_breaker_candidate" else "warning",
                 "impact": _translate_user_text(risk.get("impact", "")),
                 "mitigation": _translate_user_text(risk.get("mitigation", "")),
+                "risk_id": risk.get("risk_id"),
+                "category": risk.get("category", "unknown"),
+                "evidence_ids": [value for value in str(risk.get("evidence_ids") or "").split(", ") if value],
+                "status": "blocker" if risk.get("classification") == "deal_breaker_candidate" else "requires_review",
             }
             for risk in (grounded_risks or calibrated_risks)
         ]
@@ -2953,7 +3249,8 @@ def _build_output_payloads(
     }
 
     economics_ready = bool(economics and economics.get("economics_status") in {"conditionally_viable", "viable"})
-    if core_complete and quote_files_present and economics_ready:
+    service_contract_missing = procurement_kind == "services" and bool(preliminary_analysis.get("missing_documents"))
+    if core_complete and quote_files_present and economics_ready and not service_contract_missing:
         recommendation = DemoRecommendationCode.PARTICIPATE_CONDITIONALLY
         label = "участвовать условно"
         rationale = [
@@ -2977,8 +3274,8 @@ def _build_output_payloads(
         label = "нужна ручная проверка"
         rationale = [
             "Документы извлечены и дают предметное понимание закупки, но ценовая модель и подтверждение ресурсов отсутствуют.",
-            "Решение зависит от оценки трудозатрат, доступов к внешним системам и условий передачи лицензии.",
-            "Следующее действие должен подтвердить оператор после запроса КП или внутренней оценки подрядчика.",
+            "Проект контракта, коммерческие входы и подтверждение ресурсов отсутствуют или требуют проверки.",
+            "Следующее действие должен подтвердить оператор после получения проекта контракта и внутренней оценки исполнения.",
         ]
 
     final_recommendation = {
@@ -4097,13 +4394,51 @@ def _enrich_procurement_metadata_from_documents(
     return metadata
 
 
+def _render_canonical_report_html(model: dict[str, Any]) -> str:
+    """Presentation-only web renderer for the canonical report model."""
+    def esc(value: Any) -> str:
+        return html.escape(str(value if value not in (None, "") else "Данных недостаточно — требуется проверка"))
+    summary, passport, meta = model["executive_summary"], model["procurement_passport"], model["metadata"]
+    compatibility = model.get("compatibility_sections", {})
+    rows = "".join(
+        f"<tr><td>{row['sequence']}</td><td>{esc(row['original_name'])}</td><td>{esc(row['unit_original'])}</td><td>{esc(row['unit_price'])} RUB</td><td>{esc(row['quantity_display'])}</td><td>{esc(row['source_document_id'])}, {row['source_row']} [{esc(', '.join(row['evidence_ids']))}]</td></tr>"
+        for row in model["service_catalog"]
+    )
+    risks = "".join(f"<li><strong>{esc(risk.get('status', 'Требует проверки'))}</strong>: {esc(risk.get('risk'))}. {esc(risk.get('impact'))}</li>" for risk in model["risks"])
+    evidence = "".join(f"<li id='{esc(item['evidence_id'])}'><strong>[{esc(item['evidence_id'])}]</strong> {esc(item['document'])}, строка {esc(item['row'])}: {esc(item['short_excerpt'])}</li>" for item in model["evidence_map"])
+    bullets = lambda values: "".join(f"<li>{esc(value)}</li>" for value in values) or "<li>Не применимо — подтверждённых данных нет.</li>"
+    compatibility_rows = "".join("<tr>" + "".join(f"<td>{esc(row.get(column))}</td>" for column in compatibility.get("spec_columns", [])) + "</tr>" for row in compatibility.get("spec_rows", []))
+    # The canonical service catalogue below is the authoritative customer-facing
+    # item table.  Rendering the compatibility spec rows as well duplicates every
+    # service and makes row-level parity ambiguous.
+    compatibility_table = (f"<div class='scroll'><table><thead><tr>{''.join(f'<th>{esc(column)}</th>' for column in compatibility.get('spec_columns', []))}</tr></thead><tbody>{compatibility_rows}</tbody></table></div>" if compatibility.get("spec_rows") and not model.get("service_catalog") else "")
+    return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Анализ закупки {esc(meta.get('procurement_number'))}</title><style>
+body{{margin:0;background:#f5f8fa;color:#10243e;font:16px Arial,sans-serif}}main{{max-width:1180px;margin:auto;padding:24px}}section{{background:#fff;border:1px solid #dce5eb;border-radius:12px;padding:20px;margin:16px 0}}h1,h2{{color:#003b5c}}.decision{{border-left:6px solid #d08300}}.scroll{{overflow-x:auto}}table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom:1px solid #dce5eb;padding:9px;text-align:left;vertical-align:top}}th{{background:#e9f7f5}}.label{{font-weight:bold;color:#006b66}}@media print{{body{{background:#fff}}section{{break-inside:avoid}}}}@media(max-width:700px){{main{{padding:12px}}section{{padding:14px}}}}</style></head><body><main>
+<section><h1>{esc(compatibility.get('report_title'))}</h1><p>Номер извещения: {esc(compatibility.get('notice_number'))}</p><p>{esc(compatibility.get('source_status'))}</p><p>Скачано документов: {esc(compatibility.get('downloaded_files_count'))}</p><details><summary>Показать документы</summary><p>Документы текущего run доступны через защищённые ссылки интерфейса.</p></details>{('<a href="#archive">Скачать архив</a>' if compatibility.get('archive_available') else '')}<p class="label">Версия: {esc(meta.get('report_version'))}; полнота источников: {esc(meta.get('completeness_status'))}</p></section>
+<section><h2>Резюме для принятия решения</h2><p><strong>{esc(summary['subject'])}</strong></p><p>НМЦК (максимальная цена закупки): {esc(summary['nmck'])} {esc(summary['currency'])}</p><p>Проанализировано услуг: {esc(summary['service_item_count'])}/{esc(summary['analyzed_item_count'])}</p><div class="decision"><strong>{esc(summary['decision'])}</strong><ul>{bullets(summary['blockers'])}</ul><p>Следующее действие: {esc(summary['next_action'])}</p></div></section>
+<section><h2>Паспорт закупки</h2><ul><li>Категория: {esc(passport.get('category'))}</li><li>ОКПД2: {esc(passport.get('okpd2'))}</li><li>Заказчик: {esc(passport.get('customer'))}</li></ul></section>
+<section><h2>Предварительный анализ закупки</h2><ul>{bullets(compatibility.get('preliminary_overview', []))}</ul><h3>Состав поставки</h3>{compatibility_table}<h3>Ключевые условия договора</h3><ul>{bullets(compatibility.get('contract_highlights', []))}</ul></section>
+<section><h2>Перечень услуг и единичных расценок</h2><p>Фиксированный объём не указан документацией; единичные цены не суммируются в стоимость контракта.</p><div class="scroll"><table><thead><tr><th>№</th><th>Услуга</th><th>Единица</th><th>Единичная цена</th><th>Количество/объём</th><th>Источник и evidence</th></tr></thead><tbody>{rows}</tbody></table></div></section>
+<section><h2>Извлечённые ТКП</h2><ul>{bullets(compatibility.get('quotes', []))}</ul><h3>Сравнение ТКП</h3><ul>{bullets(compatibility.get('quotes', []))}</ul></section><section><h2>Экономика</h2><ul>{bullets(compatibility.get('economics', []))}</ul></section>
+<section><h2>Недостающие данные и ограничения</h2><ul>{bullets([item['description'] + ': ' + item['required_action'] for item in model['missing_data']] + model['limitations'])}</ul></section>
+<section><h2>Риски</h2><ul>{risks}</ul></section><section><h2>Вопросы заказчику/внутренней команде</h2><ul>{bullets(model['customer_questions'])}</ul></section><section><h2>Evidence map</h2><ul>{evidence}</ul></section>
+</main></body></html>'''
+
+
 def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, dict[str, Any]], steps: list[DemoStep]) -> None:
+    from src.modules.tender_operator_agent_demo.report_model import (
+        build_procurement_report_model,
+        canonical_report_to_markdown,
+    )
     output_dir = _output_dir(run_id)
     output_dir.mkdir(parents=True, exist_ok=True)
     for name, payload in outputs.items():
         _write_json(output_dir / f"{name}.json", payload)
 
-    report_html = _render_report_html(metadata, outputs)
+    canonical_report = build_procurement_report_model(metadata, outputs)
+    canonical_markdown = canonical_report_to_markdown(canonical_report)
+    _write_json(output_dir / "canonical_report.json", canonical_report)
+    report_html = _render_canonical_report_html(canonical_report)
     (output_dir / "report.html").write_text(report_html, encoding="utf-8")
     report_json = {
         "run_id": run_id,
@@ -4117,7 +4452,7 @@ def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, d
             {"title": step.title, "kind": "bullets", "items": step.findings}
             for step in steps
         ],
-        "report_markdown": _build_report_markdown(metadata, outputs),
+        "report_markdown": canonical_markdown,
     }
     _write_json(output_dir / "report.json", report_json)
     _write_json(output_dir / "steps.json", {"steps": [item.model_dump(mode="json") for item in steps]})

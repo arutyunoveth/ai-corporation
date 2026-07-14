@@ -1,0 +1,15 @@
+status: candidate_human_review_required
+executive_findings:
+  - The subject is a services procurement, not a goods supply.
+  - The acquired NMCK document contains a material unit-price list that must be represented as service positions.
+missing_data:
+  - missing_data_id: md-draft-contract
+    description: Draft contract was not acquired.
+    importance: blocking
+    decision_effect: Prevents substantiated assessment of payment, penalties, acceptance and warranty terms.
+bid_decision:
+  status: needs_review
+  rationale: No supplier profile/cost model and draft contract is missing.
+  blockers: [md-draft-contract]
+  confidence: low
+  next_action: Acquire and review the project contract, then validate service-item extraction against the NMCK table.

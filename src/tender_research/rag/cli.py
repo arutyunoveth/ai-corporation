@@ -170,13 +170,16 @@ def cmd_search(args: argparse.Namespace) -> None:
         )
         session.close()
         return
-    hits = retriever.search_documents(
-        args.query,
-        tender_id=args.tender_id,
-        registry_number=args.registry_number,
-        customer_name=args.customer_name,
-        limit=args.limit,
-    )
+    if args.tender_id or args.registry_number:
+        hits = retriever.search_documents(
+            args.query,
+            tender_id=args.tender_id,
+            registry_number=args.registry_number,
+            customer_name=args.customer_name,
+            limit=args.limit,
+        )
+    else:
+        hits = retriever.search_all_documents(args.query, limit=args.limit)
     print(f"provider: {args.provider or provider.provider_name}")
     print(f"model: {args.model or provider.model_name}")
     print(f"hits: {len(hits)}")
@@ -361,7 +364,10 @@ def cmd_eval(args: argparse.Namespace) -> None:
 
     with output_path.open("w", encoding="utf-8") as handle:
         for item in questions:
-            hits = retriever.search_documents(item["query"], limit=args.limit)
+            # Offline retrieval evaluation intentionally measures the entire
+            # index. It is an administrative command, not procurement
+            # analysis, so it must use the explicit unscoped API.
+            hits = retriever.search_all_documents(item["query"], limit=args.limit)
             if hits:
                 questions_with_results += 1
                 top_scores.append(hits[0].score)

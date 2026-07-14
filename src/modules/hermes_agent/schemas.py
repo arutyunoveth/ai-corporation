@@ -14,8 +14,15 @@ class HermesLineItem(BaseModel):
     characteristics: list[str] = []
     standards: list[str] = []
     equivalent_allowed: bool = True
+    source_document_id: str = ""
     source_document: str = ""
     source_quote: str = ""
+    source_locator: dict[str, Any] = Field(default_factory=dict)
+    quantity_status: str | None = None
+    unit_status: str | None = None
+    missing_reason: str | None = None
+    tender_id: str = ""
+    run_id: str = ""
     confidence: float = 0.0
 
 
@@ -68,6 +75,8 @@ class HermesFinalRecommendation(BaseModel):
 
 class HermesAnalysisResponse(BaseModel):
     tender_id: str = ""
+    registry_number: str = ""
+    run_id: str = ""
     document_roles: list[str] = []
     summary: HermesSummary = HermesSummary()
     line_items: list[HermesLineItem] = []
