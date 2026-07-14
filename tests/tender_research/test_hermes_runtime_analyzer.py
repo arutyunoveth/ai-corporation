@@ -111,12 +111,13 @@ def test_load_relevant_memory(session):
         scope="procurement_analysis",
         category="field_path:line_items.0.name",
         payload_json={"field_path": "line_items.0.name", "corrected": "Cable"},
+        source_tender_id="tender-current",
     ))
     session.flush()
 
     service = HermesProcurementAnalysisService(session)
     context = {
-        "tender": {"id": ""},
+        "tender": {"id": "tender-current"},
         "documents": [],
         "document_roles": [],
     }
