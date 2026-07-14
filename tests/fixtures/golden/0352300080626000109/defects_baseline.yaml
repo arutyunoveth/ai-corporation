@@ -25,7 +25,11 @@ defects:
     business_impact: Wrong type routes the report to a supply-oriented workflow.
     formal_requirement: Use evidence-backed procurement type and subject.
     acceptance_test: test_services_type_detected_from_repair_diagnostics_procurement
-    status: open
+    status: resolved
+    resolved_by_commit: 17617e8433b40050f47fa114a20bcb1a9b494b47
+    root_cause: Services were routed into a legacy training-oriented fallback instead of a source-backed service analysis profile.
+    actual_result: Notice subject and OKPD2 are carried into the analysis context; all extracted service rows are analyzed with explicit coverage.
+    regression_tests: [tests/r1/test_vehicle_service_analysis.py]
   - defect_id: RPT-001
     title: Report omits service catalogue
     defect_type: omission
@@ -49,4 +53,8 @@ defects:
     business_impact: User can make decisions on unrelated requirements.
     formal_requirement: Every factual requirement has source evidence.
     acceptance_test: test_prohibited_claims_are_not_rendered
-    status: open
+    status: resolved
+    resolved_by_commit: 17617e8433b40050f47fa114a20bcb1a9b494b47
+    root_cause: Generic non-goods fallback inserted education and IT integration assumptions without source evidence.
+    actual_result: Vehicle-maintenance services use a domain-safe deterministic profile; unsupported training and integration claims are rejected by regression tests and evaluator.
+    regression_tests: [tests/r1/test_vehicle_service_analysis.py, scripts/r1/evaluate_golden_analysis.py]
