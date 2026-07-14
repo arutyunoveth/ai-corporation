@@ -21,3 +21,8 @@ db_change_status: none
 deployment_status: not_deployed
 rollback: revert the R1 commit range; no data migration required
 approval_status: human_review_required
+fresh_b5_e2e:
+  tested_code_sha: 63e1c68a14576385d2f234395b7b3743d5e0b94c
+  run_1: tmp/r1/release-candidate/b5-e2e-run-1-20260714T163335/end_to_end_result.json
+  run_2: tmp/r1/release-candidate/b5-e2e-run-2-20260714T163336/end_to_end_result.json
+  result: PASS

@@ -1,0 +1,6 @@
+tests/r1/test_service_table_extraction.py
+tests/r1/test_vehicle_service_analysis.py
+tests/r1/test_golden_report_model.py
+tests/test_tender_operator_agent_report_export.py
+tests/test_tender_operator_agent_upload_demo.py
+tests/test_tender_operator_agent_getdocs_ip_intake.py

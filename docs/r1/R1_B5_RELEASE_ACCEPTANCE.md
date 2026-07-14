@@ -29,3 +29,12 @@ Runtime manifests:
 ## RC status
 
 `AUTO_GATES_PASS_HUMAN_REVIEW_REQUIRED`. The candidate does not authorize production deployment or automatic merge. Human review must confirm the source documents and rendered customer artifacts.
+
+## Fresh B5 offline E2E evidence
+
+Tested code SHA: `63e1c68a14576385d2f234395b7b3743d5e0b94c`. Two fresh isolated runs used the preserved real notice XML and NMCK DOCX only; network, production ingest and production DB were not used.
+
+- Run 1: `tmp/r1/release-candidate/b5-e2e-run-1-20260714T163335/end_to_end_result.json`
+- Run 2: `tmp/r1/release-candidate/b5-e2e-run-2-20260714T163336/end_to_end_result.json`
+
+Each run regenerated extraction, analysis, canonical JSON, HTML, DOCX and PDF; analysis and report evaluators passed. Both source validations passed, produced 43/43 service rows with full row evidence, retained `quantity=null`/`not_specified`, disclosed the missing contract, and returned `needs_review`. Semantic gates match; binary hashes may differ only because each run has a new runtime ID.
