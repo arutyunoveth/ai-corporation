@@ -1,4 +1,5 @@
 from pathlib import Path
+from lxml import html
 
 from src.modules.tender_operator_agent_demo.report_model import build_procurement_report_model, canonical_report_to_markdown
 from src.modules.tender_operator_agent_demo.upload_service import AnalyzedDocument, _build_output_payloads, _render_canonical_report_html
@@ -40,3 +41,26 @@ def test_canonical_web_and_export_text_have_same_critical_facts_without_prohibit
         assert "Не указан документацией" in text
         for forbidden in ("СМЭВ", "интеграц", "обучени", "преподавател", "аудитори"):
             assert forbidden.lower() not in text.lower()
+
+
+def test_service_catalog_is_rendered_once_when_compatibility_rows_repeat_it():
+    model = _model()
+    document = html.fromstring(_render_canonical_report_html(model))
+    tables = document.xpath("//table")
+    service_tables = [table for table in tables if "Услуга" in " ".join(table.xpath(".//th//text()"))]
+    compatibility_tables = [table for table in tables if "Наименование услуги" in " ".join(table.xpath(".//th//text()"))]
+    rows = service_tables[0].xpath(".//tbody/tr")
+    assert len(service_tables) == 1
+    assert len(compatibility_tables) == 0
+    assert len(rows) == len(model["service_catalog"]) == 43
+    assert len({row.xpath("normalize-space(./td[2])") for row in rows}) == 43
+    assert "Ключевые условия договора" in html.tostring(document, encoding="unicode")
+
+
+def test_compatibility_table_remains_when_canonical_service_catalog_is_empty():
+    model = _model()
+    model["service_catalog"] = []
+    model["compatibility_sections"]["spec_rows"] = [{"Наименование услуги": "Товар", "Единица": "шт."}]
+    model["compatibility_sections"]["spec_columns"] = ["Наименование услуги", "Единица"]
+    document = html.fromstring(_render_canonical_report_html(model))
+    assert len(document.xpath("//table[.//th[contains(., 'Наименование услуги')]]")) == 1
