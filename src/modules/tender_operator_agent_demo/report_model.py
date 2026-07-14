@@ -94,6 +94,19 @@ def build_procurement_report_model(metadata: dict[str, Any], outputs: dict[str, 
         "action_plan": preliminary.get("next_actions", []), "evidence_map": evidence_map,
         "limitations": ["Отсутствует проект контракта", "Неизвестен фактический объём", "Нет supplier profile", "Нет подтверждённой собственной себестоимости", "Прибыль и маржа не рассчитываются"],
         "provenance": {"run_id": metadata.get("run_id"), "source": metadata.get("procurement_source"), "report_model": "canonical"},
+        "compatibility_sections": {
+            "report_title": "Отчёт по загруженному прогону тендерного агента",
+            "notice_number": metadata.get("procurement_id"),
+            "source_status": "Документы получены через ЕИС" if metadata.get("procurement_source") else "Документы загружены вручную",
+            "preliminary_overview": preliminary.get("overview", []),
+            "spec_columns": preliminary.get("spec_table", {}).get("columns", []),
+            "spec_rows": preliminary.get("spec_table", {}).get("rows", []),
+            "quotes": outputs["quotes_comparison"].get("highlights", []),
+            "economics": [f"{item.get('label')}: {item.get('value')}" for item in economics.get("metrics", [])],
+            "contract_highlights": preliminary.get("contract_highlights", []),
+            "downloaded_files_count": metadata.get("downloaded_files_count", len(metadata.get("files", []))),
+            "archive_available": bool(metadata.get("archive_downloaded")),
+        },
     }
 
 
