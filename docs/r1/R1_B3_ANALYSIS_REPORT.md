@@ -37,6 +37,6 @@ Focused run: `56 passed`:
   tests/test_tender_operator_agent_report_export.py tests/r1 -q --tb=short
 ```
 
-Full deterministic sharded run: `1,548` scheduled/collected/executed unique node IDs; `1,363 passed`, `185 skipped`, no failures, crashes, non-zero shards, missing or duplicated node IDs. Aggregate manifest: `tmp/r1/test-runtime/b3-20260714T.../aggregate_result.json` (runtime artifact, intentionally not committed).
+Full deterministic sharded run: `1,548` scheduled/collected/executed unique node IDs; `1,363 passed`, `185 skipped`, no failures, crashes, non-zero shards, missing or duplicated node IDs. Aggregate manifest: `tmp/r1/test-runtime/b3-20260714T142115/aggregate_result.json` (runtime artifact, intentionally not committed).
 
 Commits: `17617e8433b40050f47fa114a20bcb1a9b494b47` (implementation) and the following acceptance-metadata commit. No production database, production ingest, runtime deployment or renderer was used by this stage.
