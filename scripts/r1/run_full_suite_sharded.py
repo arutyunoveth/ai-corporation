@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Evidence-producing, deterministic pytest sharder for R1 runtime limits."""
 from __future__ import annotations
-import argparse, json, platform, re, subprocess, sys, time
+import argparse, json, os, platform, re, subprocess, sys, time
 from pathlib import Path
 
 NODE = re.compile(r"^tests/.+::.+$")
@@ -23,9 +23,12 @@ def main():
   for i,items in enumerate(shards,1): d=root/f"shard-{i:02d}";d.mkdir(exist_ok=True);(d/'nodeids.txt').write_text('\n'.join(items)+'\n')
   (root/'collection_manifest.json').write_text(json.dumps({"collected_count":len(ids),"unique_count":len(set(ids)),"shards":a.shards,"python_version":sys.version,"platform":platform.platform()},indent=2));return
  if a.shard:
-  d=root/f"shard-{a.shard:02d}";ids=(d/'nodeids.txt').read_text().splitlines();start=time.time()
+ d=root/f"shard-{a.shard:02d}";ids=(d/'nodeids.txt').read_text().splitlines();start=time.time()
   cmd=["/usr/bin/time","-l",py,"-m","pytest","-q","--tb=short","--durations=50",*ids]
-  with (d/'stdout.log').open('w') as out,(d/'stderr.log').open('w') as err: r=run(cmd,stdout=out,stderr=err,env={**__import__('os').environ,"PYTHONFAULTHANDLER":"1","PYTHONUNBUFFERED":"1"})
+  runtime=d/'runtime';tmp=runtime/'tmp';runs=runtime/'demo-runs';tmp.mkdir(parents=True,exist_ok=True);runs.mkdir(parents=True,exist_ok=True)
+  env={**os.environ,"PYTHONFAULTHANDLER":"1","PYTHONUNBUFFERED":"1","TMPDIR":str(tmp),"AI_CORP_TENDER_OPERATOR_DEMO_RUNS_DIR":str(runs),"R1_TEST_RUN_ID":root.name,"R1_SHARD_ID":str(a.shard)}
+  (d/'environment.json').write_text(json.dumps({key:env[key] for key in ("TMPDIR","AI_CORP_TENDER_OPERATOR_DEMO_RUNS_DIR","R1_TEST_RUN_ID","R1_SHARD_ID")},indent=2))
+  with (d/'stdout.log').open('w') as out,(d/'stderr.log').open('w') as err: r=run(cmd,stdout=out,stderr=err,env=env)
   text=(d/'stdout.log').read_text(errors='replace');result={"shard":a.shard,"scheduled_count":len(ids),"exit_code":r.returncode,"duration_seconds":round(time.time()-start,3),**summary(text),"last_nodeid":ids[-1] if ids else None}
   (d/'result.json').write_text(json.dumps(result,indent=2));print(json.dumps(result));return
  if a.aggregate:
