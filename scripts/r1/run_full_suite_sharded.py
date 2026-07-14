@@ -17,7 +17,14 @@ def summary(text):
     return {"summary_present":bool(m),"passed":int(m.group(1)) if m else 0,"skipped":int(m.group(2) or 0) if m else 0}
 def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def main():
- p=argparse.ArgumentParser();p.add_argument("--output",type=Path,required=True);p.add_argument("--result",type=Path);p.add_argument("--shards",type=int,default=8);p.add_argument("--shard",type=int);p.add_argument("--prepare",action="store_true");p.add_argument("--aggregate",action="store_true");a=p.parse_args();root=a.output;py=sys.executable
+ p=argparse.ArgumentParser();p.add_argument("--output",type=Path,required=True);p.add_argument("--result",type=Path);p.add_argument("--tested-commit-sha");p.add_argument("--tested-tree-sha");p.add_argument("--expected-remote-sha");p.add_argument("--remote-ref",default="origin/codex/r1-b5-release-acceptance");p.add_argument("--shards",type=int,default=8);p.add_argument("--shard",type=int);p.add_argument("--prepare",action="store_true");p.add_argument("--aggregate",action="store_true");a=p.parse_args();root=a.output;py=sys.executable
+ if (a.prepare or a.shard or (a.aggregate and (a.output/'shard_plan.json').exists())) and not all((a.tested_commit_sha,a.tested_tree_sha,a.expected_remote_sha)):
+  print(json.dumps({'status':'invalid','reason_code':'missing_binding_arguments'})); return 2
+ if a.prepare:
+  from full_suite_binding import build_execution_binding
+  b=build_execution_binding(cwd=Path.cwd(),tested_commit=a.tested_commit_sha,tested_tree=a.tested_tree_sha,expected_remote=a.expected_remote_sha,remote_ref=a.remote_ref,runner=Path(__file__),verifier=Path(__file__).with_name('verify_full_suite_aggregate.py'))
+  root.mkdir(parents=True,exist_ok=True);(root/'execution_binding.json').write_text(json.dumps(b,sort_keys=True,indent=2)+'\n')
+  if b['status']!='PASS': print(json.dumps(b)); return 2
  if a.prepare:
   ids,c=nodeids(py);root.mkdir(parents=True,exist_ok=True);(root/'collected_tests.txt').write_text('\n'.join(ids)+'\n');(root/'collection_stdout.log').write_text(c.stdout);(root/'collection_stderr.log').write_text(c.stderr)
   shards=[ids[i::a.shards] for i in range(a.shards)]

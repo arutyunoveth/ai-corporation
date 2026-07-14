@@ -5,6 +5,11 @@ from pathlib import Path
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--result',type=Path);a=p.parse_args();root=a.output;result_path=a.result or root/'verification_result.json'
+    binding_path=root/'execution_binding.json'
+    if binding_path.exists():
+        binding=json.loads(binding_path.read_text())
+        if binding.get('status')!='PASS':
+            result={'verification_class':'execution_binding_invalid','reason_codes':binding.get('reason_codes',[]),'exact_accounting_possible':False,'overall_status':'invalid','exit_code':2};result_path.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result));return 2
     if not (root/'shard_plan.json').is_file():
         collected=len((root/'collected_tests.txt').read_text().splitlines()) if (root/'collected_tests.txt').is_file() else None
         observed=[]
