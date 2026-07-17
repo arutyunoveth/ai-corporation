@@ -7,6 +7,9 @@ import os
 import re
 import subprocess
 import tempfile
+import time
+from urllib.parse import urlparse
+from urllib.request import urlopen
 import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -154,6 +157,20 @@ class SupplyItem:
     source_row_number: int | None = None
     evidence_id: str | None = None
     unit_original: str | None = None
+    record_type: str = "line_item"
+    unit_code: str | None = None
+    ktru: str | None = None
+    okpd2: str | None = None
+    attributes: dict[str, str] = field(default_factory=dict)
+    name_source_type: str = "unresolved"
+    name_source_path: str | None = None
+    quantity_source_path: str | None = None
+    unit_source_path: str | None = None
+    source_record_id: str | None = None
+    extraction_strategy: str = "unknown"
+    evidence_ids: list[str] = field(default_factory=list)
+    official_name: str | None = None
+    display_name: str | None = None
 
 
 def get_demo_runs_root() -> Path:
@@ -785,7 +802,13 @@ def _collect_documents(run_id: str, metadata: dict[str, Any]) -> list[AnalyzedDo
 
         raw = stored_path.read_bytes()
         text, warnings, extraction_status = _extract_document_text(item["stored_name"], raw)
-        role = item.get("role_hint") or _detect_role(item["stored_name"])
+        document_kind = str(item.get("document_kind") or "").lower()
+        role_from_kind = {
+            "contract_draft": "contract_draft",
+            "technical_specification": "technical_spec",
+            "eis_notice": "notice",
+        }.get(document_kind)
+        role = role_from_kind or item.get("role_hint") or _detect_role(item.get("display_name") or item["stored_name"])
         if text:
             normalized_name = f"{item['file_id'].lower()}-{role}.txt"
             (normalized_dir / normalized_name).write_text(text, encoding="utf-8")
@@ -1007,6 +1030,38 @@ def _try_run_llm_workflow(
         return None
 
 
+def _runtime_ai_provenance() -> dict[str, Any]:
+    """Record observed local runtime facts, never credentials or prompts."""
+    settings = get_settings()
+    started = time.perf_counter()
+    endpoint = settings.local_llm_base_url.rstrip("/") + "/models"
+    healthcheck = "unreachable"
+    model = settings.llm_model or settings.local_llm_model
+    try:
+        with urlopen(endpoint, timeout=2) as response:  # local loopback only
+            payload = json.loads(response.read().decode("utf-8"))
+        models = payload.get("data", [])
+        if models:
+            model = str(models[0].get("id") or model)
+        healthcheck = "ok"
+    except Exception:
+        healthcheck = "unreachable"
+    return {
+        "analysis_engine": "deterministic",
+        "llm_invoked": False,
+        "llm_provider": settings.llm_provider,
+        "llm_model": model,
+        "llm_endpoint_host": urlparse(settings.local_llm_base_url).hostname,
+        "hermes_enabled": settings.hermes_enabled,
+        "hermes_healthcheck": "not_configured" if not settings.hermes_enabled else "not_checked",
+        "prompt_version": "semantic-matcher-v1",
+        "llm_calls_count": 0,
+        "llm_latency_ms": round((time.perf_counter() - started) * 1000),
+        "fallback_reason": "local_llm_endpoint_unreachable" if healthcheck != "ok" else "local_llm_not_used_by_deterministic_extraction",
+        "local_llm_healthcheck": healthcheck,
+    }
+
+
 def _run_supplier_internet_search(
     tender_title: str,
     notice_text: str | None = None,
@@ -1037,6 +1092,8 @@ def _infer_procurement_kind(*texts: str | None) -> str:
     combined = " ".join((text or "").lower() for text in texts if text)
     if not combined:
         return "generic"
+    if "работы электромонтажные" in combined or "выполнение работ" in combined:
+        return "works"
     scores = {
         "goods": sum(
             combined.count(marker)
@@ -1058,6 +1115,14 @@ def _infer_procurement_kind(*texts: str | None) -> str:
                 "результат работ",
                 "этап работ",
                 "акт сдачи",
+                "замена",
+                "монтаж",
+                "демонтаж",
+                "ремонт",
+                "пусконалад",
+                "смета",
+                "кс-2",
+                "кс-3",
             )
         ),
         "services": sum(
@@ -1119,6 +1184,42 @@ def _infer_procurement_kind(*texts: str | None) -> str:
     if ranked and ranked[0][1] > 0:
         return ranked[0][0]
     return "generic"
+
+
+def _classify_procurement_scope(metadata: dict[str, Any], documents: list[AnalyzedDocument], notice_text: str) -> dict[str, Any]:
+    """Classify obligations without using the result to suppress goods extraction."""
+    title = str(metadata.get("tender_title") or "").lower()
+    text = "\n".join([title, notice_text, *[(doc.text or "") for doc in documents]]).lower()
+    items = _collect_supply_items(documents)
+    structured_goods = [item for item in items if item.name_source_type == "structured_direct_name"]
+    has_goods = bool(items) or "поставка" in title or "поставляем" in text
+    structured_codes = (metadata.get("procurement") or {}).get("okpd2_codes", [])
+    okpd_works = any(str(code.get("code", "")).startswith(("41.", "42.", "43.")) for code in structured_codes if isinstance(code, dict))
+    strong_works = okpd_works or any(marker in text for marker in ("смета", "кс-2", "кс-3", "ведомость объемов работ"))
+    has_services = any(marker in text for marker in ("оказание услуг", "услуг"))
+    # A titled supply or a detailed structured product list is authoritative;
+    # installation/adjustment in contract boilerplate only makes it mixed.
+    if "оказание услуг" in title:
+        primary = "services"
+    elif strong_works and not ("поставка" in title or "товар" in title or len(structured_goods) > 1):
+        primary = "works"
+    elif has_goods and strong_works:
+        primary = "mixed"
+    elif has_goods:
+        primary = "goods"
+    elif has_services:
+        primary = "services"
+    else:
+        primary = "unknown"
+    applicable = primary in {"goods", "mixed"} or bool(items)
+    return {
+        "procurement_primary_scope": primary,
+        "contains_goods": has_goods,
+        "contains_works": strong_works,
+        "contains_services": has_services,
+        "goods_extraction_applicable": applicable,
+        "scope_classification_conflict": has_goods and not applicable,
+    }
 
 
 def _normalize_requirement_title(title: str, procurement_kind: str) -> str | None:
@@ -1435,7 +1536,7 @@ def _extract_goods_characteristics(section_text: str) -> str | None:
 
 
 _SUPPLY_UNIT_PATTERN = re.compile(
-    r"^(шт|м|м\.|м2|м3|кг|г|л|компл(?:ект)?|комп|упак(?:овка)?|пара|рул(?:он)?|набор|ед\.?|усл\.?\s*ед\.?|пог\.?\s*м\.?)$",
+    r"^(шт|штука|м|м\.|м2|м3|кг|килограмм|г|грамм|л|миллилитр|компл(?:ект)?|комп|упак(?:овка)?|уп|пара|рул(?:он)?|набор|короб(?:ка)?|пачка|лист|ед\.?|усл\.?\s*ед\.?|пог\.?\s*м\.?)$",
     re.IGNORECASE,
 )
 
@@ -1466,6 +1567,9 @@ def _normalize_supply_name(value: str | None) -> str:
 def _normalize_supply_name_key(value: str | None) -> str:
     cleaned = _normalize_supply_name(value).lower()
     cleaned = cleaned.replace("ё", "е")
+    # OCR/DOCX line wrapping can split one word with a hyphen; it is not a
+    # different procurement item from the structured XML spelling.
+    cleaned = re.sub(r"(?<=[a-zа-я])[-‐‑–]\s*(?=[a-zа-я])", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\bгост\b", "", cleaned)
     cleaned = re.sub(r"[^a-zа-я0-9]+", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
@@ -1474,6 +1578,8 @@ def _normalize_supply_name_key(value: str | None) -> str:
 
 def _normalize_supply_unit(value: str | None) -> str | None:
     cleaned = (_cleanup_tabular_value(value) or "").lower().replace(" ", "")
+    if cleaned in {"", "—", "данныхнедостаточнотребуетсяпроверка", "неуказано"} or "данныхнедостаточно" in cleaned:
+        return None
     aliases = {
         "м.": "м",
         "пог.м.": "м",
@@ -1481,8 +1587,37 @@ def _normalize_supply_unit(value: str | None) -> str | None:
         "ед": "ед.",
         "ед.": "ед.",
         "комп": "компл",
+        "штука": "шт",
+        "упаковка": "упак",
+        "миллилитр": "мл",
+        "грамм": "г",
+        "килограмм": "кг",
+        "коробка": "короб",
     }
     return aliases.get(cleaned, cleaned) or None
+
+
+def _is_line_item_name(value: str | None) -> bool:
+    cleaned = _cleanup_tabular_value(value) or ""
+    lowered = cleaned.lower()
+    if lowered == "данных недостаточно — требуется проверка":
+        return False
+    if len(cleaned) < 3 or re.fullmatch(r"(?:гост|ту|ост|санпин)\s*[\d.\-–]+", lowered, re.IGNORECASE):
+        return False
+    disallowed = (
+        "должен соответствовать", "требования к", "технические характеристики", "условия поставки",
+        "гарантийн", "упаковк", "примечани", "описание объекта закупки", "наименование товара, услуги",
+    )
+    if any(marker in lowered for marker in disallowed):
+        return False
+    if re.fullmatch(r"(?:\d+(?:[.,]\d+)?\s*)?(?:в|кв|вт|квт|мм²|мм2|мм|см)", lowered):
+        return False
+    return bool(re.search(r"[a-zа-яё]", lowered, re.IGNORECASE))
+
+
+def _is_ktru_or_okpd(value: str | None) -> bool:
+    compact = (_cleanup_tabular_value(value) or "").replace(" ", "")
+    return bool(re.fullmatch(r"\d{2,3}(?:\.\d{2,3}){1,4}(?:-\d+(?:-\d+)*)?", compact))
 
 
 def _normalize_quantity_value(value: str | None) -> str | None:
@@ -1553,11 +1688,13 @@ def _summarize_supply_characteristics(values: list[str], *, limit: int = 6) -> l
     return result
 
 
-def _supply_item_to_row(item: SupplyItem) -> dict[str, str]:
+def _supply_item_to_row(item: SupplyItem) -> dict[str, Any]:
     characteristics = "; ".join(item.characteristics) if item.characteristics else "Требуется сверка характеристик по ТЗ."
     return {
         "№": item.item_no or "—",
-        "Наименование": item.name,
+        "Наименование": item.display_name or item.name,
+        "official_name": item.official_name or item.name,
+        "display_name": item.display_name or item.name,
         "Кол-во": item.quantity or "не указано",
         "Ед. изм.": item.unit or "—",
         "Ключевые характеристики": characteristics,
@@ -1566,6 +1703,18 @@ def _supply_item_to_row(item: SupplyItem) -> dict[str, str]:
         "Цена за ед., руб.": item.unit_price or "—",
         "Сумма, руб.": item.total_price or "—",
         "Источник": ", ".join(item.source_documents or [item.source_document]),
+        "quantity_status": item.quantity_status,
+        "evidence_ids": item.evidence_ids or ([item.evidence_id] if item.evidence_id else []),
+        "key_characteristics": item.characteristics[:5],
+        "name_source_type": item.name_source_type,
+        "name_source_path": item.name_source_path,
+        "quantity_source_path": item.quantity_source_path,
+        "unit_source_path": item.unit_source_path,
+        "source_row_number": item.source_row_number,
+        "source_record_id": item.source_record_id,
+        "extraction_strategy": item.extraction_strategy,
+        "okpd2": item.okpd2,
+        "ktru": item.ktru,
     }
 
 
@@ -1596,6 +1745,9 @@ def _extract_supply_items_from_spec_text(text: str, source_document: str) -> lis
         if index + 1 >= len(candidate_lines):
             break
         name = _normalize_supply_name(candidate_lines[index + 1])
+        if not _is_line_item_name(name):
+            index += 1
+            continue
         block: list[str] = []
         index += 2
         while index < len(candidate_lines) and not re.fullmatch(r"\d{1,3}", candidate_lines[index]):
@@ -1641,6 +1793,9 @@ def _extract_supply_items_from_spec_text(text: str, source_document: str) -> lis
             confidence="high" if quantity and unit else "medium",
             raw_fragment=raw_fragment,
             source_documents=[source_document],
+            quantity_status="specified" if quantity is not None and unit else "not_specified",
+            source_row_number=len(items) + 1,
+            evidence_id=f"ev-{hashlib.sha256(f'{source_document}|spec|{item_no}|{name}|{quantity}|{unit}'.encode('utf-8')).hexdigest()[:16]}",
         )
         if item.name:
             items.append(item)
@@ -1653,23 +1808,79 @@ def _extract_supply_items_from_xlsx_text(text: str, source_document: str) -> lis
     if not text or "\t" not in text:
         return []
     items: list[SupplyItem] = []
+    column_map: dict[str, int] = {}
     for line in text.splitlines():
         cells = [_cleanup_tabular_value(cell) or "" for cell in line.split("\t")]
         meaningful = [cell for cell in cells if cell]
         if len(meaningful) < 4:
             continue
         lowered = " ".join(meaningful).lower()
+        if "есклп" in lowered and "колич" in lowered:
+            # Wrapped XLSX headers for medicinal products are emitted on two
+            # lines; their labels are shifted left by one cell after export.
+            column_map.update({"name": 1, "identifier": 2, "unit": 3, "quantity": 12})
+            continue
+        if ("наимен" in lowered or "мнн" in lowered) and ("колич" in lowered or "кол-во" in lowered):
+            for index, cell in enumerate(cells):
+                cell_lower = cell.lower()
+                if "наимен" in cell_lower or "мнн" in cell_lower:
+                    column_map["name"] = index
+                elif "колич" in cell_lower or "кол-во" in cell_lower:
+                    column_map["quantity"] = index
+                elif "ед." in cell_lower or "единиц" in cell_lower:
+                    column_map["unit"] = index
+                elif any(marker in cell_lower for marker in ("ктру", "окпд", "есклп")):
+                    column_map["identifier"] = index
+            continue
         if any(token in lowered for token in ("используемый метод", "коммерческие предложения", "коэффициент", "лист", "sheet")):
             continue
         if "наименование" in lowered and ("коли" in lowered or "кол-во" in lowered):
             continue
         if not re.fullmatch(r"\d{1,3}", meaningful[0]):
             continue
+        if {"name", "unit", "quantity"}.issubset(column_map):
+            raw_name = cells[column_map["name"]] if column_map["name"] < len(cells) else ""
+            unit_raw = cells[column_map["unit"]] if column_map["unit"] < len(cells) else ""
+            quantity_raw = cells[column_map["quantity"]] if column_map["quantity"] < len(cells) else ""
+            if not _is_line_item_name(raw_name) or not _SUPPLY_UNIT_PATTERN.fullmatch(unit_raw) or _parse_float(quantity_raw) is None:
+                continue
+            identifier_index = column_map.get("identifier")
+            ktru = cells[identifier_index] if identifier_index is not None and identifier_index < len(cells) else None
+            numeric_tail = [_parse_float(value) for value in cells[column_map["quantity"] + 1:] if value]
+            numeric_tail = [value for value in numeric_tail if value is not None]
+            total_value = numeric_tail[-1] if numeric_tail else None
+            quantity = _normalize_quantity_value(quantity_raw)
+            item = SupplyItem(
+                item_no=meaningful[0], name=_normalize_supply_name(raw_name), quantity=quantity,
+                unit=_normalize_supply_unit(unit_raw), characteristics=[], gost=_extract_gost_tokens(" ".join(meaningful)),
+                equivalent_allowed="эквивалент" in raw_name.lower(), source_document=source_document,
+                source_kind="nmck_xlsx", confidence="high", raw_fragment=line,
+                total_price=_format_decimal_price(total_value), source_documents=[source_document],
+                quantity_status="specified", source_row_number=len(items) + 1,
+                evidence_id=f"ev-{hashlib.sha256(f'{source_document}|xlsx|{len(items)+1}|{raw_name}|{quantity}|{unit_raw}'.encode('utf-8')).hexdigest()[:16]}",
+                ktru=ktru if _is_ktru_or_okpd(ktru) else None,
+            )
+            items.append(item)
+            continue
         raw_name = meaningful[1]
         name = _normalize_supply_name(raw_name)
-        unit = _normalize_supply_unit(meaningful[2])
-        quantity = _normalize_quantity_value(meaningful[3])
-        numeric_tail = [_parse_float(value) for value in meaningful[4:]]
+        if not _is_line_item_name(name):
+            continue
+        value_offset = 2
+        ktru = None
+        if _is_ktru_or_okpd(meaningful[value_offset]):
+            ktru = meaningful[value_offset]
+            value_offset += 1
+        if len(meaningful) <= value_offset + 1:
+            continue
+        unit_raw = meaningful[value_offset]
+        quantity_raw = meaningful[value_offset + 1]
+        if not _SUPPLY_UNIT_PATTERN.fullmatch(unit_raw) or _parse_float(quantity_raw) is None:
+            # A table row with shifted/ambiguous columns is review material, not a line item.
+            continue
+        unit = _normalize_supply_unit(unit_raw)
+        quantity = _normalize_quantity_value(quantity_raw)
+        numeric_tail = [_parse_float(value) for value in meaningful[value_offset + 2:]]
         numeric_tail = [value for value in numeric_tail if value is not None]
         total_value = numeric_tail[-1] if numeric_tail else None
         quantity_value = _parse_float(quantity)
@@ -1690,6 +1901,10 @@ def _extract_supply_items_from_xlsx_text(text: str, source_document: str) -> lis
             unit_price=_format_decimal_price(price_value),
             total_price=_format_decimal_price(total_value),
             source_documents=[source_document],
+            quantity_status="specified" if quantity is not None and unit else "not_specified",
+            source_row_number=len(items) + 1,
+            evidence_id=f"ev-{hashlib.sha256(f'{source_document}|xlsx|{len(items) + 1}|{name}|{quantity}|{unit}'.encode('utf-8')).hexdigest()[:16]}",
+            ktru=ktru,
         )
         items.append(item)
         if len(items) >= 24:
@@ -1784,19 +1999,63 @@ def _extract_supply_items_from_notification_xml(text: str, source_document: str)
         return []
     objects = [element for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "purchaseObject"]
     for row_number, element in enumerate(objects, start=1):
-        children = {child.tag.rsplit("}", 1)[-1]: " ".join(child.itertext()).strip() for child in element}
+        def direct_child(tag: str) -> ET.Element | None:
+            return next((node for node in element if node.tag.rsplit("}", 1)[-1] == tag), None)
+
+        def nested_child(parent: ET.Element | None, tag: str) -> ET.Element | None:
+            if parent is None:
+                return None
+            return next((node for node in parent.iter() if node.tag.rsplit("}", 1)[-1] == tag), None)
+
+        def descendants(tag: str) -> list[ET.Element]:
+            return [node for node in element.iter() if node.tag.rsplit("}", 1)[-1] == tag]
 
         def value(tag: str) -> str:
-            return html.unescape(children.get(tag, "")).strip()
+            node = next(iter(descendants(tag)), None)
+            return html.unescape(" ".join(node.itertext()).strip()) if node is not None else ""
 
-        name = _normalize_supply_name(value("name"))
+        # The direct purchaseObject name is the item.  A descendant search can
+        # otherwise select the first KTRU characteristic name as the product.
+        ktru = next(iter(descendants("KTRU")), None)
+        name_node = direct_child("name")
+        if name_node is None:
+            name_node = next((node for node in (ktru.iter() if ktru is not None else []) if node.tag.rsplit("}", 1)[-1] == "name"), None)
+        name = _normalize_supply_name(" ".join(name_node.itertext()).strip() if name_node is not None else "")
+        characteristics = []
+        for characteristic in descendants("characteristicsUsingTextForm"):
+            characteristic_name = next((node for node in characteristic if node.tag.rsplit("}", 1)[-1] == "name"), None)
+            if characteristic_name is not None:
+                label = " ".join(characteristic_name.itertext()).strip()
+                value_node = next((node for node in characteristic.iter() if node.tag.rsplit("}", 1)[-1] in {"concreteValue", "min", "max"}), None)
+                unit_node = next((node for node in characteristic.iter() if node.tag.rsplit("}", 1)[-1] == "nationalCode"), None)
+                if value_node is not None:
+                    comparator = "≥ " if any(node.tag.rsplit("}", 1)[-1] == "minMathNotation" and "greaterOrEqual" in " ".join(node.itertext()) for node in characteristic.iter()) else ""
+                    unit_value = " ".join(unit_node.itertext()).strip() if unit_node is not None else ""
+                    characteristics.append(f"{label} {comparator}{' '.join(value_node.itertext()).strip()} {unit_value}".strip())
         raw_type = value("type").upper()
         price = _parse_float(value("price"))
         total = _parse_float(value("sum"))
-        quantity_raw = value("quantity")
+        quantity_node = direct_child("quantity")
+        if quantity_node is None:
+            drug_customer_info = nested_child(direct_child("drugQuantityCustomersInfo"), "drugQuantityCustomerInfo")
+            quantity_node = nested_child(drug_customer_info, "quantity")
+        quantity_raw = ""
+        if quantity_node is not None:
+            quantity_value_node = next(
+                (node for node in quantity_node.iter() if node.tag.rsplit("}", 1)[-1] in {"value", "concreteValue"}),
+                None,
+            )
+            quantity_raw = " ".join(quantity_value_node.itertext()).strip() if quantity_value_node is not None else " ".join(quantity_node.itertext()).strip()
         quantity = _normalize_quantity_value(quantity_raw) if re.search(r"\d", quantity_raw) else None
-        okei_parts = value("OKEI").split()
-        unit = _normalize_supply_unit(okei_parts[1] if len(okei_parts) > 1 else None)
+        okei = direct_child("OKEI")
+        if okei is None:
+            drug_info = nested_child(element, "drugInfo")
+            okei = nested_child(drug_info, "manualUserOKEI")
+        unit_node = next(
+            (node for node in (okei.iter() if okei is not None else []) if node.tag.rsplit("}", 1)[-1] in {"nationalCode", "name"}),
+            None,
+        )
+        unit = _normalize_supply_unit(" ".join(unit_node.itertext()).strip() if unit_node is not None else None)
         if not name or price is None and total is None:
             continue
         item_type = "service" if raw_type in {"SERVICE", "WORK"} else "goods"
@@ -1806,7 +2065,7 @@ def _extract_supply_items_from_notification_xml(text: str, source_document: str)
             name=name,
             quantity=quantity,
             unit=unit,
-            characteristics=[],
+            characteristics=characteristics,
             gost=_extract_gost_tokens(" ".join(element.itertext())),
             equivalent_allowed=None,
             source_document=source_document,
@@ -1817,11 +2076,17 @@ def _extract_supply_items_from_notification_xml(text: str, source_document: str)
             total_price=_format_decimal_price(total),
             source_documents=[source_document],
             item_type=item_type,
-            quantity_status="specified" if quantity is not None else "not_specified",
+            quantity_status="specified" if quantity is not None and unit else "not_specified",
             pricing_basis="unit_price",
             source_row_number=row_number,
             evidence_id=f"ev-{hashlib.sha256(evidence_seed).hexdigest()[:16]}",
             unit_original=unit,
+            name_source_type="structured_direct_name" if direct_child("name") is not None else "structured_item_title",
+            name_source_path="purchaseObject/name" if direct_child("name") is not None else "purchaseObject/KTRU/name",
+            quantity_source_path="purchaseObject/quantity",
+            unit_source_path="purchaseObject/OKEI",
+            source_record_id=value("sid") or None,
+            extraction_strategy="notification_xml_purchase_object",
         ))
     return rows
 
@@ -2016,16 +2281,48 @@ def _extract_legacy_goods_spec_rows(technical_spec_text: str) -> list[dict[str, 
 
 
 def _merge_supply_items(items: list[SupplyItem]) -> list[SupplyItem]:
-    merged: dict[str, SupplyItem] = {}
+    """Create canonical procurement items while retaining every source as evidence.
+
+    A quantity can be absent in a DOCX representation of a purchase object and
+    present in XML/XLSX.  It must complement the same item rather than create a
+    second row merely because the less complete representation lacks a value.
+    """
+    merged: list[SupplyItem] = []
     for item in items:
-        key = _normalize_supply_name_key(item.name)
-        if item.source_kind == "notification_xml":
-            key = f"{item.source_document}|xml|{item.source_row_number}"
-        if not key:
+        if item.record_type != "line_item" or not _is_line_item_name(item.name):
             continue
-        existing = merged.get(key)
-        if not existing:
-            merged[key] = item
+        # Service rows describe operations.  Similar vocabulary does not make
+        # diagnostics, repair, replacement and maintenance one canonical row.
+        # Preserve each source row; goods-only matching starts below.
+        if item.item_type == "service":
+            item.evidence_ids = list(dict.fromkeys(item.evidence_ids or ([item.evidence_id] if item.evidence_id else [])))
+            item.official_name = item.official_name or item.name
+            item.display_name = item.display_name or item.name
+            merged.append(item)
+            continue
+        name_key = _normalize_supply_name_key(item.name)
+        if not name_key:
+            continue
+        item.evidence_ids = list(dict.fromkeys(item.evidence_ids or ([item.evidence_id] if item.evidence_id else [])))
+        item.official_name = item.official_name or item.name
+        item.display_name = item.display_name or item.name
+        item_unit = _normalize_supply_unit(item.unit)
+        signature = tuple(sorted(_normalize_supply_name_key(value) for value in item.characteristics if value))
+        existing = next((candidate for candidate in merged if (
+            (_normalize_supply_name_key(candidate.name) == name_key or bool(
+                set(token for token in _normalize_supply_name_key(candidate.name).split() if len(token) >= 5)
+                & set(token for token in name_key.split() if len(token) >= 5)
+            ))
+            and (not _normalize_supply_unit(candidate.unit) or not item_unit or _normalize_supply_unit(candidate.unit) == item_unit)
+            and (not candidate.quantity or not item.quantity or candidate.quantity == item.quantity)
+            and (not candidate.okpd2 or not item.okpd2 or candidate.okpd2 == item.okpd2)
+            and (not candidate.ktru or not item.ktru or candidate.ktru == item.ktru)
+            # Characteristics commonly differ in completeness between a DOCX
+            # table and structured XML.  They complement an otherwise exact
+            # name/unit/quantity match; they must not create a duplicate.
+        )), None)
+        if existing is None:
+            merged.append(item)
             continue
         if not existing.quantity and item.quantity:
             existing.quantity = item.quantity
@@ -2044,6 +2341,16 @@ def _merge_supply_items(items: list[SupplyItem]) -> list[SupplyItem]:
         for source_document in item.source_documents or [item.source_document]:
             if source_document not in existing.source_documents:
                 existing.source_documents.append(source_document)
+        existing.evidence_ids = list(dict.fromkeys(existing.evidence_ids + item.evidence_ids))
+        # Structured purchaseObject is preferred for the displayed official
+        # name, but its presence never discards quantities/evidence from a
+        # complementary specification or NMCK row.
+        if item.name_source_type == "structured_direct_name" and existing.name_source_type != "structured_direct_name":
+            existing.name = item.name
+            existing.official_name = item.name
+            existing.display_name = item.name
+            existing.name_source_type = item.name_source_type
+            existing.name_source_path = item.name_source_path
         if existing.source_document != item.source_document and item.source_kind == "technical_spec":
             existing.source_document = item.source_document
             existing.source_kind = item.source_kind
@@ -2054,10 +2361,31 @@ def _merge_supply_items(items: list[SupplyItem]) -> list[SupplyItem]:
         except ValueError:
             number = 999
         return number, item.name.lower()
-    return sorted(merged.values(), key=sort_key)
+    name_counts: dict[str, int] = {}
+    for item in merged:
+        name_counts[_normalize_supply_name_key(item.official_name or item.name)] = name_counts.get(_normalize_supply_name_key(item.official_name or item.name), 0) + 1
+    for item in merged:
+        official_name = item.official_name or item.name
+        characteristics = _summarize_supply_characteristics(item.characteristics, limit=3)
+        # Keep the official wording intact.  Add only compact, source-backed
+        # characteristics when a repeated generic name would be ambiguous.
+        if name_counts[_normalize_supply_name_key(official_name)] > 1 and characteristics:
+            item.display_name = f"{official_name} — {', '.join(characteristics)}"
+        else:
+            item.display_name = official_name
+    return sorted(merged, key=sort_key)
 
 
 def _collect_supply_items(documents: list[AnalyzedDocument]) -> list[SupplyItem]:
+    return _merge_supply_items(_collect_unmerged_source_items(documents))
+
+
+def _collect_unmerged_source_items(documents: list[AnalyzedDocument]) -> list[SupplyItem]:
+    """Return per-document extractor rows before legacy reconciliation.
+
+    The production source graph consumes these rows.  `_collect_supply_items`
+    remains a compatibility presentation helper and is never its value source.
+    """
     extracted: list[SupplyItem] = []
     for doc in documents:
         text = doc.text or ""
@@ -2074,7 +2402,7 @@ def _collect_supply_items(documents: list[AnalyzedDocument]) -> list[SupplyItem]
             extracted.extend(_extract_service_items_from_nmck_text(text, doc.display_name))
         if doc.extension == ".xml" or "purchasenotice" in text.lower() or "epnotification" in text.lower() or "purchaseobject" in text.lower():
             extracted.extend(_extract_supply_items_from_notification_xml(text, doc.display_name))
-    return _merge_supply_items(extracted)
+    return extracted
 
 
 def _extract_goods_spec_table(technical_spec_text: str) -> list[dict[str, str]]:
@@ -2670,20 +2998,24 @@ def _build_preliminary_procurement_analysis(
     contract_text = contract_draft_text or ""
     notice = notice_text or ""
     combined = "\n".join(part for part in (tz_text, contract_text, notice) if part)
-    procurement_kind = _infer_procurement_kind(tz_text, contract_text, notice, str(metadata.get("tender_title") or ""))
+    scope = _classify_procurement_scope(metadata, documents, notice)
+    procurement_kind = scope["procurement_primary_scope"]
     extracted_service_items = [item for item in _collect_supply_items(documents) if item.item_type == "service"]
-    if extracted_service_items:
+    if extracted_service_items and procurement_kind not in {"works", "mixed"}:
         procurement_kind = "services"
-    elif _collect_supply_items(documents):
+    elif _collect_supply_items(documents) and procurement_kind not in {"works", "services", "mixed"}:
         procurement_kind = "goods"
-    if procurement_kind == "goods":
-        return _build_goods_preliminary_analysis(
+    if scope["goods_extraction_applicable"] and procurement_kind in {"goods", "mixed"}:
+        preliminary = _build_goods_preliminary_analysis(
             metadata=metadata,
             documents=documents,
             technical_spec_text=technical_spec_text,
             contract_draft_text=contract_draft_text,
             notice_text=notice_text,
         )
+        preliminary["procurement_kind"] = procurement_kind
+        preliminary["scope"] = scope
+        return preliminary
     # Keep the established education-services profile for its documented
     # training inputs; all other services must not inherit those assumptions.
     training_markers = ("обучени", "слушател", "учебн", "повышени[яе] квалификац")
@@ -2744,6 +3076,7 @@ def _build_preliminary_procurement_analysis(
                 ]
             ),
             "procurement_kind": procurement_kind,
+            "scope": scope,
             "supply_section_note": (
                 "Состав работ собран по техническим документам и проекту контракта."
                 if work_rows
@@ -3018,6 +3351,13 @@ def _normalize_supplier_questions(questions: list[dict[str, Any]], procurement_k
     return normalized
 
 
+def delivery_address_from_preliminary(preliminary_analysis: dict[str, Any]) -> str | None:
+    for item in preliminary_analysis.get("overview", []):
+        if str(item).startswith("Адрес поставки:"):
+            return str(item).split(":", 1)[1].strip() or None
+    return None
+
+
 def _build_output_payloads(
     *,
     metadata: dict[str, Any],
@@ -3034,16 +3374,19 @@ def _build_output_payloads(
 ) -> dict[str, dict[str, Any]]:
     technical_spec_text = _collect_role_text(documents, "technical_spec")
     contract_draft_text = _collect_role_text(documents, "contract_draft")
+    contract_documents = [doc for doc in documents if doc.role == "contract_draft"]
+    if contract_documents:
+        contract_draft_status = "present" if any(doc.text for doc in contract_documents) else "parse_failed"
+    elif metadata.get("files"):
+        contract_draft_status = "absent"
+    else:
+        contract_draft_status = "unknown"
     notice_text = _collect_role_text(documents, "notice") or _collect_role_text(documents, "supporting") or metadata["tender_title"]
-    procurement_kind = _infer_procurement_kind(
-        technical_spec_text,
-        contract_draft_text,
-        notice_text,
-        str(metadata.get("tender_title") or ""),
-    )
-    if any(item.item_type == "service" for item in _collect_supply_items(documents)):
+    scope = _classify_procurement_scope(metadata, documents, notice_text)
+    procurement_kind = scope["procurement_primary_scope"]
+    if any(item.item_type == "service" for item in _collect_supply_items(documents)) and procurement_kind not in {"works", "mixed"}:
         procurement_kind = "services"
-    elif _collect_supply_items(documents):
+    elif _collect_supply_items(documents) and procurement_kind not in {"works", "services", "mixed"}:
         procurement_kind = "goods"
     grounded_requirement_rows = _build_document_grounded_requirements(documents, procurement_kind)
     requirement_rows = grounded_requirement_rows or _extract_requirement_rows(requirements, core_complete, procurement_kind)
@@ -3056,6 +3399,60 @@ def _build_output_payloads(
         contract_draft_text=contract_draft_text,
         notice_text=notice_text,
     )
+    # Candidate hints retain only legacy sequence/identity while the direct
+    # fragments and resolver exclusively supply goods field values.
+    from src.modules.procurement_source_graph.model import direct_fragments_to_canonical_model, legacy_rows_to_canonical_model
+    from src.modules.procurement_source_graph.structured_fragment_collector import StructuredFragmentCollector
+    graph_input_rows = (
+        preliminary_analysis.get("service_items") or preliminary_analysis.get("spec_table", {}).get("rows", [])
+        if procurement_kind == "services"
+        else preliminary_analysis.get("supply_items") or preliminary_analysis.get("service_items") or []
+    )
+    # Existing XML/DOCX/XLSX extractors populate SupplyItem source metadata.
+    # Preserve individual rows: merging them here would reintroduce adapter
+    # values before FieldSourceResolver gets to decide each field.
+    direct_extracted_items = _collect_unmerged_source_items(documents)
+    direct_fragments = StructuredFragmentCollector().collect_supply_items(metadata.get("procurement_id"), direct_extracted_items)
+    canonical_graph_model = (
+        legacy_rows_to_canonical_model(metadata.get("procurement_id"), procurement_kind, graph_input_rows)
+        if procurement_kind == "services"
+        else direct_fragments_to_canonical_model(metadata.get("procurement_id"), procurement_kind, direct_fragments, graph_input_rows)
+    )
+    canonical_run_status = (
+        "needs_review" if canonical_graph_model.unresolved_candidates
+        else "completed_with_warnings" if canonical_graph_model.quality_issues
+        else "completed"
+    )
+    preliminary_analysis["canonical_procurement_model"] = {
+        "procurement_number": canonical_graph_model.procurement_number,
+        "procurement_scope": canonical_graph_model.procurement_scope,
+        "run_status": canonical_run_status,
+        "canonical_items": [
+            {"canonical_item_id": item.canonical_item_id, "official_name": item.official_name, "display_name": item.display_name or item.official_name,
+             "quantity": item.quantity, "unit": item.unit, "okpd2": next((source.fragment.okpd2 for field, source in item.field_provenance.items() if field == "okpd2"), None),
+             "ktru": next((source.fragment.ktru for field, source in item.field_provenance.items() if field == "ktru"), None),
+             "characteristics": item.characteristics, "primary_source": item.primary_source.fragment.fragment_key if item.primary_source else None,
+             "evidence_ids": [item.primary_source.fragment.fragment_key] if item.primary_source else [],
+             "field_provenance": {field: source.fragment.fragment_key for field, source in item.field_provenance.items()},
+             "source_document": item.primary_source.fragment.document_instance_id if item.primary_source else None,
+             "source_row_number": item.primary_source.fragment.locator if item.primary_source else None,
+             "name_source_type": "validated_primary" if item.primary_source else "unresolved", "quality_gate_status": item.status,
+             "warnings": item.warnings, "conflicts": item.conflicts, "field_issues": item.field_issues}
+            for item in canonical_graph_model.canonical_items
+        ],
+        "unresolved_candidates": [item.canonical_item_id for item in canonical_graph_model.unresolved_candidates],
+        "production_model_hash": canonical_graph_model.production_model_hash,
+        "source_fragments": [
+            {"fragment_key": fragment.fragment_key, "document_instance_id": fragment.document_instance_id,
+             "source_type": fragment.source_type, "locator": fragment.locator, "row_role": fragment.row_role,
+             "name": fragment.name, "quantity": fragment.quantity, "unit": fragment.unit,
+             "okpd2": fragment.okpd2, "ktru": fragment.ktru, "characteristics": list(fragment.characteristics),
+             "provenance_kind": fragment.provenance_kind, "parent_fragment_key": fragment.parent_fragment_key,
+             "characteristic_name": fragment.characteristic_name, "characteristic_value": fragment.characteristic_value,
+             "characteristic_unit": fragment.characteristic_unit, "source_position": fragment.position_number}
+            for fragment in direct_fragments
+        ],
+    }
     if procurement_kind == "goods" and _is_goods_supply_table_present(technical_spec_text) and not preliminary_analysis.get("spec_table", {}).get("rows"):
         output_warnings.append("Позиции поставки не извлечены из ТЗ/спецификации. Анализ неполный.")
 
@@ -3092,16 +3489,31 @@ def _build_output_payloads(
         "analysis_context": {
             "procurement_number": metadata.get("procurement_id"),
             "procurement_subject": (preliminary_analysis.get("overview") or [metadata.get("tender_title")])[0].removeprefix("Предмет закупки: "),
+            "customer_name": metadata.get("customer_name") or (metadata.get("procurement") or {}).get("customer_name"),
+            "customer_inn": metadata.get("customer_inn") or (metadata.get("procurement") or {}).get("customer_inn"),
+            "customer_kpp": metadata.get("customer_kpp") or (metadata.get("procurement") or {}).get("customer_kpp"),
+            "delivery_place": metadata.get("delivery_place") or delivery_address_from_preliminary(preliminary_analysis),
+            "delivery_address": metadata.get("delivery_address") or delivery_address_from_preliminary(preliminary_analysis),
+            "delivery_region": metadata.get("delivery_region"),
+            "delivery_status": metadata.get("delivery_status") or ("known" if delivery_address_from_preliminary(preliminary_analysis) else "unknown"),
+            "delivery_evidence_ids": [metadata.get("_field_evidence", {}).get("delivery_place")] if metadata.get("_field_evidence", {}).get("delivery_place") else [],
+            "contract_draft_status": contract_draft_status,
+            "contract_draft_documents": [doc.display_name for doc in contract_documents],
+            "contract_draft_evidence_ids": [f"contract:{doc.file_id}" for doc in contract_documents],
+            "procurement_scope": scope,
+            "goods_extraction_applicable": scope["goods_extraction_applicable"],
+            "scope_classification_conflict": scope["scope_classification_conflict"],
             "procurement_category": procurement_kind,
             "domain": preliminary_analysis.get("domain_profile", "unknown"),
             "law": metadata.get("law"),
             "okpd2": _service_okpd2_from_sources(notice_text, documents) if procurement_kind == "services" else None,
+            "okpd2_codes": metadata.get("okpd2_codes") or (metadata.get("procurement") or {}).get("okpd2_codes", []),
             "nmck": _extract_notice_price(metadata, notice_text, contract_draft_text),
             "currency": "RUB",
             "service_items": preliminary_analysis.get("service_items", []),
             "document_inventory": [doc.display_name for doc in documents],
             "document_coverage": "partial" if procurement_kind == "services" and not contract_draft_text else "available",
-            "missing_documents": preliminary_analysis.get("missing_documents", []),
+            "missing_documents": [] if contract_draft_status in {"present", "parse_failed"} else preliminary_analysis.get("missing_documents", []),
             "extraction_warnings": output_warnings,
             "known_contract_terms": preliminary_analysis.get("contract_highlights", []) if contract_draft_text else [],
             "unknown_contract_terms": (["payment", "acceptance", "penalties", "security", "liability"] if not contract_draft_text else []),
@@ -4454,6 +4866,47 @@ def _enrich_procurement_metadata_from_documents(
     apply_structured_metadata_to_procurement(procurement, structured)
     metadata["_structured_metadata"] = structured
 
+    if structured.get("procurement_subject"):
+        subject_entry = structured["procurement_subject"]
+        procurement["procurement_subject"] = subject_entry["value"]
+        procurement["title_source_reference"] = subject_entry.get("source_reference")
+        metadata["procurement_title"] = subject_entry["value"]
+        metadata["tender_title"] = subject_entry["value"]
+    for key in ("customer_name", "customer_inn", "customer_kpp"):
+        entry = structured.get(key)
+        if entry:
+            procurement[key] = entry["value"]
+            metadata[key] = entry["value"]
+    delivery_entry = structured.get("delivery_place")
+    if delivery_entry:
+        delivery_value = delivery_entry["value"]
+        procurement["delivery_place"] = delivery_value
+        metadata["delivery_place"] = delivery_value
+        metadata["delivery_address"] = delivery_value
+        metadata["delivery_region"] = delivery_value.split(",", 1)[0]
+        metadata["delivery_status"] = "known"
+    okpd2_entry = structured.get("okpd2_codes")
+    if okpd2_entry:
+        metadata["okpd2_codes"] = okpd2_entry["value"]
+        procurement["okpd2_codes"] = okpd2_entry["value"]
+    for key, metadata_key in (("publication_date", "publication_date"), ("deadline", "deadline")):
+        entry = structured.get(key)
+        if entry:
+            metadata[metadata_key] = entry["value"]
+    metadata["_field_evidence"] = {
+        field: entry.get("source_reference")
+        for field, entry in (
+            ("procurement_title", structured.get("procurement_subject")),
+            ("publication_datetime", structured.get("publication_date")),
+            ("application_deadline", structured.get("deadline")),
+            ("nmck", structured.get("initial_price")),
+            ("customer_name", structured.get("customer_name")),
+            ("delivery_place", structured.get("delivery_place")),
+            ("okpd2_codes", structured.get("okpd2_codes")),
+        )
+        if entry
+    }
+
     if eis_notice_meta.get("_has_notice_data"):
         metadata["notice_source_label"] = eis_notice_meta.get("source_label", "электронное извещение ЕИС")
         procurement["structured_source_label"] = metadata["notice_source_label"]
@@ -4473,9 +4926,9 @@ def _render_canonical_report_html(model: dict[str, Any]) -> str:
     summary, passport, meta = model["executive_summary"], model["procurement_passport"], model["metadata"]
     compatibility = model.get("compatibility_sections", {})
     rows = "".join(
-        f"<tr><td>{row['sequence']}</td><td>{esc(row['original_name'])}</td><td>{esc(row['unit_original'])}</td><td>{esc(row['unit_price'])} RUB</td><td>{esc(row['quantity_display'])}</td><td>{esc(row['source_document_id'])}, {row['source_row']} [{esc(', '.join(row['evidence_ids']))}]</td></tr>"
-        for row in model["service_catalog"]
-    )
+        f"<tr><td>{row['sequence']}</td><td>{esc(row['original_name'])}</td><td>{esc(row['quantity_display'])}</td><td>{esc(row['unit_original'])}</td><td>{esc(row['quantity_status'])}</td><td>{esc(row['source_document_id'])}, {row['source_row']} [{esc(', '.join(row['evidence_ids']))}]</td></tr>"
+        for row in model["line_items"]
+    ) or '<tr><td colspan="6">Позиции и количество не удалось извлечь из доступных документов; требуется проверка первоисточника.</td></tr>'
     risks = "".join(f"<li><strong>{esc(risk.get('status', 'Требует проверки'))}</strong>: {esc(risk.get('risk'))}. {esc(risk.get('impact'))}</li>" for risk in model["risks"])
     evidence = "".join(f"<li id='{esc(item['evidence_id'])}'><strong>[{esc(item['evidence_id'])}]</strong> {esc(item['document'])}, строка {esc(item['row'])}: {esc(item['short_excerpt'])}</li>" for item in model["evidence_map"])
     bullets = lambda values: "".join(f"<li>{esc(value)}</li>" for value in values) or "<li>Не применимо — подтверждённых данных нет.</li>"
@@ -4487,10 +4940,10 @@ def _render_canonical_report_html(model: dict[str, Any]) -> str:
     return f'''<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Анализ закупки {esc(meta.get('procurement_number'))}</title><style>
 body{{margin:0;background:#f5f8fa;color:#10243e;font:16px Arial,sans-serif}}main{{max-width:1180px;margin:auto;padding:24px}}section{{background:#fff;border:1px solid #dce5eb;border-radius:12px;padding:20px;margin:16px 0}}h1,h2{{color:#003b5c}}.decision{{border-left:6px solid #d08300}}.scroll{{overflow-x:auto}}table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom:1px solid #dce5eb;padding:9px;text-align:left;vertical-align:top}}th{{background:#e9f7f5}}.label{{font-weight:bold;color:#006b66}}@media print{{body{{background:#fff}}section{{break-inside:avoid}}}}@media(max-width:700px){{main{{padding:12px}}section{{padding:14px}}}}</style></head><body><main>
 <section><h1>{esc(compatibility.get('report_title'))}</h1><p>Номер извещения: {esc(compatibility.get('notice_number'))}</p><p>{esc(compatibility.get('source_status'))}</p><p>Скачано документов: {esc(compatibility.get('downloaded_files_count'))}</p><details><summary>Показать документы</summary><p>Документы текущего run доступны через защищённые ссылки интерфейса.</p></details>{('<a href="#archive">Скачать архив</a>' if compatibility.get('archive_available') else '')}<p class="label">Версия: {esc(meta.get('report_version'))}; полнота источников: {esc(meta.get('completeness_status'))}</p></section>
-<section><h2>Резюме для принятия решения</h2><p><strong>{esc(summary['subject'])}</strong></p><p>НМЦК (максимальная цена закупки): {esc(summary['nmck'])} {esc(summary['currency'])}</p><p>Проанализировано услуг: {esc(summary['service_item_count'])}/{esc(summary['analyzed_item_count'])}</p><div class="decision"><strong>{esc(summary['decision'])}</strong><ul>{bullets(summary['blockers'])}</ul><p>Следующее действие: {esc(summary['next_action'])}</p></div></section>
-<section><h2>Паспорт закупки</h2><ul><li>Категория: {esc(passport.get('category'))}</li><li>ОКПД2: {esc(passport.get('okpd2'))}</li><li>Заказчик: {esc(passport.get('customer'))}</li></ul></section>
+<section><h2>Резюме для принятия решения</h2><p><strong>Название закупки: {esc(model.get('procurement_title'))}</strong></p><p>Номер закупки: {esc(model.get('procurement_number'))}</p><p>Дата публикации: {esc(model.get('publication_datetime'))}</p><p>Окончание подачи заявок: {esc(model.get('application_deadline'))}</p><p>НМЦК: {esc(model.get('nmck'))} {esc(model.get('currency'))}</p><p>Заказчик: {esc(model.get('customer_name'))}</p><p>Место поставки: {esc(model.get('delivery_place'))}</p><p>Проект контракта: {esc('приложен' if model.get('contract_draft_status') == 'present' else ('приложен, но автоматически разобрать его не удалось' if model.get('contract_draft_status') == 'parse_failed' else model.get('contract_draft_status')))}</p><p>Позиций: {esc(len(model['line_items']))}</p><div class="decision"><strong>{esc(model.get('decision'))}</strong><ul>{bullets(summary['blockers'])}</ul><p>Следующее действие: {esc(summary['next_action'])}</p></div></section>
+<section><h2>Паспорт закупки</h2><ul><li>Категория: {esc(passport.get('category'))}</li><li>ОКПД2: {esc(passport.get('okpd2'))}</li><li>Статус объёма: {esc(model.get('procurement_volume_status'))}</li><li>Причина статуса объёма: {esc(model.get('volume_status_reason'))}</li><li>Заказчик: {esc(passport.get('customer'))}</li><li>Место поставки: {esc(passport.get('delivery_place'))}</li></ul></section>
 <section><h2>Предварительный анализ закупки</h2><ul>{bullets(compatibility.get('preliminary_overview', []))}</ul><h3>Состав поставки</h3>{compatibility_table}<h3>Ключевые условия договора</h3><ul>{bullets(compatibility.get('contract_highlights', []))}</ul></section>
-<section><h2>Перечень услуг и единичных расценок</h2><p>Фиксированный объём не указан документацией; единичные цены не суммируются в стоимость контракта.</p><div class="scroll"><table><thead><tr><th>№</th><th>Услуга</th><th>Единица</th><th>Единичная цена</th><th>Количество/объём</th><th>Источник и evidence</th></tr></thead><tbody>{rows}</tbody></table></div></section>
+<section><h2>Состав и объём закупки</h2><div class="scroll"><table><thead><tr><th>№</th><th>Наименование / Услуга</th><th>Количество</th><th>Единица</th><th>Статус количества</th><th>Источник и evidence</th></tr></thead><tbody>{rows}</tbody></table></div></section>
 <section><h2>Извлечённые ТКП</h2><ul>{bullets(compatibility.get('quotes', []))}</ul><h3>Сравнение ТКП</h3><ul>{bullets(compatibility.get('quotes', []))}</ul></section><section><h2>Экономика</h2><ul>{bullets(compatibility.get('economics', []))}</ul></section>
 <section><h2>Недостающие данные и ограничения</h2><ul>{bullets([item['description'] + ': ' + item['required_action'] for item in model['missing_data']] + model['limitations'])}</ul></section>
 <section><h2>Риски</h2><ul>{risks}</ul></section><section><h2>Вопросы заказчику/внутренней команде</h2><ul>{bullets(model['customer_questions'])}</ul></section><section><h2>Evidence map</h2><ul>{evidence}</ul></section>
@@ -4631,6 +5084,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
     )
 
     try:
+        ai_provenance = _runtime_ai_provenance()
         documents = _collect_documents(run_id, metadata)
         warnings = list(dict.fromkeys(metadata.get("warnings", []) + [warning for doc in documents for warning in doc.warnings]))
 
@@ -4689,6 +5143,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
             provider_mode=provider_mode,
         )
         if llm_result is not None:
+            ai_provenance.update({"analysis_engine": "deterministic_with_local_llm", "llm_invoked": True, "llm_calls_count": 1, "fallback_reason": None})
             requirements = llm_result.get("requirements", {})
             calibrated_risks = llm_result.get("contract_risks", [])
             supplier_questions = llm_result.get("supplier_questions", [])
@@ -4717,6 +5172,7 @@ def analyze_uploaded_demo_run(run_id: str) -> TenderOperatorUploadedRunAnalyzeRe
                 "LLM-анализ недоступен, используется документ-зависимый детерминированный fallback.",
                 {"core_complete": core_complete},
             )
+        metadata["ai_runtime_provenance"] = ai_provenance
 
         spreadsheet_comparison = build_quote_comparison(spreadsheet_sources, analysis_mode)
         if spreadsheet_comparison.supplier_quotes_found:

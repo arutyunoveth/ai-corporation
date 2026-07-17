@@ -14,6 +14,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
+from src.shared.network.http_client import create_urllib_context
+
 logger = logging.getLogger(__name__)
 
 EIS_44FZ_HOST = "zakupki.gov.ru"
@@ -273,11 +275,8 @@ class Public44FzSearchProvider:
             return {"status": PublicSearchStatus.NETWORK_ERROR, "html": None, "error": "Only http/https URLs"}
 
         request = Request(url, headers={"User-Agent": USER_AGENT}, method="GET")
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-
-        should_bypass = self._bypass_proxy and _hostname_matches_no_proxy(hostname, self._no_proxy_domains)
+        ssl_ctx, policy_bypass = create_urllib_context(url)
+        should_bypass = policy_bypass or (self._bypass_proxy and _hostname_matches_no_proxy(hostname, self._no_proxy_domains))
         if should_bypass:
             opener = build_opener(HTTPSHandler(context=ssl_ctx), ProxyHandler({}))
         else:
@@ -299,11 +298,15 @@ class Public44FzSearchProvider:
         except URLError as exc:
             reason = str(exc.reason) if hasattr(exc, "reason") else str(exc)
             reason_lower = reason.lower()
+            if "certificate_verify_failed" in reason_lower or "certificate verify failed" in reason_lower:
+                return {"status": PublicSearchStatus.BLOCKED, "html": None, "error": "TLS verification failed"}
             if "timed out" in reason_lower or "timeout" in reason_lower:
                 return {"status": PublicSearchStatus.TIMEOUT, "html": None, "error": reason}
             if "connection reset" in reason_lower:
                 return {"status": PublicSearchStatus.BLOCKED, "html": None, "error": reason}
             return {"status": PublicSearchStatus.NETWORK_ERROR, "html": None, "error": reason}
+        except ssl.SSLError:
+            return {"status": PublicSearchStatus.BLOCKED, "html": None, "error": "TLS verification failed"}
         except Exception as exc:
             return {"status": PublicSearchStatus.NETWORK_ERROR, "html": None, "error": str(exc)}
 

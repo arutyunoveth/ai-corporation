@@ -1,0 +1,12 @@
+procurement_number,category,operator_role,started_at,report_ready_at,total_minutes,pipeline_completed,terminal_status,developer_intervention,intervention_reason,source_positions,report_positions,corrections_count,critical_corrections_count,unsupported_claims,decision,decision_reason,operator_confidence_1_5,navigation_difficulty_1_5,blocking_issue,operator_comment
+0116300036226000029,electrical_goods,codex_automated_ui,2026-07-15T13:01:28.491Z,2026-07-15T13:01:38.437Z,0.17,true,completed_with_warnings,false,,,not_displayed,,,,needs_review,,,,report_positions_not_displayed,
+0116300036226000030,electrical_goods,codex_automated_ui,2026-07-15T13:03:39.119Z,2026-07-15T13:03:39.954Z,0.01,true,completed_with_warnings,false,,,1,,,,needs_review,,,,,
+0320200018326000004,standard_goods,codex_automated_ui,2026-07-15T13:02:10.741Z,2026-07-15T13:02:17.110Z,0.11,true,completed_with_warnings,false,,,not_displayed,,,,needs_review,,,,unparsed_xls: 01-attachment-1.xls,
+0338200009426000048,standard_goods,codex_automated_ui,2026-07-15T13:03:41.343Z,2026-07-15T13:03:42.423Z,0.02,true,completed_with_warnings,false,,,not_displayed,,,,needs_review,,,,,
+0138200004626000003,services,codex_automated_ui,2026-07-15T13:03:32.359Z,2026-07-15T13:03:33.220Z,0.01,true,completed_with_warnings,false,,,not_displayed,,,,needs_review,,,,supplier_search_unavailable; tkp_not_uploaded,
+0138600003826000003,services,codex_automated_ui,2026-07-15T13:03:43.561Z,2026-07-15T13:03:44.652Z,0.02,true,completed_with_warnings,false,,,not_displayed,,,,needs_review,,,,,
+0338300003326000131,complex_or_incomplete,codex_automated_ui,2026-07-15T13:03:34.645Z,2026-07-15T13:03:35.470Z,0.01,true,completed_with_warnings,false,,,not_displayed,,,,needs_review,,,,contract_text_partial; attachment_text_extraction_errors,
+0338200009826000509,complex_or_incomplete,codex_automated_ui,2026-07-15T13:03:45.784Z,2026-07-15T13:03:46.604Z,0.01,true,completed_with_warnings,false,,,not_displayed,,,,needs_review,,,,,
+0320300111026000058,additional,codex_automated_ui,2026-07-15T13:03:36.859Z,2026-07-15T13:03:37.719Z,0.01,true,completed_with_warnings,false,,,1,,,,needs_review,,,,contract_text_partial; core_extracted_text_missing,
+0338300003326000132,additional,codex_automated_ui,2026-07-15T13:03:47.758Z,2026-07-15T13:03:48.846Z,0.02,true,completed_with_warnings,false,,,4,,,,needs_review,,,,contract_text_partial; unparsed_xls: 03-3.xls,
+

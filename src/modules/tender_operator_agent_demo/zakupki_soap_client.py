@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import ssl
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, getproxies_environment, urlopen
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, getproxies_environment
 from uuid import uuid4
 from xml.etree import ElementTree as ET
 
@@ -29,6 +28,7 @@ from src.modules.tender_operator_agent_demo.zakupki_soap_templates import (
     build_get_docs_by_reestr_number_envelope,
     build_search_envelope,
 )
+from src.shared.network.http_client import create_urllib_context
 
 
 SoapTransport = Callable[[str, str | None, int], str]
@@ -599,12 +599,10 @@ def _request_meta() -> tuple[str, str]:
 
 
 def _build_http_opener(settings: ZakupkiSoapSettings, target_url: str):
-    ssl_ctx = ssl.create_default_context()
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx, policy_bypass = create_urllib_context(target_url)
     hostname = (urlparse(target_url).hostname or "").lower()
     target_allowed = _is_allowed_eis_host(hostname, settings.allowed_hosts)
-    if settings.disable_proxy_for_eis and target_allowed:
+    if settings.disable_proxy_for_eis and target_allowed and policy_bypass:
         return build_opener(HTTPSHandler(context=ssl_ctx), ProxyHandler({})), "direct_for_eis"
     if settings.trust_env_proxy:
         return build_opener(HTTPSHandler(context=ssl_ctx)), "env_proxy"

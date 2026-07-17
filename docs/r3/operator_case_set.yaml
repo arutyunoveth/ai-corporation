@@ -1,0 +1,79 @@
+baseline_sha: 172a041f36bf652dd2436323518bcec3122be9d8
+revision: 2
+selected_at: '2026-07-15'
+selection_period_days: 30
+discovery_source: external_public_44fz
+validation_source: getDocsIP
+tls_trust_source: macos_system_keychain
+cases:
+  - procurement_number: '0116300036226000029'
+    category: electrical_goods
+    subject: 'Поставка дизельного генератора'
+    published_at: '2026-07-02'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Первый подходящий electrical_goods по published_at и номеру; getDocsIP completed, архив скачан.'
+  - procurement_number: '0116300036226000030'
+    category: electrical_goods
+    subject: 'Поставка комплектной трансформаторной подстанции'
+    published_at: '2026-07-02'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Второй подходящий electrical_goods по published_at и номеру; getDocsIP completed, архив скачан.'
+  - procurement_number: '0320200018326000004'
+    category: standard_goods
+    subject: 'Поставка продуктов питания (повидло, курага, печенье, пряники)'
+    published_at: '2026-07-07'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Первый подходящий standard_goods; getDocsIP completed, архив скачан.'
+  - procurement_number: '0338200009426000048'
+    category: standard_goods
+    subject: 'Поставка канцелярских товаров'
+    published_at: '2026-07-06'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Второй подходящий standard_goods; getDocsIP completed, архив скачан.'
+  - procurement_number: '0138200004626000003'
+    category: services
+    subject: 'Оказание услуг по организации мероприятия Совета представителей коренных малочисленных народов Севера'
+    published_at: '2026-07-06'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Первый подходящий services; getDocsIP completed, архив скачан.'
+  - procurement_number: '0138600003826000003'
+    category: services
+    subject: 'Выполнение работ по ремонту мест (площадок) накопления твердых коммунальных отходов'
+    published_at: '2026-07-07'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Второй подходящий services из ранее проверенного discovery; getDocsIP completed, архив скачан.'
+  - procurement_number: '0338300003326000131'
+    previous_procurement_number: '0338200003326000131'
+    category: complex_or_incomplete
+    subject: 'Поставка лекарственных препаратов ЖНВЛП для обеспечению отдельных категорий граждан, отпускаемыми бесплатно по рецептам врачей Государственного бюджетного учреждения здравоохранения Камчатского края «Вилючинская городская больница»-28'
+    published_at: '2026-07-07'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Сложный предмет с лекарственными препаратами и ограниченными документами; getDocsIP completed, архив скачан.'
+  - procurement_number: '0338200009826000509'
+    category: complex_or_incomplete
+    subject: 'Поставка ИМН (аппарат для измерения артериального давления)'
+    published_at: '2026-07-07'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Сложный медицинский предмет из ранее проверенного discovery; getDocsIP completed, архив скачан.'
+  - procurement_number: '0320300111026000058'
+    category: additional
+    subject: 'Множественные аналиты мочи ИВД для анализатора URIСКАН-про'
+    published_at: '2026-07-07'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Дополнительный подходящий кейс; getDocsIP completed, архив скачан.'
+  - procurement_number: '0338300003326000132'
+    category: additional
+    subject: 'Поставка расходных материалов для станции анализа мочи автоматической EU-5600 Pro'
+    published_at: '2026-07-07'
+    documents_available: true
+    contract_draft_available: false
+    selection_reason: 'Дополнительный подходящий кейс; getDocsIP completed, архив скачан.'

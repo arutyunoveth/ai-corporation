@@ -252,24 +252,27 @@ def search_tender_operator_public_44fz(
                 parsed_seen = []
         except (json.JSONDecodeError, ValueError):
             parsed_seen = []
-    return search_public_44fz(
-        query=query,
-        law=law,
-        region=region,
-        date_from=date_from,
-        date_to=date_to,
-        price_from=price_from,
-        price_to=price_to,
-        deadline_from=deadline_from,
-        deadline_to=deadline_to,
-        status_filter=status_filter,
-        procedure_type=procedure_type,
-        page=page,
-        page_size=page_size,
-        max_results=max_results,
-        cursor=cursor,
-        seen_registry_numbers=parsed_seen,
-    )
+    try:
+        return search_public_44fz(
+            query=query,
+            law=law,
+            region=region,
+            date_from=date_from,
+            date_to=date_to,
+            price_from=price_from,
+            price_to=price_to,
+            deadline_from=deadline_from,
+            deadline_to=deadline_to,
+            status_filter=status_filter,
+            procedure_type=procedure_type,
+            page=page,
+            page_size=page_size,
+            max_results=max_results,
+            cursor=cursor,
+            seen_registry_numbers=parsed_seen,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/api/demo/tender-agent/procurement/search", response_model=list[ProcurementSearchResultV2])
