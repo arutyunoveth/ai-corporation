@@ -1094,6 +1094,14 @@ def _infer_procurement_kind(*texts: str | None) -> str:
     if not combined:
         return "generic"
 
+    if (
+        "код активации" in combined
+        and "техническ" in combined
+        and "поддержк" in combined
+        and any(marker in combined for marker in ("средств защиты информации", "программ", "лиценз"))
+    ):
+        return "software_support"
+
     software_objects = (
         r"программн(?:ое|ого|ому|ым|ом) обеспечен",
         r"программн(?:ый|ого|ому|ым|ом) (?:продукт|комплекс)",
@@ -1235,6 +1243,10 @@ def _classify_procurement_scope(metadata: dict[str, Any], documents: list[Analyz
     structured_goods = [item for item in items if item.name_source_type == "structured_direct_name"]
     has_goods = bool(items) or "поставка" in title or "поставляем" in text
     structured_codes = (metadata.get("procurement") or {}).get("okpd2_codes", [])
+    service_okpd = any(
+        str(code.get("code", "")).startswith("62.02")
+        for code in structured_codes if isinstance(code, dict)
+    )
     okpd_works = any(str(code.get("code", "")).startswith(("41.", "42.", "43.")) for code in structured_codes if isinstance(code, dict))
     strong_works = okpd_works or any(marker in text for marker in ("смета", "кс-2", "кс-3", "ведомость объемов работ"))
     has_services = any(marker in text for marker in ("оказание услуг", "услуг"))
@@ -1242,8 +1254,14 @@ def _classify_procurement_scope(metadata: dict[str, Any], documents: list[Analyz
     inferred_kind = _infer_procurement_kind(text)
     # A titled supply or a detailed structured product list is authoritative;
     # installation/adjustment in contract boilerplate only makes it mixed.
-    software_kinds = {"mixed", "software_modification", "integration", "license"}
-    if title_kind in software_kinds:
+    software_kinds = {"mixed", "software_modification", "integration", "license", "software_support"}
+    support_certificate = (
+        "код активации" in text and "техническ" in text and "поддержк" in text
+        and any(marker in text for marker in ("средств защиты информации", "программ", "лиценз"))
+    )
+    if service_okpd or support_certificate:
+        primary = "services"
+    elif title_kind in software_kinds:
         primary = title_kind
     elif inferred_kind in software_kinds and not has_goods:
         primary = inferred_kind
@@ -1266,6 +1284,8 @@ def _classify_procurement_scope(metadata: dict[str, Any], documents: list[Analyz
         "contains_goods": has_goods,
         "contains_works": strong_works,
         "contains_services": has_services,
+        "software_service_support": service_okpd or support_certificate,
+        "activation_support_item": "код активации" in text and "техническ" in text and "поддержк" in text,
         "goods_extraction_applicable": applicable,
         "scope_classification_conflict": has_goods and not applicable,
     }
@@ -3451,6 +3471,7 @@ def _build_output_payloads(
     # Candidate hints retain only legacy sequence/identity while the direct
     # fragments and resolver exclusively supply goods field values.
     from src.modules.procurement_source_graph.model import direct_fragments_to_canonical_model, legacy_rows_to_canonical_model
+    from src.modules.procurement_source_graph.serialization import provenance_records, serialize_graph
     from src.modules.procurement_source_graph.structured_fragment_collector import StructuredFragmentCollector
     graph_input_rows = (
         preliminary_analysis.get("service_items") or preliminary_analysis.get("spec_table", {}).get("rows", [])
@@ -3464,7 +3485,7 @@ def _build_output_payloads(
     direct_fragments = StructuredFragmentCollector().collect_supply_items(metadata.get("procurement_id"), direct_extracted_items)
     canonical_graph_model = (
         legacy_rows_to_canonical_model(metadata.get("procurement_id"), procurement_kind, graph_input_rows)
-        if procurement_kind == "services"
+        if procurement_kind == "services" and not any("код активации" in (fragment.name or "").lower() for fragment in direct_fragments)
         else direct_fragments_to_canonical_model(metadata.get("procurement_id"), procurement_kind, direct_fragments, graph_input_rows)
     )
     canonical_run_status = (
@@ -3501,6 +3522,8 @@ def _build_output_payloads(
              "characteristic_unit": fragment.characteristic_unit, "source_position": fragment.position_number}
             for fragment in direct_fragments
         ],
+        "source_graph": serialize_graph(canonical_graph_model, direct_fragments, "procurement-source-graph-v2"),
+        "provenance_records": [record.__dict__ for record in provenance_records(canonical_graph_model)],
     }
     if procurement_kind == "goods" and _is_goods_supply_table_present(technical_spec_text) and not preliminary_analysis.get("spec_table", {}).get("rows"):
         output_warnings.append("Позиции поставки не извлечены из ТЗ/спецификации. Анализ неполный.")

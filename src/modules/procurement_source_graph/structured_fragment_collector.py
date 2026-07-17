@@ -6,6 +6,30 @@ import re
 from .model import StructuredSourceFragment
 
 
+def _normalize_characteristic_context(value: str) -> str:
+    """Remove a repeated terminal condition while retaining the source raw text."""
+    normalized = re.sub(r"\s+", " ", value).strip()
+    voltage = re.compile(r"(?P<prefix>.*?)(?:напряжением\s+)(?P<condition>\d+(?:[.,]\d+)?\s*(?:В|V|вольт))\s+при\s+(?:напряжении\s+)?(?P=condition)\b", re.IGNORECASE)
+    if voltage.search(normalized):
+        return voltage.sub(r"\g<prefix>при напряжении \g<condition>", normalized)
+    repeated = re.compile(r"(?P<condition>\d+(?:[.,]\d+)?\s*(?:°C|В|V|вольт|мл|г))\s+при\s+(?P=condition)\b", re.IGNORECASE)
+    while repeated.search(normalized):
+        normalized = repeated.sub(r"\g<condition>", normalized)
+    # The collector may append the parsed numeric context to a name that
+    # already contains the same condition.  Compare punctuation-insensitively:
+    # "на 100 г. продукта, кКал при 100 г. продукта, кКал" and
+    # "объёмом 2 мл, диаметром при 2 мл, диаметром" are both one condition.
+    # Greedily select the final "при": an earlier genuine condition may be
+    # part of the left-hand name, while the terminal one is the duplicated
+    # context appended by the extractor.
+    suffix = re.match(r"(?P<left>.+)\s+при\s+(?P<right>[^;]+)$", normalized, re.IGNORECASE)
+    if suffix:
+        compact = lambda text: re.sub(r"[^\w]+", "", text.casefold())
+        if compact(suffix.group("left")).endswith(compact(suffix.group("right"))):
+            return suffix.group("left").rstrip(" ,;")
+    return normalized
+
+
 class StructuredFragmentCollector:
     def collect_supply_items(self, procurement_number: str | None, items: list[object]) -> list[StructuredSourceFragment]:
         fragments: list[StructuredSourceFragment] = []
@@ -42,7 +66,9 @@ class StructuredFragmentCollector:
                 if match and len(matches) > 1:
                     context = characteristic[matches[0].start():match.start()].strip(" ;,")
                     characteristic_name = f"{characteristic_name} при {context}" if context else characteristic_name
-                characteristic_name = re.sub(r",?\s*градусы?$", "", characteristic_name, flags=re.IGNORECASE).strip()
+                characteristic_name = _normalize_characteristic_context(
+                    re.sub(r",?\s*градусы?$", "", characteristic_name, flags=re.IGNORECASE).strip()
+                )
                 fragments.append(StructuredSourceFragment(
                     fragment_key=f"{key}:characteristic:{characteristic_index}", document_instance_id=fragment.document_instance_id,
                     source_type=fragment.source_type, locator=f"{fragment.locator}:characteristic:{characteristic_index}",

@@ -114,6 +114,93 @@ class CanonicalProcurementModel:
     source_graph_summary: dict[str, int]
     quality_issues: list[str]
     production_model_hash: str
+    cross_source_matches: list[dict[str, str]] = field(default_factory=list)
+    cardinality_decisions: list[dict[str, str]] = field(default_factory=list)
+
+
+def _match_score(item: CanonicalProcurementItem, fragment: StructuredSourceFragment) -> int:
+    """Score a compatible fragment without allowing a generic-token Cartesian join."""
+    name_tokens = _tokens(item.official_name)
+    fragment_tokens = _tokens(fragment.name)
+    overlap = name_tokens & fragment_tokens
+    score = len(overlap) * 10
+    if item.official_name.casefold().strip() == fragment.name.casefold().strip():
+        score += 100
+    if item.quantity and fragment.quantity and item.quantity == fragment.quantity:
+        score += 3
+    if item.unit and fragment.unit and item.unit.casefold() == fragment.unit.casefold():
+        score += 2
+    return score
+
+
+def _graph_reconciliation(
+    items: list[CanonicalProcurementItem],
+    fragments: list[StructuredSourceFragment],
+    resolver: "FieldSourceResolver",
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Create deterministic one-to-one evidence edges and graph-derived cardinality."""
+    primaries = [item for item in items if item.primary_source]
+    primary_by_fragment = {item.primary_source.fragment.fragment_key: item for item in primaries}
+    item_fragments = [fragment for fragment in fragments if fragment.row_role == "item"]
+    matches: list[dict[str, str]] = []
+    matched_secondary: dict[str, CanonicalProcurementItem] = {}
+    ambiguous: set[str] = set()
+    for document_id in sorted({fragment.document_instance_id for fragment in item_fragments}):
+        secondary = [fragment for fragment in item_fragments if fragment.document_instance_id == document_id and fragment.fragment_key not in primary_by_fragment]
+        candidates: list[tuple[int, str, str, StructuredSourceFragment, CanonicalProcurementItem]] = []
+        best_by_secondary: dict[str, int] = {}
+        candidate_items_by_secondary: dict[str, set[str]] = {}
+        for fragment in secondary:
+            for item in primaries:
+                primary = item.primary_source.fragment
+                if primary.document_instance_id == document_id or not resolver.is_compatible(item.official_name, fragment):
+                    continue
+                score = _match_score(item, fragment)
+                candidates.append((score, fragment.position_number or "", item.canonical_item_id, fragment, item))
+                best_by_secondary[fragment.fragment_key] = max(best_by_secondary.get(fragment.fragment_key, score), score)
+        for score, _position, item_id, fragment, _item in candidates:
+            if score == best_by_secondary[fragment.fragment_key]:
+                candidate_items_by_secondary.setdefault(fragment.fragment_key, set()).add(item_id)
+        ambiguous.update(key for key, ids in candidate_items_by_secondary.items() if len(ids) > 1)
+        used_items: set[str] = set()
+        for score, _position, item_id, fragment, item in sorted(candidates, key=lambda value: (-value[0], value[1], value[2], value[3].fragment_key)):
+            if fragment.fragment_key in ambiguous or fragment.fragment_key in matched_secondary or item_id in used_items:
+                continue
+            primary = item.primary_source.fragment
+            relationship = "complementary" if any(source.fragment.fragment_key == fragment.fragment_key for source in item.complementary_sources) else "confirming"
+            matches.append({
+                "left_fragment_key": primary.fragment_key,
+                "right_fragment_key": fragment.fragment_key,
+                "canonical_item_id": item_id,
+                "relationship": relationship,
+                "confidence": "high" if score >= 100 else "medium",
+                "reason": "deterministic one-to-one compatible source match",
+            })
+            matched_secondary[fragment.fragment_key] = item
+            used_items.add(item_id)
+    cardinality: list[dict[str, str]] = []
+    for fragment in item_fragments:
+        primary_item = primary_by_fragment.get(fragment.fragment_key)
+        matched_item = matched_secondary.get(fragment.fragment_key)
+        if primary_item:
+            decision, item = "distinct_canonical_item", primary_item
+        elif matched_item:
+            decision, item = "confirming_source", matched_item
+        elif fragment.fragment_key in ambiguous:
+            decision, item = "ambiguous_candidate", None
+        else:
+            decision, item = "unmatched", None
+        cardinality.append({
+            "document_instance_id": fragment.document_instance_id,
+            "source_position": fragment.position_number or fragment.locator,
+            "source_name": fragment.name,
+            "source_fragment_key": fragment.fragment_key,
+            "canonical_item_id": item.canonical_item_id if item else "",
+            "decision": decision,
+            "related_fragment_keys": item.primary_source.fragment.fragment_key if item and item.primary_source else "",
+            "reason": "production graph reconciliation",
+        })
+    return matches, cardinality
 
 
 def legacy_rows_to_canonical_model(procurement_number: str | None, scope: str | None, rows: list[dict]) -> CanonicalProcurementModel:
@@ -179,7 +266,7 @@ def direct_fragments_to_canonical_model(
     used_primary: set[str] = set()
 
     direct_hints: list[dict] = []
-    for fragment in (fragment for fragment in fragments if fragment.row_role == "item"):
+    for fragment in (fragment for fragment in fragments if fragment.row_role in {"item", "service"}):
         # Reconcile only cross-document representations.  Same-document rows
         # are physical source positions and must remain independently visible.
         match = next((hint for hint in direct_hints if hint["_document"] != fragment.document_instance_id
@@ -294,8 +381,9 @@ def direct_fragments_to_canonical_model(
                 item.warnings.append("distinguishing_values_missing")
             # Preserve the official source wording; display is a separate view.
             item.display_name = f"{item.official_name} — позиция {position or item.canonical_item_id} извещения"
+    cross_source_matches, cardinality_decisions = _graph_reconciliation(graph.canonical_items, fragments, resolver)
     return CanonicalProcurementModel(
         procurement_number, scope, graph.canonical_items, unresolved,
         {"fragments": len(fragments), "confirmed": len(confirmed), "unresolved": len(unresolved)},
-        quality_issues, graph.model_hash(),
+        quality_issues, graph.model_hash(), cross_source_matches, cardinality_decisions,
     )

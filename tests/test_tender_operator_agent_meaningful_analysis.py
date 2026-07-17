@@ -80,6 +80,18 @@ def test_software_procurement_kind_is_mode_independent(monkeypatch, text):
     assert _infer_procurement_kind(text) == legacy_kind
 
 
+def test_support_activation_certificate_is_not_high_confidence_goods(monkeypatch):
+    from src.modules.tender_operator_agent_demo.upload_service import _classify_procurement_scope
+
+    monkeypatch.setenv("AI_CORP_SOURCE_GRAPH_MODE", "production")
+    scope = _classify_procurement_scope(
+        {"tender_title": "Поставка сертификата на код активации технической поддержки средств защиты информации", "procurement": {"okpd2_codes": [{"code": "62.02.30.000"}]}},
+        [],
+        "Сертификат на код активации технической поддержки средств защиты информации",
+    )
+    assert scope["procurement_primary_scope"] == "services"
+
+
 def test_document_grounded_questions_for_software_procurement_have_no_training_noise():
     questions = _build_document_grounded_questions("mixed", [])
     joined = " ".join(questions).lower()
