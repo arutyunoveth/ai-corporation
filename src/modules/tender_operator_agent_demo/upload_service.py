@@ -1089,9 +1089,50 @@ def _run_supplier_internet_search(
 
 
 def _infer_procurement_kind(*texts: str | None) -> str:
-    combined = " ".join((text or "").lower() for text in texts if text)
+    raw_combined = re.sub(r"\s+", " ", " ".join(text or "" for text in texts if text)).strip()
+    combined = raw_combined.lower().replace("ё", "е")
     if not combined:
         return "generic"
+
+    software_objects = (
+        r"программн(?:ое|ого|ому|ым|ом) обеспечен",
+        r"программн(?:ый|ого|ому|ым|ом) (?:продукт|комплекс)",
+        r"информационн(?:ая|ой|ую|ые|ых) систем",
+        r"(?:^|\W)saas(?:\W|$)",
+        r"(?:^|\W)пк\s*[«\"]",
+    )
+    has_software_object = any(re.search(pattern, combined) for pattern in software_objects) or bool(
+        re.search(r"(?:^|\W)ПО(?:\W|$)", raw_combined)
+    )
+    has_software_change = bool(
+        re.search(r"\b(?:внедрен|доработ|модификац|разработ|обновлен|сопровожден)\w*", combined)
+    )
+    has_software_license = bool(
+        re.search(r"(?:неисключительн\w*\s+прав|прав\w*\s+(?:на|использован)|передач\w*\s+прав)", combined)
+        or ("лиценз" in combined and has_software_object)
+    )
+    has_integration = any(
+        marker in combined
+        for marker in ("интеграц", "смэв", "обмен данн", "api", "межведомствен", "витрин")
+    )
+    embedded_hardware_software = bool(
+        re.search(r"(?:оборудован|компьютер|контроллер|модул)\w*.*(?:встроенн|предустановленн|прошивк)\w*.*(?:по|программ)", combined)
+        or re.search(r"(?:встроенн|предустановленн|прошивк)\w*.*(?:по|программ)\w*.*(?:оборудован|компьютер|контроллер|модул)", combined)
+    )
+    software_semantics = has_software_object and not embedded_hardware_software
+    if software_semantics:
+        if has_integration and (has_software_change or has_software_license):
+            return "mixed"
+        if has_software_change:
+            return "software_modification"
+        if has_software_license:
+            return "license"
+        if has_integration:
+            return "integration"
+
+    if re.search(r"лицензируем\w*\s+(?:вид|деятельност)", combined) and not has_software_object:
+        return "generic"
+
     if "работы электромонтажные" in combined or "выполнение работ" in combined:
         return "works"
     scores = {
@@ -1197,9 +1238,16 @@ def _classify_procurement_scope(metadata: dict[str, Any], documents: list[Analyz
     okpd_works = any(str(code.get("code", "")).startswith(("41.", "42.", "43.")) for code in structured_codes if isinstance(code, dict))
     strong_works = okpd_works or any(marker in text for marker in ("смета", "кс-2", "кс-3", "ведомость объемов работ"))
     has_services = any(marker in text for marker in ("оказание услуг", "услуг"))
+    title_kind = _infer_procurement_kind(title)
+    inferred_kind = _infer_procurement_kind(text)
     # A titled supply or a detailed structured product list is authoritative;
     # installation/adjustment in contract boilerplate only makes it mixed.
-    if "оказание услуг" in title:
+    software_kinds = {"mixed", "software_modification", "integration", "license"}
+    if title_kind in software_kinds:
+        primary = title_kind
+    elif inferred_kind in software_kinds and not has_goods:
+        primary = inferred_kind
+    elif "оказание услуг" in title:
         primary = "services"
     elif strong_works and not ("поставка" in title or "товар" in title or len(structured_goods) > 1):
         primary = "works"
@@ -1211,7 +1259,8 @@ def _classify_procurement_scope(metadata: dict[str, Any], documents: list[Analyz
         primary = "services"
     else:
         primary = "unknown"
-    applicable = primary in {"goods", "mixed"} or bool(items)
+    software_mixed = primary == "mixed" and (title_kind == "mixed" or not has_goods)
+    applicable = primary == "goods" or (primary == "mixed" and not software_mixed) or bool(items)
     return {
         "procurement_primary_scope": primary,
         "contains_goods": has_goods,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from src.modules.tender_operator_agent_demo.upload_service import (
     AnalyzedDocument,
     _build_report_markdown,
@@ -24,6 +26,58 @@ SOFTWARE_TEXT = """
 def test_infer_procurement_kind_detects_mixed_software_integration():
     kind = _infer_procurement_kind(SOFTWARE_TEXT)
     assert kind in {"mixed", "software_modification"}
+
+
+@pytest.mark.parametrize("mode", ["legacy", "production"])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Приобретение неисключительных прав на программное обеспечение", "license"),
+        ("Лицензия на программный продукт для бухгалтерского учета", "license"),
+        ("Сопровождение и обновление информационной системы заказчика", "software_modification"),
+        ("Внедрение и доработка программного обеспечения", "software_modification"),
+    ],
+)
+def test_software_procurement_kind_positive_matrix(monkeypatch, mode, text, expected):
+    monkeypatch.setenv("AI_CORP_SOURCE_GRAPH_MODE", mode)
+    assert _infer_procurement_kind(text) == expected
+
+
+@pytest.mark.parametrize("mode", ["legacy", "production"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Лицензируемый вид деятельности по перевозке пассажиров",
+        "Поставка компьютеров с предустановленным программным обеспечением",
+        "Поставка оборудования со встроенным ПО и заводской прошивкой",
+        "Поставка контроллеров и кабельных модулей",
+        "Техническая поддержка серверного оборудования",
+        "Поставка блока питания",
+        "Поставка электродов для электротерапевтического аппарата",
+        "Поставка эндопротезов тазобедренного сустава",
+        "Поставка хлеба недлительного хранения",
+        "Поставка кровельного материала Бикрост",
+    ],
+)
+def test_software_procurement_kind_negative_matrix(monkeypatch, mode, text):
+    monkeypatch.setenv("AI_CORP_SOURCE_GRAPH_MODE", mode)
+    assert _infer_procurement_kind(text) not in {"mixed", "software_modification", "integration", "license"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Приобретение неисключительных прав на программное обеспечение",
+        "Сопровождение и обновление информационной системы заказчика",
+        "Поставка оборудования со встроенным ПО и заводской прошивкой",
+        "Лицензируемый вид деятельности по перевозке пассажиров",
+    ],
+)
+def test_software_procurement_kind_is_mode_independent(monkeypatch, text):
+    monkeypatch.setenv("AI_CORP_SOURCE_GRAPH_MODE", "legacy")
+    legacy_kind = _infer_procurement_kind(text)
+    monkeypatch.setenv("AI_CORP_SOURCE_GRAPH_MODE", "production")
+    assert _infer_procurement_kind(text) == legacy_kind
 
 
 def test_document_grounded_questions_for_software_procurement_have_no_training_noise():

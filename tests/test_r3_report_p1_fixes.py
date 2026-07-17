@@ -2,14 +2,26 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from src.modules.tender_operator_agent_demo.case_set_validation import compare_case_ids
 from src.modules.tender_operator_agent_demo.eis_notice_parser import extract_notice_metadata, merge_structured_metadata
 from src.modules.tender_operator_agent_demo.report_model import build_procurement_report_model, canonical_report_to_markdown
 from src.modules.tender_operator_agent_demo.report_export_service import _build_docx_from_canonical, _build_pdf_from_canonical
 from src.modules.tender_operator_agent_demo.upload_service import _extract_supply_items_from_notification_xml, _render_canonical_report_html
+from src.shared.config.settings import get_settings
 
 
 NOTICE_XML = """<notification><publishDTInEIS>2026-07-07T12:38:12.345+10:00</publishDTInEIS><endDT>2026-07-15T12:00:00+10:00</endDT><purchaseObjectInfo>Официальное название закупки</purchaseObjectInfo><initialPrice>1234.50</initialPrice><purchaseObjects><purchaseObject><type>GOODS</type><KTRU><name>Препарат альфа</name></KTRU><OKEI><nationalCode>шт</nationalCode><name>штука</name></OKEI><quantity><value>12</value></quantity><price>10</price><sum>120</sum></purchaseObject><purchaseObject><type>GOODS</type><KTRU><name>Препарат бета</name></KTRU><OKEI><nationalCode>упак</nationalCode></OKEI><quantity></quantity><price>20</price><sum>20</sum></purchaseObject></purchaseObjects></notification>"""
+
+
+@pytest.fixture(autouse=True)
+def _legacy_report_fixture_mode(monkeypatch):
+    """These synthetic report fixtures predate and intentionally omit the production source graph."""
+    monkeypatch.setenv("AI_CORP_SOURCE_GRAPH_MODE", "legacy")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _outputs(items: list[dict]) -> dict[str, dict]:
