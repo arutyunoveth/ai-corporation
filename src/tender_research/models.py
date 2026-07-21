@@ -242,6 +242,12 @@ class TenderAnalysisRun(UUIDPrimaryKeyMixin, Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Nullable only for R7 history. Every R8 customer workflow run has all three.
+    customer_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("customer_profiles.customer_id"), nullable=True)
+    project_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("pilot_projects.id"), nullable=True)
+    procurement_case_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("procurement_cases.id"), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    artifact_key: Mapped[str | None] = mapped_column(String(96), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
@@ -249,6 +255,8 @@ class TenderAnalysisRun(UUIDPrimaryKeyMixin, Base):
         Index("ix_tender_analysis_runs_registry_number", "registry_number"),
         Index("ix_tender_analysis_runs_status", "status"),
         Index("ix_tender_analysis_runs_created_at", "created_at"),
+        Index("ix_tender_analysis_runs_customer_project_case", "customer_id", "project_id", "procurement_case_id"),
+        UniqueConstraint("procurement_case_id", "idempotency_key", name="uq_r8_run_case_idempotency"),
     )
 
 
