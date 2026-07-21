@@ -1,7 +1,8 @@
 name: arvectum-pilot
 services:
   pilot-db:
-    image: postgres:16-alpine
+    # Migrations require the pgvector extension (migration 090).
+    image: pgvector/pgvector:pg16
     env_file: ${PILOT_SECRET_ENV:?set PILOT_SECRET_ENV to an external 0600 file}
     environment:
       POSTGRES_DB: ${PILOT_DB_NAME:-arvectum_pilot}
@@ -40,12 +41,15 @@ services:
       - pilot-data:/app/data
       - pilot-artifacts:/app/artifacts
       - pilot-eis:/app/eis-archives
+      # Customer HTTP runs are persisted outside the read-only image layer.
+      - pilot-artifacts:/app/company_agent_runs
       - "${PILOT_TLS_POLICY:?set PILOT_TLS_POLICY}:/run/secrets/etp-policy.yaml:ro"
     read_only: true
     tmpfs: [/tmp]
     security_opt: [no-new-privileges:true]
     depends_on: { pilot-migrate: { condition: service_completed_successfully } }
-    networks: [pilot-internal]
+    # Database traffic stays private; this is the only workload with controlled EIS egress.
+    networks: [pilot-internal, pilot-egress]
     restart: unless-stopped
   pilot-proxy:
     image: nginx:1.27-alpine
@@ -57,5 +61,7 @@ services:
     depends_on: { pilot-api: { condition: service_healthy } }
     networks: [pilot-internal]
     restart: unless-stopped
-networks: { pilot-internal: { internal: true } }
+networks:
+  pilot-internal: { internal: true }
+  pilot-egress: {}
 volumes: { pilot-db: {}, pilot-data: {}, pilot-artifacts: {}, pilot-eis: {}, pilot-backups: {} }
