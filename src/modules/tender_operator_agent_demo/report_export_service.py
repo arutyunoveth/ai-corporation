@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from html import escape as html_escape, unescape as html_unescape
 from pathlib import Path
 import re
+import os
+import tempfile
 from typing import Literal
 from xml.sax.saxutils import escape as xml_escape
 
@@ -406,12 +408,34 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
     file_name = _build_export_file_name(registry_number, run_id, "pdf")
     output_path = _safe_output_path(root, file_name)
     # A completed run's customer PDF is an immutable persisted artifact.
-    if not output_path.is_file() or output_path.stat().st_size == 0:
-        canonical = _load_canonical_report(run_id)
-        if canonical:
-            _build_pdf_from_canonical(canonical, title, output_path)
+    lock_path = output_path.with_suffix(output_path.suffix + ".lock")
+    with lock_path.open("a+b") as lock:
+        try:
+            import fcntl
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        except ImportError:  # pragma: no cover - Windows development fallback
+            pass
+        if output_path.is_file():
+            with output_path.open("rb") as existing:
+                header = existing.read(5)
+            if output_path.stat().st_size == 0 or header != b"%PDF-":
+                raise RuntimeError("Persisted PDF artifact is corrupt")
         else:
-            _build_pdf_from_parts(title, metadata_lines, report_markdown, output_path)
+            descriptor, temporary_name = tempfile.mkstemp(prefix=".pdf-", suffix=".partial", dir=root)
+            os.close(descriptor)
+            temporary_path = Path(temporary_name)
+            try:
+                canonical = _load_canonical_report(run_id)
+                if canonical:
+                    _build_pdf_from_canonical(canonical, title, temporary_path)
+                else:
+                    _build_pdf_from_parts(title, metadata_lines, report_markdown, temporary_path)
+                with temporary_path.open("rb") as created:
+                    if created.read(5) != b"%PDF-":
+                        raise RuntimeError("Generated PDF artifact is invalid")
+                os.replace(temporary_path, output_path)
+            finally:
+                temporary_path.unlink(missing_ok=True)
 
     return ExportedDemoReport(
         run_id=run_id,

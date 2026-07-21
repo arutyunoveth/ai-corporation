@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import pytest
@@ -177,6 +178,19 @@ class TestPdfExport:
         assert "0123456789012345" in result.file_name
         assert result.file_name.endswith(".pdf")
         assert Path(result.file_path).stat().st_size > 1000
+
+    def test_concurrent_first_export_publishes_one_valid_artifact(self, mock_run_data):
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            exports = list(pool.map(lambda _: export_demo_agent_report_pdf("toa-run-test-00000000-abc123"), range(4)))
+        payloads = {Path(item.file_path).read_bytes() for item in exports}
+        assert len(payloads) == 1
+        assert next(iter(payloads)).startswith(b"%PDF-")
+
+    def test_corrupt_nonempty_artifact_is_rejected(self, mock_run_data, tmp_path):
+        path = tmp_path / "demo_agent_report_0123456789012345_toa-run-.pdf"
+        path.write_bytes(b"not-a-pdf")
+        with pytest.raises(RuntimeError, match="corrupt"):
+            export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
 
 
 class TestErrors:
