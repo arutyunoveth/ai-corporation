@@ -59,9 +59,11 @@ services:
     tmpfs: [/var/cache/nginx, /var/run, /tmp]
     security_opt: [no-new-privileges:true]
     depends_on: { pilot-api: { condition: service_healthy } }
-    networks: [pilot-internal]
+    # Keep the upstream private; ingress is required for Docker to publish the loopback port.
+    networks: [pilot-internal, pilot-ingress]
     restart: unless-stopped
 networks:
   pilot-internal: { internal: true }
+  pilot-ingress: {}
   pilot-egress: {}
 volumes: { pilot-db: {}, pilot-data: {}, pilot-artifacts: {}, pilot-eis: {}, pilot-backups: {} }
