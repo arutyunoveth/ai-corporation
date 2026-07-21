@@ -1,0 +1,86 @@
+name: arvectum-pilot
+services:
+  pilot-db:
+    # Migrations require the pgvector extension (migration 090).
+    image: pgvector/pgvector:pg16
+    env_file: ${PILOT_SECRET_ENV:?set PILOT_SECRET_ENV to an external 0600 file}
+    environment:
+      POSTGRES_DB: ${PILOT_DB_NAME:-arvectum_pilot}
+      POSTGRES_USER: ${PILOT_DB_USER:-arvectum}
+    volumes: [pilot-db:/var/lib/postgresql/data]
+    networks: [pilot-internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
+    restart: unless-stopped
+  pilot-migrate:
+    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile, args: { REVISION: "${ARVECTUM_IMAGE_REVISION:?set exact Git commit}", VERSION: "${ARVECTUM_IMAGE_VERSION:?set image version}" } }
+    env_file: ${PILOT_SECRET_ENV:?set PILOT_SECRET_ENV to an external 0600 file}
+    environment:
+      AI_CORP_DATABASE_URL: postgresql+psycopg://${PILOT_DB_USER:-arvectum}:${PILOT_DB_PASSWORD}@pilot-db:5432/${PILOT_DB_NAME:-arvectum_pilot}
+    command: ["alembic", "upgrade", "head"]
+    depends_on: { pilot-db: { condition: service_healthy } }
+    networks: [pilot-internal]
+    restart: "no"
+  pilot-api:
+    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile, args: { REVISION: "${ARVECTUM_IMAGE_REVISION:?set exact Git commit}", VERSION: "${ARVECTUM_IMAGE_VERSION:?set image version}" } }
+    env_file: ${PILOT_SECRET_ENV:?set PILOT_SECRET_ENV to an external 0600 file}
+    environment:
+      AI_CORP_DATABASE_URL: postgresql+psycopg://${PILOT_DB_USER:-arvectum}:${PILOT_DB_PASSWORD}@pilot-db:5432/${PILOT_DB_NAME:-arvectum_pilot}
+      AI_CORP_DEBUG: "false"
+      AI_CORP_SOURCE_GRAPH_MODE: production
+      AI_CORP_ALLOW_DEMO_DISCOVERY: "false"
+      AI_CORP_ALLOWED_HOSTS: pilot.arvectum.com,localhost,127.0.0.1
+      AI_CORP_CORS_ALLOW_ORIGINS: ""
+      AI_CORP_LLM_PROVIDER: stub
+      AI_CORP_LLM_ALLOW_RAW_PARTNER_DATA: "false"
+      AI_CORP_LLM_STORE_RAW_RESPONSE: "false"
+      ZAKUPKI_GOV_RU_SOAP_ENABLED: "true"
+      ARVECTUM_ETP_TLS_ENABLED: "true"
+      ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"
+      ARVECTUM_ETP_PROXY_BYPASS_ENABLED: "true"
+      ARVECTUM_ETP_TLS_POLICY_PATH: /run/arvectum/etp-trust/policy.yaml
+      ARVECTUM_ETP_TRUST_DIR: /run/arvectum/etp-trust
+    volumes:
+      - pilot-data:/app/data
+      - pilot-artifacts:/app/artifacts
+      - pilot-eis:/app/eis-archives
+      # Customer HTTP runs are persisted outside the read-only image layer.
+      - pilot-artifacts:/app/company_agent_runs
+      - "${PILOT_CONTAINER_TRUST:?set PILOT_CONTAINER_TRUST}:/run/arvectum/etp-trust:ro"
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    depends_on: { pilot-migrate: { condition: service_completed_successfully }, pilot-eis-preflight: { condition: service_completed_successfully } }
+    # Database traffic stays private; this is the only workload with controlled EIS egress.
+    networks: [pilot-internal, pilot-egress]
+    restart: unless-stopped
+  pilot-eis-preflight:
+    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile, args: { REVISION: "${ARVECTUM_IMAGE_REVISION:?set exact Git commit}", VERSION: "${ARVECTUM_IMAGE_VERSION:?set image version}" } }
+    environment:
+      ARVECTUM_ETP_TLS_ENABLED: "true"
+      ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"
+      ARVECTUM_ETP_PROXY_BYPASS_ENABLED: "true"
+      ARVECTUM_ETP_TLS_POLICY_PATH: /run/arvectum/etp-trust/policy.yaml
+      ARVECTUM_ETP_TRUST_DIR: /run/arvectum/etp-trust
+    volumes: ["${PILOT_CONTAINER_TRUST:?set PILOT_CONTAINER_TRUST}:/run/arvectum/etp-trust:ro"]
+    command: ["sh", "-c", "python scripts/ops/etp_trust.py verify-host --host zakupki.gov.ru && python scripts/ops/etp_trust.py verify-host --host int.zakupki.gov.ru"]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    networks: [pilot-internal, pilot-egress]
+    restart: "no"
+  pilot-proxy:
+    image: nginx:1.27-alpine
+    ports: ["127.0.0.1:18081:8080"]
+    volumes: [./nginx.conf:/etc/nginx/conf.d/default.conf:ro]
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /tmp]
+    security_opt: [no-new-privileges:true]
+    depends_on: { pilot-api: { condition: service_healthy } }
+    # Keep the upstream private; ingress is required for Docker to publish the loopback port.
+    networks: [pilot-internal, pilot-ingress]
+    restart: unless-stopped
+networks:
+  pilot-internal: { internal: true }
+  pilot-ingress: {}
+  pilot-egress: {}
+volumes: { pilot-db: {}, pilot-data: {}, pilot-artifacts: {}, pilot-eis: {}, pilot-backups: {} }
