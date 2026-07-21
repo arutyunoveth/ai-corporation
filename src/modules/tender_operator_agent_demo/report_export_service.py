@@ -162,8 +162,28 @@ def _validate_persisted_pdf(pdf_path: Path, manifest_path: Path, *, run_id: str,
 def _write_pdf_manifest(path: Path, *, run_id: str, registry_number: str, report_model_hash: str, artifact_key: str, pdf_path: Path) -> None:
     payload = {"run_id": run_id, "registry_number": registry_number, "report_model_hash": report_model_hash, "artifact_key": artifact_key, "pdf_relative_path": f"data/demo/exports/{pdf_path.name}", "pdf_sha256": _sha256(pdf_path), "byte_size": pdf_path.stat().st_size, "renderer_version": _PDF_RENDERER_VERSION}
     temporary = path.with_suffix(path.suffix + ".partial")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    with temporary.open("w", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(temporary, path)
+
+
+def _remove_interrupted_pdf_artifacts(pdf_path: Path, manifest_path: Path) -> None:
+    """Discard only this key's incomplete/orphaned publication pair under its lock."""
+    for path in (pdf_path, manifest_path, pdf_path.with_suffix(pdf_path.suffix + ".partial"), manifest_path.with_suffix(manifest_path.suffix + ".partial")):
+        path.unlink(missing_ok=True)
+
+
+def _fsync_directory(path: Path) -> None:
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError:  # Filesystems such as some Docker mounts do not support directory fsync.
+        pass
 
 
 def _safe_output_dir(data_dir: str | None = None) -> Path:
@@ -465,9 +485,15 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         except ImportError:  # pragma: no cover - Windows development fallback
             pass
-        if output_path.is_file() or manifest_path.is_file():
+        # Partial files never represent a published artifact.  A lone member of
+        # the pair is recoverable after a process crash, not a permanent error.
+        for partial in (output_path.with_suffix(output_path.suffix + ".partial"), manifest_path.with_suffix(manifest_path.suffix + ".partial")):
+            partial.unlink(missing_ok=True)
+        if output_path.is_file() and manifest_path.is_file():
             _validate_persisted_pdf(output_path, manifest_path, run_id=run_id, registry_number=registry_number, report_model_hash=report_model_hash, artifact_key=artifact_key)
         else:
+            if output_path.is_file() or manifest_path.is_file():
+                _remove_interrupted_pdf_artifacts(output_path, manifest_path)
             descriptor, temporary_name = tempfile.mkstemp(prefix=".pdf-", suffix=".partial", dir=root)
             os.close(descriptor)
             temporary_path = Path(temporary_name)
@@ -479,8 +505,14 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
                 with temporary_path.open("rb") as created:
                     if created.read(5) != b"%PDF-":
                         raise RuntimeError("Generated PDF artifact is invalid")
+                    created.seek(0, os.SEEK_END)
+                    if created.tell() == 0:
+                        raise RuntimeError("Generated PDF artifact is empty")
+                with temporary_path.open("rb") as created:
+                    os.fsync(created.fileno())
                 os.replace(temporary_path, output_path)
                 _write_pdf_manifest(manifest_path, run_id=run_id, registry_number=registry_number, report_model_hash=report_model_hash, artifact_key=artifact_key, pdf_path=output_path)
+                _fsync_directory(root)
             finally:
                 temporary_path.unlink(missing_ok=True)
 

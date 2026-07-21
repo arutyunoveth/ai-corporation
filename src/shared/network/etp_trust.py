@@ -121,27 +121,23 @@ def validate_ca_file(authority: Authority) -> Path:
     if not path.is_file() or path.is_symlink():
         raise ETPTrustConfigurationError(f"CA file is missing or symlinked: {path}")
     expected = (authority.certificate_sha256,) if isinstance(authority.certificate_sha256, str) else authority.certificate_sha256
-    pem_blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", path.read_bytes(), re.DOTALL)
+    raw = path.read_bytes()
+    pem_blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", raw, re.DOTALL)
+    normalized: list[tuple[bytes, bytes]] = []
     try:
-        cert_blobs = pem_blocks or [subprocess.run(
-            ["openssl", "x509", "-in", str(path), "-outform", "DER"], check=True, capture_output=True, timeout=5,
-        ).stdout]
+        if pem_blocks:
+            for pem in pem_blocks:
+                der = subprocess.run(["openssl", "x509", "-inform", "PEM", "-outform", "DER"], input=pem, check=True, capture_output=True, timeout=5).stdout
+                normalized.append((der, pem))
+        else:
+            der = subprocess.run(["openssl", "x509", "-inform", "DER", "-in", str(path), "-outform", "DER"], check=True, capture_output=True, timeout=5).stdout
+            pem = subprocess.run(["openssl", "x509", "-inform", "DER", "-in", str(path), "-outform", "PEM"], check=True, capture_output=True, timeout=5).stdout
+            normalized.append((der, pem))
     except (OSError, subprocess.SubprocessError) as exc:
-        try:
-            der = subprocess.run(
-                ["openssl", "x509", "-inform", "DER", "-in", str(path), "-outform", "DER"],
-                check=True, capture_output=True, timeout=5,
-            ).stdout
-            cert_blobs = [der]
-        except (OSError, subprocess.SubprocessError) as der_exc:
-            raise ETPTrustConfigurationError(f"Cannot decode CA certificate: {der_exc}") from exc
+        raise ETPTrustConfigurationError(f"Cannot decode CA certificate: {exc}") from exc
     digests = []
-    for blob in cert_blobs:
-        with tempfile.NamedTemporaryFile(suffix=".pem") as certificate:
-            certificate.write(blob)
-            certificate.flush()
-            der = subprocess.run(["openssl", "x509", "-in", certificate.name, "-outform", "DER"], check=True, capture_output=True, timeout=5).stdout
-            text = subprocess.run(["openssl", "x509", "-in", certificate.name, "-noout", "-text"], check=True, capture_output=True, text=True, timeout=5).stdout
+    for der, pem in normalized:
+        text = subprocess.run(["openssl", "x509", "-inform", "PEM", "-noout", "-text"], input=pem, check=True, capture_output=True, timeout=5).stdout.decode("utf-8", errors="replace")
         if "CA:TRUE" not in text:
             raise ETPTrustConfigurationError(f"Certificate is not marked as a CA: {path}")
         digests.append(hashlib.sha256(der).hexdigest().upper())

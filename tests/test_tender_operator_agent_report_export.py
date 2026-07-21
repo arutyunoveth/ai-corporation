@@ -194,6 +194,24 @@ class TestPdfExport:
         with pytest.raises(RuntimeError, match="invalid"):
             export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
 
+    @pytest.mark.parametrize("orphan", ["pdf", "manifest", "partial_pdf", "partial_manifest"])
+    def test_orphaned_publication_pair_is_recovered(self, mock_run_data, orphan: str):
+        result = export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
+        pdf = Path(result.file_path)
+        manifest = pdf.with_suffix(".manifest.json")
+        if orphan == "pdf":
+            manifest.unlink()
+        elif orphan == "manifest":
+            pdf.unlink()
+        elif orphan == "partial_pdf":
+            pdf.with_suffix(".pdf.partial").write_bytes(b"partial")
+        else:
+            manifest.with_suffix(".json.partial").write_text("partial", encoding="utf-8")
+        recovered = export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
+        assert Path(recovered.file_path).read_bytes().startswith(b"%PDF-")
+        payload = __import__("json").loads(Path(recovered.file_path).with_suffix(".manifest.json").read_text())
+        assert payload["pdf_sha256"] == __import__("hashlib").sha256(Path(recovered.file_path).read_bytes()).hexdigest()
+
     def test_same_prefix_runs_have_distinct_immutable_pdf_artifacts(self, tmp_path):
         first = "toa-run-20260721144956-8b2eee"
         second = "toa-run-20260722110000-abcd12"

@@ -26,6 +26,9 @@ compose=(env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" doc
 for _ in {1..30}; do "${compose[@]}" exec -T pilot-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null && break; sleep 2; done
 "${compose[@]}" exec -T pilot-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null || die "target DB health timeout"
 "${compose[@]}" exec -T pilot-db sh -lc 'exec pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' < "$backup/database.dump"
+expected_head=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["alembic"]["repository_head"])' "$backup/manifest.json") || die "missing Alembic metadata"
+restored_head=$("${compose[@]}" exec -T pilot-db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT version_num FROM alembic_version"' | tr -d '[:space:]')
+[[ "$restored_head" == "$expected_head" ]] || die "restored Alembic head mismatch"
 for volume in "${volumes[@]:1}"; do docker volume create "$volume" >/dev/null; done
 docker run --rm -v "${target}_pilot-data:/restore/data" -v "${target}_pilot-artifacts:/restore/artifacts" -v "${target}_pilot-eis:/restore/eis-archives" -v "$backup:/backup:ro" alpine:3.20 sh -ec 'tar -xzf /backup/artifacts.tar.gz -C /restore'
 "${compose[@]}" up -d --build pilot-migrate pilot-eis-preflight pilot-api pilot-proxy
@@ -34,12 +37,13 @@ for _ in {1..45}; do [[ $(docker inspect -f '{{.State.Health.Status}}' "${target
 curl --noproxy '*' -fsS "http://127.0.0.1:$port/health/tender-agent" >/dev/null || die "proxy health timeout"
 run_id=$(python3 -c 'import json,sys; x=json.load(open(sys.argv[1])).get("accepted_run"); print(x.get("run_id", "") if isinstance(x,dict) else "")' "$backup/manifest.json")
 if [[ -n "$run_id" ]]; then
+  verify_tmp=$(mktemp -d); trap 'rm -f "$override"; rm -rf "$verify_tmp"' EXIT
   set -a; source "$env_file"; set +a
   pdf_rel=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["accepted_run"]["pdf_relative_path"] if "pdf_relative_path" in json.load(open(sys.argv[1]))["accepted_run"] else "")' "$backup/manifest.json")
   expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["accepted_run"]["pdf_sha256"])' "$backup/manifest.json")
   before=$(docker run --rm -v "${target}_pilot-data:/data:ro" alpine:3.20 sh -ec "stat -c '%Y:%s' /data/${pdf_rel#data/}")
-  curl --noproxy '*' -fsS -u "$AI_CORP_PILOT_AUTH_USERNAME:$AI_CORP_PILOT_AUTH_PASSWORD" "http://127.0.0.1:$port/api/demo/tender-agent/runs/$run_id/export/pdf" -o "$backup/restored.pdf"
-  [[ $(shasum -a 256 "$backup/restored.pdf" | awk '{print $1}') == "$expected" ]] || die "restored PDF hash mismatch"
+  curl --noproxy '*' -fsS -u "$AI_CORP_PILOT_AUTH_USERNAME:$AI_CORP_PILOT_AUTH_PASSWORD" "http://127.0.0.1:$port/api/demo/tender-agent/runs/$run_id/export/pdf" -o "$verify_tmp/restored.pdf"
+  [[ $(shasum -a 256 "$verify_tmp/restored.pdf" | awk '{print $1}') == "$expected" ]] || die "restored PDF hash mismatch"
   after=$(docker run --rm -v "${target}_pilot-data:/data:ro" alpine:3.20 sh -ec "stat -c '%Y:%s' /data/${pdf_rel#data/}")
   [[ "$before" == "$after" ]] || die "restored PDF mtime changed"
 fi
