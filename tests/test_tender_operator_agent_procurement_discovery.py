@@ -331,6 +331,54 @@ def test_public_44fz_search_by_exact_notice_number_skips_supplier_relevance(monk
     assert "relevance" not in result["cards"][0]
 
 
+def test_public_44fz_exact_number_search_isolated_from_supplier_relevance_state(monkeypatch):
+    """Exact-number calls must neither consume nor mutate relevance state."""
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    card = {
+        "title": "Тестовая закупка",
+        "notice_number": "0888500000226000399",
+        "reestr_number": "0888500000226000399",
+        "customer_name": "Заказчик",
+        "initial_price": 1000000.0,
+        "publication_date": "07.07.2026",
+        "deadline": "15.07.2026",
+        "status": "Закупка завершена",
+        "procedure_type": "Электронный аукцион",
+        "source_url": "https://zakupki.gov.ru/notice?regNumber=0888500000226000399",
+        "law": "44fz",
+        "warnings": [],
+    }
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {"status": "parsed", "html": "<html></html>", "error": None},
+    )
+    monkeypatch.setattr(discovery, "parse_44fz_search_results", lambda html: [card])
+
+    relevance_calls: list[str] = []
+
+    class Score:
+        def to_dict(self):
+            return {"status": "relevant"}
+
+    def score(**kwargs):
+        relevance_calls.append(kwargs["title"])
+        return Score()
+
+    monkeypatch.setattr(discovery, "score_procurement_card", score)
+
+    ordinary_first = discovery.search_public_44fz(query="тест", law="44fz", max_results=1)
+    exact_first = discovery.search_public_44fz(query=card["notice_number"], law="44fz", max_results=1)
+    ordinary_second = discovery.search_public_44fz(query="тест", law="44fz", max_results=1)
+    exact_second = discovery.search_public_44fz(query=card["notice_number"], law="44fz", max_results=1)
+
+    assert [result["status"] for result in (ordinary_first, exact_first, ordinary_second, exact_second)] == ["parsed"] * 4
+    assert all("relevance" in result["cards"][0] for result in (ordinary_first, ordinary_second))
+    assert all("relevance" not in result["cards"][0] for result in (exact_first, exact_second))
+    assert relevance_calls == [card["title"], card["title"]]
+
+
 def test_public_44fz_search_backfill_fills_to_page_size(monkeypatch):
     import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
 
@@ -401,6 +449,7 @@ def test_public_44fz_search_backfill_fills_to_page_size(monkeypatch):
         page=1,
         page_size=10,
         max_results=10,
+        reference_date=date(2026, 7, 10),
     )
 
     assert result["status"] == "parsed"
@@ -468,11 +517,12 @@ def test_public_44fz_search_backfill_limit_not_exceeded(monkeypatch):
         page=1,
         page_size=10,
         max_results=10,
+        reference_date=date(2026, 7, 10),
     )
 
     assert result["status"] == "parsed"
     assert result["returned_count"] <= 10
-    assert result["eis_pages_fetched"] <= 3
+    assert result["eis_pages_fetched"] <= discovery.MAX_BACKFILL_PAGES
 
 
 def test_public_44fz_search_no_duplicates_with_cursor(monkeypatch):
@@ -539,6 +589,7 @@ def test_public_44fz_search_no_duplicates_with_cursor(monkeypatch):
         page=1,
         page_size=10,
         max_results=10,
+        reference_date=date(2026, 7, 10),
     )
 
     assert page1_result["returned_count"] == 10
@@ -561,6 +612,28 @@ def test_public_44fz_search_no_duplicates_with_cursor(monkeypatch):
     assert page2_result["returned_count"] >= 1
     page2_numbers = {c["notice_number"] for c in page2_result["cards"]}
     assert page1_numbers.isdisjoint(page2_numbers)
+
+
+def test_public_44fz_search_rejects_cursor_for_other_filters(monkeypatch):
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {"status": "parsed", "html": "<html></html>", "error": None},
+    )
+    monkeypatch.setattr(discovery, "parse_44fz_search_results", lambda html: [])
+
+    cursor = discovery._encode_search_cursor(
+        query="кабель",
+        filters=discovery._build_cursor_filters(law="44fz"),
+        next_eis_page=2,
+        seen_registry_numbers=["1"],
+        page_size=10,
+    )
+
+    with pytest.raises(ValueError, match="не соответствует"):
+        search_public_44fz(query="поставка", law="44fz", cursor=cursor)
 
 
 def test_public_44fz_search_exact_total_true_when_native_only(monkeypatch):
@@ -771,6 +844,7 @@ def test_public_44fz_search_returned_count_reflects_backfill(monkeypatch):
         page=1,
         page_size=10,
         max_results=10,
+        reference_date=date(2026, 7, 10),
     )
 
     assert result["status"] == "parsed"
@@ -1028,7 +1102,7 @@ def test_public_44fz_search_drops_exact_total_for_non_native_filters(monkeypatch
         ],
     )
 
-    result = search_public_44fz(query="тест", law="44fz", procedure_type="Электронный аукцион", page=1, page_size=10, max_results=10)
+    result = search_public_44fz(query="тест", law="44fz", procedure_type="Электронный аукцион", page=1, page_size=10, max_results=10, reference_date=date(2026, 7, 10))
 
     assert result["total_count"] == 99
     assert result["total_count_exact_for_displayed_filters"] is False

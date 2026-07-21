@@ -28,6 +28,8 @@ PDF_CONTENT_TYPE = "application/pdf"
 _EXPORT_SUBDIR = ("rag", "exports")
 _FONT_NAME = "TenderExportUnicode"
 _FONT_CANDIDATES = (
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
     "/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf",
     "/System/Library/Fonts/Supplemental/Arial.ttf",

@@ -27,13 +27,13 @@ def extract_notice_metadata(xml_text: str) -> dict[str, Any]:
 
     result["publication_date"] = _extract_value(
         root, ns_map,
-        ("publishDate", "placingDate", "publicationDate", "publication_date", "createDate"),
+        ("publishDTInEIS", "publishDate", "placingDate", "publicationDate", "publication_date", "createDate"),
         transform=_normalize_date,
     )
 
     result["submission_deadline"] = _extract_value(
         root, ns_map,
-        ("endDate", "applicationEndDate", "collectingEndDate", "submissionDeadline", "deadline"),
+        ("endDT", "endDate", "applicationEndDate", "collectingEndDate", "submissionDeadline", "deadline"),
         transform=_normalize_date,
     )
 
@@ -51,11 +51,31 @@ def extract_notice_metadata(xml_text: str) -> dict[str, Any]:
         root, ns_map,
         ("inn", "customerInn", "placerInn"),
     )
+    result["customer_kpp"] = _extract_value(root, ns_map, ("KPP", "kpp", "customerKpp"))
+
+    customer_node = next((node for node in root.iter() if _local_name(node.tag) == "customer"), None)
+    if customer_node is not None:
+        result["customer_name"] = _child_value(customer_node, ("fullName", "name")) or result.get("customer_name")
+        result["customer_inn"] = _child_value(customer_node, ("INN", "inn")) or result.get("customer_inn")
+        result["customer_kpp"] = _child_value(customer_node, ("KPP", "kpp")) or result.get("customer_kpp")
+
+    delivery_places = _extract_delivery_places(root)
+    if delivery_places:
+        result["delivery_places"] = delivery_places
+        result["delivery_place"] = delivery_places[0]
+
+    okpd2_codes = _extract_okpd2_codes(root)
+    if okpd2_codes:
+        result["okpd2_codes"] = okpd2_codes
 
     result["procurement_subject"] = _extract_value(
         root, ns_map,
         ("subject", "lotSubject", "procurementSubject", "contractSubject", "lotObjectInfo"),
     )
+    if not result.get("procurement_subject"):
+        result["procurement_subject"] = _extract_value(
+            root, ns_map, ("purchaseObjectInfo", "purchaseObject"),
+        )
 
     procedure_type = _extract_value(
         root, ns_map,
@@ -66,9 +86,50 @@ def extract_notice_metadata(xml_text: str) -> dict[str, Any]:
 
     result["source_label"] = source_label
 
-    if result.get("nmck") or result.get("publication_date") or result.get("submission_deadline"):
+    if result.get("nmck") or result.get("publication_date") or result.get("submission_deadline") or result.get("customer_name"):
         result["_has_notice_data"] = True
 
+    return result
+
+
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _child_value(node: ET.Element, names: tuple[str, ...]) -> str | None:
+    for descendant in node.iter():
+        if _local_name(descendant.tag) in names and descendant.text and descendant.text.strip():
+            return descendant.text.strip()
+    return None
+
+
+def _extract_delivery_places(root: ET.Element) -> list[str]:
+    values: list[str] = []
+    for node in root.iter():
+        if _local_name(node.tag) not in {"deliveryPlacesInfo", "deliveryPlaceInfo", "placeOfDelivery"}:
+            continue
+        for descendant in node.iter():
+            if _local_name(descendant.tag) not in {"GARAddress", "deliveryPlace", "deliveryAddress", "placeOfDelivery"}:
+                continue
+            text = " ".join(descendant.itertext()).strip()
+            if text and text not in values:
+                values.append(text)
+    return values
+
+
+def _extract_okpd2_codes(root: ET.Element) -> list[dict[str, str]]:
+    """Extract only explicit OKPD2 records from the structured EIS notice."""
+    result: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for node in root.iter():
+        if _local_name(node.tag).lower() not in {"okpd2", "okpd2info"}:
+            continue
+        code = _child_value(node, ("OKPDCode", "okpdCode", "code"))
+        name = _child_value(node, ("OKPDName", "okpdName", "name"))
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        result.append({"code": code, "name": name or "Наименование не указано в извещении", "source_type": "structured_notice_xml"})
     return result
 
 
@@ -130,6 +191,9 @@ def merge_structured_metadata(
         ("delivery_term", "delivery_term"),
         ("customer_name", "customer_name"),
         ("customer_inn", "customer_inn"),
+        ("customer_kpp", "customer_kpp"),
+        ("delivery_place", "delivery_place"),
+        ("okpd2_codes", "okpd2_codes"),
         ("procurement_subject", "procurement_subject"),
         ("procedure_type", "procedure_type"),
     ]
@@ -148,6 +212,7 @@ def merge_structured_metadata(
                     "value": value,
                     "source": source_name,
                     "source_label": source_labels.get(source_name, source_name),
+                    "source_reference": f"{source_name}:{notice_key}",
                 }
                 break
 
@@ -171,8 +236,15 @@ def apply_structured_metadata_to_procurement(
         procurement_payload["deadline"] = structured["deadline"]["value"]
     if structured.get("delivery_term") and isinstance(structured["delivery_term"], dict):
         procurement_payload["delivery_term"] = structured["delivery_term"]["value"]
+    if structured.get("delivery_place") and isinstance(structured["delivery_place"], dict):
+        procurement_payload["delivery_place"] = structured["delivery_place"]["value"]
+    for key in ("customer_name", "customer_inn", "customer_kpp"):
+        if structured.get(key) and isinstance(structured[key], dict):
+            procurement_payload[key] = structured[key]["value"]
     if structured.get("procedure_type") and isinstance(structured["procedure_type"], dict):
         procurement_payload["procedure_type"] = structured["procedure_type"]["value"]
+    if structured.get("okpd2_codes") and isinstance(structured["okpd2_codes"], dict):
+        procurement_payload["okpd2_codes"] = structured["okpd2_codes"]["value"]
 
     if source_labels:
         procurement_payload["structured_source_label"] = ", ".join(sorted(source_labels))
@@ -315,9 +387,16 @@ def _parse_price(value: str) -> float | None:
 def _normalize_date(value: str) -> str | None:
     if not value:
         return None
-    match = re.match(r"(\d{4})-(\d{2})-(\d{2})", value)
+    match = re.match(r"(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?))?([+-]\d{2}:?\d{2})?", value)
     if match:
-        return f"{match[3]}.{match[2]}.{match[1]}"
+        date_value = f"{match[3]}.{match[2]}.{match[1]}"
+        time_value = match[4]
+        timezone_value = match[5]
+        if time_value:
+            date_value += f" {time_value}"
+        if timezone_value:
+            date_value += f" {timezone_value}"
+        return date_value
     match = re.match(r"(\d{2})\.(\d{2})\.(\d{4})", value)
     if match:
         return value

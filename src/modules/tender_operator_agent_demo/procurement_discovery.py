@@ -42,7 +42,7 @@ from src.modules.tender_operator_agent_demo.zakupki_soap_client import ZakupkiSo
 
 
 DEFAULT_SEARCH_PAGE_SIZE = 10
-MAX_BACKFILL_PAGES = 3
+MAX_BACKFILL_PAGES = 10
 
 
 def _encode_search_cursor(
@@ -108,6 +108,16 @@ def _build_cursor_filters(
     if deadline_to:
         out["deadline_to"] = deadline_to
     return out
+
+
+def _cursor_matches_request(
+    cursor_payload: dict[str, Any],
+    *,
+    query: str,
+    filters: dict[str, Any],
+) -> bool:
+    """Only resume a cursor for the exact search that created it."""
+    return cursor_payload.get("q") == query and cursor_payload.get("f") == filters
 
 
 def _diagnostics_dir() -> Path:
@@ -446,9 +456,11 @@ def search_public_44fz(
     reference_date: date | None = None,
 ) -> dict:
     normalized_law = normalize_public_eis_law(law)
+    exact_procurement_number = _looks_like_exact_procurement_number(query)
     page_num = max(page, 1)
     effective_page_size = min(max(page_size, 1), 50)
-    requested_limit = max_results if max_results else effective_page_size
+    requested_limit = min(max(max_results or effective_page_size, 1), 100)
+    physical_eis_page_size = DEFAULT_SEARCH_PAGE_SIZE
 
     status_filter_stage_flag = resolve_public_eis_stage_flag(status_filter)
     local_status_filter = status_filter if status_filter_stage_flag is None else None
@@ -473,11 +485,12 @@ def search_public_44fz(
 
     if cursor:
         decoded = _decode_search_cursor(cursor)
-        if decoded:
-            start_eis_page = decoded.get("ep", 1)
-            next_eis_page = start_eis_page
-            seen = set(decoded.get("sn", []))
-            page_num = decoded.get("up", 1) + 1
+        if not decoded or not _cursor_matches_request(decoded, query=query, filters=cursor_filters):
+            raise ValueError("Cursor не соответствует текущему поисковому запросу и фильтрам.")
+        start_eis_page = decoded.get("ep", 1)
+        next_eis_page = start_eis_page
+        seen = set(decoded.get("sn", []))
+        page_num = decoded.get("up", 1) + 1
 
     try:
         first_url = build_public_eis_search_url(
@@ -490,7 +503,7 @@ def search_public_44fz(
             price_to=price_to,
             status_filter=status_filter,
             page=next_eis_page,
-            max_results=effective_page_size,
+            max_results=physical_eis_page_size,
         )
     except ValueError as exc:
         return PublicProcurementSearchResponse(
@@ -596,7 +609,7 @@ def search_public_44fz(
     eis_has_more = True
     current_eis_page = next_eis_page
 
-    while len(valid_cards) < effective_page_size and pages_fetched < MAX_BACKFILL_PAGES and eis_has_more:
+    while len(valid_cards) < requested_limit and pages_fetched < MAX_BACKFILL_PAGES and eis_has_more:
         if pages_fetched == 0 and not cursor:
             fetch_url = first_fetch_url
             raw_html = fetch_result.get("html", "")
@@ -611,7 +624,7 @@ def search_public_44fz(
                 price_to=price_to,
                 status_filter=status_filter,
                 page=current_eis_page,
-                max_results=effective_page_size,
+                max_results=physical_eis_page_size,
             )
             page_fetch = fetch_public_44fz_search_page(fetch_url)
             if page_fetch.get("status") != Public44FzSearchStatus.PARSED or not page_fetch.get("html"):
@@ -637,6 +650,7 @@ def search_public_44fz(
             procedure_type=procedure_type,
             status_grace_days=2,
             reference_date=reference_date,
+            skip_status_consistency=exact_procurement_number,
         )
         newly_filtered = len(page_cards) - len(filtered)
         total_filtered_count += newly_filtered
@@ -652,7 +666,7 @@ def search_public_44fz(
         pages_fetched += 1
         current_eis_page += 1
 
-        if len(page_cards) < effective_page_size and not has_eis_total:
+        if len(page_cards) < physical_eis_page_size and not has_eis_total:
             eis_has_more = False
 
     is_backfill = pages_fetched > 1
@@ -687,9 +701,9 @@ def search_public_44fz(
         ).model_dump(mode="json")
 
     valid_cards = _sort_public_44fz_cards(valid_cards)
-    profile = None if _looks_like_exact_procurement_number(query) else get_supplier_profile()
+    profile = None if exact_procurement_number else get_supplier_profile()
     scored_cards = []
-    for card in valid_cards[:effective_page_size]:
+    for card in valid_cards[:requested_limit]:
         card_with_relevance = dict(card)
         card_with_relevance["law"] = normalized_law
         card_with_relevance["category"] = _public_law_label(normalized_law)
@@ -717,7 +731,7 @@ def search_public_44fz(
 
     has_more = False
     if total_count_exact_for_displayed_filters and has_eis_total:
-        has_more = page_num * effective_page_size < parsed_total_count
+        has_more = len(seen) < parsed_total_count
     elif eis_has_more_results:
         has_more = True
     elif not is_backfill and len(valid_cards) > effective_page_size:
@@ -898,6 +912,7 @@ def _filter_public_44fz_cards(
     procedure_type: str | None = None,
     status_grace_days: int = 0,
     reference_date: date | None = None,
+    skip_status_consistency: bool = False,
 ) -> list[dict]:
     filtered: list[dict] = []
     effective_status_grace_days = status_grace_days or (2 if status_filter else 0)
@@ -905,7 +920,7 @@ def _filter_public_44fz_cards(
         # Explicit deadline ranges are authoritative. Otherwise retain the
         # normal active-status expiry check, with the caller-selected grace
         # period (the search path uses a small ingestion grace window).
-        if not (deadline_from or deadline_to) and not _matches_public_card_status_consistency(
+        if not skip_status_consistency and not (deadline_from or deadline_to) and not _matches_public_card_status_consistency(
             card, today=reference_date, grace_days=effective_status_grace_days
         ):
             continue

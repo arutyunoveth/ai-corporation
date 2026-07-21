@@ -480,7 +480,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                           </label>
                           <label>
                             Макс. результатов
-                            <input name="max_results" type="number" min="1" max="20" value="10" />
+                            <input name="max_results" type="number" min="1" max="50" value="10" />
                           </label>
                         </div>
                         <div class="split">
@@ -871,6 +871,9 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             procurementSources: [],
             procurementResults: [],
             publicSearchCards: [],
+            publicSearchCursor: null,
+            publicSearchParams: null,
+            publicSearchSeen: [],
             datasetRun: null,
             datasetReplayActive: false,
             datasetDisplayStatuses: new Map(),
@@ -1635,7 +1638,7 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
             }}
           }}
 
-          function renderPublicSearchCards(cards) {{
+          function renderPublicSearchCards(cards, pagination = {{}}) {{
             const node = document.getElementById('procurement-results');
             if (!cards || !cards.length) {{
               node.innerHTML = `<div class="empty">По вашему запросу закупки не найдены.</div>`;
@@ -1672,11 +1675,43 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 <div class="note" style="margin-top:8px">Поиск работает в read-only режиме. Система не входит в личный кабинет, не обходит captcha, не подаёт заявку.</div>
               </div>
             `;
-            }}).join('');
+            }}).join('') + `
+              <div class="form-actions" style="margin-top:12px">
+                ${{pagination.has_more && pagination.next_cursor ? '<button class="button" id="public-search-next-button" type="button">Загрузить ещё</button>' : ''}}
+              </div>`;
             for (const button of node.querySelectorAll('.public-search-handoff-button')) {{
               button.addEventListener('click', () => {{
                 handlePublicSearchHandoff(button.dataset.reestr, button.dataset.title, button.dataset.customer, button.dataset.url);
               }});
+            }}
+            document.getElementById('public-search-next-button')?.addEventListener('click', loadNextPublicSearchPage);
+          }}
+
+          async function loadNextPublicSearchPage() {{
+            if (!state.publicSearchCursor || !state.publicSearchParams) return;
+            const searchParams = new URLSearchParams(state.publicSearchParams);
+            searchParams.set('cursor', state.publicSearchCursor);
+            searchParams.set('seen_registry_numbers', JSON.stringify(state.publicSearchSeen));
+            try {{
+              const result = await fetchJson('/api/demo/tender-agent/procurement/public-44fz-search', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
+                body: searchParams,
+              }});
+              const known = new Set(state.publicSearchSeen);
+              for (const card of result.cards || []) {{
+                const number = card.notice_number || card.reestr_number || '';
+                if (number && !known.has(number)) {{
+                  state.publicSearchCards.push(card);
+                  state.publicSearchSeen.push(number);
+                  known.add(number);
+                }}
+              }}
+              state.publicSearchCursor = result.next_cursor || null;
+              renderPublicSearchCards(state.publicSearchCards, result);
+              setFlash('procurement-flash', `Загружено уникальных карточек: ${{state.publicSearchCards.length}}.`);
+            }} catch (error) {{
+              setFlash('procurement-flash', `Не удалось загрузить следующую страницу: ${{error.message}}`, true);
             }}
           }}
 
@@ -1837,7 +1872,10 @@ def render_tender_operator_console_html(selected_run_id: str | None = None) -> s
                 }});
                 if (searchResult.status === 'parsed' && searchResult.cards && searchResult.cards.length) {{
                   state.publicSearchCards = searchResult.cards;
-                  renderPublicSearchCards(searchResult.cards);
+                  state.publicSearchParams = searchParams.toString();
+                  state.publicSearchSeen = searchResult.cards.map((card) => card.notice_number || card.reestr_number || '').filter(Boolean);
+                  state.publicSearchCursor = searchResult.next_cursor || null;
+                  renderPublicSearchCards(searchResult.cards, searchResult);
                   renderProcurementSourceDiagnostics(payload.source);
                   setFlash('procurement-flash', `Найдено закупок: ${{searchResult.cards.length}}. Выберите карточку для получения документации.`);
                 }} else {{

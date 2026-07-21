@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     llm_max_retries: int = 1
     llm_allow_raw_partner_data: bool = False
     llm_store_raw_response: bool = False
+    source_graph_mode: str = "legacy"
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     yandex_api_key: str | None = None
@@ -90,6 +92,11 @@ class Settings(BaseSettings):
     public_search_page_size: int = 30
     public_search_no_proxy_domains: str = "zakupki.gov.ru,.zakupki.gov.ru,int.zakupki.gov.ru,int44.zakupki.gov.ru"
     allow_demo_discovery: bool = True
+
+    etp_tls_policy_path: str | None = Field(default=None, validation_alias="ARVECTUM_ETP_TLS_POLICY_PATH")
+    etp_tls_enabled: bool = Field(default=False, validation_alias="ARVECTUM_ETP_TLS_ENABLED")
+    etp_tls_fail_closed: bool = Field(default=True, validation_alias="ARVECTUM_ETP_TLS_FAIL_CLOSED")
+    etp_proxy_bypass_enabled: bool = Field(default=True, validation_alias="ARVECTUM_ETP_PROXY_BYPASS_ENABLED")
 
     # Recovered Hermes analyser remains opt-in and is never a required customer flow.
     hermes_base_url: str = "http://127.0.0.1:8099"

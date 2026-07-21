@@ -1,4 +1,4 @@
-.PHONY: check test ci
+.PHONY: check test ci eis-preflight r4-local-start
 
 check:
 	python -m compileall -q src
@@ -8,3 +8,13 @@ test:
 	python -m pytest -q
 
 ci: check test
+
+# Local-only developer targets: require the maintainer's local trust material
+# under /Users/master and are intentionally not used by CI or deployment.
+eis-preflight:
+	@test -x .venv-r3/bin/python || (echo ".venv-r3/bin/python is required"; exit 2)
+	@test -f /Users/master/.config/arvectum/r3-soap-token.env || (echo "R3 SOAP token environment is required"; exit 2)
+	@zsh -lc 'source /Users/master/.config/arvectum/r3-soap-token.env; export ARVECTUM_ETP_TLS_ENABLED=true ARVECTUM_ETP_TLS_POLICY_PATH=/Users/master/.config/arvectum/trust/policy.yaml ARVECTUM_ETP_TLS_FAIL_CLOSED=true ARVECTUM_ETP_PROXY_BYPASS_ENABLED=true NO_PROXY="zakupki.gov.ru,.zakupki.gov.ru" no_proxy="zakupki.gov.ru,.zakupki.gov.ru" ZAKUPKI_GOV_RU_SOAP_ENABLED=true; unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy; .venv-r3/bin/python scripts/ops/etp_trust.py verify-host --host zakupki.gov.ru; .venv-r3/bin/python scripts/ops/etp_trust.py verify-host --host int.zakupki.gov.ru'
+
+r4-local-start: eis-preflight
+	@zsh -lc 'source /Users/master/.config/arvectum/r3-soap-token.env; export ARVECTUM_ETP_TLS_ENABLED=true ARVECTUM_ETP_TLS_POLICY_PATH=/Users/master/.config/arvectum/trust/policy.yaml ARVECTUM_ETP_TLS_FAIL_CLOSED=true ARVECTUM_ETP_PROXY_BYPASS_ENABLED=true NO_PROXY="zakupki.gov.ru,.zakupki.gov.ru" no_proxy="zakupki.gov.ru,.zakupki.gov.ru" ZAKUPKI_GOV_RU_SOAP_ENABLED=true; unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy; .venv-r3/bin/python -m uvicorn src.main:app --host 127.0.0.1 --port 8001'

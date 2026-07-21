@@ -874,7 +874,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             warning: 'риск',
             blocked: 'заблокировано',
           };
-          const SEARCH_PAGE_SIZE = 10;
+          const SEARCH_PAGE_SIZE = 50;
           const fileRolePrefixes = {
             notice: 'notice',
             technical: 'technical_spec',
@@ -1208,6 +1208,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
           }
 
           let lastSeenRegistryNumbers = [];
+          let loadedSearchCards = [];
 
           function searchResultsMeta(payload = {}, cards = []) {
             const page = Math.max(1, Number(payload.page) || 1);
@@ -1244,7 +1245,14 @@ def render_tender_operator_pilot_wizard_html() -> str:
           }
 
           function renderSearchResults(payload = {}) {
-            const cards = payload.cards || [];
+            const pageCards = payload.cards || [];
+            for (const card of pageCards) {
+              const regNum = card.notice_number || card.reestr_number || '';
+              if (!regNum || !loadedSearchCards.some((existing) => (existing.notice_number || existing.reestr_number || '') === regNum)) {
+                loadedSearchCards.push(card);
+              }
+            }
+            const cards = loadedSearchCards;
             const eisSearchUrl = payload.eis_search_url || '';
             const outcome = String(payload.outcome || '');
             const hasMore = payload.has_more === true;
@@ -1267,7 +1275,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
               }
               return;
             }
-            for (const card of cards) {
+            for (const card of pageCards) {
               const regNum = card.notice_number || card.reestr_number || '';
               if (regNum && !lastSeenRegistryNumbers.includes(regNum)) {
                 lastSeenRegistryNumbers.push(regNum);
@@ -1368,6 +1376,7 @@ def render_tender_operator_pilot_wizard_html() -> str:
             }
             lastSearchBaseParams = buildSearchBaseParams();
             lastSeenRegistryNumbers = [];
+            loadedSearchCards = [];
             await runSearchPage(1);
           }
 

@@ -77,8 +77,8 @@ class TestExtractNoticeMetadata:
         result = extract_notice_metadata(SAMPLE_XML_44FZ)
         assert result.get("_has_notice_data") is True
         assert result.get("nmck") == 5000000.0
-        assert result.get("publication_date") == "01.07.2026"
-        assert result.get("submission_deadline") == "15.07.2026"
+        assert result.get("publication_date") == "01.07.2026 14:30:00"
+        assert result.get("submission_deadline") == "15.07.2026 12:00:00"
         assert result.get("delivery_term") == "до 31.12.2026"
         assert result.get("customer_name") == "Федеральное казённое учреждение"
         assert result.get("customer_inn") == "7712345678"
@@ -89,8 +89,8 @@ class TestExtractNoticeMetadata:
         result = extract_notice_metadata(SAMPLE_XML_ALT_NS)
         assert result.get("_has_notice_data") is True
         assert result.get("nmck") == 1500000.0
-        assert result.get("publication_date") == "15.06.2026"
-        assert result.get("submission_deadline") == "01.07.2026"
+        assert result.get("publication_date") == "15.06.2026 10:00:00"
+        assert result.get("submission_deadline") == "01.07.2026 10:00:00"
         assert result.get("delivery_term") == "в течение 60 дней с даты подписания"
         assert result.get("customer_name") == "ГБУ Здравоохранения"
         assert result.get("customer_inn") == "7722334455"
@@ -101,8 +101,8 @@ class TestExtractNoticeMetadata:
         result = extract_notice_metadata(SAMPLE_XML_NO_NS)
         assert result.get("_has_notice_data") is True
         assert result.get("nmck") == 2500000.0
-        assert result.get("publication_date") == "01.05.2026"
-        assert result.get("submission_deadline") == "20.05.2026"
+        assert result.get("publication_date") == "01.05.2026 09:00:00"
+        assert result.get("submission_deadline") == "20.05.2026 09:00:00"
         assert result.get("delivery_term") == "30 дней"
         assert result.get("customer_name") == "АО Рога и Копыта"
         assert result.get("customer_inn") == "7711223344"

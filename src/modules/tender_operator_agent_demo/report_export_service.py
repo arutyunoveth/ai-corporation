@@ -253,41 +253,111 @@ def _load_canonical_report(run_id: str) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _user_status(value: object) -> str:
+    labels = {
+        "known": "Объём определён",
+        "partially_known": "Объём определён не для всех позиций",
+        "specified": "Указано в документации",
+        "absent": "Не обнаружено в документации",
+        "extraction_failed": "Данные есть в источнике, но не извлечены автоматически",
+        "not_specified": "Не обнаружено в документации",
+        "not_specified_in_source": "Не обнаружено в документации",
+        "not_applicable": "Товарный объём неприменим",
+        "scope_conflict": "Тип закупки определён неоднозначно",
+        "unknown": "Требуется проверка",
+    }
+    return labels.get(str(value), str(value))
+
+
+def _user_evidence(row: dict) -> str:
+    raw_document = str(row.get("source_document_id") or "Документ")
+    lowered = raw_document.lower()
+    if "xml" in lowered or "notification" in lowered:
+        document = "Извещение ЕИС"
+    elif "нмцк" in lowered:
+        document = "Расчёт НМЦК"
+    elif any(marker in lowered for marker in ("техническ", "ооз", "спецификац")):
+        document = "Техническое задание"
+    elif "контракт" in lowered:
+        document = "Проект контракта"
+    else:
+        document = Path(raw_document).stem[:48] or "Документ"
+    source_row = row.get("source_row")
+    if source_row not in (None, ""):
+        source_row = str(source_row).rsplit(":row:", 1)[-1].rsplit(":", 1)[-1]
+    return f"{document}, позиция {source_row}" if source_row not in (None, "") else document
+
+
+def _pdf_quantity(value: object) -> str:
+    return "Не указано в проверенных документах" if value in {"Не указан документацией", "Не указано в проверенных документах"} else str(value)
+
+
 def _build_docx_from_canonical(model: dict, title: str, output_path: Path) -> None:
     document = Document(); document.add_heading(title, 0)
     summary, passport = model["executive_summary"], model["procurement_passport"]
-    for line in (f"Предмет: {summary['subject']}", f"НМЦК (максимальная цена закупки): {summary['nmck']} {summary['currency']}", f"Решение: {summary['decision']}", f"ОКПД2: {passport.get('okpd2')}"):
+    contract_label = "приложен" if model.get("contract_draft_status") == "present" else ("приложен, но автоматически разобрать его не удалось" if model.get("contract_draft_status") == "parse_failed" else _user_status(model.get("contract_draft_status")))
+    for line in (f"Официальное название закупки: {model.get('procurement_title')}", f"Номер закупки: {model.get('procurement_number')}", f"Заказчик: {model.get('customer_name')}", f"Место поставки: {model.get('delivery_place')}", f"Проект контракта: {contract_label}", f"Дата публикации: {model.get('publication_datetime')}", f"Окончание подачи заявок: {model.get('application_deadline')}", f"НМЦК: {model.get('nmck')} {model.get('currency')}", f"Решение: {model.get('decision')}", f"ОКПД2: {passport.get('okpd2')}", f"Статус объёма: {_user_status(model.get('procurement_volume_status'))}", f"Причина статуса объёма: {model.get('volume_status_reason')}"):
         document.add_paragraph(line)
-    document.add_heading("Перечень услуг и единичных расценок", 1)
+    if model["line_items"]:
+        document.add_paragraph(f"Первая извлечённая позиция: {model['line_items'][0].get('display_name') or model['line_items'][0]['original_name']}")
+    document.add_heading("Состав и объём закупки", 1)
     table = document.add_table(rows=1, cols=6); table.style = "Table Grid"
-    for cell, label in zip(table.rows[0].cells, ("№", "Услуга", "Единица", "Единичная цена", "Объём", "Источник")): cell.text = label
-    for row in model["service_catalog"]:
+    for cell, label in zip(table.rows[0].cells, ("№", "Наименование", "Количество", "Единица", "Статус количества", "Источник / evidence")): cell.text = label
+    for row in model["line_items"]:
         cells = table.add_row().cells
-        values = (row["sequence"], row["original_name"], row["unit_original"], f"{row['unit_price']} RUB", row["quantity_display"], f"{row['source_document_id']}, {row['source_row']} [{', '.join(row['evidence_ids'])}]")
+        values = (row["sequence"], row.get("display_name") or row["original_name"], row["quantity_display"], row["unit_original"], _user_status(row["quantity_status"]), _user_evidence(row))
         for cell, value in zip(cells, values): cell.text = str(value)
+    if not model["line_items"]:
+        document.add_paragraph("Позиции и количество не удалось извлечь из доступных документов; требуется проверка первоисточника.")
     document.add_heading("Ограничения анализа", 1)
     for item in model["missing_data"]: document.add_paragraph(item["description"], style="List Bullet")
     for item in model["limitations"]: document.add_paragraph(item, style="List Bullet")
-    document.add_heading("Evidence map", 1)
-    for item in model["evidence_map"]: document.add_paragraph(f"[{item['evidence_id']}] {item['document']}, строка {item['row']}: {item['short_excerpt']}", style="List Bullet")
+    document.add_paragraph("Техническая карта доказательств сохранена в JSON-версии отчёта.")
     document.save(output_path)
 
 
 def _build_pdf_from_canonical(model: dict, title: str, output_path: Path) -> None:
     font_name = _ensure_pdf_font_registered(); styles = _pdf_styles(font_name)
+    table_style = ParagraphStyle("focused_table", parent=styles["body"], fontSize=6.7, leading=7.5)
     summary, passport = model["executive_summary"], model["procurement_passport"]
-    story = [Paragraph(html_escape(title), styles["title"]), Paragraph(_pdf_inline_markup(f"Предмет: {summary['subject']}"), styles["body"]), Paragraph(_pdf_inline_markup(f"НМЦК (максимальная цена закупки): {summary['nmck']} {summary['currency']}; ОКПД2: {passport.get('okpd2')}"), styles["body"]), Paragraph(_pdf_inline_markup(f"Решение: {summary['decision']}"), styles["body"]), Paragraph("Перечень услуг и единичных расценок", styles["h1"])]
-    data = [[Paragraph(value, styles["body"]) for value in ("№", "Услуга", "Ед.", "Цена", "Объём", "Источник")]]
-    for row in model["service_catalog"]:
-        data.append([Paragraph(_pdf_inline_markup(str(value)), styles["body"]) for value in (row["sequence"], row["original_name"], row["unit_original"], f"{row['unit_price']} RUB", row["quantity_display"], f"[{', '.join(row['evidence_ids'])}]")])
-    table = Table(data, colWidths=[8*mm, 58*mm, 25*mm, 22*mm, 30*mm, 27*mm], repeatRows=1)
-    table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), .25, HexColor("#b9c8d0")), ("BACKGROUND", (0,0), (-1,0), HexColor("#e9f7f5")), ("VALIGN", (0,0), (-1,-1), "TOP")]))
-    story += [table, Paragraph("Ограничения анализа", styles["h1"])]
+    story = [Paragraph(html_escape(title), styles["title"])]
+    contract_label = "приложен" if model.get("contract_draft_status") == "present" else ("приложен, но автоматически разобрать его не удалось" if model.get("contract_draft_status") == "parse_failed" else _user_status(model.get("contract_draft_status")))
+    story += [Paragraph(_pdf_inline_markup(str(line)), styles["body"]) for line in (f"Название закупки: {model.get('procurement_title')}", f"Номер закупки: {model.get('procurement_number')}", f"Заказчик: {model.get('customer_name')}", f"Место поставки: {model.get('delivery_place')}", f"Проект контракта: {contract_label}", f"Дата публикации: {model.get('publication_datetime')}", f"Окончание подачи заявок: {model.get('application_deadline')}", f"НМЦК: {model.get('nmck')} {model.get('currency')}", f"Решение: {model.get('decision')}", f"ОКПД2: {passport.get('okpd2')}", f"Статус объёма: {_user_status(model.get('procurement_volume_status'))}")]
+    story.append(Paragraph("Состав и объём закупки", styles["h1"]))
+    source_issues = [issue for row in model.get("line_items", []) for issue in row.get("field_issues", [])]
+    if source_issues:
+        story.append(Paragraph("Подтверждённые ограничения исходных документов", styles["h1"]))
+        okpd2_missing = sum(issue.get("field_name") == "okpd2" for issue in source_issues)
+        quantity_missing = sum(issue.get("field_name") == "quantity" for issue in source_issues)
+        total_items = len(model.get("line_items", []))
+        if okpd2_missing:
+            story.append(Paragraph(f"Для {okpd2_missing} из {total_items} позиций код ОКПД2 не найден в проверенных документах. Позиции идентифицированы по наименованию и месту в источнике.", styles["body"]))
+        if quantity_missing:
+            story.append(Paragraph(f"Количество не найдено для {quantity_missing} позиций. Коммерческий расчёт требует ручной проверки.", styles["body"]))
+    # Put limitations before the variable-height table.  This prevents a
+    # short limitations-only tail page after a table that happened to fit.
+    story.append(Paragraph("Ограничения анализа", styles["h1"]))
     story += [Paragraph(_pdf_inline_markup(item["description"]), styles["body"]) for item in model["missing_data"]]
     story += [Paragraph(_pdf_inline_markup(item), styles["body"]) for item in model["limitations"]]
-    story.append(Paragraph("Evidence map", styles["h1"]))
-    story += [Paragraph(_pdf_inline_markup(f"[{item['evidence_id']}] {item['document']}, строка {item['row']}: {item['short_excerpt']}"), styles["body"]) for item in model["evidence_map"]]
-    doc = SimpleDocTemplate(str(output_path), pagesize=A4, leftMargin=12*mm, rightMargin=12*mm, topMargin=14*mm, bottomMargin=14*mm, title=title); doc.build(story)
+    data = [[Paragraph(value, table_style) for value in ("№", "Наименование", "Количество", "Ед.", "Статус", "Источник / evidence")]]
+    for row in model["line_items"]:
+        characteristics = row.get("characteristics") or []
+        characteristic_text = "; ".join(str(item.get("display_value") or "") for item in characteristics[:3] if isinstance(item, dict))
+        display_name = row.get("display_name") or row["original_name"]
+        item_cell = [Paragraph(_pdf_inline_markup(str(display_name)), table_style)]
+        if characteristic_text:
+            item_cell.append(Paragraph(_pdf_inline_markup(characteristic_text), ParagraphStyle("focused_characteristics", parent=table_style, fontSize=6, leading=7)))
+        row_values = (row["sequence"], item_cell, _pdf_quantity(row["quantity_display"]), row["unit_original"], _user_status(row["quantity_status"]), _user_evidence(row))
+        data.append([value if isinstance(value, list) else Paragraph(_pdf_inline_markup(str(value)), table_style) for value in row_values])
+    if len(data) == 1:
+        empty_message = "Основной предмет закупки — работы. Товарный анализ неприменим." if model.get("procurement_scope", {}).get("procurement_primary_scope") == "works" else "Позиции и количество не удалось извлечь из доступных документов; требуется проверка первоисточника."
+        story.append(Paragraph(empty_message, styles["body"]))
+    else:
+        table = Table(data, colWidths=[8*mm, 58*mm, 25*mm, 22*mm, 30*mm, 27*mm], repeatRows=1)
+        table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), .25, HexColor("#b9c8d0")), ("BACKGROUND", (0,0), (-1,0), HexColor("#e9f7f5")), ("VALIGN", (0,0), (-1,-1), "TOP")]))
+        story.append(table)
+    model_hash = ((model.get("provenance") or {}).get("production_model_hash") or model.get("production_model_hash") or "unknown")
+    doc = SimpleDocTemplate(str(output_path), pagesize=A4, leftMargin=12*mm, rightMargin=12*mm, topMargin=14*mm, bottomMargin=14*mm, title=title, author=f"production_model_hash={model_hash}"); doc.build(story)
 
 
 def export_demo_agent_report_docx(run_id: str) -> ExportedDemoReport:

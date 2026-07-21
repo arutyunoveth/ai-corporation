@@ -79,9 +79,8 @@ def fingerprint(token: str) -> str:
 
 
 def _build_opener():
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    from src.shared.network.etp_trust import build_ssl_context, policy_from_environment
+    ctx = build_ssl_context("int.zakupki.gov.ru", policy_from_environment())
     return build_opener(HTTPSHandler(context=ctx), ProxyHandler({}))
 
 
