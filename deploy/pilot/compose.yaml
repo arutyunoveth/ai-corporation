@@ -38,6 +38,7 @@ services:
       ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"
       ARVECTUM_ETP_PROXY_BYPASS_ENABLED: "true"
       ARVECTUM_ETP_TLS_POLICY_PATH: /run/arvectum/etp-trust/policy.yaml
+      ARVECTUM_ETP_TRUST_DIR: /run/arvectum/etp-trust
     volumes:
       - pilot-data:/app/data
       - pilot-artifacts:/app/artifacts
@@ -59,6 +60,7 @@ services:
       ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"
       ARVECTUM_ETP_PROXY_BYPASS_ENABLED: "true"
       ARVECTUM_ETP_TLS_POLICY_PATH: /run/arvectum/etp-trust/policy.yaml
+      ARVECTUM_ETP_TRUST_DIR: /run/arvectum/etp-trust
     volumes: ["${PILOT_CONTAINER_TRUST:?set PILOT_CONTAINER_TRUST}:/run/arvectum/etp-trust:ro"]
     command: ["sh", "-c", "python scripts/ops/etp_trust.py verify-host --host zakupki.gov.ru && python scripts/ops/etp_trust.py verify-host --host int.zakupki.gov.ru"]
     read_only: true
