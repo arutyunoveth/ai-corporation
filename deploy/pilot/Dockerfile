@@ -1,7 +1,7 @@
 FROM python:3.11-slim AS runtime
-ARG REVISION=c0e7c7dbfb65765e5a918318d784115b00b4ce06
-ARG VERSION=r6-main-source-graph-2026-07-21
-LABEL org.opencontainers.image.revision=$REVISION org.opencontainers.image.version=$VERSION org.opencontainers.image.source="https://github.com/arutyunoveth/ai-corporation"
+ARG REVISION=unknown
+ARG VERSION=unreleased
+LABEL org.opencontainers.image.revision=$REVISION org.opencontainers.image.version=$VERSION org.opencontainers.image.source="https://github.com/arutyunoveth/ai-corporation" org.arvectum.release-baseline="c0e7c7dbfb65765e5a918318d784115b00b4ce06"
 RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core libmagic1 && rm -rf /var/lib/apt/lists/* && useradd --create-home --uid 10001 app
 WORKDIR /app
 COPY pyproject.toml README.md ./

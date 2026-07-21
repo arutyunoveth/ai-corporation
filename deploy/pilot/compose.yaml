@@ -12,7 +12,7 @@ services:
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
     restart: unless-stopped
   pilot-migrate:
-    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile }
+    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile, args: { REVISION: "${ARVECTUM_IMAGE_REVISION:?set exact Git commit}", VERSION: "${ARVECTUM_IMAGE_VERSION:?set image version}" } }
     env_file: ${PILOT_SECRET_ENV:?set PILOT_SECRET_ENV to an external 0600 file}
     environment:
       AI_CORP_DATABASE_URL: postgresql+psycopg://${PILOT_DB_USER:-arvectum}:${PILOT_DB_PASSWORD}@pilot-db:5432/${PILOT_DB_NAME:-arvectum_pilot}
@@ -21,7 +21,7 @@ services:
     networks: [pilot-internal]
     restart: "no"
   pilot-api:
-    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile }
+    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile, args: { REVISION: "${ARVECTUM_IMAGE_REVISION:?set exact Git commit}", VERSION: "${ARVECTUM_IMAGE_VERSION:?set image version}" } }
     env_file: ${PILOT_SECRET_ENV:?set PILOT_SECRET_ENV to an external 0600 file}
     environment:
       AI_CORP_DATABASE_URL: postgresql+psycopg://${PILOT_DB_USER:-arvectum}:${PILOT_DB_PASSWORD}@pilot-db:5432/${PILOT_DB_NAME:-arvectum_pilot}
@@ -54,7 +54,7 @@ services:
     networks: [pilot-internal, pilot-egress]
     restart: unless-stopped
   pilot-eis-preflight:
-    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile }
+    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile, args: { REVISION: "${ARVECTUM_IMAGE_REVISION:?set exact Git commit}", VERSION: "${ARVECTUM_IMAGE_VERSION:?set image version}" } }
     environment:
       ARVECTUM_ETP_TLS_ENABLED: "true"
       ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"

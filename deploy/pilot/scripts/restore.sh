@@ -21,7 +21,8 @@ volumes=("${target}_pilot-db" "${target}_pilot-data" "${target}_pilot-artifacts"
 existing=(); for volume in "${volumes[@]}"; do docker volume inspect "$volume" >/dev/null 2>&1 && existing+=("$volume"); done
 if ((${#existing[@]})); then $replace || die "target volumes already exist; pass --replace"; env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" docker compose --project-name "$target" --env-file "$env_file" -f "$compose_file" down || true; docker volume rm "${existing[@]}"; fi
 override=$(mktemp); trap 'rm -f "$override"' EXIT; printf 'services:\n  pilot-proxy:\n    ports: !override ["127.0.0.1:%s:8080"]\n' "$port" > "$override"
-compose=(env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" docker compose --project-name "$target" --env-file "$env_file" -f "$compose_file" -f "$override")
+image_revision=$(git rev-parse HEAD); image_version="${ARVECTUM_IMAGE_VERSION:-r7-controlled-pilot}"
+compose=(env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" "ARVECTUM_IMAGE_REVISION=$image_revision" "ARVECTUM_IMAGE_VERSION=$image_version" docker compose --project-name "$target" --env-file "$env_file" -f "$compose_file" -f "$override")
 "${compose[@]}" up -d pilot-db
 for _ in {1..30}; do "${compose[@]}" exec -T pilot-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null && break; sleep 2; done
 "${compose[@]}" exec -T pilot-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null || die "target DB health timeout"

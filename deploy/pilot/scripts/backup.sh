@@ -9,7 +9,9 @@ while (($#)); do case "$1" in
 [[ -n "$output" && -n "$project" && -n "$env_file" && -n "$compose_file" && -n "$trust_dir" ]] || usage
 [[ -f "$env_file" && -f "$compose_file" && -d "$trust_dir" && ! -e "$output" ]] || die "invalid input path or existing output"
 [[ -z "$expected_pdf" || -n "$verify_run" ]] || die "--expected-pdf-sha256 requires --verify-run-id"
-compose=(env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" docker compose --project-name "$project" --env-file "$env_file" -f "$compose_file")
+[[ -z "$verify_run" || "$verify_run" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$ && "$verify_run" != *..* ]] || die "invalid verify run ID"
+image_revision=$(git rev-parse HEAD); image_version="${ARVECTUM_IMAGE_VERSION:-r7-controlled-pilot}"
+compose=(env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" "ARVECTUM_IMAGE_REVISION=$image_revision" "ARVECTUM_IMAGE_VERSION=$image_version" docker compose --project-name "$project" --env-file "$env_file" -f "$compose_file")
 "${compose[@]}" ps --status running pilot-db | grep -q pilot-db || die "pilot-db is not running"
 "${compose[@]}" ps --status running pilot-api | grep -q pilot-api || die "pilot-api is not running"
 "${compose[@]}" exec -T pilot-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null || die "pilot-db is unhealthy"
@@ -24,9 +26,19 @@ docker run --rm --volumes-from "$api_id:ro" -v "$tmp:/backup" alpine:3.20 sh -ec
 [[ -s "$tmp/artifacts.tar.gz" ]] || die "artifact archive is empty"
 db_sha=$(shasum -a 256 "$tmp/database.dump" | awk '{print $1}'); art_sha=$(shasum -a 256 "$tmp/artifacts.tar.gz" | awk '{print $1}')
 if [[ -n "$verify_run" ]]; then
-  manifest_path=$(docker exec "$api_id" sh -lc "grep -rl --include='*.manifest.json' --fixed-strings '\"run_id\": \"$verify_run\"' /app/data/demo/exports 2>/dev/null | head -1")
-  [[ -n "$manifest_path" ]] || die "no PDF artifact manifest for requested run"
-  docker cp "$api_id:$manifest_path" "$tmp/selected.manifest.json"
+  docker cp "$api_id:/app/data/demo/exports/." "$tmp/export-manifests"
+  python3 - "$tmp/export-manifests" "$verify_run" "$tmp/selected.manifest.json" <<'PY'
+import json,pathlib,sys
+root,run,out=map(pathlib.Path, sys.argv[1:])
+matches=[]
+for p in root.rglob('*.manifest.json'):
+ try:
+  value=json.loads(p.read_text(encoding='utf-8'))
+  if value.get('run_id') == str(run): matches.append(value)
+ except (OSError,ValueError): pass
+if len(matches)!=1: raise SystemExit('expected exactly one artifact manifest')
+pathlib.Path(out).write_text(json.dumps(matches[0]),encoding='utf-8')
+PY
 else printf 'null\n' > "$tmp/selected.manifest.json"; fi
 python3 - "$tmp/manifest.json" "$tmp/selected.manifest.json" "$tmp/database.dump" "$tmp/artifacts.tar.gz" "$project" "$trust_dir" "$verify_run" "$expected_pdf" "$repo_head" "$db_head" <<'PY'
 import hashlib,json,pathlib,re,sys,datetime
@@ -35,6 +47,14 @@ chosen=json.load(open(selected))
 if run:
     if not isinstance(chosen,dict) or chosen.get('run_id')!=run: raise SystemExit('selected artifact manifest is invalid')
     if expected and chosen.get('pdf_sha256','').lower()!=expected.lower(): raise SystemExit('selected PDF hash differs from expected')
+    rel=chosen.get('pdf_relative_path','')
+    if not isinstance(rel,str) or not rel.startswith('data/demo/exports/') or rel.startswith('/') or '..' in pathlib.PurePosixPath(rel).parts or not rel.endswith('.pdf'): raise SystemExit('unsafe PDF path')
+    import tarfile
+    with tarfile.open(art,'r:gz') as archive:
+      members=[x for x in archive.getmembers() if x.name==rel and x.isfile()]
+      if len(members)!=1: raise SystemExit('verified PDF missing or duplicated in archive')
+      payload=archive.extractfile(members[0]).read()
+    if not payload.startswith(b'%PDF-') or len(payload)!=chosen.get('byte_size') or hashlib.sha256(payload).hexdigest()!=chosen.get('pdf_sha256'): raise SystemExit('archived PDF verification failed')
 policy=pathlib.Path(trust)/'policy.yaml'; policy_text=policy.read_text(encoding='utf-8') if policy.is_file() else ''
 fingerprints=re.findall(r'(?i)\b[0-9a-f]{64}\b',policy_text)
 sha=lambda p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
