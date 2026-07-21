@@ -29,7 +29,7 @@ from src.shared.network.etp_trust import (  # noqa: E402
 )
 
 
-ROOT = Path(os.environ.get("ARVECTUM_ETP_TRUST_DIR", "/Users/master/.config/arvectum/trust"))
+ROOT = Path(os.environ.get("ARVECTUM_ETP_TRUST_DIR", str(Path.home() / ".config/arvectum/trust")))
 POLICY = ROOT / "policy.yaml"
 
 
