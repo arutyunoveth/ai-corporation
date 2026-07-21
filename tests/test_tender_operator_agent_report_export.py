@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from src.modules.tender_operator_agent_demo.report_export_service import (
     ExportedDemoReport,
+    _pdf_artifact_paths,
     export_demo_agent_report_docx,
     export_demo_agent_report_pdf,
 )
@@ -187,10 +188,34 @@ class TestPdfExport:
         assert next(iter(payloads)).startswith(b"%PDF-")
 
     def test_corrupt_nonempty_artifact_is_rejected(self, mock_run_data, tmp_path):
-        path = tmp_path / "demo_agent_report_0123456789012345_toa-run-.pdf"
+        result = export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
+        path = Path(result.file_path)
         path.write_bytes(b"not-a-pdf")
-        with pytest.raises(RuntimeError, match="corrupt"):
+        with pytest.raises(RuntimeError, match="invalid"):
             export_demo_agent_report_pdf("toa-run-test-00000000-abc123")
+
+    def test_same_prefix_runs_have_distinct_immutable_pdf_artifacts(self, tmp_path):
+        first = "toa-run-20260721144956-8b2eee"
+        second = "toa-run-20260722110000-abcd12"
+        first_metadata = {**SAMPLE_METADATA, "run_id": first}
+        second_metadata = {**SAMPLE_METADATA, "run_id": second}
+        reports = {
+            first: TenderOperatorDemoReportResponse(run_id=first, report_title="one", generated_at="2026-07-06T12:00:00", recommendation="manual_review_required", recommendation_label="ok", executive_summary=[], manual_checks=[], sections=[], report_markdown="first report"),
+            second: TenderOperatorDemoReportResponse(run_id=second, report_title="two", generated_at="2026-07-06T12:00:00", recommendation="manual_review_required", recommendation_label="ok", executive_summary=[], manual_checks=[], sections=[], report_markdown="second report"),
+        }
+        with (
+            patch("src.modules.tender_operator_agent_demo.report_export_service._load_metadata", side_effect=lambda run_id: first_metadata if run_id == first else second_metadata),
+            patch("src.modules.tender_operator_agent_demo.report_export_service.get_uploaded_demo_report", side_effect=lambda run_id: reports[run_id]),
+            patch("src.modules.tender_operator_agent_demo.report_export_service.get_uploaded_demo_report_html", return_value="<p>report</p>"),
+        ):
+            first_export = export_demo_agent_report_pdf(first)
+            second_export = export_demo_agent_report_pdf(second)
+            assert first_export.file_path != second_export.file_path
+            assert Path(first_export.file_path).read_bytes() != Path(second_export.file_path).read_bytes()
+            assert export_demo_agent_report_pdf(first).file_path == first_export.file_path
+            assert export_demo_agent_report_pdf(second).file_path == second_export.file_path
+            assert __import__("json").loads(Path(first_export.file_path).with_suffix(".manifest.json").read_text())["run_id"] == first
+            assert __import__("json").loads(Path(second_export.file_path).with_suffix(".manifest.json").read_text())["run_id"] == second
 
 
 class TestErrors:

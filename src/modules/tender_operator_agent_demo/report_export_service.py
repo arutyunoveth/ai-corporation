@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape as html_escape, unescape as html_unescape
 from pathlib import Path
+import hashlib
+import json
 import re
 import os
 import tempfile
@@ -57,6 +59,7 @@ class ExportedDemoReport:
 
 _DEMO_EXPORT_SUBDIR = ("demo", "exports")
 _SAFE_RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,127}$")
+_PDF_RENDERER_VERSION = "r7-persisted-pdf-v2"
 
 
 def _analysis_title(registry_number: str) -> str:
@@ -116,6 +119,51 @@ def _format_nmck(price, currency) -> str:
 def _build_export_file_name(registry_number: str, run_id: str, format_name: Literal["docx", "pdf"]) -> str:
     safe_registry = _safe_segment(registry_number, "unknown_registry")
     return f"demo_agent_report_{safe_registry}_{_short_run_id(run_id)}.{format_name}"
+
+
+def _pdf_artifact_key(registry_number: str, run_id: str, report_model_hash: str) -> str:
+    identity = f"{registry_number}\0{run_id}\0{report_model_hash}\0{_PDF_RENDERER_VERSION}".encode("utf-8")
+    return hashlib.sha256(identity).hexdigest()[:24]
+
+
+def _pdf_artifact_paths(root: Path, registry_number: str, run_id: str, report_model_hash: str) -> tuple[str, Path, Path]:
+    key = _pdf_artifact_key(registry_number, run_id, report_model_hash)
+    pdf = _safe_output_path(root, f"demo_agent_report_{_safe_segment(registry_number, 'unknown_registry')}_{key}.pdf")
+    return key, pdf, pdf.with_suffix(".manifest.json")
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _validate_persisted_pdf(pdf_path: Path, manifest_path: Path, *, run_id: str, registry_number: str, report_model_hash: str, artifact_key: str) -> None:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as exc:
+        raise RuntimeError("Persisted PDF manifest is missing or invalid") from exc
+    expected = {
+        "run_id": run_id,
+        "registry_number": registry_number,
+        "report_model_hash": report_model_hash,
+        "artifact_key": artifact_key,
+        "renderer_version": _PDF_RENDERER_VERSION,
+    }
+    if any(manifest.get(key) != value for key, value in expected.items()):
+        raise RuntimeError("Persisted PDF manifest does not belong to requested run")
+    if not pdf_path.is_file() or pdf_path.stat().st_size != manifest.get("byte_size"):
+        raise RuntimeError("Persisted PDF artifact size is invalid")
+    with pdf_path.open("rb") as existing:
+        if existing.read(5) != b"%PDF-":
+            raise RuntimeError("Persisted PDF artifact is corrupt")
+    if _sha256(pdf_path) != manifest.get("pdf_sha256"):
+        raise RuntimeError("Persisted PDF artifact hash is invalid")
+
+
+def _write_pdf_manifest(path: Path, *, run_id: str, registry_number: str, report_model_hash: str, artifact_key: str, pdf_path: Path) -> None:
+    payload = {"run_id": run_id, "registry_number": registry_number, "report_model_hash": report_model_hash, "artifact_key": artifact_key, "pdf_relative_path": f"data/demo/exports/{pdf_path.name}", "pdf_sha256": _sha256(pdf_path), "byte_size": pdf_path.stat().st_size, "renderer_version": _PDF_RENDERER_VERSION}
+    temporary = path.with_suffix(path.suffix + ".partial")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
 
 
 def _safe_output_dir(data_dir: str | None = None) -> Path:
@@ -404,9 +452,11 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
     title = _analysis_title(registry_number)
     metadata_lines = _demo_metadata_lines(metadata)
 
+    canonical = _load_canonical_report(run_id)
+    report_model_hash = hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest() if canonical else hashlib.sha256(report_markdown.encode("utf-8")).hexdigest()
     root = _safe_output_dir()
-    file_name = _build_export_file_name(registry_number, run_id, "pdf")
-    output_path = _safe_output_path(root, file_name)
+    artifact_key, output_path, manifest_path = _pdf_artifact_paths(root, registry_number, run_id, report_model_hash)
+    file_name = output_path.name
     # A completed run's customer PDF is an immutable persisted artifact.
     lock_path = output_path.with_suffix(output_path.suffix + ".lock")
     with lock_path.open("a+b") as lock:
@@ -415,17 +465,13 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
             fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         except ImportError:  # pragma: no cover - Windows development fallback
             pass
-        if output_path.is_file():
-            with output_path.open("rb") as existing:
-                header = existing.read(5)
-            if output_path.stat().st_size == 0 or header != b"%PDF-":
-                raise RuntimeError("Persisted PDF artifact is corrupt")
+        if output_path.is_file() or manifest_path.is_file():
+            _validate_persisted_pdf(output_path, manifest_path, run_id=run_id, registry_number=registry_number, report_model_hash=report_model_hash, artifact_key=artifact_key)
         else:
             descriptor, temporary_name = tempfile.mkstemp(prefix=".pdf-", suffix=".partial", dir=root)
             os.close(descriptor)
             temporary_path = Path(temporary_name)
             try:
-                canonical = _load_canonical_report(run_id)
                 if canonical:
                     _build_pdf_from_canonical(canonical, title, temporary_path)
                 else:
@@ -434,6 +480,7 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
                     if created.read(5) != b"%PDF-":
                         raise RuntimeError("Generated PDF artifact is invalid")
                 os.replace(temporary_path, output_path)
+                _write_pdf_manifest(manifest_path, run_id=run_id, registry_number=registry_number, report_model_hash=report_model_hash, artifact_key=artifact_key, pdf_path=output_path)
             finally:
                 temporary_path.unlink(missing_ok=True)
 

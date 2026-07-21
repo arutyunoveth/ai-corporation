@@ -1,68 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() { echo "usage: $0 --output DIR --project-name NAME --env-file FILE --compose-file FILE [--run-id ID]" >&2; exit 2; }
+usage() { echo "usage: $0 --output DIR --project-name NAME --env-file FILE --compose-file FILE --trust-dir DIR [--verify-run-id ID --expected-pdf-sha256 SHA256]" >&2; exit 2; }
 die() { echo "backup: $*" >&2; exit 1; }
-
-output= project= env_file= compose_file= run_id="${PILOT_ACCEPTED_RUN_ID:-toa-run-20260721144956-8b2eee}"
-while (($#)); do
-  case "$1" in
-    --output) output=${2:-}; shift 2;; --project-name) project=${2:-}; shift 2;;
-    --env-file) env_file=${2:-}; shift 2;; --compose-file) compose_file=${2:-}; shift 2;;
-    --run-id) run_id=${2:-}; shift 2;; -h|--help) usage;; *) usage;;
-  esac
-done
-[[ -n "$output" && -n "$project" && -n "$env_file" && -n "$compose_file" ]] || usage
-[[ -f "$env_file" && -f "$compose_file" ]] || die "env file or compose file is missing"
-command -v docker >/dev/null || die "docker is unavailable"
-[[ ! -e "$output" ]] || die "output path already exists"
-mkdir -p "$(dirname "$output")"
-
-compose=(docker compose --project-name "$project" --env-file "$env_file" -f "$compose_file")
+output= project= env_file= compose_file= trust_dir= verify_run= expected_pdf=
+while (($#)); do case "$1" in
+  --output) output=${2:-}; shift 2;; --project-name) project=${2:-}; shift 2;; --env-file) env_file=${2:-}; shift 2;; --compose-file) compose_file=${2:-}; shift 2;; --trust-dir) trust_dir=${2:-}; shift 2;; --verify-run-id) verify_run=${2:-}; shift 2;; --expected-pdf-sha256) expected_pdf=${2:-}; shift 2;; *) usage;; esac; done
+[[ -n "$output" && -n "$project" && -n "$env_file" && -n "$compose_file" && -n "$trust_dir" ]] || usage
+[[ -f "$env_file" && -f "$compose_file" && -d "$trust_dir" && ! -e "$output" ]] || die "invalid input path or existing output"
+[[ -z "$expected_pdf" || -n "$verify_run" ]] || die "--expected-pdf-sha256 requires --verify-run-id"
+compose=(env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" docker compose --project-name "$project" --env-file "$env_file" -f "$compose_file")
 "${compose[@]}" ps --status running pilot-db | grep -q pilot-db || die "pilot-db is not running"
 "${compose[@]}" ps --status running pilot-api | grep -q pilot-api || die "pilot-api is not running"
 "${compose[@]}" exec -T pilot-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null || die "pilot-db is unhealthy"
-api_id=$("${compose[@]}" ps -q pilot-api)
-[[ -n "$api_id" ]] || die "pilot-api container is missing"
-
-tmp=$(mktemp -d "${output%/}.tmp.XXXXXX")
-cleanup() { rm -rf "$tmp"; }
-trap cleanup EXIT
-
+api_id=$("${compose[@]}" ps -q pilot-api); [[ -n "$api_id" ]] || die "pilot-api container is missing"
+mkdir -p "$(dirname "$output")"; tmp=$(mktemp -d "${output%/}.tmp.XXXXXX"); trap 'rm -rf "$tmp"' EXIT
 "${compose[@]}" exec -T pilot-db sh -lc 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-owner --no-privileges' > "$tmp/database.dump"
-[[ -s "$tmp/database.dump" ]] || die "pg_dump produced an empty dump"
-"${compose[@]}" exec -T pilot-db pg_restore --list < "$tmp/database.dump" >/dev/null || die "pg_restore validation failed"
-
-pdf_rel="data/demo/exports/demo_agent_report_0379100000726000101_toa-run-.pdf"
-pdf_host="$tmp/accepted.pdf"
-docker cp "$api_id:/app/$pdf_rel" "$pdf_host" || die "persisted PDF is missing"
-[[ $(head -c 5 "$pdf_host") == '%PDF-' ]] || die "persisted PDF is invalid"
-pdf_sha=$(shasum -a 256 "$pdf_host" | awk '{print $1}')
-[[ "$pdf_sha" == "2a09d8e4985f9167dd9a5a7dd7ca384499b5dcc70ca4fd328210aaf9002cb94d" ]] || die "persisted PDF hash differs from accepted baseline"
-report_sha=$(docker exec "$api_id" sh -lc "sha256sum /app/artifacts/tender_operator_demo/$run_id/output/canonical_report.json" | awk '{print $1}')
-
-docker run --rm --volumes-from "$api_id:ro" -v "$tmp:/backup" alpine:3.20 sh -ec '
-  tar -C /app --exclude="*.tmp" --exclude="*.partial" --exclude="*.part" -czf /backup/artifacts.tar.gz data artifacts eis-archives
-'
+[[ -s "$tmp/database.dump" ]] && "${compose[@]}" exec -T pilot-db pg_restore --list < "$tmp/database.dump" >/dev/null || die "database dump validation failed"
+docker run --rm --volumes-from "$api_id:ro" -v "$tmp:/backup" alpine:3.20 sh -ec 'tar -C /app --exclude="*.tmp" --exclude="*.partial" --exclude="*.part" -czf /backup/artifacts.tar.gz data artifacts eis-archives'
 [[ -s "$tmp/artifacts.tar.gz" ]] || die "artifact archive is empty"
-tar -tzf "$tmp/artifacts.tar.gz" | grep -qx "$pdf_rel" || die "archive misses persisted PDF"
-archive_pdf_sha=$(tar -xOzf "$tmp/artifacts.tar.gz" "$pdf_rel" | shasum -a 256 | awk '{print $1}')
-[[ "$archive_pdf_sha" == "$pdf_sha" ]] || die "archived PDF hash mismatch"
-
-db_sha=$(shasum -a 256 "$tmp/database.dump" | awk '{print $1}')
-art_sha=$(shasum -a 256 "$tmp/artifacts.tar.gz" | awk '{print $1}')
-app_commit=$(git rev-parse HEAD)
-tree_sha=$(git rev-parse HEAD^{tree})
-alembic_head=$(docker exec "$api_id" alembic heads 2>/dev/null | awk 'NR==1 {print $1}')
-python3 - "$tmp/manifest.json" "$project" "$app_commit" "$tree_sha" "$alembic_head" "$db_sha" "$art_sha" "$tmp/database.dump" "$tmp/artifacts.tar.gz" "$run_id" "$report_sha" "$pdf_rel" "$pdf_host" "$pdf_sha" <<'PY'
-import json, pathlib, sys
-p=pathlib.Path
-(out, project, commit, tree, head, dbsha, artsha, db, art, run, reportsha, pdfrel, pdf, pdfsha)=sys.argv[1:]
-payload={"manifest_version":1,"created_at_utc":__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),"source_project":project,"release_baseline_commit":"c0e7c7dbfb65765e5a918318d784115b00b4ce06","application_commit":commit,"application_tree_sha":tree,"alembic_head":head,"database_dump":{"filename":"database.dump","byte_size":p(db).stat().st_size,"sha256":dbsha,"format":"pg_dump custom (-Fc)"},"artifacts_archive":{"filename":"artifacts.tar.gz","byte_size":p(art).stat().st_size,"sha256":artsha},"accepted_run":{"run_id":run,"procurement_number":"0379100000726000101","report_model_hash":reportsha,"pdf_relative_path":pdfrel,"pdf_size":p(pdf).stat().st_size,"pdf_sha256":pdfsha},"external_prerequisites":{"eis_root_sha256":"C2A80C62195278A6636DE9DE1ECDA45EE7E929FB8E2EC74B3A5ABD7F4A1129F3","eis_intermediate_sha256":"2155785036C900DBB5F1BB2A1569C80C55595BD6BF94867A29BBDDBC7D88A3F2","certificates_not_included":True}}
-p(out).write_text(json.dumps(payload, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+db_sha=$(shasum -a 256 "$tmp/database.dump" | awk '{print $1}'); art_sha=$(shasum -a 256 "$tmp/artifacts.tar.gz" | awk '{print $1}')
+if [[ -n "$verify_run" ]]; then
+  manifest_path=$(docker exec "$api_id" sh -lc "grep -rl --include='*.manifest.json' --fixed-strings '\"run_id\": \"$verify_run\"' /app/data/demo/exports 2>/dev/null | head -1")
+  [[ -n "$manifest_path" ]] || die "no PDF artifact manifest for requested run"
+  docker cp "$api_id:$manifest_path" "$tmp/selected.manifest.json"
+else printf 'null\n' > "$tmp/selected.manifest.json"; fi
+python3 - "$tmp/manifest.json" "$tmp/selected.manifest.json" "$tmp/database.dump" "$tmp/artifacts.tar.gz" "$project" "$trust_dir" "$verify_run" "$expected_pdf" <<'PY'
+import hashlib,json,pathlib,re,sys,datetime
+out,selected,db,art,project,trust,run,expected=sys.argv[1:]
+chosen=json.load(open(selected))
+if run:
+    if not isinstance(chosen,dict) or chosen.get('run_id')!=run: raise SystemExit('selected artifact manifest is invalid')
+    if expected and chosen.get('pdf_sha256','').lower()!=expected.lower(): raise SystemExit('selected PDF hash differs from expected')
+policy=pathlib.Path(trust)/'policy.yaml'; policy_text=policy.read_text(encoding='utf-8') if policy.is_file() else ''
+fingerprints=re.findall(r'(?i)\b[0-9a-f]{64}\b',policy_text)
+sha=lambda p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+payload={'manifest_version':1,'created_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'source_project':project,'release_baseline_commit':'c0e7c7dbfb65765e5a918318d784115b00b4ce06','application_commit':__import__('subprocess').check_output(['git','rev-parse','HEAD'],text=True).strip(),'application_tree_sha':__import__('subprocess').check_output(['git','rev-parse','HEAD^{tree}'],text=True).strip(),'alembic_head':None,'database_dump':{'filename':'database.dump','byte_size':pathlib.Path(db).stat().st_size,'sha256':sha(db),'format':'pg_dump custom (-Fc)'},'artifacts_archive':{'filename':'artifacts.tar.gz','byte_size':pathlib.Path(art).stat().st_size,'sha256':sha(art)},'accepted_run':chosen,'external_prerequisites':{'certificate_sha256':fingerprints,'certificates_not_included':True}}
+pathlib.Path(out).write_text(json.dumps(payload,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 PY
-(cd "$tmp" && shasum -a 256 database.dump artifacts.tar.gz manifest.json > SHA256SUMS)
-(cd "$tmp" && shasum -a 256 -c SHA256SUMS) >/dev/null || die "checksum validation failed"
-mv "$tmp" "$output"
-trap - EXIT
-echo "backup created: $output"
+(cd "$tmp" && shasum -a 256 database.dump artifacts.tar.gz manifest.json > SHA256SUMS && shasum -a 256 -c SHA256SUMS >/dev/null) || die "checksum validation failed"
+mv "$tmp" "$output"; trap - EXIT; echo "backup created: $output"

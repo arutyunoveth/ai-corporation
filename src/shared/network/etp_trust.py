@@ -132,6 +132,7 @@ def validate_ca_file(authority: Authority) -> Path:
                 ["openssl", "x509", "-inform", "DER", "-in", str(path), "-outform", "DER"],
                 check=True, capture_output=True, timeout=5,
             ).stdout
+            cert_blobs = [der]
         except (OSError, subprocess.SubprocessError) as der_exc:
             raise ETPTrustConfigurationError(f"Cannot decode CA certificate: {der_exc}") from exc
     digests = []
