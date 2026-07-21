@@ -37,20 +37,35 @@ services:
       ARVECTUM_ETP_TLS_ENABLED: "true"
       ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"
       ARVECTUM_ETP_PROXY_BYPASS_ENABLED: "true"
+      ARVECTUM_ETP_TLS_POLICY_PATH: /run/arvectum/etp-trust/policy.yaml
     volumes:
       - pilot-data:/app/data
       - pilot-artifacts:/app/artifacts
       - pilot-eis:/app/eis-archives
       # Customer HTTP runs are persisted outside the read-only image layer.
       - pilot-artifacts:/app/company_agent_runs
-      - "${PILOT_TLS_POLICY:?set PILOT_TLS_POLICY}:/run/secrets/etp-policy.yaml:ro"
+      - "${PILOT_CONTAINER_TRUST:?set PILOT_CONTAINER_TRUST}:/run/arvectum/etp-trust:ro"
     read_only: true
     tmpfs: [/tmp]
     security_opt: [no-new-privileges:true]
-    depends_on: { pilot-migrate: { condition: service_completed_successfully } }
+    depends_on: { pilot-migrate: { condition: service_completed_successfully }, pilot-eis-preflight: { condition: service_completed_successfully } }
     # Database traffic stays private; this is the only workload with controlled EIS egress.
     networks: [pilot-internal, pilot-egress]
     restart: unless-stopped
+  pilot-eis-preflight:
+    build: { context: ../.., dockerfile: deploy/pilot/Dockerfile }
+    environment:
+      ARVECTUM_ETP_TLS_ENABLED: "true"
+      ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"
+      ARVECTUM_ETP_PROXY_BYPASS_ENABLED: "true"
+      ARVECTUM_ETP_TLS_POLICY_PATH: /run/arvectum/etp-trust/policy.yaml
+    volumes: ["${PILOT_CONTAINER_TRUST:?set PILOT_CONTAINER_TRUST}:/run/arvectum/etp-trust:ro"]
+    command: ["sh", "-c", "python scripts/ops/etp_trust.py verify-host --host zakupki.gov.ru && python scripts/ops/etp_trust.py verify-host --host int.zakupki.gov.ru"]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    networks: [pilot-internal, pilot-egress]
+    restart: "no"
   pilot-proxy:
     image: nginx:1.27-alpine
     ports: ["127.0.0.1:18081:8080"]
