@@ -9,6 +9,8 @@ test:
 
 ci: check test
 
+# Local-only developer targets: require the maintainer's local trust material
+# under /Users/master and are intentionally not used by CI or deployment.
 eis-preflight:
 	@test -x .venv-r3/bin/python || (echo ".venv-r3/bin/python is required"; exit 2)
 	@test -f /Users/master/.config/arvectum/r3-soap-token.env || (echo "R3 SOAP token environment is required"; exit 2)
