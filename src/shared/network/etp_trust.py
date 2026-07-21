@@ -21,7 +21,7 @@ class ETPTrustConfigurationError(ValueError):
 class Authority:
     name: str
     file: Path | None = None
-    certificate_sha256: str | None = None
+    certificate_sha256: tuple[str, ...] | None = None
     type: str = "file"
 
 
@@ -79,13 +79,14 @@ def load_trust_policy(path: str | os.PathLike[str] | None) -> TrustPolicy:
             continue
         if not isinstance(value, dict) or not value.get("file") or not fingerprint_raw:
             raise ETPTrustConfigurationError(f"Authority {name!r} requires file and certificate_sha256")
-        fingerprint = str(fingerprint_raw).replace(":", "").upper()
-        if not re.fullmatch(r"[0-9A-F]{64}", fingerprint):
+        fingerprint_values = fingerprint_raw if isinstance(fingerprint_raw, list) else [fingerprint_raw]
+        fingerprints = tuple(str(item).replace(":", "").upper() for item in fingerprint_values)
+        if not fingerprints or any(not re.fullmatch(r"[0-9A-F]{64}", item) for item in fingerprints):
             raise ETPTrustConfigurationError(f"Authority {name!r} has invalid SHA-256")
         authorities[str(name)] = Authority(
             name=str(name),
             file=(policy_path.parent / str(value["file"])).resolve(),
-            certificate_sha256=fingerprint,
+            certificate_sha256=fingerprints,
             type="file",
         )
     hosts = tuple(
@@ -119,11 +120,12 @@ def validate_ca_file(authority: Authority) -> Path:
         raise ETPTrustConfigurationError(f"File authority {authority.name} is incomplete")
     if not path.is_file() or path.is_symlink():
         raise ETPTrustConfigurationError(f"CA file is missing or symlinked: {path}")
+    expected = (authority.certificate_sha256,) if isinstance(authority.certificate_sha256, str) else authority.certificate_sha256
+    pem_blocks = re.findall(rb"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", path.read_bytes(), re.DOTALL)
     try:
-        der = subprocess.run(
-            ["openssl", "x509", "-in", str(path), "-outform", "DER"],
-            check=True, capture_output=True, timeout=5,
-        ).stdout
+        cert_blobs = pem_blocks or [subprocess.run(
+            ["openssl", "x509", "-in", str(path), "-outform", "DER"], check=True, capture_output=True, timeout=5,
+        ).stdout]
     except (OSError, subprocess.SubprocessError) as exc:
         try:
             der = subprocess.run(
@@ -132,8 +134,17 @@ def validate_ca_file(authority: Authority) -> Path:
             ).stdout
         except (OSError, subprocess.SubprocessError) as der_exc:
             raise ETPTrustConfigurationError(f"Cannot decode CA certificate: {der_exc}") from exc
-    digest = hashlib.sha256(der).hexdigest().upper()
-    if digest != authority.certificate_sha256:
+    digests = []
+    for blob in cert_blobs:
+        with tempfile.NamedTemporaryFile(suffix=".pem") as certificate:
+            certificate.write(blob)
+            certificate.flush()
+            der = subprocess.run(["openssl", "x509", "-in", certificate.name, "-outform", "DER"], check=True, capture_output=True, timeout=5).stdout
+            text = subprocess.run(["openssl", "x509", "-in", certificate.name, "-noout", "-text"], check=True, capture_output=True, text=True, timeout=5).stdout
+        if "CA:TRUE" not in text:
+            raise ETPTrustConfigurationError(f"Certificate is not marked as a CA: {path}")
+        digests.append(hashlib.sha256(der).hexdigest().upper())
+    if set(digests) != set(expected) or len(digests) != len(expected):
         raise ETPTrustConfigurationError(f"SHA-256 mismatch for authority {authority.name}")
     try:
         info = ssl._ssl._test_decode_cert(str(path))
