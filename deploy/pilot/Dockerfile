@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-co
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY scripts ./scripts
+COPY docs/agents/company ./docs/agents/company
 COPY migrations ./migrations
 COPY alembic.ini ./
 RUN pip install --no-cache-dir . && mkdir -p /app/data /app/artifacts /app/eis-archives && chown -R app:app /app
