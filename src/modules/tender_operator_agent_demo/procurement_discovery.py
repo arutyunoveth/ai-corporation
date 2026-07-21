@@ -456,6 +456,7 @@ def search_public_44fz(
     reference_date: date | None = None,
 ) -> dict:
     normalized_law = normalize_public_eis_law(law)
+    exact_procurement_number = _looks_like_exact_procurement_number(query)
     page_num = max(page, 1)
     effective_page_size = min(max(page_size, 1), 50)
     requested_limit = min(max(max_results or effective_page_size, 1), 100)
@@ -649,6 +650,7 @@ def search_public_44fz(
             procedure_type=procedure_type,
             status_grace_days=2,
             reference_date=reference_date,
+            skip_status_consistency=exact_procurement_number,
         )
         newly_filtered = len(page_cards) - len(filtered)
         total_filtered_count += newly_filtered
@@ -699,7 +701,7 @@ def search_public_44fz(
         ).model_dump(mode="json")
 
     valid_cards = _sort_public_44fz_cards(valid_cards)
-    profile = None if _looks_like_exact_procurement_number(query) else get_supplier_profile()
+    profile = None if exact_procurement_number else get_supplier_profile()
     scored_cards = []
     for card in valid_cards[:requested_limit]:
         card_with_relevance = dict(card)
@@ -910,6 +912,7 @@ def _filter_public_44fz_cards(
     procedure_type: str | None = None,
     status_grace_days: int = 0,
     reference_date: date | None = None,
+    skip_status_consistency: bool = False,
 ) -> list[dict]:
     filtered: list[dict] = []
     effective_status_grace_days = status_grace_days or (2 if status_filter else 0)
@@ -917,7 +920,7 @@ def _filter_public_44fz_cards(
         # Explicit deadline ranges are authoritative. Otherwise retain the
         # normal active-status expiry check, with the caller-selected grace
         # period (the search path uses a small ingestion grace window).
-        if not (deadline_from or deadline_to) and not _matches_public_card_status_consistency(
+        if not skip_status_consistency and not (deadline_from or deadline_to) and not _matches_public_card_status_consistency(
             card, today=reference_date, grace_days=effective_status_grace_days
         ):
             continue

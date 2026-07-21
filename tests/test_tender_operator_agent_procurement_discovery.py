@@ -331,6 +331,54 @@ def test_public_44fz_search_by_exact_notice_number_skips_supplier_relevance(monk
     assert "relevance" not in result["cards"][0]
 
 
+def test_public_44fz_exact_number_search_isolated_from_supplier_relevance_state(monkeypatch):
+    """Exact-number calls must neither consume nor mutate relevance state."""
+    import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
+
+    card = {
+        "title": "Тестовая закупка",
+        "notice_number": "0888500000226000399",
+        "reestr_number": "0888500000226000399",
+        "customer_name": "Заказчик",
+        "initial_price": 1000000.0,
+        "publication_date": "07.07.2026",
+        "deadline": "15.07.2026",
+        "status": "Закупка завершена",
+        "procedure_type": "Электронный аукцион",
+        "source_url": "https://zakupki.gov.ru/notice?regNumber=0888500000226000399",
+        "law": "44fz",
+        "warnings": [],
+    }
+    monkeypatch.setattr(
+        discovery,
+        "fetch_public_44fz_search_page",
+        lambda url: {"status": "parsed", "html": "<html></html>", "error": None},
+    )
+    monkeypatch.setattr(discovery, "parse_44fz_search_results", lambda html: [card])
+
+    relevance_calls: list[str] = []
+
+    class Score:
+        def to_dict(self):
+            return {"status": "relevant"}
+
+    def score(**kwargs):
+        relevance_calls.append(kwargs["title"])
+        return Score()
+
+    monkeypatch.setattr(discovery, "score_procurement_card", score)
+
+    ordinary_first = discovery.search_public_44fz(query="тест", law="44fz", max_results=1)
+    exact_first = discovery.search_public_44fz(query=card["notice_number"], law="44fz", max_results=1)
+    ordinary_second = discovery.search_public_44fz(query="тест", law="44fz", max_results=1)
+    exact_second = discovery.search_public_44fz(query=card["notice_number"], law="44fz", max_results=1)
+
+    assert [result["status"] for result in (ordinary_first, exact_first, ordinary_second, exact_second)] == ["parsed"] * 4
+    assert all("relevance" in result["cards"][0] for result in (ordinary_first, ordinary_second))
+    assert all("relevance" not in result["cards"][0] for result in (exact_first, exact_second))
+    assert relevance_calls == [card["title"], card["title"]]
+
+
 def test_public_44fz_search_backfill_fills_to_page_size(monkeypatch):
     import src.modules.tender_operator_agent_demo.procurement_discovery as discovery
 

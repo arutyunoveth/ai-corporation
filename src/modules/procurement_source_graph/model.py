@@ -185,7 +185,15 @@ def _graph_reconciliation(
         if primary_item:
             decision, item = "distinct_canonical_item", primary_item
         elif matched_item:
-            decision, item = "confirming_source", matched_item
+            decision = (
+                "complementary_source"
+                if any(
+                    source.fragment.fragment_key == fragment.fragment_key
+                    for source in matched_item.complementary_sources
+                )
+                else "confirming_source"
+            )
+            item = matched_item
         elif fragment.fragment_key in ambiguous:
             decision, item = "ambiguous_candidate", None
         else:
