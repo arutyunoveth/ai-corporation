@@ -11,6 +11,24 @@ while (($#)); do case "$1" in --backup) backup=${2:-};shift 2;;--target-project)
 (cd "$backup" && shasum -a 256 -c SHA256SUMS) >/dev/null || die "backup checksum mismatch"
 source_project=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); assert m.get("manifest_version")==1; print(m.get("source_project", ""))' "$backup/manifest.json") || die "malformed manifest"
 [[ -n "$source_project" && "$target" != "$source_project" ]] || die "target must differ from source project"
+accepted_values=$(mktemp)
+trap 'rm -f "$accepted_values"' EXIT
+python3 - "$backup/manifest.json" > "$accepted_values" <<'PY'
+import json, pathlib, re, sys
+m=json.load(open(sys.argv[1], encoding='utf-8')); item=m.get('accepted_run')
+if item is None:
+ print(); print(); print(); print(); raise SystemExit(0)
+if not isinstance(item,dict): raise SystemExit('accepted_run must be null or object')
+run,path,digest,size=(item.get(k) for k in ('run_id','pdf_relative_path','pdf_sha256','byte_size'))
+bad=re.compile(r'[\s/\\`$;|&<>(){}\[\]"\']')
+if not isinstance(run,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{2,127}',run) or '..' in run or bad.search(run): raise SystemExit('unsafe accepted run ID')
+if not isinstance(path,str) or not path.startswith('data/demo/exports/') or not path.endswith('.pdf') or path.startswith('/') or '..' in pathlib.PurePosixPath(path).parts or bad.search(path) or pathlib.PurePosixPath(path).as_posix()!=path or '//' in path: raise SystemExit('unsafe accepted PDF path')
+if not isinstance(digest,str) or not re.fullmatch(r'[0-9a-f]{64}',digest): raise SystemExit('unsafe accepted PDF hash')
+if not isinstance(size,int) or size<=0: raise SystemExit('unsafe accepted PDF size')
+print(run); print(path); print(digest); print(size)
+PY
+[[ $? -eq 0 ]] || die "invalid accepted artifact metadata"
+{ IFS= read -r run_id; IFS= read -r pdf_rel; IFS= read -r expected; IFS= read -r pdf_size; } < "$accepted_values"
 python3 - "$backup/artifacts.tar.gz" <<'PY'
 import pathlib,sys,tarfile
 with tarfile.open(sys.argv[1],'r:gz') as a:
@@ -20,7 +38,7 @@ PY
 volumes=("${target}_pilot-db" "${target}_pilot-data" "${target}_pilot-artifacts" "${target}_pilot-eis")
 existing=(); for volume in "${volumes[@]}"; do docker volume inspect "$volume" >/dev/null 2>&1 && existing+=("$volume"); done
 if ((${#existing[@]})); then $replace || die "target volumes already exist; pass --replace"; env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" docker compose --project-name "$target" --env-file "$env_file" -f "$compose_file" down || true; docker volume rm "${existing[@]}"; fi
-override=$(mktemp); trap 'rm -f "$override"' EXIT; printf 'services:\n  pilot-proxy:\n    ports: !override ["127.0.0.1:%s:8080"]\n' "$port" > "$override"
+override=$(mktemp); trap 'rm -f "$override" "$accepted_values" "${verify_tmp:-}"' EXIT; printf 'services:\n  pilot-proxy:\n    ports: !override ["127.0.0.1:%s:8080"]\n' "$port" > "$override"
 image_revision=$(git rev-parse HEAD); image_version="${ARVECTUM_IMAGE_VERSION:-r7-controlled-pilot}"
 compose=(env "PILOT_SECRET_ENV=$env_file" "PILOT_CONTAINER_TRUST=$trust_dir" "ARVECTUM_IMAGE_REVISION=$image_revision" "ARVECTUM_IMAGE_VERSION=$image_version" docker compose --project-name "$target" --env-file "$env_file" -f "$compose_file" -f "$override")
 "${compose[@]}" up -d pilot-db
@@ -36,16 +54,14 @@ docker run --rm -v "${target}_pilot-data:/restore/data" -v "${target}_pilot-arti
 for _ in {1..45}; do [[ $(docker inspect -f '{{.State.Health.Status}}' "${target}-pilot-api-1" 2>/dev/null || true) == healthy ]] && break; sleep 2; done
 [[ $(docker inspect -f '{{.State.Health.Status}}' "${target}-pilot-api-1" 2>/dev/null || true) == healthy ]] || die "API health timeout"
 curl --noproxy '*' -fsS "http://127.0.0.1:$port/health/tender-agent" >/dev/null || die "proxy health timeout"
-run_id=$(python3 -c 'import json,sys; x=json.load(open(sys.argv[1])).get("accepted_run"); print(x.get("run_id", "") if isinstance(x,dict) else "")' "$backup/manifest.json")
 if [[ -n "$run_id" ]]; then
   verify_tmp=$(mktemp -d); trap 'rm -f "$override"; rm -rf "$verify_tmp"' EXIT
   set -a; source "$env_file"; set +a
-  pdf_rel=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["accepted_run"]["pdf_relative_path"] if "pdf_relative_path" in json.load(open(sys.argv[1]))["accepted_run"] else "")' "$backup/manifest.json")
-  expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["accepted_run"]["pdf_sha256"])' "$backup/manifest.json")
-  before=$(docker run --rm -v "${target}_pilot-data:/data:ro" alpine:3.20 sh -ec "stat -c '%Y:%s' /data/${pdf_rel#data/}")
+  container_pdf_path="/data/${pdf_rel#data/}"
+  before=$(docker run --rm -v "${target}_pilot-data:/data:ro" alpine:3.20 stat -c '%Y:%s' "$container_pdf_path")
   curl --noproxy '*' -fsS -u "$AI_CORP_PILOT_AUTH_USERNAME:$AI_CORP_PILOT_AUTH_PASSWORD" "http://127.0.0.1:$port/api/demo/tender-agent/runs/$run_id/export/pdf" -o "$verify_tmp/restored.pdf"
   [[ $(shasum -a 256 "$verify_tmp/restored.pdf" | awk '{print $1}') == "$expected" ]] || die "restored PDF hash mismatch"
-  after=$(docker run --rm -v "${target}_pilot-data:/data:ro" alpine:3.20 sh -ec "stat -c '%Y:%s' /data/${pdf_rel#data/}")
+  after=$(docker run --rm -v "${target}_pilot-data:/data:ro" alpine:3.20 stat -c '%Y:%s' "$container_pdf_path")
   [[ "$before" == "$after" ]] || die "restored PDF mtime changed"
 fi
 echo "restore verified"
