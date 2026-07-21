@@ -405,11 +405,13 @@ def export_demo_agent_report_pdf(run_id: str) -> ExportedDemoReport:
     root = _safe_output_dir()
     file_name = _build_export_file_name(registry_number, run_id, "pdf")
     output_path = _safe_output_path(root, file_name)
-    canonical = _load_canonical_report(run_id)
-    if canonical:
-        _build_pdf_from_canonical(canonical, title, output_path)
-    else:
-        _build_pdf_from_parts(title, metadata_lines, report_markdown, output_path)
+    # A completed run's customer PDF is an immutable persisted artifact.
+    if not output_path.is_file() or output_path.stat().st_size == 0:
+        canonical = _load_canonical_report(run_id)
+        if canonical:
+            _build_pdf_from_canonical(canonical, title, output_path)
+        else:
+            _build_pdf_from_parts(title, metadata_lines, report_markdown, output_path)
 
     return ExportedDemoReport(
         run_id=run_id,
