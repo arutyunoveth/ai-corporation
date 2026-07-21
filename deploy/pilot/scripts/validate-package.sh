@@ -12,6 +12,7 @@ rg -q 'networks: \[pilot-internal, pilot-egress\]' "$compose"
 rg -q 'pilot-internal: \{ internal: true \}' "$compose"
 rg -q 'pilot-egress: \{\}' "$compose"
 rg -q '127\.0\.0\.1:18081:8080' "$compose"
+rg -q 'location = /health/tender-agent.*proxy_set_header Host \$host' "$root/deploy/pilot/nginx.conf"
 rg -q '^COPY scripts ./scripts$' "$dockerfile"
 rg -q '^COPY docs/agents/company ./docs/agents/company$' "$dockerfile"
 
