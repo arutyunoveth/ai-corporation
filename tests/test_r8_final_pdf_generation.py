@@ -68,7 +68,7 @@ def test_final_pdf_generation_rejects_conflict_and_tampering(tmp_path, monkeypat
     generated = publish_final_pdf_generation(**_kwargs())
     changed = {**_kwargs(), "pdf_bytes": b"%PDF-1.4\nother\n"}
     with pytest.raises(FinalPdfArtifactConflictError):
-        publish_final_pdf_generation(**changed)
+        publish_final_pdf_generation(**changed, allow_existing_verified=False)
     generated.pdf_path.write_bytes(b"%PDF-1.4\ntampered\n")
     expected = {
         key: generated.manifest[key]

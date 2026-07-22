@@ -335,6 +335,7 @@ def publish_final_pdf_generation(
     production_model_hash: str,
     report_model_hash: str,
     pdf_bytes: bytes,
+    allow_existing_verified: bool = True,
     now_factory: Callable[[], datetime] = lambda: datetime.now(UTC),
     fault: Callable[[str], None] | None = None,
 ) -> PublishedFinalPdfGeneration:
@@ -441,7 +442,18 @@ def publish_final_pdf_generation(
                 artifacts_root.mkdir(mode=0o750)
             final = artifacts_root / artifact_key
             if final.exists():
-                verified_existing = _read_generation(final, expected)
+                existing_expected = expected
+                if allow_existing_verified:
+                    # Rendering is intentionally outside the filesystem lock. A
+                    # second renderer may emit different volatile PDF bytes; the
+                    # first immutable generation remains authoritative when all
+                    # canonical identities match.
+                    existing_expected = {
+                        key: value
+                        for key, value in expected.items()
+                        if key not in {"pdf_sha256", "byte_size"}
+                    }
+                verified_existing = _read_generation(final, existing_expected)
                 return PublishedFinalPdfGeneration(
                     final,
                     verified_existing.pdf_path,
