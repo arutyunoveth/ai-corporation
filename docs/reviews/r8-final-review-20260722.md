@@ -22,21 +22,22 @@
 - Customer input identities are content-derived and no longer depend on a
   generated document UUID. Document role detection is in a neutral module and
   the customer resolver has no demo-module import.
+- `make test-r8-postgres` starts a disposable PostgreSQL 16+pgvector service,
+  runs migrations, exercises two independent FastAPI request/session
+  boundaries, verifies the single published artifact, and tears the service
+  down in `finally`. GitHub Actions run `29942467649` completed this job.
 
 ### Blocking gaps
 
 1. The acceptance evidence directory retains only four of the fourteen
    required files. It lacks lifecycle, migration-cycle, tenant-isolation,
    restart, tampering, inventory, DB-count, commands, and checksum evidence.
-2. `tests/test_r8_artifact_concurrency.py` remains an identity-only unit test;
-   the requested automated PostgreSQL/FastAPI multi-session integration test
-   and `make test-r8-postgres` target do not exist.
-3. The required 095→096→095→096 migration cycle and the full tampering/lifecycle
+2. The required 095→096→095→096 migration cycle and the full tampering/lifecycle
    matrices have not been supplied as reproducible test evidence.
 
 ## Recommendation
 
-**REVIEW_CHANGES_REQUIRED**. The implementation has meaningful independent
-checks, but the missing reproducible evidence and integration regression
-coverage prevent a `MERGE_READY` recommendation. No merge, tag, deployment,
-or auto-merge action was performed by this review.
+**REVIEW_CHANGES_REQUIRED**. The PostgreSQL concurrency regression coverage is
+now reproducible, but the missing full evidence matrix and migration cycle
+still prevent a `MERGE_READY` recommendation. No merge, tag, deployment, or
+auto-merge action was performed by this review.
