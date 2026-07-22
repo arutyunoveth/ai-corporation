@@ -5023,36 +5023,8 @@ body{{margin:0;background:#f5f8fa;color:#10243e;font:16px Arial,sans-serif}}main
 
 
 def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, dict[str, Any]], steps: list[DemoStep]) -> None:
-    from src.modules.tender_operator_agent_demo.report_model import (
-        build_procurement_report_model,
-        canonical_report_to_markdown,
-    )
-    output_dir = _output_dir(run_id)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    for name, payload in outputs.items():
-        _write_json(output_dir / f"{name}.json", payload)
-
-    canonical_report = build_procurement_report_model(metadata, outputs)
-    canonical_markdown = canonical_report_to_markdown(canonical_report)
-    _write_json(output_dir / "canonical_report.json", canonical_report)
-    report_html = _render_canonical_report_html(canonical_report)
-    (output_dir / "report.html").write_text(report_html, encoding="utf-8")
-    report_json = {
-        "run_id": run_id,
-        "report_title": "Отчёт по загруженному прогону тендерного агента",
-        "generated_at": _safe_datetime(),
-        "recommendation": outputs["final_recommendation"]["recommendation"],
-        "recommendation_label": outputs["final_recommendation"]["label"],
-        "executive_summary": outputs["final_recommendation"]["rationale"],
-        "manual_checks": outputs["final_recommendation"]["manual_checks"],
-        "sections": [
-            {"title": step.title, "kind": "bullets", "items": step.findings}
-            for step in steps
-        ],
-        "report_markdown": canonical_markdown,
-    }
-    _write_json(output_dir / "report.json", report_json)
-    _write_json(output_dir / "steps.json", {"steps": [item.model_dump(mode="json") for item in steps]})
+    from src.modules.procurement_analysis.canonical_persistence import persist_canonical_outputs
+    persist_canonical_outputs(output_dir=_output_dir(run_id), run_id=run_id, metadata=metadata, outputs=outputs, steps=steps)
 
 
 def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
