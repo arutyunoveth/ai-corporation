@@ -17,6 +17,9 @@ def upgrade() -> None:
     columns = {item["name"] for item in inspector.get_columns("procurement_cases")}
     if "current_run_id" not in columns:
         op.add_column("procurement_cases", sa.Column("current_run_id", sa.String(36), nullable=True))
+    indexes = {item["name"] for item in inspector.get_indexes("procurement_cases")}
+    if "ix_procurement_cases_current_run" not in indexes:
+        op.create_index("ix_procurement_cases_current_run", "procurement_cases", ["current_run_id"])
     if bind.dialect.name == "postgresql":
         names = {item["name"] for item in inspector.get_foreign_keys("procurement_cases")}
         if "fk_procurement_cases_current_run" not in names:

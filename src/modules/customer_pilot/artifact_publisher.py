@@ -238,6 +238,10 @@ def publish_final_pdf(session: Session, run: TenderAnalysisRun, case: Procuremen
         session.rollback()
         winner = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == _ARTIFACT_TYPE))
         if winner:
+            winner_binding = session.scalar(select(PilotRunResult).where(PilotRunResult.id == winner.run_result_id))
+            if not winner_binding:
+                raise HTTPException(409, "Concurrent final artifact binding is missing")
+            verified_pilot_artifact(run, case, winner_binding, winner)
             return winner
         raise
     return artifact

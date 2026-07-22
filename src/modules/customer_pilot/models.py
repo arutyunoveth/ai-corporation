@@ -36,7 +36,9 @@ class ProcurementCase(UUIDPrimaryKeyMixin, Base):
     procurement_number: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
     artifact_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
-    current_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    current_run_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("tender_analysis_runs.id"), nullable=True
+    )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
@@ -48,6 +50,7 @@ class ProcurementCase(UUIDPrimaryKeyMixin, Base):
         UniqueConstraint("customer_id", "project_id", "procurement_number"),
         Index("ix_procurement_cases_customer_project", "customer_id", "project_id"),
         Index("ix_procurement_cases_status", "status"),
+        Index("ix_procurement_cases_current_run", "current_run_id"),
     )
 
 

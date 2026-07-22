@@ -78,7 +78,6 @@ class ReviewIn(BaseModel):
     checklist: dict = Field(default_factory=dict)
     internal_comment: str | None = None
     client_comment: str | None = None
-    source_graph_hash: str | None = None
 
 
 class FeedbackIn(BaseModel):
@@ -450,6 +449,7 @@ def mark_client_ready(customer_id: str, case_id: str, session: DBSession):
     approved = session.scalar(
         select(PilotReview).where(
             PilotReview.procurement_case_id == case_id,
+            PilotReview.run_id == case.current_run_id,
             PilotReview.verdict.in_({"approved", "approved_with_notes"}),
         )
     )
@@ -481,6 +481,7 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
     review = session.scalar(
         select(PilotReview).where(
             PilotReview.procurement_case_id == case_id,
+            PilotReview.run_id == case.current_run_id,
             PilotReview.immutable_at.is_not(None),
         )
     )
