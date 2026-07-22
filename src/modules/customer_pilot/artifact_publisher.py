@@ -1,247 +1,309 @@
-"""Trusted R8 canonical-result binding and immutable customer artifact publication."""
+"""Trusted R8 binding and PDF publication from immutable canonical snapshots."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-import re
 import tempfile
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from src.modules.customer_pilot.models import PilotArtifact, PilotRunResult, ProcurementCase
+from src.modules.customer_pilot.canonical_snapshot import (
+    CanonicalSnapshotConflictError,
+    CanonicalSnapshotError,
+    publish_canonical_snapshot,
+)
+from src.modules.customer_pilot.models import (
+    PilotArtifact,
+    PilotRunResult,
+    ProcurementCase,
+)
+from src.modules.procurement_analysis.canonical_persistence import (
+    verify_canonical_bytes,
+)
+from src.modules.procurement_analysis.frozen_producer import (
+    produce_frozen_canonical_analysis,
+)
 from src.tender_research.config import load_config
 from src.tender_research.models import TenderAnalysisRun
-from src.tender_research.rag.analysis_service import analyze_tender
 
-_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _ARTIFACT_TYPE = "final_pdf"
 _PDF_RENDERER_VERSION = "r7-persisted-pdf-v2"
 
 
 def _pdf_artifact_key(registry_number: str, run_id: str, report_model_hash: str) -> str:
-    """The frozen R7 identity formula, reproduced without importing demo storage."""
-    identity = f"{registry_number}\0{run_id}\0{report_model_hash}\0{_PDF_RENDERER_VERSION}".encode("utf-8")
-    return hashlib.sha256(identity).hexdigest()[:24]
-
-
-def _fsync_directory(path: Path) -> None:
-    try:
-        descriptor = os.open(path, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-    except OSError:
-        pass
-
-
-def _render_pdf(title: str, metadata: list[str], markdown: str, output: Path) -> None:
-    """Use the frozen R7 renderer without its demo persistence namespace."""
-    from src.modules.tender_operator_agent_demo.report_export_service import _build_pdf_from_parts
-    _build_pdf_from_parts(title, metadata, markdown, output)
-
-
-def _canonical_bytes(value: dict) -> bytes:
-    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    return hashlib.sha256(
+        f"{registry_number}\0{run_id}\0{report_model_hash}\0{_PDF_RENDERER_VERSION}".encode()
+    ).hexdigest()[:24]
 
 
 def _root() -> Path:
-    return Path(load_config().data_dir).resolve()
-
-
-def _relative_path(*segments: str) -> str:
-    if any(not _SAFE_SEGMENT.fullmatch(str(segment)) for segment in segments):
-        raise RuntimeError("Unsafe server-generated artifact segment")
-    return str(Path("customer-pilot").joinpath(*segments))
+    return Path(load_config().data_dir)
 
 
 def _path_under_root(relative_path: str) -> Path:
     candidate = Path(relative_path)
     if candidate.is_absolute() or ".." in candidate.parts:
-        raise RuntimeError("Unsafe persisted artifact path")
-    root = _root()
-    resolved = (root / candidate).resolve()
+        raise HTTPException(409, "Persisted artifact path is unsafe")
+    return _root() / candidate
+
+
+def _source_analysis_run_id(run: TenderAnalysisRun) -> str:
+    return str(uuid5(NAMESPACE_URL, f"arvectum:frozen-r7-source:{run.id}"))
+
+
+def _customer_metadata(run: TenderAnalysisRun, case: ProcurementCase) -> dict:
+    """Server-owned metadata only; callers cannot inject report fields or hashes."""
+    return {
+        "run_id": run.id,
+        "procurement_id": run.registry_number,
+        "tender_title": f"Закупка {run.registry_number}",
+        "tender_category": "Закупка",
+        "customer_name": str(run.customer_id),
+        "status": "completed",
+        "warnings": [],
+        "limitations": [
+            "Документы для закупки требуют операторской проверки в pilot-контуре."
+        ],
+        "files": [],
+        "procurement": {"registry_number": run.registry_number, "case_id": case.id},
+    }
+
+
+def _verified_binding(
+    run: TenderAnalysisRun, case: ProcurementCase, binding: PilotRunResult
+) -> None:
+    if not binding.is_verified_snapshot_binding:
+        raise HTTPException(409, "Canonical snapshot binding is incomplete")
+    if (
+        binding.customer_id,
+        binding.project_id,
+        binding.procurement_case_id,
+        binding.run_id,
+    ) != (run.customer_id, run.project_id, case.id, run.id):
+        raise HTTPException(409, "Canonical snapshot ownership is invalid")
     try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise RuntimeError("Artifact path escapes data root") from exc
-    return root / candidate
+        req = _path_under_root(binding.requirements_storage_key).read_bytes()
+        report = _path_under_root(binding.canonical_report_storage_key).read_bytes()
+        manifest = _path_under_root(binding.binding_manifest_storage_key).read_bytes()
+    except OSError as exc:
+        raise HTTPException(409, "Canonical snapshot files are unavailable") from exc
+    verified = verify_canonical_bytes(
+        requirements_bytes=req, canonical_report_bytes=report
+    )
+    if (
+        verified.requirements_file_sha256 != binding.requirements_file_sha256
+        or verified.canonical_report_file_sha256 != binding.canonical_report_file_sha256
+        or verified.source_graph_hash != binding.source_graph_hash
+        or verified.production_model_hash != binding.production_model_hash
+        or verified.report_model_hash != binding.report_model_hash
+        or hashlib.sha256(manifest).hexdigest() != binding.binding_manifest_file_sha256
+    ):
+        raise HTTPException(409, "Canonical snapshot identities are invalid")
 
 
-def _source_graph_hash(result) -> str:
-    graph = [
-        {"section": section.id, "sources": [source.chunk_id for source in section.sources]}
-        for section in result.sections
-    ]
-    return hashlib.sha256(_canonical_bytes({"source_graph": graph})).hexdigest()
-
-
-def bind_completed_analysis(session: Session, run: TenderAnalysisRun, case: ProcurementCase) -> PilotRunResult:
-    """Run production analysis and atomically persist its server-owned canonical report."""
-    existing = session.scalar(select(PilotRunResult).where(PilotRunResult.run_id == run.id))
-    if existing:
+def bind_completed_analysis(
+    session: Session, run: TenderAnalysisRun, case: ProcurementCase
+) -> PilotRunResult:
+    """Produce frozen R7 bytes, snapshot them, then bind all identities to DB."""
+    existing = session.scalar(
+        select(PilotRunResult).where(PilotRunResult.run_id == run.id)
+    )
+    if existing and existing.is_verified_snapshot_binding:
+        _verified_binding(run, case, existing)
         return existing
-    result = analyze_tender(run.registry_number, session=session, save_report=False, record_history=False)
-    if not result.report_markdown:
-        raise HTTPException(409, "Analysis did not produce a canonical report")
-    canonical = {
-        "version": "r8-canonical-report-v1",
+    source_run_id = _source_analysis_run_id(run)
+    try:
+        with tempfile.TemporaryDirectory(prefix="r8-frozen-producer-") as directory:
+            production = produce_frozen_canonical_analysis(
+                registry_number=run.registry_number,
+                run_id=run.id,
+                output_dir=Path(directory),
+                metadata=_customer_metadata(run, case),
+                documents=[],
+                source_analysis_run_id=source_run_id,
+            )
+            snapshot = publish_canonical_snapshot(
+                customer_id=run.customer_id,
+                project_id=run.project_id,
+                procurement_case_id=case.id,
+                run_id=run.id,
+                registry_number=run.registry_number,
+                source_analysis_run_id=production.source_analysis_run_id,
+                verified=production.persisted,
+            )
+    except CanonicalSnapshotConflictError as exc:
+        raise HTTPException(
+            409, "Immutable canonical snapshot conflicts with this run"
+        ) from exc
+    except CanonicalSnapshotError as exc:
+        raise HTTPException(
+            422, "Frozen canonical snapshot cannot be published"
+        ) from exc
+    except Exception as exc:
+        # The R7 producer is fail-closed; no synthetic report fallback exists.
+        raise HTTPException(
+            422, "Frozen R7 analysis did not produce a trusted result"
+        ) from exc
+    values = {
         "customer_id": run.customer_id,
         "project_id": run.project_id,
-        "procurement_case_id": run.procurement_case_id,
+        "procurement_case_id": case.id,
         "run_id": run.id,
-        "registry_number": run.registry_number,
-        "analysis_status": result.status,
-        "report_markdown": result.report_markdown,
-        "sections": [
-            {
-                "id": section.id,
-                "title": section.title,
-                "question": section.question,
-                "answer": section.answer,
-                "status": section.status,
-                "sources": [
-                    {"chunk_id": source.chunk_id, "document_id": source.document_id, "quote_preview": source.quote_preview}
-                    for source in section.sources
-                ],
-            }
-            for section in result.sections
-        ],
+        "source_analysis_run_id": production.source_analysis_run_id,
+        "canonical_report_storage_key": snapshot.canonical_report_relative_path,
+        "canonical_report_hash": production.report_model_hash,  # deprecated compatibility alias
+        "source_graph_hash": snapshot.source_graph_hash,
+        "production_model_hash": snapshot.production_model_hash,
+        "requirements_storage_key": snapshot.requirements_relative_path,
+        "requirements_file_sha256": snapshot.requirements_file_sha256,
+        "canonical_report_file_sha256": snapshot.canonical_report_file_sha256,
+        "binding_manifest_storage_key": snapshot.binding_manifest_relative_path,
+        "binding_manifest_file_sha256": snapshot.binding_manifest_file_sha256,
+        "source_graph_hash_algorithm": snapshot.source_graph_hash_algorithm,
+        "report_model_hash": snapshot.report_model_hash,
+        "verification_policy_version": snapshot.verification_policy_version,
     }
-    contents = _canonical_bytes(canonical)
-    report_hash = hashlib.sha256(contents).hexdigest()
-    source_hash = _source_graph_hash(result)
-    relative = f"{_relative_path(str(run.customer_id), str(run.project_id), str(case.id), str(run.id))}/canonical-report.json"
-    target = _path_under_root(relative)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists() and (target.is_symlink() or not target.is_file()):
-        raise HTTPException(409, "Canonical report storage is unsafe")
-    if not target.exists():
-        descriptor, name = tempfile.mkstemp(prefix=".canonical-", suffix=".partial", dir=target.parent)
-        temporary = Path(name)
-        try:
-            with os.fdopen(descriptor, "wb") as handle:
-                handle.write(contents); handle.flush(); os.fsync(handle.fileno())
-            os.replace(temporary, target)
-            _fsync_directory(target.parent)
-        finally:
-            temporary.unlink(missing_ok=True)
-    elif target.read_bytes() != contents:
-        raise HTTPException(409, "Canonical report storage conflicts with this run")
-    binding = PilotRunResult(
-        customer_id=run.customer_id, project_id=run.project_id, procurement_case_id=case.id,
-        run_id=run.id, source_analysis_run_id=result.run_id,
-        canonical_report_storage_key=relative, canonical_report_hash=report_hash,
-        source_graph_hash=source_hash, production_model_hash=report_hash,
-    )
-    session.add(binding)
+    if existing:
+        for name, value in values.items():
+            setattr(existing, name, value)
+        binding = existing
+    else:
+        binding = PilotRunResult(**values)
+        session.add(binding)
     session.flush()
+    if not binding.is_verified_snapshot_binding:
+        raise HTTPException(409, "Canonical snapshot binding is incomplete")
     return binding
 
 
-def _load_canonical(run: TenderAnalysisRun, case: ProcurementCase, binding: PilotRunResult) -> dict:
-    if (binding.customer_id, binding.project_id, binding.procurement_case_id, binding.run_id) != (run.customer_id, run.project_id, case.id, run.id):
-        raise HTTPException(409, "Canonical result ownership is invalid")
-    path = _path_under_root(binding.canonical_report_storage_key)
-    if path.is_symlink() or not path.is_file():
-        raise HTTPException(409, "Canonical report is missing or unsafe")
+def _load_canonical(
+    run: TenderAnalysisRun, case: ProcurementCase, binding: PilotRunResult
+) -> dict:
+    _verified_binding(run, case, binding)
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise HTTPException(422, "Canonical report is invalid") from exc
-    encoded = _canonical_bytes(data)
-    if hashlib.sha256(encoded).hexdigest() != binding.canonical_report_hash:
-        raise HTTPException(409, "Canonical report hash is invalid")
-    expected = {"customer_id": run.customer_id, "project_id": run.project_id, "procurement_case_id": case.id, "run_id": run.id, "registry_number": run.registry_number}
-    if any(data.get(key) != value for key, value in expected.items()):
-        raise HTTPException(409, "Canonical report ownership is invalid")
-    if not isinstance(data.get("report_markdown"), str) or not data["report_markdown"].strip():
-        raise HTTPException(422, "Canonical report has no renderable content")
-    return data
+        return json.loads(
+            _path_under_root(binding.canonical_report_storage_key).read_bytes()
+        )
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, "Canonical snapshot report is invalid") from exc
 
 
-def publish_final_pdf(session: Session, run: TenderAnalysisRun, case: ProcurementCase) -> PilotArtifact:
-    existing = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == _ARTIFACT_TYPE))
+def publish_final_pdf(
+    session: Session, run: TenderAnalysisRun, case: ProcurementCase
+) -> PilotArtifact:
+    existing = session.scalar(
+        select(PilotArtifact).where(
+            PilotArtifact.run_id == run.id,
+            PilotArtifact.artifact_type == _ARTIFACT_TYPE,
+        )
+    )
     if existing:
-        binding = session.scalar(select(PilotRunResult).where(PilotRunResult.id == existing.run_result_id))
+        binding = session.scalar(
+            select(PilotRunResult).where(PilotRunResult.id == existing.run_result_id)
+        )
         if not binding:
             raise HTTPException(409, "Final artifact binding is missing")
         from src.modules.customer_pilot.artifacts import verified_pilot_artifact
+
         verified_pilot_artifact(run, case, binding, existing)
         return existing
-    if run.status != "completed" or case.status != "operator_review":
-        raise HTTPException(409, "Final PDF can be published only after canonical completion")
-    binding = session.scalar(select(PilotRunResult).where(PilotRunResult.run_id == run.id))
+    if run.status != "completed" or case.status not in {
+        "operator_review",
+        "client_ready",
+        "delivered",
+    }:
+        raise HTTPException(
+            409, "Final PDF can be published only after canonical completion"
+        )
+    binding = session.scalar(
+        select(PilotRunResult).where(PilotRunResult.run_id == run.id)
+    )
     if not binding:
         raise HTTPException(409, "Canonical result is required before publication")
     canonical = _load_canonical(run, case, binding)
-    artifact_key = _pdf_artifact_key(run.registry_number, run.id, binding.canonical_report_hash)
-    directory_rel = _relative_path(str(run.customer_id), str(run.project_id), str(case.id), str(run.id))
-    pdf_rel = f"{directory_rel}/{artifact_key}.pdf"
-    manifest_rel = f"{directory_rel}/{artifact_key}.manifest.json"
+    artifact_key = _pdf_artifact_key(
+        run.registry_number, run.id, binding.report_model_hash
+    )
+    base = Path(binding.canonical_report_storage_key).parent.parent
+    pdf_rel, manifest_rel = (
+        str(base / "artifacts" / f"{artifact_key}.pdf"),
+        str(base / "artifacts" / f"{artifact_key}.manifest.json"),
+    )
     pdf_path, manifest_path = _path_under_root(pdf_rel), _path_under_root(manifest_rel)
-    pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = pdf_path.with_suffix(".pdf.lock")
-    with lock_path.open("a+b") as lock:
-        try:
-            import fcntl
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        except ImportError:  # pragma: no cover
-            pass
-        for partial in (pdf_path.with_suffix(".pdf.partial"), manifest_path.with_suffix(".json.partial")):
-            partial.unlink(missing_ok=True)
-        if not (pdf_path.exists() and manifest_path.exists()):
-            if pdf_path.exists() or manifest_path.exists():
-                pdf_path.unlink(missing_ok=True); manifest_path.unlink(missing_ok=True)
-            descriptor, name = tempfile.mkstemp(prefix=".pdf-", suffix=".partial", dir=pdf_path.parent)
-            temporary = Path(name)
-            try:
-                os.close(descriptor)
-                _render_pdf(f"Анализ закупки {run.registry_number}", [f"Реестровый номер: {run.registry_number}", f"Run: {run.id}"], canonical["report_markdown"], temporary)
-                bytes_ = temporary.read_bytes()
-                if not bytes_.startswith(b"%PDF-") or not bytes_:
-                    raise RuntimeError("Generated PDF is invalid")
-                with temporary.open("rb") as handle: os.fsync(handle.fileno())
-                os.replace(temporary, pdf_path)
-                digest = hashlib.sha256(bytes_).hexdigest()
-                manifest = {
-                    "customer_id": run.customer_id, "project_id": run.project_id, "procurement_case_id": case.id, "run_id": run.id,
-                    "run_result_id": binding.id, "registry_number": run.registry_number, "run_namespace_key": run.artifact_key,
-                    "artifact_key": artifact_key, "artifact_type": _ARTIFACT_TYPE, "report_model_hash": binding.canonical_report_hash,
-                    "source_graph_hash": binding.source_graph_hash, "renderer_version": _PDF_RENDERER_VERSION,
-                    "pdf_relative_path": pdf_rel, "pdf_sha256": digest, "byte_size": len(bytes_), "created_at": binding.completed_at.isoformat(),
-                }
-                partial = manifest_path.with_suffix(".json.partial")
-                with partial.open("wb") as handle:
-                    handle.write(_canonical_bytes(manifest)); handle.flush(); os.fsync(handle.fileno())
-                os.replace(partial, manifest_path); _fsync_directory(pdf_path.parent)
-            finally:
-                temporary.unlink(missing_ok=True)
-    from src.modules.customer_pilot.artifacts import verified_pilot_artifact
-    payload = verified_pilot_artifact(run, case, binding, None, manifest_path=manifest_rel)
+    try:
+        pdf_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            prefix=".pdf-", suffix=".partial", dir=pdf_path.parent, delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+        from src.modules.tender_operator_agent_demo.report_export_service import (
+            _build_pdf_from_canonical,
+        )
+
+        _build_pdf_from_canonical(
+            canonical, f"Анализ закупки {run.registry_number}", temporary
+        )
+        pdf_bytes = temporary.read_bytes()
+        if not pdf_bytes.startswith(b"%PDF-"):
+            raise HTTPException(422, "Frozen canonical renderer returned invalid PDF")
+        os.replace(temporary, pdf_path)
+    finally:
+        if "temporary" in locals():
+            temporary.unlink(missing_ok=True)
+    digest = hashlib.sha256(pdf_bytes).hexdigest()
+    manifest = {
+        "customer_id": run.customer_id,
+        "project_id": run.project_id,
+        "procurement_case_id": case.id,
+        "run_id": run.id,
+        "run_result_id": binding.id,
+        "registry_number": run.registry_number,
+        "run_namespace_key": run.artifact_key,
+        "artifact_key": artifact_key,
+        "artifact_type": _ARTIFACT_TYPE,
+        "canonical_report_storage_key": binding.canonical_report_storage_key,
+        "canonical_report_file_sha256": binding.canonical_report_file_sha256,
+        "binding_manifest_file_sha256": binding.binding_manifest_file_sha256,
+        "report_model_hash": binding.report_model_hash,
+        "source_graph_hash": binding.source_graph_hash,
+        "production_model_hash": binding.production_model_hash,
+        "renderer_version": _PDF_RENDERER_VERSION,
+        "pdf_relative_path": pdf_rel,
+        "pdf_sha256": digest,
+        "byte_size": len(pdf_bytes),
+        "created_at": binding.completed_at.isoformat(),
+    }
+    manifest_path.write_bytes(
+        (
+            json.dumps(
+                manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
+            + "\n"
+        ).encode()
+    )
     artifact = PilotArtifact(
-        customer_id=run.customer_id, project_id=run.project_id, procurement_case_id=case.id, run_id=run.id, run_result_id=binding.id,
-        artifact_type=_ARTIFACT_TYPE, artifact_key=artifact_key, report_model_hash=binding.canonical_report_hash,
-        source_graph_hash=binding.source_graph_hash, renderer_version=_PDF_RENDERER_VERSION, manifest_relative_path=manifest_rel,
-        pdf_relative_path=pdf_rel, pdf_sha256=payload["pdf_sha256"], byte_size=payload["byte_size"], status="published",
+        customer_id=run.customer_id,
+        project_id=run.project_id,
+        procurement_case_id=case.id,
+        run_id=run.id,
+        run_result_id=binding.id,
+        artifact_type=_ARTIFACT_TYPE,
+        artifact_key=artifact_key,
+        report_model_hash=binding.report_model_hash,
+        source_graph_hash=binding.source_graph_hash,
+        renderer_version=_PDF_RENDERER_VERSION,
+        manifest_relative_path=manifest_rel,
+        pdf_relative_path=pdf_rel,
+        pdf_sha256=digest,
+        byte_size=len(pdf_bytes),
+        status="published",
     )
     session.add(artifact)
-    try:
-        session.flush()
-    except IntegrityError:
-        session.rollback()
-        winner = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == _ARTIFACT_TYPE))
-        if winner:
-            winner_binding = session.scalar(select(PilotRunResult).where(PilotRunResult.id == winner.run_result_id))
-            if not winner_binding:
-                raise HTTPException(409, "Concurrent final artifact binding is missing")
-            verified_pilot_artifact(run, case, winner_binding, winner)
-            return winner
-        raise
+    session.flush()
     return artifact

@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
-from src.modules.customer_pilot import artifact_publisher, artifacts
-from src.modules.customer_pilot.models import PilotProject, ProcurementCase
+from src.modules.customer_pilot import artifact_publisher, artifacts, canonical_snapshot
+from src.modules.customer_pilot.models import PilotProject, PilotRunResult, ProcurementCase
 from src.modules.customer_pilot.router import StartIn, start_run
 from src.modules.customer_registry.models import CustomerProfile
 from src.shared.db.base import Base
@@ -50,19 +50,10 @@ def test_two_customers_are_isolated_and_same_procurement_has_distinct_keys(
 
 
 def _trusted_analysis(monkeypatch, root):
-    class Source:
-        chunk_id = "chunk-1"; document_id = "doc-1"; quote_preview = "source"
-    class Section:
-        id = "requirements"; title = "Требования"; question = "?"; answer = "ok"; status = "completed"; sources = [Source()]
-    class Result:
-        run_id = "production-run"; status = "completed"; report_markdown = "# Отчёт\nПроверенный результат"; sections = [Section()]
-    monkeypatch.setattr(artifact_publisher, "analyze_tender", lambda *args, **kwargs: Result())
     config = lambda: type("Config", (), {"data_dir": str(root)})()
     monkeypatch.setattr(artifact_publisher, "load_config", config)
     monkeypatch.setattr(artifacts, "load_config", config)
-    def render(_title, _metadata, _markdown, output):
-        output.write_bytes(b"%PDF-1.4\nR8 trusted artifact\n")
-    monkeypatch.setattr(artifact_publisher, "_render_pdf", render)
+    monkeypatch.setattr(canonical_snapshot, "load_config", config)
 
 
 def test_idempotent_start_review_feedback_and_delivery_contract(
@@ -124,6 +115,32 @@ def test_cross_customer_run_and_feedback_are_not_disclosed(client, session):
         f"/api/operator/pilot/customers/CUST-B/cases/{case_b['id']}/runs/{run['id']}/complete"
     )
     assert response.status_code == 404
+
+
+def test_completed_customers_share_no_snapshot_or_binding_namespace(client, session, tmp_path, monkeypatch):
+    _customer(session, "CUST-A")
+    _customer(session, "CUST-B")
+    _trusted_analysis(monkeypatch, tmp_path)
+    case_a, case_b = _case(client, "CUST-A"), _case(client, "CUST-B")
+    run_a = client.post(
+        f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs",
+        json={}, headers={"Idempotency-Key": "complete-a"},
+    ).json()["id"]
+    run_b = client.post(
+        f"/api/operator/pilot/customers/CUST-B/cases/{case_b['id']}/runs",
+        json={}, headers={"Idempotency-Key": "complete-b"},
+    ).json()["id"]
+    complete_a = client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs/{run_a}/complete")
+    complete_b = client.post(f"/api/operator/pilot/customers/CUST-B/cases/{case_b['id']}/runs/{run_b}/complete")
+    assert complete_a.status_code == complete_b.status_code == 200
+    assert client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs/{run_a}/complete").json()["idempotent"] is True
+    results = session.execute(select(PilotRunResult)).scalars().all()
+    by_run = {item.run_id: item for item in results}
+    left, right = by_run[run_a], by_run[run_b]
+    assert left.source_analysis_run_id != right.source_analysis_run_id
+    assert left.canonical_report_storage_key != right.canonical_report_storage_key
+    assert left.binding_manifest_storage_key != right.binding_manifest_storage_key
+    assert left.is_verified_snapshot_binding and right.is_verified_snapshot_binding
 
 
 def test_concurrent_different_keys_create_only_one_active_run(tmp_path):

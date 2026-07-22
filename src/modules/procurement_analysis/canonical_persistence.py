@@ -122,6 +122,40 @@ def verify_persisted_canonical_outputs(*, output_dir: Path, expected_outputs: di
         canonical_report_bytes = canonical_path.read_bytes()
     except OSError as exc:
         raise FrozenCanonicalPersistenceError("Frozen canonical output files are unreadable") from exc
+    return verify_canonical_bytes(
+        requirements_bytes=requirements_bytes,
+        canonical_report_bytes=canonical_report_bytes,
+        requirements_path=requirements_path,
+        canonical_report_path=canonical_path,
+        report_json_path=output_dir / "report.json",
+        report_html_path=output_dir / "report.html",
+        steps_path=output_dir / "steps.json",
+        expected_outputs=expected_outputs,
+        expected_canonical_report=expected_canonical_report,
+    )
+
+
+def verify_canonical_bytes(
+    *,
+    requirements_bytes: bytes,
+    canonical_report_bytes: bytes,
+    requirements_path: Path | None = None,
+    canonical_report_path: Path | None = None,
+    report_json_path: Path | None = None,
+    report_html_path: Path | None = None,
+    steps_path: Path | None = None,
+    expected_outputs: dict | None = None,
+    expected_canonical_report: dict | None = None,
+) -> PersistedCanonicalOutputs:
+    """Verify exact frozen bytes without consulting a mutable working directory.
+
+    This is deliberately the sole parser/graph-policy boundary used by both
+    R7 persisted-output verification and the R8 immutable snapshot publisher.
+    """
+    if not isinstance(requirements_bytes, bytes) or not requirements_bytes:
+        raise FrozenCanonicalContractError("Frozen R7 requirements bytes are invalid")
+    if not isinstance(canonical_report_bytes, bytes) or not canonical_report_bytes:
+        raise FrozenCanonicalContractError("Frozen R7 canonical report bytes are invalid")
     try:
         persisted_requirements = json.loads(requirements_bytes)
         preliminary = persisted_requirements["preliminary_analysis"]
@@ -142,4 +176,20 @@ def verify_persisted_canonical_outputs(*, output_dir: Path, expected_outputs: di
         raise FrozenCanonicalContractError("Persisted frozen canonical report differs from in-memory result")
     validated_graph = validate_frozen_source_graph(graph, production_hash, persisted_canonical)
     model_hash = hashlib.sha256(json.dumps(persisted_canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-    return PersistedCanonicalOutputs(requirements_path, canonical_path, output_dir / "report.json", output_dir / "report.html", output_dir / "steps.json", persisted_canonical, requirements_bytes, canonical_report_bytes, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_bytes).hexdigest(), hashlib.sha256(canonical_report_bytes).hexdigest())
+    unknown = Path("<verified-bytes>")
+    return PersistedCanonicalOutputs(
+        requirements_path or unknown,
+        canonical_report_path or unknown,
+        report_json_path or unknown,
+        report_html_path or unknown,
+        steps_path or unknown,
+        persisted_canonical,
+        requirements_bytes,
+        canonical_report_bytes,
+        validated_graph.graph,
+        validated_graph.source_graph_hash,
+        production_hash,
+        model_hash,
+        hashlib.sha256(requirements_bytes).hexdigest(),
+        hashlib.sha256(canonical_report_bytes).hexdigest(),
+    )

@@ -316,7 +316,10 @@ def complete_run(
     run = _run(session, customer_id, case_id, run_id)
     if case.current_run_id != run.id:
         raise HTTPException(409, "Analysis run is no longer current")
-    if run.status != "analyzing":
+    existing = session.scalar(select(PilotRunResult).where(PilotRunResult.run_id == run.id))
+    if run.status == "completed" and existing and existing.is_verified_snapshot_binding:
+        return {"id": run.id, "status": run.status, "case_status": case.status, "run_result_id": existing.id, "idempotent": True}
+    if run.status not in {"analyzing", "completed"}:
         raise HTTPException(409, "Run is not active")
     try:
         binding = bind_completed_analysis(session, run, case)
@@ -336,7 +339,7 @@ def complete_run(
         run_id=run_id,
     )
     session.commit()
-    return {"id": run.id, "status": run.status, "case_status": case.status, "run_result_id": binding.id}
+    return {"id": run.id, "status": run.status, "case_status": case.status, "run_result_id": binding.id, "idempotent": False}
 
 
 def _artifact(session: Session, run: TenderAnalysisRun) -> PilotArtifact:
@@ -401,7 +404,7 @@ def review_run(
         if not artifact:
             raise HTTPException(409, "Immutable final PDF is required before approval")
         result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
-        if not result:
+        if not result or not result.is_verified_snapshot_binding:
             raise HTTPException(409, "Canonical result binding is required")
         verified_pilot_artifact(run, case, result, artifact)
     review = PilotReview(
@@ -460,7 +463,7 @@ def mark_client_ready(customer_id: str, case_id: str, session: DBSession):
     run = _run(session, customer_id, case_id, approved.run_id)
     artifact = _artifact(session, run)
     result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
-    if not result:
+    if not result or not result.is_verified_snapshot_binding:
         raise HTTPException(409, "Canonical result binding is required")
     verified_pilot_artifact(run, case, result, artifact)
     _transition(case, "client_ready")
@@ -492,7 +495,7 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
     run = _run(session, customer_id, case_id, review.run_id)
     artifact = _artifact(session, run)
     result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
-    if not result:
+    if not result or not result.is_verified_snapshot_binding:
         raise HTTPException(409, "Canonical result binding is required")
     verified_pilot_artifact(run, case, result, artifact)
     _transition(case, "delivered")

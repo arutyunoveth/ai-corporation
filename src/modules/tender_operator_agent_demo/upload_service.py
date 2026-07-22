@@ -5023,8 +5023,8 @@ body{{margin:0;background:#f5f8fa;color:#10243e;font:16px Arial,sans-serif}}main
 
 
 def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, dict[str, Any]], steps: list[DemoStep]) -> None:
-    from src.modules.procurement_analysis.canonical_persistence import persist_canonical_outputs
-    persist_canonical_outputs(output_dir=_output_dir(run_id), run_id=run_id, metadata=metadata, outputs=outputs, steps=steps, render_html=_render_canonical_report_html, now_factory=_safe_datetime)
+    from src.modules.procurement_analysis.frozen_producer import persist_frozen_r7_outputs
+    persist_frozen_r7_outputs(output_dir=_output_dir(run_id), run_id=run_id, metadata=metadata, outputs=outputs, steps=steps, render_html=_render_canonical_report_html, now_factory=_safe_datetime)
 
 
 def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:

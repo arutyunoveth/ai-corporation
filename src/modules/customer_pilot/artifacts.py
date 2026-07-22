@@ -36,6 +36,8 @@ def _safe_file(relative: str) -> Path:
 
 def verified_pilot_artifact(run, case, result, artifact, *, manifest_path: str | None = None) -> dict:
     """Verify every DB and manifest ownership edge and inspect PDF bytes once."""
+    if not result.is_verified_snapshot_binding:
+        raise HTTPException(409, "Canonical snapshot binding is incomplete")
     relative_manifest = manifest_path or (artifact.manifest_relative_path if artifact else None)
     if not relative_manifest:
         raise HTTPException(409, "Final artifact is not registered")
@@ -50,7 +52,7 @@ def verified_pilot_artifact(run, case, result, artifact, *, manifest_path: str |
         "customer_id": run.customer_id, "project_id": run.project_id,
         "procurement_case_id": case.id, "run_id": run.id, "run_result_id": result.id,
         "registry_number": run.registry_number, "run_namespace_key": run.artifact_key,
-        "report_model_hash": result.canonical_report_hash, "source_graph_hash": result.source_graph_hash,
+        "report_model_hash": result.report_model_hash, "source_graph_hash": result.source_graph_hash,
         "artifact_type": "final_pdf",
     }
     if any(payload.get(key) != value for key, value in expected.items()):
