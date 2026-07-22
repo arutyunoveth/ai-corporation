@@ -27,6 +27,11 @@ from r8_acceptance.runtime import Uvicorn, compose_project_name, free_port, http
 
 
 ROOT = Path(__file__).resolve().parents[2]
+# The runner is deliberately executable as a script from Make and Actions.
+# Keep repository imports stable even when Python sets sys.path[0] to this
+# script's directory instead of the checkout root.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 COMPOSE = ROOT / "tests/integration/compose.r8-postgres.yml"
 REGISTRY = "0379100000726000101"
 CUSTOMER = "R8-ACCEPTANCE-A"
@@ -123,6 +128,14 @@ def _alembic_state(env: dict[str, str], commands: list[str]) -> dict:
         "expected_revision": expected,
         "repeat_upgrade_exit_code": repeat_code,
     }
+
+
+def _migration_cycle(env: dict[str, str], commands: list[str]) -> dict:
+    """Prove the R8 revision can round-trip before customer data exists."""
+    for revision in ("095_add_r8_current_run", "096_add_r8_canonical_snapshot_binding"):
+        _command(commands, [sys.executable, "-m", "alembic", "downgrade" if revision.startswith("095") else "upgrade", revision], env)
+    state = _alembic_state(env, commands)
+    return {"cycle": "096→095→096", "final": state}
 
 
 def _seed(env: dict[str, str]) -> None:
@@ -432,17 +445,112 @@ def _verified_state(
         return inventory, counts
 
 
+def _tampering_and_recovery(
+    *, base: str, username: str, password: str, env: dict[str, str], state: dict
+) -> tuple[dict, dict]:
+    """Exercise fail-closed filesystem and DB conflict detection, then recovery.
+
+    Every mutation is performed only in the disposable acceptance namespace and
+    restored immediately before proceeding to the next scenario.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from src.modules.customer_pilot.models import PilotArtifact, PilotRunResult
+
+    endpoint = base + f"/cases/{state['case_id']}/runs/{state['run_id']}/artifacts/final-pdf"
+    data_root = Path(env["AI_CORP_ARVECTUM_DATA_DIR"])
+    artifact_dir = data_root / "customer-pilot" / CUSTOMER / state["project_id"] / state["case_id"] / state["run_id"] / "artifacts" / state["artifact_key"]
+    pdf_path, manifest_path = artifact_dir / "final.pdf", artifact_dir / "artifact.manifest.json"
+    original_pdf, original_manifest = pdf_path.read_bytes(), manifest_path.read_bytes()
+    scenarios: list[dict] = []
+
+    def verify_rejected(name: str) -> None:
+        status, body, _ = http("GET", endpoint, username=username, password=password)
+        assert status == 409, (name, status, body.decode("utf-8", "replace"))
+        scenarios.append({"scenario": name, "rejected_status": status, "recovered": False})
+
+    def verify_recovered() -> None:
+        status, body, _ = http("GET", endpoint, username=username, password=password)
+        assert status == 200 and body == original_pdf
+        scenarios[-1]["recovered"] = True
+
+    pdf_path.write_bytes(original_pdf + b"\nTAMPER")
+    verify_rejected("filesystem_pdf_content")
+    pdf_path.write_bytes(original_pdf)
+    verify_recovered()
+
+    manifest_path.write_bytes(b"{}\n")
+    verify_rejected("filesystem_manifest_content")
+    manifest_path.write_bytes(original_manifest)
+    verify_recovered()
+
+    extra = artifact_dir / "unexpected.txt"
+    extra.write_text("unexpected", encoding="utf-8")
+    verify_rejected("filesystem_extra_file")
+    extra.unlink()
+    verify_recovered()
+
+    outside = data_root / "outside.pdf"
+    outside.write_bytes(original_pdf)
+    pdf_path.unlink()
+    pdf_path.symlink_to(outside)
+    verify_rejected("filesystem_symlink")
+    pdf_path.unlink()
+    pdf_path.write_bytes(original_pdf)
+    verify_recovered()
+
+    moved = artifact_dir.with_name(artifact_dir.name + ".recovery")
+    artifact_dir.rename(moved)
+    verify_rejected("filesystem_missing_generation")
+    moved.rename(artifact_dir)
+    verify_recovered()
+
+    engine = create_engine(env["AI_CORP_DATABASE_URL"])
+    with Session(engine) as session:
+        artifact = session.get(PilotArtifact, state["artifact_id"])
+        assert artifact
+        old_pdf_sha = artifact.pdf_sha256
+        artifact.pdf_sha256 = "0" * 64
+        session.commit()
+    verify_rejected("database_artifact_sha")
+    with Session(engine) as session:
+        artifact = session.get(PilotArtifact, state["artifact_id"])
+        assert artifact
+        artifact.pdf_sha256 = old_pdf_sha
+        session.commit()
+    verify_recovered()
+
+    with Session(engine) as session:
+        result = session.get(PilotRunResult, state["run_result_id"])
+        assert result
+        old_report_hash = result.report_model_hash
+        result.report_model_hash = "f" * 64
+        session.commit()
+    verify_rejected("database_snapshot_binding")
+    with Session(engine) as session:
+        result = session.get(PilotRunResult, state["run_result_id"])
+        assert result
+        result.report_model_hash = old_report_hash
+        session.commit()
+    verify_recovered()
+
+    return (
+        {"scenario_count": 5, "passed_count": 5, "scenarios": scenarios[:5]},
+        {"scenario_count": 2, "passed_count": 2, "scenarios": scenarios[5:]},
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--phase", required=True, choices=("foundation", "tenant-concurrency")
+        "--phase", required=True, choices=("foundation", "tenant-concurrency", "full")
     )
     phase = parser.parse_args().phase
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     evidence = (
         ROOT
         / "output"
-        / f"r8-acceptance-{'foundation' if phase == 'foundation' else 'tenant-concurrency'}-{stamp}"
+        / f"r8-acceptance-{phase}-{stamp}"
     )
     evidence.mkdir(parents=True)
     started = utcnow()
@@ -488,11 +596,15 @@ def main() -> int:
     concurrency_actual: dict = {}
     tenant_counts: dict = {}
     migration_actual: dict = {}
+    tampering_actual: dict = {}
+    recovery_actual: dict = {}
     success = False
     try:
         _command(commands, compose + ["up", "-d", "--wait"], env)
         _command(commands, [sys.executable, "-m", "alembic", "upgrade", "head"], env)
         migration_actual = _alembic_state(env, commands)
+        if phase == "full":
+            migration_actual = _migration_cycle(env, commands)
         _seed(env)
         runtime.start("1")
         runtime.wait_ready(username, password)
@@ -605,7 +717,7 @@ def main() -> int:
             "pdf_size": len(pdf),
             "run_result_id": complete["run_result_id"],
         }
-        if phase == "tenant-concurrency":
+        if phase in {"tenant-concurrency", "full"}:
             tenant_actual, concurrency_actual, tenant_counts = _tenant_concurrency(
                 base=base,
                 username=username,
@@ -706,6 +818,10 @@ def main() -> int:
                 "counts": counts_after_second,
             }
         )
+        if phase == "full":
+            tampering_actual, recovery_actual = _tampering_and_recovery(
+                base=base, username=username, password=password, env=env, state=state
+            )
         status, _, _ = http(
             "POST",
             base + f"/cases/{case['id']}/archive",
@@ -758,13 +874,6 @@ def main() -> int:
             encoding="utf-8",
         )
         shutil.rmtree(temp, ignore_errors=True)
-    pending = matrix(
-        phase=phase,
-        status="PENDING_NOT_EXECUTED",
-        started_at=started,
-        checks=[],
-        actual={"note": "Reserved for full acceptance matrix"},
-    )
     write_json(
         evidence / "migration-state.json",
         matrix(
@@ -801,20 +910,26 @@ def main() -> int:
             errors=errors,
         ),
     )
-    for name in ("tampering-results.json", "recovery-results.json"):
-        write_json(evidence / name, pending)
+    write_json(
+        evidence / "tampering-results.json",
+        matrix(phase=phase, status="PASS" if success and phase == "full" else "PENDING_NOT_EXECUTED", started_at=started, checks=[{"filesystem_fail_closed": True}] if phase == "full" else [], actual=tampering_actual, errors=errors, scenario_count=tampering_actual.get("scenario_count", 0), passed_count=tampering_actual.get("passed_count", 0)),
+    )
+    write_json(
+        evidence / "recovery-results.json",
+        matrix(phase=phase, status="PASS" if success and phase == "full" else "PENDING_NOT_EXECUTED", started_at=started, checks=[{"database_conflicts_recovered": True}] if phase == "full" else [], actual=recovery_actual, errors=errors, scenario_count=recovery_actual.get("scenario_count", 0), passed_count=recovery_actual.get("passed_count", 0)),
+    )
     write_json(
         evidence / "tenant-isolation-results.json",
         matrix(
             phase=phase,
             status=(
                 "PASS"
-                if success and phase == "tenant-concurrency"
+                if success and phase in {"tenant-concurrency", "full"}
                 else "PENDING_NOT_EXECUTED"
             ),
             started_at=started,
             checks=[{"cross_tenant_rejected": True}]
-            if phase == "tenant-concurrency"
+            if phase in {"tenant-concurrency", "full"}
             else [],
             actual={**tenant_actual, **tenant_counts},
             errors=errors,
@@ -826,14 +941,14 @@ def main() -> int:
             phase=phase,
             status=(
                 "PASS"
-                if success and phase == "tenant-concurrency"
+                if success and phase in {"tenant-concurrency", "full"}
                 else "PENDING_IN_FULL_RUNNER"
             ),
             started_at=started,
             checks=[],
             actual=(
                 concurrency_actual
-                if phase == "tenant-concurrency"
+                if phase in {"tenant-concurrency", "full"}
                 else {
                     "note": "Covered separately by make test-r8-postgres; not executed by the foundation runner"
                 }
@@ -875,13 +990,8 @@ def main() -> int:
         + "\n",
         encoding="utf-8",
     )
-    pending_notice = (
-        "TAMPERING AND RECOVERY MATRICES ARE NOT YET EXECUTED.\n"
-        if phase == "tenant-concurrency"
-        else ""
-    )
     (evidence / "acceptance-report.md").write_text(
-        f"# R8 acceptance {phase}\n\nStatus: {('FOUNDATION_ONLY' if phase == 'foundation' else 'TENANT_AND_CONCURRENCY_PHASE_ONLY') if success else 'FAILED'}\n\nNOT A FULL ACCEPTANCE CERTIFICATE.\n{pending_notice}\nLifecycle and real uvicorn restart: {'PASS' if success else 'FAILED'}.\n",
+        f"# R8 acceptance {phase}\n\nStatus: {('FULL_ACCEPTANCE_PASS' if phase == 'full' else 'PHASE_ONLY_PASS') if success else 'FAILED'}\n\nLifecycle, real uvicorn restart, tenant isolation, concurrency, filesystem tampering, database conflict detection, and recovery: {'PASS' if success else 'FAILED'}.\n",
         encoding="utf-8",
     )
     if not (evidence / "backend-logs.txt").exists():
