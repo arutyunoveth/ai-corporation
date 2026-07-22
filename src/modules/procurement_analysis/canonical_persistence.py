@@ -17,10 +17,36 @@ class PersistedCanonicalOutputs:
     steps_path: Path
     canonical_report: dict[str, Any]
     source_graph: dict[str, Any]
+    source_graph_hash: str
     production_model_hash: str
     report_model_hash: str
     requirements_file_sha256: str
     canonical_report_file_sha256: str
+
+
+@dataclass(frozen=True)
+class ValidatedFrozenSourceGraph:
+    graph: dict[str, Any]
+    source_graph_hash: str
+
+
+def source_graph_hash(source_graph: dict[str, Any]) -> str:
+    """Versioned canonical serialization of the persisted frozen graph."""
+    return hashlib.sha256(json.dumps(source_graph, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def validate_frozen_source_graph(source_graph: dict[str, Any], production_model_hash: str, canonical_report: dict[str, Any]) -> ValidatedFrozenSourceGraph:
+    if not isinstance(source_graph, dict) or not source_graph:
+        raise ValueError("Frozen R7 source graph is missing")
+    if source_graph.get("graph_version") != "procurement-source-graph-v2":
+        raise ValueError("Frozen R7 source graph version is invalid")
+    if source_graph.get("production_model_hash") != production_model_hash or not isinstance(production_model_hash, str) or len(production_model_hash) != 64:
+        raise ValueError("Frozen R7 source graph production hash is invalid")
+    if not isinstance(source_graph.get("structured_fragments"), list) or not isinstance(source_graph.get("canonical_item_edges"), list):
+        raise ValueError("Frozen R7 source graph records are invalid")
+    if canonical_report.get("provenance", {}).get("production_model_hash") != production_model_hash:
+        raise ValueError("Frozen R7 production model hash mismatch")
+    return ValidatedFrozenSourceGraph(source_graph, source_graph_hash(source_graph))
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -49,7 +75,6 @@ def persist_canonical_outputs(*, output_dir: Path, run_id: str, metadata: dict, 
         raise ValueError("Frozen R7 canonical source-graph contract is incomplete") from exc
     if not isinstance(graph, dict) or not production_hash:
         raise ValueError("Frozen R7 canonical source-graph contract is invalid")
-    if canonical.get("provenance", {}).get("production_model_hash") != production_hash:
-        raise ValueError("Frozen R7 production model hash mismatch")
+    validated_graph = validate_frozen_source_graph(graph, production_hash, canonical)
     model_hash = hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-    return PersistedCanonicalOutputs(requirements_path, canonical_path, report_path, html_path, steps_path, canonical, graph, production_hash, model_hash, hashlib.sha256(requirements_path.read_bytes()).hexdigest(), hashlib.sha256(canonical_path.read_bytes()).hexdigest())
+    return PersistedCanonicalOutputs(requirements_path, canonical_path, report_path, html_path, steps_path, canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_path.read_bytes()).hexdigest(), hashlib.sha256(canonical_path.read_bytes()).hexdigest())
