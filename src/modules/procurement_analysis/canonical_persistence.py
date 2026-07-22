@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -30,6 +31,10 @@ class ValidatedFrozenSourceGraph:
     source_graph_hash: str
 
 
+SOURCE_GRAPH_HASH_ALGORITHM = "sha256-json-c14n-v1"
+_HASH = re.compile(r"^[0-9a-f]{64}$")
+
+
 def source_graph_hash(source_graph: dict[str, Any]) -> str:
     """Versioned canonical serialization of the persisted frozen graph."""
     return hashlib.sha256(json.dumps(source_graph, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -40,10 +45,32 @@ def validate_frozen_source_graph(source_graph: dict[str, Any], production_model_
         raise ValueError("Frozen R7 source graph is missing")
     if source_graph.get("graph_version") != "procurement-source-graph-v2":
         raise ValueError("Frozen R7 source graph version is invalid")
-    if source_graph.get("production_model_hash") != production_model_hash or not isinstance(production_model_hash, str) or len(production_model_hash) != 64:
+    if source_graph.get("production_model_hash") != production_model_hash or not isinstance(production_model_hash, str) or not _HASH.fullmatch(production_model_hash):
         raise ValueError("Frozen R7 source graph production hash is invalid")
-    if not isinstance(source_graph.get("structured_fragments"), list) or not isinstance(source_graph.get("canonical_item_edges"), list):
+    fragments = source_graph.get("structured_fragments")
+    if not isinstance(fragments, list) or not isinstance(source_graph.get("canonical_item_edges"), list):
         raise ValueError("Frozen R7 source graph records are invalid")
+    keys = []
+    for fragment in fragments:
+        if not isinstance(fragment, dict) or not isinstance(fragment.get("fragment_key"), str) or not fragment["fragment_key"]:
+            raise ValueError("Frozen R7 source fragment is invalid")
+        keys.append(fragment["fragment_key"])
+    if len(keys) != len(set(keys)):
+        raise ValueError("Frozen R7 source fragments are not unique")
+    keyset = set(keys)
+    for edge in source_graph.get("parent_child_edges", []):
+        if not isinstance(edge, dict) or edge.get("parent") not in keyset or edge.get("child") not in keyset:
+            raise ValueError("Frozen R7 parent-child edge is dangling")
+    seen_edges = set()
+    for edge in source_graph["canonical_item_edges"]:
+        if not isinstance(edge, dict) or edge.get("source_fragment_key") not in keyset or not edge.get("canonical_item_id") or not edge.get("field_name"):
+            raise ValueError("Frozen R7 canonical item edge is dangling")
+        identity = (edge["canonical_item_id"], edge["source_fragment_key"], edge["field_name"])
+        if identity in seen_edges: raise ValueError("Frozen R7 canonical item edge is duplicated")
+        seen_edges.add(identity)
+    for key in ("cross_source_matches", "cardinality_decisions"):
+        if not isinstance(source_graph.get(key), list):
+            raise ValueError("Frozen R7 source graph relation set is invalid")
     if canonical_report.get("provenance", {}).get("production_model_hash") != production_model_hash:
         raise ValueError("Frozen R7 production model hash mismatch")
     return ValidatedFrozenSourceGraph(source_graph, source_graph_hash(source_graph))
@@ -67,7 +94,8 @@ def persist_canonical_outputs(*, output_dir: Path, run_id: str, metadata: dict, 
     steps_path = output_dir / "steps.json"; _write_json(steps_path, {"steps": [item.model_dump(mode="json") for item in steps]})
     requirements_path = output_dir / "requirements.json"
     try:
-        preliminary = outputs["requirements"]["preliminary_analysis"]
+        persisted_requirements = json.loads(requirements_path.read_bytes())
+        preliminary = persisted_requirements["preliminary_analysis"]
         canonical_model = preliminary["canonical_procurement_model"]
         graph = canonical_model["source_graph"]
         production_hash = canonical_model["production_model_hash"]
@@ -75,6 +103,11 @@ def persist_canonical_outputs(*, output_dir: Path, run_id: str, metadata: dict, 
         raise ValueError("Frozen R7 canonical source-graph contract is incomplete") from exc
     if not isinstance(graph, dict) or not production_hash:
         raise ValueError("Frozen R7 canonical source-graph contract is invalid")
-    validated_graph = validate_frozen_source_graph(graph, production_hash, canonical)
-    model_hash = hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-    return PersistedCanonicalOutputs(requirements_path, canonical_path, report_path, html_path, steps_path, canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_path.read_bytes()).hexdigest(), hashlib.sha256(canonical_path.read_bytes()).hexdigest())
+    if graph != outputs["requirements"]["preliminary_analysis"]["canonical_procurement_model"]["source_graph"]:
+        raise ValueError("Persisted frozen source graph differs from in-memory result")
+    persisted_canonical = json.loads(canonical_path.read_bytes())
+    if persisted_canonical != canonical:
+        raise ValueError("Persisted frozen canonical report differs from in-memory result")
+    validated_graph = validate_frozen_source_graph(graph, production_hash, persisted_canonical)
+    model_hash = hashlib.sha256(json.dumps(persisted_canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    return PersistedCanonicalOutputs(requirements_path, canonical_path, report_path, html_path, steps_path, persisted_canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_path.read_bytes()).hexdigest(), hashlib.sha256(canonical_path.read_bytes()).hexdigest())
