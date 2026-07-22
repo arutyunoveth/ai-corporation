@@ -12,15 +12,22 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-from scripts.capacity.backup_reader import analyze_backup
+from scripts.capacity.backup_reader import (
+    analyze_backup,
+    resolve_backup_source_names,
+)
 from scripts.capacity.db_collector import collect_database_metrics
 from scripts.capacity.forecast_model import run_forecast
-from scripts.capacity.fs_collector import collect_filesystem_metrics
+from scripts.capacity.fs_collector import (
+    collect_filesystem_metrics,
+    resolve_backup_source_bytes,
+)
 from scripts.capacity.report_renderer import (
     build_snapshot_json,
     write_forecast_outputs,
@@ -53,15 +60,15 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
         if raw_dsn:
             db_metrics = collect_database_metrics(raw_dsn)
             if not db_metrics.get("available"):
-                warnings.append(f"database metrics collection failed: {db_metrics.get('error')}")
+                warnings.append("database metrics collection failed")
         else:
-            db_metrics = {"available": False, "error": "no DSN provided", "warnings": ["no DSN provided"]}
+            db_metrics = {"available": False, "error": {"code": "no_dsn", "error_type": "ConfigError"}}
 
     roots: dict[str, str] = {}
     if args.root:
         for r in args.root:
             if "=" not in r:
-                warnings.append(f"invalid root format (expected name=path): {r}")
+                warnings.append("invalid root format")
                 continue
             name, path = r.split("=", 1)
             roots[name.strip()] = path.strip()
@@ -71,16 +78,22 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
         fs_metrics = collect_filesystem_metrics(roots, args.include_relative_paths)
         for entry in fs_metrics:
             if not entry.get("available"):
-                warnings.append(f"filesystem root '{entry['root_name']}' unavailable: {entry.get('error')}")
+                warnings.append(
+                    f"filesystem root '{entry['root_name']}' unavailable"
+                )
 
     backup_metrics: dict = {"available": False}
     if args.backup_dir:
-        live_artifacts = None
-        for entry in fs_metrics:
-            if entry.get("root_name") in ("pilot-artifacts", "artifacts", "company_agent_runs"):
-                live_artifacts = entry.get("logical_bytes")
-                break
-        backup_metrics = analyze_backup(args.backup_dir, live_artifacts)
+        source_names = resolve_backup_source_names(args.backup_source_root)
+        source_name_set = set(source_names)
+        live_archive_source_bytes = resolve_backup_source_bytes(fs_metrics, source_name_set)
+        if live_archive_source_bytes is None:
+            warnings.append(
+                "backup compression ratio not computed: one or more backup source roots missing"
+            )
+        backup_metrics = analyze_backup(args.backup_dir, live_archive_source_bytes)
+
+    privacy_flags = {"include_relative_paths": args.include_relative_paths}
 
     snapshot = build_snapshot_json(
         db_metrics=db_metrics,
@@ -88,6 +101,7 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
         backup_metrics=backup_metrics,
         git_commit=git_commit,
         warnings=warnings,
+        privacy_flags=privacy_flags,
     )
 
     output_dir = args.output_dir or os.path.join(
@@ -101,11 +115,10 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 def cmd_forecast(args: argparse.Namespace) -> int:
     snapshot = None
     if args.snapshot:
-        import json
         try:
             snapshot = json.loads(Path(args.snapshot).read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError) as exc:
-            print(f"error: cannot read snapshot {args.snapshot}: {exc}", file=sys.stderr)
+            print(f"error: cannot read snapshot: {exc}", file=sys.stderr)
             return 1
 
     scenario_path = args.scenario
@@ -113,14 +126,30 @@ def cmd_forecast(args: argparse.Namespace) -> int:
         print(f"error: scenario file not found: {scenario_path}", file=sys.stderr)
         return 1
 
-    years_list = [int(y.strip()) for y in args.years.split(",") if y.strip()]
+    raw_years = [y.strip() for y in args.years.split(",") if y.strip()]
+    years_list: list[int] = []
+    seen: set[int] = set()
+    for y in raw_years:
+        try:
+            yv = int(y)
+        except ValueError:
+            print(f"error: invalid year value: {y}", file=sys.stderr)
+            return 1
+        if yv <= 0:
+            print(f"error: year must be positive: {yv}", file=sys.stderr)
+            return 1
+        if yv in seen:
+            print(f"error: duplicate year: {yv}", file=sys.stderr)
+            return 1
+        seen.add(yv)
+        years_list.append(yv)
     if not years_list:
         print("error: at least one year value required", file=sys.stderr)
         return 1
 
     try:
         forecast = run_forecast(snapshot, scenario_path, years_list)
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, ZeroDivisionError) as exc:
         print(f"error: forecast computation failed: {exc}", file=sys.stderr)
         return 1
 
@@ -151,6 +180,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Root directory name=path, can be specified multiple times",
     )
     snap.add_argument("--backup-dir", default=None, help="Path to existing backup directory")
+    snap.add_argument(
+        "--backup-source-root",
+        action="append",
+        default=None,
+        help="Root name for backup source bytes calculation (repeatable). Falls back to defaults if not provided.",
+    )
     snap.add_argument("--output-dir", default=None, help="Output directory for reports")
     snap.add_argument("--no-db", action="store_true", help="Skip database collection")
     snap.add_argument("--no-files", action="store_true", help="Skip filesystem collection")

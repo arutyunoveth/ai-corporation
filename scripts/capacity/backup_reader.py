@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 
@@ -11,32 +12,37 @@ _BACKUP_COMPONENTS = frozenset({
     "SHA256SUMS",
 })
 
+_DEFAULT_BACKUP_SOURCE_NAMES = [
+    "pilot-data", "data",
+    "pilot-artifacts", "artifacts",
+    "pilot-eis", "eis-archives", "pilot-eis-archives",
+]
+
 
 def analyze_backup(
     backup_dir: str,
-    live_artifacts_bytes: int | None = None,
+    live_archive_source_bytes: int | None = None,
 ) -> dict:
     result: dict = {
         "available": False,
         "error": None,
         "warnings": [],
-        "backup_dir": None,
+        "backup_dir_id": None,
         "components": {},
         "compression_ratio": None,
         "total_bytes": None,
         "total_gib": None,
     }
-    bdir = os.path.abspath(backup_dir)
-    if not os.path.isdir(bdir):
-        result["error"] = f"backup directory does not exist: {backup_dir}"
+    if not os.path.isdir(backup_dir):
+        result["error"] = {"code": "backup_dir_not_found", "error_type": "FileNotFoundError"}
         result["warnings"].append("backup directory not accessible")
         return result
 
     result["available"] = True
-    result["backup_dir"] = _path_id_short(bdir)
+    result["backup_dir_id"] = _path_id_short(backup_dir)
     found = set()
-    for fname in os.listdir(bdir):
-        fpath = os.path.join(bdir, fname)
+    for fname in os.listdir(backup_dir):
+        fpath = os.path.join(backup_dir, fname)
         if fname in _BACKUP_COMPONENTS and os.path.isfile(fpath):
             found.add(fname)
             try:
@@ -50,7 +56,9 @@ def analyze_backup(
                         manifest = json.load(fh)
                     entry["manifest_metadata"] = _safe_manifest(manifest)
                 except (json.JSONDecodeError, OSError) as exc:
-                    result["warnings"].append(f"cannot parse manifest.json: {exc}")
+                    result["warnings"].append(
+                        {"code": "manifest_parse_failed", "error_type": type(exc).__name__}
+                    )
             result["components"][fname] = entry
 
     for required in sorted(_BACKUP_COMPONENTS):
@@ -60,7 +68,9 @@ def analyze_backup(
                 "byte_size": None,
                 "exists": False,
             }
-            result["warnings"].append(f"missing backup component: {required}")
+            result["warnings"].append(
+                {"code": "missing_backup_component", "error_type": "FileNotFoundError"}
+            )
 
     total = 0
     has_all = True
@@ -76,17 +86,16 @@ def analyze_backup(
 
     art_comp = result["components"].get("artifacts.tar.gz", {})
     art_bytes = art_comp.get("byte_size")
-    if art_bytes is not None and art_bytes > 0 and live_artifacts_bytes is not None and live_artifacts_bytes > 0:
-        ratio = art_bytes / live_artifacts_bytes
+    if art_bytes is not None and art_bytes > 0 and live_archive_source_bytes is not None and live_archive_source_bytes > 0:
+        ratio = art_bytes / live_archive_source_bytes
         result["compression_ratio"] = round(ratio, 4)
         result["warnings"].append(
-            "compression ratio is based on a single snapshot and may not generalize"
+            {"code": "single_snapshot_ratio", "error_type": "Warning"}
         )
     return result
 
 
 def _path_id_short(abs_path: str) -> str:
-    import hashlib
     return hashlib.sha256(abs_path.encode("utf-8")).hexdigest()[:16]
 
 
@@ -97,3 +106,9 @@ def _safe_manifest(manifest: dict) -> dict:
         "compression", "notes",
     }
     return {k: v for k, v in manifest.items() if k in safe_keys}
+
+
+def resolve_backup_source_names(provided: list[str] | None) -> list[str]:
+    if provided:
+        return provided
+    return _DEFAULT_BACKUP_SOURCE_NAMES
