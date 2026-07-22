@@ -1,0 +1,20 @@
+services:
+  postgres:
+    # Migration 090 requires CREATE EXTENSION vector; use a disposable image
+    # with the extension installed rather than weakening production migrations.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: r8_acceptance
+      POSTGRES_USER: r8_acceptance
+      POSTGRES_PASSWORD: ${R8_POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${R8_POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U r8_acceptance -d r8_acceptance"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - r8-postgres-data:/var/lib/postgresql/data
+volumes:
+  r8-postgres-data:

@@ -1,4 +1,4 @@
-.PHONY: check test ci eis-preflight r4-local-start
+.PHONY: check test ci test-r8-postgres eis-preflight r4-local-start
 
 check:
 	python -m compileall -q src
@@ -6,6 +6,9 @@ check:
 
 test:
 	python -m pytest -q
+
+test-r8-postgres:
+	python scripts/acceptance/run_r8_postgres_tests.py
 
 ci: check test
 

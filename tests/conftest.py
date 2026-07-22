@@ -15,7 +15,10 @@ from sqlalchemy.pool import StaticPool
 _original_database_url = os.environ.get("AI_CORP_DATABASE_URL")
 if _original_database_url:
     os.environ.setdefault("AI_CORP_ORIGINAL_DATABASE_URL", _original_database_url)
-os.environ["AI_CORP_DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+# PostgreSQL acceptance tests intentionally exercise the application sessions
+# configured by the runner.  The normal suite remains hermetic SQLite.
+if os.environ.get("RUN_R8_POSTGRES_INTEGRATION") != "1":
+    os.environ["AI_CORP_DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
 from src.main import app
 from src.shared.api.dependencies import get_db_session
