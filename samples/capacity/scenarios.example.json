@@ -1,0 +1,285 @@
+{
+  "schema_version": "1.0",
+  "note": "This file contains example assumptions for capacity forecasting. All values are marked source=assumption and do not represent actual Arvectum production data. Replace with measured or derived values before using for procurement decisions.",
+  "profiles": {
+    "pilot": {
+      "description": "Controlled pilot with limited procurements and manual analysis runs",
+      "procurements_per_month": {
+        "value": 5,
+        "source": "assumption",
+        "note": "Expected monthly procurement volume during pilot"
+      },
+      "analysis_runs_per_procurement": {
+        "value": 3,
+        "source": "assumption",
+        "note": "Average analysis iterations per procurement"
+      },
+      "documents_per_procurement": {
+        "value": 50,
+        "source": "assumption",
+        "note": "Average number of documents per procurement notice"
+      },
+      "raw_document_bytes_per_procurement": {
+        "value": 524288000,
+        "source": "assumption",
+        "note": "500 MB raw documents per procurement (PDF, DOCX, images)"
+      },
+      "extracted_text_bytes_per_procurement": {
+        "value": 52428800,
+        "source": "assumption",
+        "note": "50 MB extracted text per procurement"
+      },
+      "chunks_per_procurement": {
+        "value": 15000,
+        "source": "assumption",
+        "note": "Text chunks after splitting"
+      },
+      "vector_dimension": {
+        "value": 1536,
+        "source": "assumption",
+        "note": "OpenAI text-embedding-ada-002 dimension"
+      },
+      "vector_bytes_per_component": {
+        "value": 4,
+        "source": "assumption",
+        "note": "float32 per vector component"
+      },
+      "embedding_rows_per_chunk": {
+        "value": 1,
+        "source": "assumption",
+        "note": "One embedding vector per chunk"
+      },
+      "report_artifact_bytes_per_run": {
+        "value": 10485760,
+        "source": "assumption",
+        "note": "10 MB report artifacts per run (DOCX, PDF exports)"
+      },
+      "other_artifact_bytes_per_run": {
+        "value": 52428800,
+        "source": "assumption",
+        "note": "50 MB other artifacts per run (logs, intermediate files)"
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "value": 104857600,
+        "source": "assumption",
+        "note": "100 MB database storage for procurement metadata, excluding vectors"
+      },
+      "database_non_vector_bytes_per_run": {
+        "value": 20971520,
+        "source": "assumption",
+        "note": "20 MB database storage per analysis run metadata"
+      },
+      "full_backups_retained": {
+        "value": 7,
+        "source": "assumption",
+        "note": "Number of full backups retained"
+      },
+      "backup_compression_ratio": {
+        "value": 0.3,
+        "source": "assumption",
+        "note": "Estimated backup compression ratio (compressed / uncompressed)"
+      },
+      "temporary_space_peak_factor": {
+        "value": 1.5,
+        "source": "assumption",
+        "note": "Peak temporary space as multiple of primary storage"
+      },
+      "operational_margin_bytes": {
+        "value": 10737418240,
+        "source": "assumption",
+        "note": "10 GiB for Docker images, logs, updates, service files"
+      },
+      "free_space_reserve_percent": {
+        "value": 20,
+        "source": "assumption",
+        "note": "Minimum free space reserve percentage"
+      }
+    },
+    "commercial_mvp": {
+      "description": "Commercial MVP with moderate procurement volume and automated analysis",
+      "procurements_per_month": {
+        "value": 50,
+        "source": "assumption",
+        "note": "Expected monthly procurement volume at commercial MVP stage"
+      },
+      "analysis_runs_per_procurement": {
+        "value": 5,
+        "source": "assumption",
+        "note": "Average analysis iterations per procurement"
+      },
+      "documents_per_procurement": {
+        "value": 80,
+        "source": "assumption",
+        "note": "Average number of documents per procurement notice"
+      },
+      "raw_document_bytes_per_procurement": {
+        "value": 1073741824,
+        "source": "assumption",
+        "note": "1 GB raw documents per procurement"
+      },
+      "extracted_text_bytes_per_procurement": {
+        "value": 104857600,
+        "source": "assumption",
+        "note": "100 MB extracted text per procurement"
+      },
+      "chunks_per_procurement": {
+        "value": 30000,
+        "source": "assumption",
+        "note": "Text chunks after splitting"
+      },
+      "vector_dimension": {
+        "value": 1536,
+        "source": "assumption",
+        "note": "OpenAI text-embedding-ada-002 dimension"
+      },
+      "vector_bytes_per_component": {
+        "value": 4,
+        "source": "assumption",
+        "note": "float32 per vector component"
+      },
+      "embedding_rows_per_chunk": {
+        "value": 2,
+        "source": "assumption",
+        "note": "Two embedding vectors per chunk (original + augmented)"
+      },
+      "report_artifact_bytes_per_run": {
+        "value": 20971520,
+        "source": "assumption",
+        "note": "20 MB report artifacts per run"
+      },
+      "other_artifact_bytes_per_run": {
+        "value": 104857600,
+        "source": "assumption",
+        "note": "100 MB other artifacts per run"
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "value": 209715200,
+        "source": "assumption",
+        "note": "200 MB database storage per procurement"
+      },
+      "database_non_vector_bytes_per_run": {
+        "value": 52428800,
+        "source": "assumption",
+        "note": "50 MB database storage per analysis run"
+      },
+      "full_backups_retained": {
+        "value": 14,
+        "source": "assumption",
+        "note": "Number of full backups retained"
+      },
+      "backup_compression_ratio": {
+        "value": 0.3,
+        "source": "assumption",
+        "note": "Estimated backup compression ratio"
+      },
+      "temporary_space_peak_factor": {
+        "value": 1.5,
+        "source": "assumption",
+        "note": "Peak temporary space as multiple of primary storage"
+      },
+      "operational_margin_bytes": {
+        "value": 21474836480,
+        "source": "assumption",
+        "note": "20 GiB for Docker images, logs, updates, service files"
+      },
+      "free_space_reserve_percent": {
+        "value": 25,
+        "source": "assumption",
+        "note": "Minimum free space reserve percentage"
+      }
+    },
+    "scaling": {
+      "description": "Full-scale production with high procurement volume",
+      "procurements_per_month": {
+        "value": 500,
+        "source": "assumption",
+        "note": "Expected monthly procurement volume at full scale"
+      },
+      "analysis_runs_per_procurement": {
+        "value": 10,
+        "source": "assumption",
+        "note": "Average analysis iterations per procurement"
+      },
+      "documents_per_procurement": {
+        "value": 120,
+        "source": "assumption",
+        "note": "Average number of documents per procurement notice"
+      },
+      "raw_document_bytes_per_procurement": {
+        "value": 5368709120,
+        "source": "assumption",
+        "note": "5 GB raw documents per procurement"
+      },
+      "extracted_text_bytes_per_procurement": {
+        "value": 524288000,
+        "source": "assumption",
+        "note": "500 MB extracted text per procurement"
+      },
+      "chunks_per_procurement": {
+        "value": 100000,
+        "source": "assumption",
+        "note": "Text chunks after splitting"
+      },
+      "vector_dimension": {
+        "value": 1536,
+        "source": "assumption",
+        "note": "OpenAI text-embedding-ada-002 dimension"
+      },
+      "vector_bytes_per_component": {
+        "value": 4,
+        "source": "assumption",
+        "note": "float32 per vector component"
+      },
+      "embedding_rows_per_chunk": {
+        "value": 3,
+        "source": "assumption",
+        "note": "Three embedding vectors per chunk (original + two augmentations)"
+      },
+      "report_artifact_bytes_per_run": {
+        "value": 52428800,
+        "source": "assumption",
+        "note": "50 MB report artifacts per run"
+      },
+      "other_artifact_bytes_per_run": {
+        "value": 209715200,
+        "source": "assumption",
+        "note": "200 MB other artifacts per run"
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "value": 524288000,
+        "source": "assumption",
+        "note": "500 MB database storage per procurement"
+      },
+      "database_non_vector_bytes_per_run": {
+        "value": 104857600,
+        "source": "assumption",
+        "note": "100 MB database storage per analysis run"
+      },
+      "full_backups_retained": {
+        "value": 30,
+        "source": "assumption",
+        "note": "Number of full backups retained"
+      },
+      "backup_compression_ratio": {
+        "value": 0.25,
+        "source": "assumption",
+        "note": "Estimated backup compression ratio at scale"
+      },
+      "temporary_space_peak_factor": {
+        "value": 1.3,
+        "source": "assumption",
+        "note": "Peak temporary space as multiple of primary storage"
+      },
+      "operational_margin_bytes": {
+        "value": 53687091200,
+        "source": "assumption",
+        "note": "50 GiB for Docker images, logs, updates, service files"
+      },
+      "free_space_reserve_percent": {
+        "value": 20,
+        "source": "assumption",
+        "note": "Minimum free space reserve percentage"
+      }
+    }
+  }
+}
