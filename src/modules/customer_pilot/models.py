@@ -36,6 +36,7 @@ class ProcurementCase(UUIDPrimaryKeyMixin, Base):
     procurement_number: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
     artifact_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
+    current_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
@@ -122,6 +123,9 @@ class PilotAuditEvent(UUIDPrimaryKeyMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
     )
+    __table_args__ = (
+        Index("ix_pilot_audit_customer_created", "customer_id", "created_at"),
+    )
 
 
 class PilotRunResult(UUIDPrimaryKeyMixin, Base):
@@ -174,7 +178,4 @@ class PilotArtifact(UUIDPrimaryKeyMixin, Base):
     __table_args__ = (
         UniqueConstraint("run_id", "artifact_type", name="uq_pilot_artifact_run_type"),
         Index("ix_pilot_artifacts_customer_case", "customer_id", "procurement_case_id"),
-    )
-    __table_args__ = (
-        Index("ix_pilot_audit_customer_created", "customer_id", "created_at"),
     )

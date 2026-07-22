@@ -169,6 +169,11 @@ def _load_canonical(run: TenderAnalysisRun, case: ProcurementCase, binding: Pilo
 def publish_final_pdf(session: Session, run: TenderAnalysisRun, case: ProcurementCase) -> PilotArtifact:
     existing = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == _ARTIFACT_TYPE))
     if existing:
+        binding = session.scalar(select(PilotRunResult).where(PilotRunResult.id == existing.run_result_id))
+        if not binding:
+            raise HTTPException(409, "Final artifact binding is missing")
+        from src.modules.customer_pilot.artifacts import verified_pilot_artifact
+        verified_pilot_artifact(run, case, binding, existing)
         return existing
     if run.status != "completed" or case.status != "operator_review":
         raise HTTPException(409, "Final PDF can be published only after canonical completion")
