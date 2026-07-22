@@ -11,6 +11,8 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -28,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "tests/integration/compose.r8-postgres.yml"
 REGISTRY = "0379100000726000101"
 CUSTOMER = "R8-ACCEPTANCE-A"
+CUSTOMER_B = "R8-ACCEPTANCE-B"
 
 
 def _json(body: bytes) -> dict:
@@ -85,6 +88,13 @@ def _seed(env: dict[str, str]) -> None:
                 customer_status="prospect",
             )
         )
+        session.add(
+            CustomerProfile(
+                customer_id=CUSTOMER_B,
+                legal_name="R8 Acceptance Customer B",
+                customer_status="prospect",
+            )
+        )
         tender = ProcurementTender(
             source="r8-acceptance",
             external_id=REGISTRY,
@@ -119,6 +129,141 @@ def _seed(env: dict[str, str]) -> None:
             )
         )
         session.commit()
+
+
+def _tenant_concurrency(
+    *,
+    base: str,
+    username: str,
+    password: str,
+    env: dict[str, str],
+    customer_a_state: dict,
+) -> tuple[dict, dict]:
+    """Run tenant isolation and actual parallel PDF publication against uvicorn."""
+    bbase = base.replace(CUSTOMER, CUSTOMER_B)
+    status, body, _ = http(
+        "POST",
+        bbase + "/projects",
+        username=username,
+        password=password,
+        body={"name": "Acceptance"},
+    )
+    assert status == 201
+    project = _json(body)
+    status, body, _ = http(
+        "POST",
+        bbase + f"/projects/{project['id']}/cases",
+        username=username,
+        password=password,
+        body={"procurement_number": REGISTRY},
+    )
+    assert status == 201
+    case = _json(body)
+    status, body, _ = http(
+        "POST",
+        bbase + f"/cases/{case['id']}/runs",
+        username=username,
+        password=password,
+        body={},
+        headers={"Idempotency-Key": "tenant-b"},
+    )
+    assert status == 201
+    run = _json(body)
+    status, body, _ = http(
+        "POST",
+        bbase + f"/cases/{case['id']}/runs/{run['id']}/complete",
+        username=username,
+        password=password,
+    )
+    assert status == 200
+    complete = _json(body)
+    barrier = Barrier(4)
+    url = bbase + f"/cases/{case['id']}/runs/{run['id']}/artifacts/final-pdf"
+
+    def publish(_: int) -> tuple[int, dict]:
+        barrier.wait(timeout=10)
+        status, body, _ = http("POST", url, username=username, password=password)
+        return status, _json(body)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses = list(pool.map(publish, range(4)))
+    assert all(status in {200, 201} for status, _ in responses)
+    artifact_ids = {body["id"] for _, body in responses}
+    artifact_keys = {body["artifact_key"] for _, body in responses}
+    hashes = {body["pdf_sha256"] for _, body in responses}
+    assert len(artifact_ids) == len(artifact_keys) == len(hashes) == 1
+    artifact = responses[0][1]
+    status, body, _ = http(
+        "POST",
+        bbase + f"/cases/{case['id']}/runs/{run['id']}/review",
+        username=username,
+        password=password,
+        body={"reviewer": "acceptance", "verdict": "approved"},
+    )
+    assert status == 200
+    review = _json(body)
+    bstate = {
+        "project_id": project["id"],
+        "case_id": case["id"],
+        "run_id": run["id"],
+        "artifact_id": artifact["id"],
+        "artifact_key": artifact["artifact_key"],
+        "pdf_sha256": artifact["pdf_sha256"],
+        "review_id": review["id"],
+        "run_result_id": complete["run_result_id"],
+    }
+    binventory, bcounts = _verified_state(env, bstate)
+    # Cross-tenant paths use B as actor and A-owned opaque identifiers supplied by caller.
+    a_case, a_run = customer_a_state["case_id"], customer_a_state["run_id"]
+    forbidden = [
+        ("GET", f"/cases/{a_case}"),
+        ("POST", f"/cases/{a_case}/runs"),
+        ("POST", f"/cases/{a_case}/runs/{a_run}/complete"),
+        ("POST", f"/cases/{a_case}/runs/{a_run}/artifacts/final-pdf"),
+        ("GET", f"/cases/{a_case}/runs/{a_run}/artifacts/final-pdf"),
+        ("POST", f"/cases/{a_case}/client-ready"),
+        ("POST", f"/cases/{a_case}/archive"),
+    ]
+    matrix = []
+    for method, suffix in forbidden:
+        status, body, _ = http(
+            method,
+            bbase + suffix,
+            username=username,
+            password=password,
+            body={} if method == "POST" else None,
+            headers={"Idempotency-Key": "cross-tenant"}
+            if suffix.endswith("/runs")
+            else None,
+        )
+        text = body.decode("utf-8", "replace")
+        assert status == 404 and a_case not in text and a_run not in text
+        matrix.append(
+            {
+                "method": method,
+                "operation": suffix.split("?")[0],
+                "status": status,
+                "response_leak_check": True,
+            }
+        )
+    return (
+        {
+            "customer_b": bstate,
+            "customer_b_inventory": binventory,
+            "worker_count": 4,
+            "responses": [
+                {
+                    "status": status,
+                    "artifact_id": body["id"],
+                    "artifact_key": body["artifact_key"],
+                    "pdf_sha256": body["pdf_sha256"],
+                }
+                for status, body in responses
+            ],
+            "cross_tenant_matrix": matrix,
+        },
+        {"customer_b_counts": bcounts},
+    )
 
 
 def _verified_state(env: dict[str, str], state: dict) -> tuple[dict, dict]:
@@ -227,10 +372,16 @@ def _verified_state(env: dict[str, str], state: dict) -> tuple[dict, dict]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--phase", required=True, choices=("foundation",))
-    parser.parse_args()
+    parser.add_argument(
+        "--phase", required=True, choices=("foundation", "tenant-concurrency")
+    )
+    phase = parser.parse_args().phase
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    evidence = ROOT / "output" / f"r8-acceptance-foundation-{stamp}"
+    evidence = (
+        ROOT
+        / "output"
+        / f"r8-acceptance-{'foundation' if phase == 'foundation' else 'tenant-concurrency'}-{stamp}"
+    )
     evidence.mkdir(parents=True)
     started = utcnow()
     commands: list[str] = []
@@ -271,6 +422,8 @@ def main() -> int:
     inventory: dict = {}
     counts_before: dict = {}
     restart_snapshots: list[dict] = []
+    tenant_actual: dict = {}
+    concurrency_actual: dict = {}
     success = False
     try:
         _command(commands, compose + ["up", "-d", "--wait"], env)
@@ -387,6 +540,14 @@ def main() -> int:
             "pdf_size": len(pdf),
             "run_result_id": complete["run_result_id"],
         }
+        if phase == "tenant-concurrency":
+            tenant_actual, concurrency_actual = _tenant_concurrency(
+                base=base,
+                username=username,
+                password=password,
+                env=env,
+                customer_a_state=state,
+            )
         inventory, counts_before = _verified_state(env, state)
         restart_snapshots.append(
             {"stage": "before_restart", "inventory": inventory, "counts": counts_before}
@@ -503,6 +664,7 @@ def main() -> int:
         )
         shutil.rmtree(temp, ignore_errors=True)
     pending = matrix(
+        phase=phase,
         status="PENDING_NOT_EXECUTED",
         started_at=started,
         checks=[],
@@ -511,6 +673,7 @@ def main() -> int:
     write_json(
         evidence / "migration-state.json",
         matrix(
+            phase=phase,
             status="PASS" if success else "FAILED",
             started_at=started,
             checks=[{"upgrade_head": success}, {"single_head": success}],
@@ -519,6 +682,7 @@ def main() -> int:
     write_json(
         evidence / "lifecycle-results.json",
         matrix(
+            phase=phase,
             status="PASS" if success else "FAILED",
             started_at=started,
             checks=lifecycle_checks,
@@ -529,6 +693,7 @@ def main() -> int:
     write_json(
         evidence / "restart-results.json",
         matrix(
+            phase=phase,
             status="PASS" if success else "FAILED",
             started_at=started,
             checks=[
@@ -539,26 +704,49 @@ def main() -> int:
             errors=errors,
         ),
     )
-    for name in (
-        "tenant-isolation-results.json",
-        "tampering-results.json",
-        "recovery-results.json",
-    ):
+    for name in ("tampering-results.json", "recovery-results.json"):
         write_json(evidence / name, pending)
+    write_json(
+        evidence / "tenant-isolation-results.json",
+        matrix(
+            phase=phase,
+            status=(
+                "PASS"
+                if success and phase == "tenant-concurrency"
+                else "PENDING_NOT_EXECUTED"
+            ),
+            started_at=started,
+            checks=[{"cross_tenant_rejected": True}]
+            if phase == "tenant-concurrency"
+            else [],
+            actual=tenant_actual,
+            errors=errors,
+        ),
+    )
     write_json(
         evidence / "concurrency-results.json",
         matrix(
-            status="PENDING_IN_FULL_RUNNER",
+            phase=phase,
+            status=(
+                "PASS"
+                if success and phase == "tenant-concurrency"
+                else "PENDING_IN_FULL_RUNNER"
+            ),
             started_at=started,
             checks=[],
-            actual={
-                "note": "Covered separately by make test-r8-postgres; not executed by the foundation runner"
-            },
+            actual=(
+                concurrency_actual
+                if phase == "tenant-concurrency"
+                else {
+                    "note": "Covered separately by make test-r8-postgres; not executed by the foundation runner"
+                }
+            ),
         ),
     )
     write_json(
         evidence / "artifact-inventory.json",
         matrix(
+            phase=phase,
             status="PASS" if success else "FAILED",
             started_at=started,
             checks=[
@@ -572,6 +760,7 @@ def main() -> int:
     write_json(
         evidence / "database-counts.json",
         matrix(
+            phase=phase,
             status="PASS" if success else "FAILED",
             started_at=started,
             checks=[{"restart_preserved_counts": success}],
@@ -589,8 +778,13 @@ def main() -> int:
         + "\n",
         encoding="utf-8",
     )
+    pending_notice = (
+        "TAMPERING AND RECOVERY MATRICES ARE NOT YET EXECUTED.\n"
+        if phase == "tenant-concurrency"
+        else ""
+    )
     (evidence / "acceptance-report.md").write_text(
-        f"# R8 acceptance foundation\n\nStatus: {'FOUNDATION_ONLY' if success else 'FAILED'}\n\nNOT A FULL ACCEPTANCE CERTIFICATE.\n\nLifecycle and real uvicorn restart: {'PASS' if success else 'FAILED'}.\n",
+        f"# R8 acceptance {phase}\n\nStatus: {('FOUNDATION_ONLY' if phase == 'foundation' else 'TENANT_AND_CONCURRENCY_PHASE_ONLY') if success else 'FAILED'}\n\nNOT A FULL ACCEPTANCE CERTIFICATE.\n{pending_notice}\nLifecycle and real uvicorn restart: {'PASS' if success else 'FAILED'}.\n",
         encoding="utf-8",
     )
     if not (evidence / "backend-logs.txt").exists():

@@ -50,6 +50,7 @@ def write_json(path: Path, payload: dict) -> None:
 
 def matrix(
     *,
+    phase: str = "foundation",
     status: str,
     started_at: str,
     checks: list[dict],
@@ -58,7 +59,7 @@ def matrix(
 ) -> dict:
     return {
         "schema_version": "r8-acceptance-evidence-v1",
-        "phase": "foundation",
+        "phase": phase,
         "status": status,
         "started_at": started_at,
         "finished_at": utcnow(),

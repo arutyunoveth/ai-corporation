@@ -1,4 +1,4 @@
-.PHONY: check test ci test-r8-postgres test-r8-acceptance-foundation eis-preflight r4-local-start
+.PHONY: check test ci test-r8-postgres test-r8-acceptance-foundation test-r8-acceptance-tenant-concurrency eis-preflight r4-local-start
 
 check:
 	python -m compileall -q src
@@ -12,6 +12,9 @@ test-r8-postgres:
 
 test-r8-acceptance-foundation:
 	python scripts/acceptance/run_r8_acceptance.py --phase foundation
+
+test-r8-acceptance-tenant-concurrency:
+	python scripts/acceptance/run_r8_acceptance.py --phase tenant-concurrency
 
 ci: check test
 
