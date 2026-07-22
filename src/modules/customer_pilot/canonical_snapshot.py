@@ -15,6 +15,12 @@ from src.modules.procurement_analysis.canonical_persistence import PersistedCano
 from src.tender_research.config import load_config
 
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+_HASH = re.compile(r"^[0-9a-f]{64}$")
+
+class CanonicalSnapshotError(RuntimeError): pass
+class CanonicalSnapshotContractError(CanonicalSnapshotError): pass
+class CanonicalSnapshotStorageError(CanonicalSnapshotError): pass
+class CanonicalSnapshotConflictError(CanonicalSnapshotError): pass
 
 @dataclass(frozen=True)
 class PublishedCanonicalSnapshot:
@@ -25,14 +31,22 @@ class PublishedCanonicalSnapshot:
     manifest: dict; manifest_bytes: bytes; idempotent: bool
 
 def _root(*values: str) -> Path:
-    if any(not _SAFE.fullmatch(value) for value in values): raise ValueError("Unsafe customer snapshot segment")
+    if any(not isinstance(value, str) or not _SAFE.fullmatch(value) for value in values): raise CanonicalSnapshotContractError("Unsafe customer snapshot segment")
     root = Path(load_config().data_dir).resolve()
     path = root.joinpath("customer-pilot", *values)
     for parent in [root, *[root.joinpath("customer-pilot", *values[:i]) for i in range(0, len(values) + 1)]]:
-        if parent.exists() and (parent.is_symlink() or not parent.is_dir()): raise RuntimeError("Unsafe customer snapshot directory")
+        if parent.exists() and (parent.is_symlink() or not parent.is_dir()): raise CanonicalSnapshotStorageError("Unsafe customer snapshot directory")
     return path
 
+def _validate_bundle(verified: PersistedCanonicalOutputs) -> None:
+    if not isinstance(verified, PersistedCanonicalOutputs): raise CanonicalSnapshotContractError("Verified canonical bundle is required")
+    for value, digest in ((verified.requirements_bytes, verified.requirements_file_sha256), (verified.canonical_report_bytes, verified.canonical_report_file_sha256)):
+        if not isinstance(value, bytes) or not value or hashlib.sha256(value).hexdigest() != digest: raise CanonicalSnapshotContractError("Verified canonical bytes do not match identity")
+    if any(not isinstance(value, str) or not _HASH.fullmatch(value) for value in (verified.source_graph_hash, verified.production_model_hash, verified.report_model_hash)) or SOURCE_GRAPH_HASH_ALGORITHM != "sha256-json-c14n-v1":
+        raise CanonicalSnapshotContractError("Verified canonical identities are invalid")
+
 def publish_canonical_snapshot(*, customer_id: str, project_id: str, procurement_case_id: str, run_id: str, registry_number: str, source_analysis_run_id: str | None, verified: PersistedCanonicalOutputs, created_at: datetime | None = None) -> PublishedCanonicalSnapshot:
+    _validate_bundle(verified)
     run_root = _root(customer_id, project_id, procurement_case_id, run_id); run_root.mkdir(parents=True, exist_ok=True)
     final = run_root / "analysis"; manifest_name = "canonical-binding.manifest.json"
     req_rel, report_rel, manifest_rel = "analysis/requirements.json", "analysis/canonical_report.json", f"analysis/{manifest_name}"
