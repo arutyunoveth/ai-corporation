@@ -32,6 +32,15 @@ def upgrade() -> None:
     for name, type_ in additions:
         if name not in columns:
             op.add_column("pilot_run_results", sa.Column(name, type_, nullable=True))
+    artifact_columns = {
+        item["name"] for item in inspector.get_columns("pilot_artifacts")
+    }
+    for name, type_ in (
+        ("manifest_file_sha256", sa.String(length=64)),
+        ("verification_policy_version", sa.String(length=64)),
+    ):
+        if name not in artifact_columns:
+            op.add_column("pilot_artifacts", sa.Column(name, type_, nullable=True))
     # 094 used this ambiguous legacy field for a report identity. New verified
     # bindings intentionally leave it NULL and persist the two real hashes.
     if bind.dialect.name == "sqlite":
@@ -69,11 +78,19 @@ def downgrade() -> None:
         )
     )
     nulls = bind.execute(
-        sa.text("SELECT COUNT(*) FROM pilot_run_results WHERE canonical_report_hash IS NULL")
+        sa.text(
+            "SELECT COUNT(*) FROM pilot_run_results WHERE canonical_report_hash IS NULL"
+        )
     ).scalar_one()
     if nulls:
         raise RuntimeError("Cannot downgrade 096 while canonical_report_hash is NULL")
     inspector = sa.inspect(bind)
+    artifact_columns = {
+        item["name"] for item in inspector.get_columns("pilot_artifacts")
+    }
+    for name in ("verification_policy_version", "manifest_file_sha256"):
+        if name in artifact_columns:
+            op.drop_column("pilot_artifacts", name)
     indexes = {item["name"] for item in inspector.get_indexes("pilot_run_results")}
     for name in (
         "ix_pilot_run_results_source_graph_hash",
@@ -97,6 +114,15 @@ def downgrade() -> None:
             op.drop_column("pilot_run_results", name)
     if bind.dialect.name == "sqlite":
         with op.batch_alter_table("pilot_run_results") as batch:
-            batch.alter_column("canonical_report_hash", existing_type=sa.String(length=64), nullable=False)
+            batch.alter_column(
+                "canonical_report_hash",
+                existing_type=sa.String(length=64),
+                nullable=False,
+            )
     else:
-        op.alter_column("pilot_run_results", "canonical_report_hash", existing_type=sa.String(length=64), nullable=False)
+        op.alter_column(
+            "pilot_run_results",
+            "canonical_report_hash",
+            existing_type=sa.String(length=64),
+            nullable=False,
+        )

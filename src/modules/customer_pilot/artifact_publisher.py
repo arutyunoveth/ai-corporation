@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import tempfile
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
@@ -17,20 +16,21 @@ from src.modules.customer_pilot.canonical_snapshot import (
     CanonicalSnapshotConflictError,
     CanonicalSnapshotError,
     publish_canonical_snapshot,
-    verify_customer_snapshot,
 )
 from src.modules.customer_pilot.input_resolver import resolve_customer_run_inputs
 from src.modules.customer_pilot.binding_verifier import (
     RunSnapshotBindingError,
     verify_run_snapshot_binding,
 )
+from src.modules.customer_pilot.artifact_snapshot import (
+    FinalPdfArtifactConflictError,
+    FinalPdfArtifactError,
+    publish_final_pdf_generation,
+)
 from src.modules.customer_pilot.models import (
     PilotArtifact,
     PilotRunResult,
     ProcurementCase,
-)
-from src.modules.procurement_analysis.canonical_persistence import (
-    verify_canonical_bytes,
 )
 from src.modules.procurement_analysis.frozen_producer import (
     produce_frozen_canonical_analysis,
@@ -225,16 +225,9 @@ def publish_final_pdf(
     artifact_key = _pdf_artifact_key(
         run.registry_number, run.id, binding.report_model_hash
     )
-    base = Path(binding.canonical_report_storage_key).parent.parent
-    pdf_rel, manifest_rel = (
-        str(base / "artifacts" / f"{artifact_key}.pdf"),
-        str(base / "artifacts" / f"{artifact_key}.manifest.json"),
-    )
-    pdf_path, manifest_path = _path_under_root(pdf_rel), _path_under_root(manifest_rel)
     try:
-        pdf_path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
-            prefix=".pdf-", suffix=".partial", dir=pdf_path.parent, delete=False
+            prefix=".r8-final-pdf-", suffix=".partial", delete=False
         ) as handle:
             temporary = Path(handle.name)
         from src.modules.tender_operator_agent_demo.report_export_service import (
@@ -247,42 +240,37 @@ def publish_final_pdf(
         pdf_bytes = temporary.read_bytes()
         if not pdf_bytes.startswith(b"%PDF-"):
             raise HTTPException(422, "Frozen canonical renderer returned invalid PDF")
-        os.replace(temporary, pdf_path)
     finally:
         if "temporary" in locals():
             temporary.unlink(missing_ok=True)
-    digest = hashlib.sha256(pdf_bytes).hexdigest()
-    manifest = {
-        "customer_id": run.customer_id,
-        "project_id": run.project_id,
-        "procurement_case_id": case.id,
-        "run_id": run.id,
-        "run_result_id": binding.id,
-        "registry_number": run.registry_number,
-        "run_namespace_key": run.artifact_key,
-        "artifact_key": artifact_key,
-        "artifact_type": _ARTIFACT_TYPE,
-        "canonical_report_storage_key": binding.canonical_report_storage_key,
-        "canonical_report_file_sha256": binding.canonical_report_file_sha256,
-        "binding_manifest_storage_key": binding.binding_manifest_storage_key,
-        "binding_manifest_file_sha256": binding.binding_manifest_file_sha256,
-        "report_model_hash": binding.report_model_hash,
-        "source_graph_hash": binding.source_graph_hash,
-        "production_model_hash": binding.production_model_hash,
-        "renderer_version": _PDF_RENDERER_VERSION,
-        "pdf_relative_path": pdf_rel,
-        "pdf_sha256": digest,
-        "byte_size": len(pdf_bytes),
-        "created_at": binding.completed_at.isoformat(),
-    }
-    manifest_path.write_bytes(
-        (
-            json.dumps(
-                manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-            )
-            + "\n"
-        ).encode()
-    )
+    try:
+        generation = publish_final_pdf_generation(
+            customer_id=run.customer_id,
+            project_id=run.project_id,
+            procurement_case_id=case.id,
+            run_id=run.id,
+            run_result_id=binding.id,
+            registry_number=run.registry_number,
+            source_analysis_run_id=binding.source_analysis_run_id,
+            run_namespace_key=run.artifact_key,
+            artifact_key=artifact_key,
+            renderer_version=_PDF_RENDERER_VERSION,
+            requirements_storage_key=binding.requirements_storage_key,
+            requirements_file_sha256=binding.requirements_file_sha256,
+            canonical_report_storage_key=binding.canonical_report_storage_key,
+            canonical_report_file_sha256=binding.canonical_report_file_sha256,
+            binding_manifest_storage_key=binding.binding_manifest_storage_key,
+            binding_manifest_file_sha256=binding.binding_manifest_file_sha256,
+            source_graph_hash=binding.source_graph_hash,
+            source_graph_hash_algorithm=binding.source_graph_hash_algorithm,
+            production_model_hash=binding.production_model_hash,
+            report_model_hash=binding.report_model_hash,
+            pdf_bytes=pdf_bytes,
+        )
+    except FinalPdfArtifactConflictError as exc:
+        raise HTTPException(409, "Immutable final PDF conflicts with this run") from exc
+    except FinalPdfArtifactError as exc:
+        raise HTTPException(422, "Final PDF cannot be published safely") from exc
     artifact = PilotArtifact(
         customer_id=run.customer_id,
         project_id=run.project_id,
@@ -294,10 +282,12 @@ def publish_final_pdf(
         report_model_hash=binding.report_model_hash,
         source_graph_hash=binding.source_graph_hash,
         renderer_version=_PDF_RENDERER_VERSION,
-        manifest_relative_path=manifest_rel,
-        pdf_relative_path=pdf_rel,
-        pdf_sha256=digest,
-        byte_size=len(pdf_bytes),
+        manifest_relative_path=generation.manifest_relative_path,
+        manifest_file_sha256=generation.manifest_file_sha256,
+        verification_policy_version=generation.verification_policy_version,
+        pdf_relative_path=generation.pdf_relative_path,
+        pdf_sha256=generation.pdf_sha256,
+        byte_size=generation.byte_size,
         status="published",
     )
     session.add(artifact)

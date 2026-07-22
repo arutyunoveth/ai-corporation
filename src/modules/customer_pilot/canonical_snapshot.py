@@ -364,7 +364,11 @@ def _snapshot_from_existing(
         raise CanonicalSnapshotContractError("Immutable snapshot file set is invalid")
     if files is None:
         req, report, manifest = (final / name for name in EXACT_FILE_SET)
-        req_bytes, report_bytes, manifest_bytes = (_read_regular(req), _read_regular(report), _read_regular(manifest))
+        req_bytes, report_bytes, manifest_bytes = (
+            _read_regular(req),
+            _read_regular(report),
+            _read_regular(manifest),
+        )
     else:
         req, report, manifest, req_bytes, report_bytes, manifest_bytes = files
     try:
@@ -611,9 +615,13 @@ def verify_customer_snapshot(
     canonical_report_relative_path: str,
     binding_manifest_relative_path: str,
     binding_manifest_file_sha256: str,
+    requirements_file_sha256: str,
+    canonical_report_file_sha256: str,
     source_graph_hash: str,
+    source_graph_hash_algorithm: str,
     production_model_hash: str,
     report_model_hash: str,
+    verification_policy_version: str,
 ) -> PublishedCanonicalSnapshot:
     """Re-read a customer binding from disk before any lifecycle transition."""
     segments = tuple(
@@ -641,6 +649,13 @@ def verify_customer_snapshot(
     verified = verify_canonical_bytes(
         requirements_bytes=req, canonical_report_bytes=report
     )
+    if (
+        verified.requirements_file_sha256 != requirements_file_sha256
+        or verified.canonical_report_file_sha256 != canonical_report_file_sha256
+        or source_graph_hash_algorithm != SOURCE_GRAPH_HASH_ALGORITHM
+        or verification_policy_version != VERIFICATION_POLICY_VERSION
+    ):
+        raise CanonicalSnapshotConflictError("Database snapshot identities conflict")
     expected = {
         "customer_id": customer_id,
         "project_id": project_id,
@@ -658,7 +673,10 @@ def verify_customer_snapshot(
         "canonical_report_file_sha256": verified.canonical_report_file_sha256,
     }
     snapshot = _snapshot_from_existing(
-        final=final, expected=expected, verified=verified, paths=paths,
+        final=final,
+        expected=expected,
+        verified=verified,
+        paths=paths,
         files=(req_path, report_path, manifest_path, req, report, manifest),
     )
     if snapshot.binding_manifest_file_sha256 != binding_manifest_file_sha256:
@@ -666,5 +684,9 @@ def verify_customer_snapshot(
             "Database binding manifest identity conflicts"
         )
     return PublishedCanonicalSnapshot(
-        **{**snapshot.__dict__, "requirements_bytes": req, "canonical_report_bytes": report}
+        **{
+            **snapshot.__dict__,
+            "requirements_bytes": req,
+            "canonical_report_bytes": report,
+        }
     )

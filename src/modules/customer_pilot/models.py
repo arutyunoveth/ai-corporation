@@ -147,7 +147,9 @@ class PilotRunResult(UUIDPrimaryKeyMixin, Base):
     run_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("tender_analysis_runs.id"), nullable=False, unique=True
     )
-    source_analysis_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    source_analysis_run_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
     canonical_report_storage_key: Mapped[str] = mapped_column(Text, nullable=False)
     # ``canonical_report_hash`` is retained as a deprecated R8-pre-096 field.
     # It is never reused as a file hash or frozen report-model identity.
@@ -155,36 +157,65 @@ class PilotRunResult(UUIDPrimaryKeyMixin, Base):
     source_graph_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     production_model_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     requirements_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    requirements_file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    canonical_report_file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    binding_manifest_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    binding_manifest_file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    source_graph_hash_algorithm: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requirements_file_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    canonical_report_file_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    binding_manifest_storage_key: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    binding_manifest_file_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    source_graph_hash_algorithm: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     report_model_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    verification_policy_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    verification_policy_version: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
     @property
     def is_verified_snapshot_binding(self) -> bool:
         import re
 
         hash_value = re.compile(r"^[0-9a-f]{64}$")
         hashes = (
-            self.requirements_file_sha256, self.canonical_report_file_sha256,
-            self.binding_manifest_file_sha256, self.source_graph_hash,
-            self.production_model_hash, self.report_model_hash,
+            self.requirements_file_sha256,
+            self.canonical_report_file_sha256,
+            self.binding_manifest_file_sha256,
+            self.source_graph_hash,
+            self.production_model_hash,
+            self.report_model_hash,
         )
         return bool(
-            self.source_analysis_run_id and self.requirements_storage_key
-            and self.canonical_report_storage_key and self.binding_manifest_storage_key
-            and all(isinstance(value, str) and hash_value.fullmatch(value) for value in hashes)
+            self.source_analysis_run_id
+            and self.requirements_storage_key
+            and self.canonical_report_storage_key
+            and self.binding_manifest_storage_key
+            and all(
+                isinstance(value, str) and hash_value.fullmatch(value)
+                for value in hashes
+            )
             and self.source_graph_hash_algorithm == "sha256-json-c14n-v1"
             and self.verification_policy_version == "r8-frozen-canonical-verifier-v1"
         )
 
     __table_args__ = (
-        Index("ix_pilot_run_results_customer_case", "customer_id", "procurement_case_id"),
-        Index("ix_pilot_run_results_binding_manifest_key", "binding_manifest_storage_key"),
+        Index(
+            "ix_pilot_run_results_customer_case", "customer_id", "procurement_case_id"
+        ),
+        Index(
+            "ix_pilot_run_results_binding_manifest_key", "binding_manifest_storage_key"
+        ),
         Index("ix_pilot_run_results_report_model_hash", "report_model_hash"),
         Index("ix_pilot_run_results_source_graph_hash", "source_graph_hash"),
     )
@@ -194,23 +225,43 @@ class PilotArtifact(UUIDPrimaryKeyMixin, Base):
     """Immutable customer-scoped final output. Paths are always data-root relative."""
 
     __tablename__ = "pilot_artifacts"
-    customer_id: Mapped[str] = mapped_column(String(64), ForeignKey("customer_profiles.customer_id"), nullable=False)
-    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("pilot_projects.id"), nullable=False)
-    procurement_case_id: Mapped[str] = mapped_column(String(36), ForeignKey("procurement_cases.id"), nullable=False)
-    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("tender_analysis_runs.id"), nullable=False)
-    run_result_id: Mapped[str] = mapped_column(String(36), ForeignKey("pilot_run_results.id"), nullable=False)
-    artifact_type: Mapped[str] = mapped_column(String(32), nullable=False, default="final_pdf")
+    customer_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("customer_profiles.customer_id"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("pilot_projects.id"), nullable=False
+    )
+    procurement_case_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("procurement_cases.id"), nullable=False
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tender_analysis_runs.id"), nullable=False
+    )
+    run_result_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("pilot_run_results.id"), nullable=False
+    )
+    artifact_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="final_pdf"
+    )
     artifact_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
     report_model_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     source_graph_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     renderer_version: Mapped[str] = mapped_column(String(64), nullable=False)
     manifest_relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    manifest_file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verification_policy_version: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     pdf_relative_path: Mapped[str] = mapped_column(Text, nullable=False)
     pdf_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     byte_size: Mapped[int] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="published")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    immutable_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    immutable_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
     __table_args__ = (
         UniqueConstraint("run_id", "artifact_type", name="uq_pilot_artifact_run_type"),
         Index("ix_pilot_artifacts_customer_case", "customer_id", "procurement_case_id"),

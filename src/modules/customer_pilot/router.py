@@ -20,8 +20,15 @@ from src.modules.customer_pilot.models import (
     PilotRunResult,
     ProcurementCase,
 )
-from src.modules.customer_pilot.artifact_publisher import bind_completed_analysis, publish_final_pdf
+from src.modules.customer_pilot.artifact_publisher import (
+    bind_completed_analysis,
+    publish_final_pdf,
+)
 from src.modules.customer_pilot.artifacts import verified_pilot_artifact
+from src.modules.customer_pilot.binding_verifier import (
+    RunSnapshotBindingError,
+    verify_run_snapshot_binding,
+)
 from src.modules.customer_registry.models import CustomerProfile
 from src.shared.api.dependencies import DBSession
 from src.shared.db.base import utcnow
@@ -316,15 +323,44 @@ def complete_run(
     run = _run(session, customer_id, case_id, run_id)
     if case.current_run_id != run.id:
         raise HTTPException(409, "Analysis run is no longer current")
-    existing = session.scalar(select(PilotRunResult).where(PilotRunResult.run_id == run.id))
+    existing = session.scalar(
+        select(PilotRunResult).where(PilotRunResult.run_id == run.id)
+    )
     if run.status == "completed" and existing and existing.is_verified_snapshot_binding:
-        return {"id": run.id, "status": run.status, "case_status": case.status, "run_result_id": existing.id, "idempotent": True}
+        try:
+            verify_run_snapshot_binding(run=run, case=case, binding=existing)
+        except RunSnapshotBindingError as exc:
+            _audit(
+                session,
+                "analysis_snapshot_invalid",
+                customer_id=customer_id,
+                project_id=case.project_id,
+                case_id=case_id,
+                run_id=run_id,
+            )
+            session.commit()
+            raise HTTPException(409, "Existing canonical snapshot is invalid") from exc
+        return {
+            "id": run.id,
+            "status": run.status,
+            "case_status": case.status,
+            "run_result_id": existing.id,
+            "idempotent": True,
+        }
     if run.status not in {"analyzing", "completed"}:
         raise HTTPException(409, "Run is not active")
     try:
         binding = bind_completed_analysis(session, run, case)
     except HTTPException:
-        _audit(session, "analysis_failed", customer_id=customer_id, project_id=case.project_id, case_id=case_id, run_id=run_id, payload={"reason": "canonical_result_unavailable"})
+        _audit(
+            session,
+            "analysis_failed",
+            customer_id=customer_id,
+            project_id=case.project_id,
+            case_id=case_id,
+            run_id=run_id,
+            payload={"reason": "canonical_result_unavailable"},
+        )
         session.commit()
         raise
     run.status = "completed"
@@ -339,50 +375,100 @@ def complete_run(
         run_id=run_id,
     )
     session.commit()
-    return {"id": run.id, "status": run.status, "case_status": case.status, "run_result_id": binding.id, "idempotent": False}
+    return {
+        "id": run.id,
+        "status": run.status,
+        "case_status": case.status,
+        "run_result_id": binding.id,
+        "idempotent": False,
+    }
 
 
 def _artifact(session: Session, run: TenderAnalysisRun) -> PilotArtifact:
-    item = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == "final_pdf"))
+    item = session.scalar(
+        select(PilotArtifact).where(
+            PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == "final_pdf"
+        )
+    )
     if not item:
         raise HTTPException(404, "Final artifact not found")
     return item
 
 
-@router.post("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts/final-pdf", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts/final-pdf",
+    status_code=status.HTTP_201_CREATED,
+)
 def publish_pdf(customer_id: str, case_id: str, run_id: str, session: DBSession):
     case = _case(session, customer_id, case_id)
     run = _run(session, customer_id, case_id, run_id)
     if case.current_run_id != run.id:
         raise HTTPException(409, "Analysis run is no longer current")
     artifact = publish_final_pdf(session, run, case)
-    _audit(session, "artifact_exported", customer_id=customer_id, project_id=case.project_id, case_id=case_id, run_id=run_id, payload={"artifact_key": artifact.artifact_key})
+    _audit(
+        session,
+        "artifact_exported",
+        customer_id=customer_id,
+        project_id=case.project_id,
+        case_id=case_id,
+        run_id=run_id,
+        payload={"artifact_key": artifact.artifact_key},
+    )
     session.commit()
     return _artifact_response(artifact)
 
 
 def _artifact_response(artifact: PilotArtifact) -> dict:
-    return {"id": artifact.id, "artifact_type": artifact.artifact_type, "artifact_key": artifact.artifact_key, "report_model_hash": artifact.report_model_hash, "renderer_version": artifact.renderer_version, "pdf_sha256": artifact.pdf_sha256, "byte_size": artifact.byte_size, "created_at": artifact.created_at, "immutable_at": artifact.immutable_at, "status": artifact.status}
+    return {
+        "id": artifact.id,
+        "artifact_type": artifact.artifact_type,
+        "artifact_key": artifact.artifact_key,
+        "report_model_hash": artifact.report_model_hash,
+        "renderer_version": artifact.renderer_version,
+        "pdf_sha256": artifact.pdf_sha256,
+        "byte_size": artifact.byte_size,
+        "created_at": artifact.created_at,
+        "immutable_at": artifact.immutable_at,
+        "status": artifact.status,
+    }
 
 
 @router.get("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts")
 def list_artifacts(customer_id: str, case_id: str, run_id: str, session: DBSession):
     _case(session, customer_id, case_id)
     run = _run(session, customer_id, case_id, run_id)
-    return [_artifact_response(item) for item in session.scalars(select(PilotArtifact).where(PilotArtifact.customer_id == customer_id, PilotArtifact.procurement_case_id == case_id, PilotArtifact.run_id == run.id)).all()]
+    return [
+        _artifact_response(item)
+        for item in session.scalars(
+            select(PilotArtifact).where(
+                PilotArtifact.customer_id == customer_id,
+                PilotArtifact.procurement_case_id == case_id,
+                PilotArtifact.run_id == run.id,
+            )
+        ).all()
+    ]
 
 
-@router.get("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts/final-pdf")
+@router.get(
+    "/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts/final-pdf"
+)
 def download_pdf(customer_id: str, case_id: str, run_id: str, session: DBSession):
     case = _case(session, customer_id, case_id)
     run = _run(session, customer_id, case_id, run_id)
     artifact = _artifact(session, run)
-    result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+    result = session.scalar(
+        select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id)
+    )
     if not result:
         raise HTTPException(409, "Final artifact binding is missing")
     verified_pilot_artifact(run, case, result, artifact)
     from src.modules.customer_pilot.artifact_publisher import _path_under_root
-    return FileResponse(_path_under_root(artifact.pdf_relative_path), media_type="application/pdf", filename=f"{artifact.artifact_key}.pdf")
+
+    return FileResponse(
+        _path_under_root(artifact.pdf_relative_path),
+        media_type="application/pdf",
+        filename=f"{artifact.artifact_key}.pdf",
+    )
 
 
 @router.post("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/review")
@@ -400,10 +486,17 @@ def review_run(
     artifact = None
     result = None
     if payload.verdict in {"approved", "approved_with_notes"}:
-        artifact = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == "final_pdf"))
+        artifact = session.scalar(
+            select(PilotArtifact).where(
+                PilotArtifact.run_id == run.id,
+                PilotArtifact.artifact_type == "final_pdf",
+            )
+        )
         if not artifact:
             raise HTTPException(409, "Immutable final PDF is required before approval")
-        result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+        result = session.scalar(
+            select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id)
+        )
         if not result or not result.is_verified_snapshot_binding:
             raise HTTPException(409, "Canonical result binding is required")
         verified_pilot_artifact(run, case, result, artifact)
@@ -462,7 +555,9 @@ def mark_client_ready(customer_id: str, case_id: str, session: DBSession):
         raise HTTPException(409, "Approved review is not for the current run")
     run = _run(session, customer_id, case_id, approved.run_id)
     artifact = _artifact(session, run)
-    result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+    result = session.scalar(
+        select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id)
+    )
     if not result or not result.is_verified_snapshot_binding:
         raise HTTPException(409, "Canonical result binding is required")
     verified_pilot_artifact(run, case, result, artifact)
@@ -494,7 +589,9 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
         raise HTTPException(409, "Approved review is not for the current run")
     run = _run(session, customer_id, case_id, review.run_id)
     artifact = _artifact(session, run)
-    result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+    result = session.scalar(
+        select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id)
+    )
     if not result or not result.is_verified_snapshot_binding:
         raise HTTPException(409, "Canonical result binding is required")
     verified_pilot_artifact(run, case, result, artifact)
