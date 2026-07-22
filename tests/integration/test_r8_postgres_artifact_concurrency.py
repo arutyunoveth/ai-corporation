@@ -102,4 +102,22 @@ def test_postgres_fastapi_concurrent_final_pdf_has_one_immutable_generation(tmp_
         result = session.scalar(select(PilotRunResult).where(PilotRunResult.run_id == run_id))
         run_row = session.scalar(select(TenderAnalysisRun).where(TenderAnalysisRun.id == run_id))
         case_row = session.scalar(select(ProcurementCase).where(ProcurementCase.id == case_id))
-        verified_pilot_artifact(run_row, case_row, result, artifacts[0])
+        verified = verified_pilot_artifact(run_row, case_row, result, artifacts[0])
+        generation = verified.generation
+        assert {item.name for item in generation.artifact_directory.iterdir()} == {
+            "final.pdf",
+            "artifact.manifest.json",
+        }
+        before = (generation.pdf_path.stat().st_mtime_ns, generation.manifest_path.stat().st_mtime_ns)
+
+    with TestClient(app) as retry_client:
+        retry = retry_client.post(endpoint)
+    assert retry.status_code < 500
+    assert retry.json()["id"] == results[0][1]["id"]
+    with SessionLocal() as session:
+        artifact = session.scalar(select(PilotArtifact))
+        result = session.scalar(select(PilotRunResult).where(PilotRunResult.run_id == run_id))
+        run_row = session.scalar(select(TenderAnalysisRun).where(TenderAnalysisRun.id == run_id))
+        case_row = session.scalar(select(ProcurementCase).where(ProcurementCase.id == case_id))
+        verified = verified_pilot_artifact(run_row, case_row, result, artifact)
+        assert (verified.generation.pdf_path.stat().st_mtime_ns, verified.generation.manifest_path.stat().st_mtime_ns) == before
