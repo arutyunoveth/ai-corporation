@@ -10,6 +10,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.modules.customer_pilot.canonical_snapshot import (
@@ -290,6 +291,23 @@ def publish_final_pdf(
         byte_size=generation.byte_size,
         status="published",
     )
-    session.add(artifact)
-    session.flush()
+    try:
+        with session.begin_nested():
+            session.add(artifact)
+            session.flush()
+    except IntegrityError:
+        # A concurrent request may have committed the only permitted DB row
+        # after the immutable filesystem generation was already verified.
+        recovered = session.scalar(
+            select(PilotArtifact).where(
+                PilotArtifact.run_id == run.id,
+                PilotArtifact.artifact_type == _ARTIFACT_TYPE,
+            )
+        )
+        if not recovered:
+            raise HTTPException(409, "Final artifact binding conflicts")
+        from src.modules.customer_pilot.artifacts import verified_pilot_artifact
+
+        verified_pilot_artifact(run, case, binding, recovered)
+        return recovered
     return artifact

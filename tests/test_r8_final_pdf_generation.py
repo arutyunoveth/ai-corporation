@@ -30,7 +30,9 @@ def _kwargs():
         "registry_number": "0379100000726000101",
         "source_analysis_run_id": "source_a",
         "run_namespace_key": "namespace_a",
-        "artifact_key": "artifact_a",
+        "artifact_key": hashlib.sha256(
+            b"0379100000726000101\0run_a\0" + b"a" * 64 + b"\0r7-persisted-pdf-v2"
+        ).hexdigest()[:24],
         "renderer_version": "r7-persisted-pdf-v2",
         "requirements_storage_key": "customer-pilot/CUST-A/project_a/case_a/run_a/analysis/requirements.json",
         "requirements_file_sha256": digest,

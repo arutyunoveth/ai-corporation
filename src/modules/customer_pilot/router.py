@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -24,7 +24,10 @@ from src.modules.customer_pilot.artifact_publisher import (
     bind_completed_analysis,
     publish_final_pdf,
 )
-from src.modules.customer_pilot.artifacts import verified_pilot_artifact
+from src.modules.customer_pilot.artifacts import (
+    verify_review_artifact_binding,
+    verified_pilot_artifact,
+)
 from src.modules.customer_pilot.binding_verifier import (
     RunSnapshotBindingError,
     verify_run_snapshot_binding,
@@ -461,13 +464,13 @@ def download_pdf(customer_id: str, case_id: str, run_id: str, session: DBSession
     )
     if not result:
         raise HTTPException(409, "Final artifact binding is missing")
-    verified_pilot_artifact(run, case, result, artifact)
-    from src.modules.customer_pilot.artifact_publisher import _path_under_root
-
-    return FileResponse(
-        _path_under_root(artifact.pdf_relative_path),
+    verified = verified_pilot_artifact(run, case, result, artifact)
+    return Response(
+        content=verified.pdf_bytes,
         media_type="application/pdf",
-        filename=f"{artifact.artifact_key}.pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{artifact.artifact_key}.pdf"'
+        },
     )
 
 
@@ -560,7 +563,10 @@ def mark_client_ready(customer_id: str, case_id: str, session: DBSession):
     )
     if not result or not result.is_verified_snapshot_binding:
         raise HTTPException(409, "Canonical result binding is required")
-    verified_pilot_artifact(run, case, result, artifact)
+    verified = verified_pilot_artifact(run, case, result, artifact)
+    verify_review_artifact_binding(
+        review=approved, run=run, artifact=artifact, verified_artifact=verified
+    )
     _transition(case, "client_ready")
     _audit(
         session,
@@ -580,7 +586,9 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
         select(PilotReview).where(
             PilotReview.procurement_case_id == case_id,
             PilotReview.run_id == case.current_run_id,
+            PilotReview.verdict.in_({"approved", "approved_with_notes"}),
             PilotReview.immutable_at.is_not(None),
+            PilotReview.artifact_id.is_not(None),
         )
     )
     if not review or not review.artifact_id:
@@ -594,7 +602,10 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
     )
     if not result or not result.is_verified_snapshot_binding:
         raise HTTPException(409, "Canonical result binding is required")
-    verified_pilot_artifact(run, case, result, artifact)
+    verified = verified_pilot_artifact(run, case, result, artifact)
+    verify_review_artifact_binding(
+        review=review, run=run, artifact=artifact, verified_artifact=verified
+    )
     _transition(case, "delivered")
     _audit(
         session,

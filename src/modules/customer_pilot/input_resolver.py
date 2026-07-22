@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.tender_research.models import (
@@ -35,18 +35,25 @@ def resolve_customer_run_inputs(
             (ProcurementTender.registry_number == registry_number)
             | (ProcurementTender.purchase_number == registry_number)
         )
-        .order_by(ProcurementTender.updated_at.desc())
+        .order_by(ProcurementTender.updated_at.desc(), ProcurementTender.id.desc())
     )
     if not tender:
         raise HTTPException(
             409, "No persisted procurement intake is available for this registry number"
         )
     rows = session.scalars(
-        select(ProcurementTenderDocument).where(
+        select(ProcurementTenderDocument)
+        .where(
             ProcurementTenderDocument.tender_id == tender.id,
             ProcurementTenderDocument.download_status.in_(
                 ("downloaded", "completed", "ready")
             ),
+        )
+        .order_by(
+            ProcurementTenderDocument.file_name.asc(),
+            func.coalesce(ProcurementTenderDocument.document_identity_hash, "").asc(),
+            func.coalesce(ProcurementTenderDocument.sha256, "").asc(),
+            ProcurementTenderDocument.id.asc(),
         )
     ).all()
     from src.modules.procurement_analysis.frozen_types import AnalyzedDocument
@@ -57,7 +64,10 @@ def resolve_customer_run_inputs(
         chunks = session.scalars(
             select(ProcurementDocumentChunk)
             .where(ProcurementDocumentChunk.document_id == row.id)
-            .order_by(ProcurementDocumentChunk.chunk_index)
+            .order_by(
+                ProcurementDocumentChunk.chunk_index.asc(),
+                ProcurementDocumentChunk.id.asc(),
+            )
         ).all()
         text = "\n\n".join(chunk.text for chunk in chunks if chunk.text)
         if not text:

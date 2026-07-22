@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 import tempfile
 from dataclasses import dataclass
@@ -63,6 +64,9 @@ _MANIFEST_KEYS = {
     "exact_file_set",
     "created_at",
 }
+_ARTIFACT_KEY = re.compile(r"^[0-9a-f]{24}$")
+_PARTIAL_PREFIX = ".artifact."
+_PDF_RENDERER_VERSION = "r7-persisted-pdf-v2"
 
 
 class FinalPdfArtifactError(RuntimeError):
@@ -82,6 +86,17 @@ class FinalPdfArtifactConflictError(FinalPdfArtifactError):
 
 
 @dataclass(frozen=True)
+class FinalPdfArtifactIdentity:
+    renderer_version: str
+    artifact_key: str
+    artifact_directory_relative_path: str
+    pdf_relative_path: str
+    manifest_relative_path: str
+    manifest_version: str
+    verification_policy_version: str
+
+
+@dataclass(frozen=True)
 class PublishedFinalPdfGeneration:
     artifact_directory: Path
     pdf_path: Path
@@ -92,10 +107,74 @@ class PublishedFinalPdfGeneration:
     manifest_file_sha256: str
     byte_size: int
     manifest: dict
+    pdf_bytes: bytes
     manifest_bytes: bytes
     verification_policy_version: str
     created_at: str
     idempotent: bool
+
+
+@dataclass(frozen=True)
+class VerifiedFinalPdfGeneration:
+    artifact_directory: Path
+    pdf_path: Path
+    manifest_path: Path
+    pdf_relative_path: str
+    manifest_relative_path: str
+    pdf_bytes: bytes
+    manifest_bytes: bytes
+    parsed_manifest: dict
+    pdf_sha256: str
+    manifest_file_sha256: str
+    byte_size: int
+    artifact_key: str
+    renderer_version: str
+    verification_policy_version: str
+
+
+def derive_final_pdf_artifact_identity(
+    *,
+    registry_number: str,
+    run_id: str,
+    report_model_hash: str,
+    customer_id: str,
+    project_id: str,
+    procurement_case_id: str,
+) -> FinalPdfArtifactIdentity:
+    """Derive every artifact location from trusted immutable run identity."""
+    if not all(
+        isinstance(value, str) and value
+        for value in (
+            registry_number,
+            run_id,
+            report_model_hash,
+            customer_id,
+            project_id,
+            procurement_case_id,
+        )
+    ):
+        raise FinalPdfArtifactContractError("Final PDF artifact identity is invalid")
+    key = hashlib.sha256(
+        f"{registry_number}\0{run_id}\0{report_model_hash}\0{_PDF_RENDERER_VERSION}".encode()
+    ).hexdigest()[:24]
+    base = (
+        Path("customer-pilot")
+        / customer_id
+        / project_id
+        / procurement_case_id
+        / run_id
+        / "artifacts"
+        / key
+    )
+    return FinalPdfArtifactIdentity(
+        _PDF_RENDERER_VERSION,
+        key,
+        str(base),
+        str(base / "final.pdf"),
+        str(base / "artifact.manifest.json"),
+        MANIFEST_VERSION,
+        VERIFICATION_POLICY_VERSION,
+    )
 
 
 def _sha(value: bytes) -> str:
@@ -153,7 +232,36 @@ def _validate_manifest(value: object) -> dict:
     return value
 
 
-def _read_generation(final: Path, expected: dict) -> PublishedFinalPdfGeneration:
+def _cleanup_stale_partials(artifacts_root: Path, artifact_key: str) -> None:
+    """Remove only flat, server-shaped staging dirs for this exact artifact."""
+    pattern = re.compile(
+        rf"^\.artifact\.{re.escape(artifact_key)}\.partial\.[A-Za-z0-9_-]{{8,128}}$"
+    )
+    try:
+        children = list(artifacts_root.iterdir())
+    except OSError as exc:
+        raise FinalPdfArtifactStorageError("Cannot inspect final PDF staging") from exc
+    for candidate in children:
+        if not candidate.name.startswith(_PARTIAL_PREFIX):
+            continue
+        if not pattern.fullmatch(candidate.name):
+            continue
+        try:
+            mode = _lstat(candidate).st_mode
+            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+                raise FinalPdfArtifactStorageError("Unsafe stale final PDF staging")
+            for item in candidate.iterdir():
+                child_mode = _lstat(item).st_mode
+                if stat.S_ISLNK(child_mode) or not stat.S_ISREG(child_mode):
+                    raise FinalPdfArtifactStorageError("Unsafe stale final PDF staging")
+            _safe_remove_tree(candidate)
+        except CanonicalSnapshotStorageError as exc:
+            raise FinalPdfArtifactStorageError(
+                "Unsafe stale final PDF staging"
+            ) from exc
+
+
+def _read_generation(final: Path, expected: dict) -> VerifiedFinalPdfGeneration:
     try:
         mode = _lstat(final).st_mode
         if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
@@ -186,20 +294,21 @@ def _read_generation(final: Path, expected: dict) -> PublishedFinalPdfGeneration
         raise FinalPdfArtifactContractError("Final PDF bytes do not match manifest")
     if any(payload.get(key) != value for key, value in expected.items()):
         raise FinalPdfArtifactConflictError("Immutable final PDF artifact conflicts")
-    return PublishedFinalPdfGeneration(
+    return VerifiedFinalPdfGeneration(
         final,
         final / "final.pdf",
         final / "artifact.manifest.json",
         payload["pdf_relative_path"],
         str(Path(payload["pdf_relative_path"]).with_name("artifact.manifest.json")),
+        pdf,
+        manifest_bytes,
+        payload,
         payload["pdf_sha256"],
         _sha(manifest_bytes),
         len(pdf),
-        payload,
-        manifest_bytes,
+        payload["artifact_key"],
+        payload["renderer_version"],
         payload["verification_policy_version"],
-        payload["created_at"],
-        True,
     )
 
 
@@ -267,24 +376,31 @@ def publish_final_pdf_generation(
         for value in hashes
     ):
         raise FinalPdfArtifactContractError("Final PDF artifact binding is invalid")
-    if source_graph_hash_algorithm != "sha256-json-c14n-v1":
+    if (
+        source_graph_hash_algorithm != "sha256-json-c14n-v1"
+        or renderer_version != _PDF_RENDERER_VERSION
+        or not _ARTIFACT_KEY.fullmatch(artifact_key)
+    ):
         raise FinalPdfArtifactContractError("Final PDF source graph policy is invalid")
     try:
         run_root = _safe_namespace(customer_id, project_id, procurement_case_id, run_id)
     except (CanonicalSnapshotStorageError, RuntimeError) as exc:
         raise FinalPdfArtifactStorageError("Final PDF namespace is unsafe") from exc
-    base = (
-        Path("customer-pilot")
-        / customer_id
-        / project_id
-        / procurement_case_id
-        / run_id
-        / "artifacts"
-        / artifact_key
+    identity = derive_final_pdf_artifact_identity(
+        registry_number=registry_number,
+        run_id=run_id,
+        report_model_hash=report_model_hash,
+        customer_id=customer_id,
+        project_id=project_id,
+        procurement_case_id=procurement_case_id,
     )
+    if artifact_key != identity.artifact_key:
+        raise FinalPdfArtifactContractError(
+            "Final PDF artifact key is not derived identity"
+        )
     pdf_relative, manifest_relative = (
-        str(base / "final.pdf"),
-        str(base / "artifact.manifest.json"),
+        identity.pdf_relative_path,
+        identity.manifest_relative_path,
     )
     expected = {
         "customer_id": customer_id,
@@ -325,7 +441,24 @@ def publish_final_pdf_generation(
                 artifacts_root.mkdir(mode=0o750)
             final = artifacts_root / artifact_key
             if final.exists():
-                return _read_generation(final, expected)
+                verified_existing = _read_generation(final, expected)
+                return PublishedFinalPdfGeneration(
+                    final,
+                    verified_existing.pdf_path,
+                    verified_existing.manifest_path,
+                    verified_existing.pdf_relative_path,
+                    verified_existing.manifest_relative_path,
+                    verified_existing.pdf_sha256,
+                    verified_existing.manifest_file_sha256,
+                    verified_existing.byte_size,
+                    verified_existing.parsed_manifest,
+                    verified_existing.pdf_bytes,
+                    verified_existing.manifest_bytes,
+                    verified_existing.verification_policy_version,
+                    verified_existing.parsed_manifest["created_at"],
+                    True,
+                )
+            _cleanup_stale_partials(artifacts_root, artifact_key)
             temp = Path(
                 tempfile.mkdtemp(
                     prefix=f".artifact.{artifact_key}.partial.", dir=artifacts_root
@@ -354,11 +487,7 @@ def publish_final_pdf_generation(
                 fault("before_temp_directory_fsync")
             _fsync_dir(temp)
             # Verify the staging generation before a single directory rename.
-            generated = _read_generation(temp, expected)
-            if generated.idempotent is not True:
-                raise FinalPdfArtifactContractError(
-                    "Final PDF staging verification failed"
-                )
+            _read_generation(temp, expected)
             if fault:
                 fault("before_rename")
             os.replace(temp, final)
@@ -385,6 +514,7 @@ def publish_final_pdf_generation(
         _sha(manifest_bytes),
         len(pdf_bytes),
         payload,
+        pdf_bytes,
         manifest_bytes,
         VERIFICATION_POLICY_VERSION,
         payload["created_at"],
@@ -399,12 +529,12 @@ def verify_final_pdf_generation(
     procurement_case_id: str,
     run_id: str,
     expected: dict,
-) -> PublishedFinalPdfGeneration:
+) -> VerifiedFinalPdfGeneration:
     try:
         run_root = _safe_namespace(customer_id, project_id, procurement_case_id, run_id)
     except (CanonicalSnapshotStorageError, RuntimeError) as exc:
         raise FinalPdfArtifactStorageError("Final PDF namespace is unsafe") from exc
     artifact_key = expected.get("artifact_key")
-    if not isinstance(artifact_key, str):
+    if not isinstance(artifact_key, str) or not _ARTIFACT_KEY.fullmatch(artifact_key):
         raise FinalPdfArtifactContractError("Final PDF artifact key is invalid")
     return _read_generation(run_root / "artifacts" / artifact_key, expected)
