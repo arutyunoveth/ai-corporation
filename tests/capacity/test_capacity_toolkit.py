@@ -671,6 +671,12 @@ class TestDbCollector:
             assert "code" in err
             assert "error_type" in err
 
+    def test_pgvector_uses_extversion_column(self):
+        from scripts.capacity.db_collector import _DB_QUERIES
+        q = _DB_QUERIES["extension_vector"]
+        assert "extversion" in q, f"pgvector query must use extversion column, got: {q}"
+        assert "version" not in q.replace("extversion", ""), "query should not reference bare 'version' column"
+
 
 # ── PostgreSQL size components ────────────────────────────────────────
 

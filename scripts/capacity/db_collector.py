@@ -15,7 +15,7 @@ _DB_QUERIES = {
     "read_only": "SHOW default_transaction_read_only",
     "txn_read_only": "SHOW transaction_read_only",
     "extension_vector": (
-        "SELECT version FROM pg_extension WHERE extname = 'vector'"
+        "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
     ),
     "vector_columns": """
         SELECT
