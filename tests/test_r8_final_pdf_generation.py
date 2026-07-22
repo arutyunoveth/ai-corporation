@@ -103,3 +103,20 @@ def test_final_pdf_generation_recovers_after_post_rename_fault(tmp_path, monkeyp
         publish_final_pdf_generation(**_kwargs(), fault=fault)
     # The immutable generation was renamed; retry verifies it without overwrite.
     assert publish_final_pdf_generation(**_kwargs()).idempotent
+
+
+@pytest.mark.parametrize("tamper", ("manifest", "extra_file", "symlink"))
+def test_final_pdf_generation_fails_closed_for_unsafe_existing_tree(
+    tmp_path, monkeypatch, tamper
+):
+    monkeypatch.setattr(canonical_snapshot, "load_config", _config(tmp_path))
+    generated = publish_final_pdf_generation(**_kwargs())
+    if tamper == "manifest":
+        generated.manifest_path.write_bytes(b"{}")
+    elif tamper == "extra_file":
+        (generated.artifact_directory / "foreign.txt").write_text("foreign")
+    else:
+        generated.pdf_path.unlink()
+        generated.pdf_path.symlink_to(tmp_path / "outside.pdf")
+    with pytest.raises(FinalPdfArtifactError):
+        publish_final_pdf_generation(**_kwargs())
