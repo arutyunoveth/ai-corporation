@@ -172,3 +172,4 @@ def test_concurrent_different_keys_create_only_one_active_run(tmp_path):
 def test_customer_pilot_router_is_inside_existing_operator_auth_boundary():
     assert _is_protected_path("/api/operator/pilot/summary", ("/api",), ("/health",))
     assert "/api" in Settings().pilot_auth_protected_prefixes.split(",")
+    assert "/customers" in Settings().pilot_auth_protected_prefixes.split(",")
