@@ -351,6 +351,7 @@ def _snapshot_from_existing(
     expected: dict,
     verified: PersistedCanonicalOutputs,
     paths: tuple[str, str, str],
+    files: tuple[Path, Path, Path, bytes, bytes, bytes] | None = None,
 ) -> PublishedCanonicalSnapshot:
     _directory(final)
     try:
@@ -361,12 +362,11 @@ def _snapshot_from_existing(
         ) from exc
     if names != sorted(EXACT_FILE_SET):
         raise CanonicalSnapshotContractError("Immutable snapshot file set is invalid")
-    req, report, manifest = (final / name for name in EXACT_FILE_SET)
-    req_bytes, report_bytes, manifest_bytes = (
-        _read_regular(req),
-        _read_regular(report),
-        _read_regular(manifest),
-    )
+    if files is None:
+        req, report, manifest = (final / name for name in EXACT_FILE_SET)
+        req_bytes, report_bytes, manifest_bytes = (_read_regular(req), _read_regular(report), _read_regular(manifest))
+    else:
+        req, report, manifest, req_bytes, report_bytes, manifest_bytes = files
     try:
         payload = _validate_manifest(json.loads(manifest_bytes))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -634,8 +634,10 @@ def verify_customer_snapshot(
     ) != paths:
         raise CanonicalSnapshotContractError("Database snapshot paths are invalid")
     final = run_root / "analysis"
-    req = _read_regular(final / "requirements.json")
-    report = _read_regular(final / "canonical_report.json")
+    req_path, report_path, manifest_path = (final / name for name in EXACT_FILE_SET)
+    req = _read_regular(req_path)
+    report = _read_regular(report_path)
+    manifest = _read_regular(manifest_path)
     verified = verify_canonical_bytes(
         requirements_bytes=req, canonical_report_bytes=report
     )
@@ -656,7 +658,8 @@ def verify_customer_snapshot(
         "canonical_report_file_sha256": verified.canonical_report_file_sha256,
     }
     snapshot = _snapshot_from_existing(
-        final=final, expected=expected, verified=verified, paths=paths
+        final=final, expected=expected, verified=verified, paths=paths,
+        files=(req_path, report_path, manifest_path, req, report, manifest),
     )
     if snapshot.binding_manifest_file_sha256 != binding_manifest_file_sha256:
         raise CanonicalSnapshotConflictError(
