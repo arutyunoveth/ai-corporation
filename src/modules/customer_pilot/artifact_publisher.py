@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.modules.customer_pilot.models import PilotArtifact, PilotRunResult, ProcurementCase
@@ -225,5 +226,13 @@ def publish_final_pdf(session: Session, run: TenderAnalysisRun, case: Procuremen
         source_graph_hash=binding.source_graph_hash, renderer_version=_PDF_RENDERER_VERSION, manifest_relative_path=manifest_rel,
         pdf_relative_path=pdf_rel, pdf_sha256=payload["pdf_sha256"], byte_size=payload["byte_size"], status="published",
     )
-    session.add(artifact); session.flush()
+    session.add(artifact)
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        winner = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == _ARTIFACT_TYPE))
+        if winner:
+            return winner
+        raise
     return artifact
