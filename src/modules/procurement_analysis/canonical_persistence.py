@@ -10,13 +10,17 @@ from typing import Any, Callable
 
 
 @dataclass(frozen=True)
-class PersistedCanonicalOutputs:
+class PersistedCanonicalFiles:
     requirements_path: Path
     canonical_report_path: Path
     report_json_path: Path
     report_html_path: Path
     steps_path: Path
     canonical_report: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PersistedCanonicalOutputs(PersistedCanonicalFiles):
     source_graph: dict[str, Any]
     source_graph_hash: str
     production_model_hash: str
@@ -86,7 +90,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def persist_canonical_outputs(*, output_dir: Path, run_id: str, metadata: dict, outputs: dict, steps: list, render_html: Callable[[dict], str], now_factory: Callable[[], str]) -> PersistedCanonicalOutputs:
+def persist_canonical_outputs(*, output_dir: Path, run_id: str, metadata: dict, outputs: dict, steps: list, render_html: Callable[[dict], str], now_factory: Callable[[], str]) -> PersistedCanonicalFiles:
     from src.modules.tender_operator_agent_demo.report_model import build_procurement_report_model, canonical_report_to_markdown
     output_dir.mkdir(parents=True, exist_ok=True)
     for name, payload in outputs.items():
@@ -98,21 +102,29 @@ def persist_canonical_outputs(*, output_dir: Path, run_id: str, metadata: dict, 
     _write_json(report_path, {"run_id": run_id, "report_title": "Отчёт по загруженному прогону тендерного агента", "generated_at": now_factory(), "recommendation": outputs["final_recommendation"]["recommendation"], "recommendation_label": outputs["final_recommendation"]["label"], "executive_summary": outputs["final_recommendation"]["rationale"], "manual_checks": outputs["final_recommendation"]["manual_checks"], "sections": [{"title": item.title, "kind": "bullets", "items": item.findings} for item in steps], "report_markdown": canonical_report_to_markdown(canonical)})
     steps_path = output_dir / "steps.json"; _write_json(steps_path, {"steps": [item.model_dump(mode="json") for item in steps]})
     requirements_path = output_dir / "requirements.json"
+    return PersistedCanonicalFiles(requirements_path, canonical_path, report_path, html_path, steps_path, canonical)
+
+
+def verify_persisted_canonical_outputs(*, output_dir: Path, expected_outputs: dict | None = None, expected_canonical_report: dict | None = None) -> PersistedCanonicalOutputs:
+    requirements_path, canonical_path = output_dir / "requirements.json", output_dir / "canonical_report.json"
     try:
         persisted_requirements = json.loads(requirements_path.read_bytes())
         preliminary = persisted_requirements["preliminary_analysis"]
         canonical_model = preliminary["canonical_procurement_model"]
         graph = canonical_model["source_graph"]
         production_hash = canonical_model["production_model_hash"]
-    except (KeyError, TypeError) as exc:
-        raise ValueError("Frozen R7 canonical source-graph contract is incomplete") from exc
+        persisted_canonical = json.loads(canonical_path.read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise FrozenCanonicalContractError("Frozen R7 canonical source-graph contract is incomplete") from exc
     if not isinstance(graph, dict) or not production_hash:
-        raise ValueError("Frozen R7 canonical source-graph contract is invalid")
-    if graph != outputs["requirements"]["preliminary_analysis"]["canonical_procurement_model"]["source_graph"]:
-        raise ValueError("Persisted frozen source graph differs from in-memory result")
-    persisted_canonical = json.loads(canonical_path.read_bytes())
-    if persisted_canonical != canonical:
-        raise ValueError("Persisted frozen canonical report differs from in-memory result")
+        raise FrozenCanonicalContractError("Frozen R7 canonical source-graph contract is invalid")
+    if expected_outputs is not None:
+        try:
+            if graph != expected_outputs["requirements"]["preliminary_analysis"]["canonical_procurement_model"]["source_graph"]:
+                raise FrozenCanonicalContractError("Persisted frozen source graph differs from in-memory result")
+        except (KeyError, TypeError) as exc: raise FrozenCanonicalContractError("Expected frozen graph is invalid") from exc
+    if expected_canonical_report is not None and persisted_canonical != expected_canonical_report:
+        raise FrozenCanonicalContractError("Persisted frozen canonical report differs from in-memory result")
     validated_graph = validate_frozen_source_graph(graph, production_hash, persisted_canonical)
     model_hash = hashlib.sha256(json.dumps(persisted_canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-    return PersistedCanonicalOutputs(requirements_path, canonical_path, report_path, html_path, steps_path, persisted_canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_path.read_bytes()).hexdigest(), hashlib.sha256(canonical_path.read_bytes()).hexdigest())
+    return PersistedCanonicalOutputs(requirements_path, canonical_path, output_dir / "report.json", output_dir / "report.html", output_dir / "steps.json", persisted_canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_path.read_bytes()).hexdigest(), hashlib.sha256(canonical_path.read_bytes()).hexdigest())
