@@ -20,6 +20,10 @@ from src.modules.customer_pilot.canonical_snapshot import (
     verify_customer_snapshot,
 )
 from src.modules.customer_pilot.input_resolver import resolve_customer_run_inputs
+from src.modules.customer_pilot.binding_verifier import (
+    RunSnapshotBindingError,
+    verify_run_snapshot_binding,
+)
 from src.modules.customer_pilot.models import (
     PilotArtifact,
     PilotRunResult,
@@ -79,7 +83,7 @@ def _customer_metadata(run: TenderAnalysisRun, case: ProcurementCase) -> dict:
 
 def _verified_binding(
     run: TenderAnalysisRun, case: ProcurementCase, binding: PilotRunResult
-) -> None:
+) -> object:
     if not binding.is_verified_snapshot_binding:
         raise HTTPException(409, "Canonical snapshot binding is incomplete")
     if (
@@ -90,22 +94,8 @@ def _verified_binding(
     ) != (run.customer_id, run.project_id, case.id, run.id):
         raise HTTPException(409, "Canonical snapshot ownership is invalid")
     try:
-        verify_customer_snapshot(
-            customer_id=run.customer_id,
-            project_id=run.project_id,
-            procurement_case_id=case.id,
-            run_id=run.id,
-            registry_number=run.registry_number,
-            source_analysis_run_id=binding.source_analysis_run_id,
-            requirements_relative_path=binding.requirements_storage_key,
-            canonical_report_relative_path=binding.canonical_report_storage_key,
-            binding_manifest_relative_path=binding.binding_manifest_storage_key,
-            binding_manifest_file_sha256=binding.binding_manifest_file_sha256,
-            source_graph_hash=binding.source_graph_hash,
-            production_model_hash=binding.production_model_hash,
-            report_model_hash=binding.report_model_hash,
-        )
-    except CanonicalSnapshotError as exc:
+        return verify_run_snapshot_binding(run=run, case=case, binding=binding)
+    except RunSnapshotBindingError as exc:
         raise HTTPException(409, "Canonical snapshot identities are invalid") from exc
 
 
@@ -192,11 +182,9 @@ def bind_completed_analysis(
 def _load_canonical(
     run: TenderAnalysisRun, case: ProcurementCase, binding: PilotRunResult
 ) -> dict:
-    _verified_binding(run, case, binding)
     try:
-        return json.loads(
-            _path_under_root(binding.canonical_report_storage_key).read_bytes()
-        )
+        verified = _verified_binding(run, case, binding)
+        return json.loads(verified.canonical_report_bytes)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(422, "Canonical snapshot report is invalid") from exc
 
