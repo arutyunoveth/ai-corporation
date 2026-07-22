@@ -68,6 +68,63 @@ def _command(commands: list[str], args: list[str], env: dict[str, str]) -> None:
         )
 
 
+def _alembic_state(env: dict[str, str], commands: list[str]) -> dict:
+    """Assert the actual installed migration head rather than inheriting success."""
+
+    def inspect(*args: str) -> tuple[int, str]:
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", *args],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        commands.append(
+            json.dumps(
+                {
+                    "command": " ".join(result.args),
+                    "exit_code": result.returncode,
+                    "finished_at": utcnow(),
+                    "started_at": utcnow(),
+                    "duration_seconds": 0,
+                },
+                sort_keys=True,
+            )
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    heads_code, heads = inspect("heads")
+    current_code, current = inspect("current")
+    repeat_code, _ = inspect("upgrade", "head")
+    parsed_heads = [line.strip() for line in heads.splitlines() if "(head)" in line]
+    expected = "096_add_r8_canonical_snapshot_binding"
+    current_revision = next(
+        (
+            line.strip()
+            for line in current.splitlines()
+            if "096_add_r8_canonical_snapshot_binding" in line
+        ),
+        "",
+    )
+    passed = (
+        heads_code == current_code == repeat_code == 0
+        and len(parsed_heads) == 1
+        and expected in parsed_heads[0]
+        and expected in current_revision
+    )
+    if not passed:
+        raise AssertionError("Alembic head/current assertion failed")
+    return {
+        "command": "alembic heads/current/upgrade head",
+        "exit_code": 0,
+        "parsed_heads": parsed_heads,
+        "head_count": len(parsed_heads),
+        "current_revision": current_revision,
+        "expected_revision": expected,
+        "repeat_upgrade_exit_code": repeat_code,
+    }
+
+
 def _seed(env: dict[str, str]) -> None:
     # Import only after the disposable DATABASE_URL is established.
     from sqlalchemy import create_engine
@@ -424,10 +481,12 @@ def main() -> int:
     restart_snapshots: list[dict] = []
     tenant_actual: dict = {}
     concurrency_actual: dict = {}
+    migration_actual: dict = {}
     success = False
     try:
         _command(commands, compose + ["up", "-d", "--wait"], env)
         _command(commands, [sys.executable, "-m", "alembic", "upgrade", "head"], env)
+        migration_actual = _alembic_state(env, commands)
         _seed(env)
         runtime.start("1")
         runtime.wait_ready(username, password)
@@ -521,7 +580,7 @@ def main() -> int:
         )
         assert status == 200
         review = _json(body)
-        status, _, _ = http(
+        status, body, _ = http(
             "POST",
             base + f"/cases/{case['id']}/runs/{run['id']}/review",
             username=username,
@@ -589,7 +648,7 @@ def main() -> int:
             password=password,
         )
         assert status == 200
-        status, _, _ = http(
+        status, feedback_body, _ = http(
             "POST",
             base + f"/cases/{case['id']}/feedback?run_id={run['id']}",
             username=username,
@@ -601,6 +660,19 @@ def main() -> int:
             },
         )
         assert status == 201
+        feedback = _json(feedback_body)
+        status, body, _ = http(
+            "GET",
+            base + f"/cases/{case['id']}/feedback",
+            username=username,
+            password=password,
+        )
+        assert status == 200 and any(
+            item["id"] == feedback["id"]
+            and item["run_id"] == run["id"]
+            and item["comment"] == "foundation"
+            for item in _json(body)
+        )
         runtime.stop("2")
         runtime.port = free_port()
         runtime.start("3")
@@ -635,6 +707,23 @@ def main() -> int:
             password=password,
         )
         assert status == 200
+        for method, suffix in (
+            ("POST", f"/cases/{case['id']}/runs"),
+            ("POST", f"/cases/{case['id']}/client-ready"),
+            ("POST", f"/cases/{case['id']}/delivered"),
+            ("POST", f"/cases/{case['id']}/archive"),
+        ):
+            status, _, _ = http(
+                method,
+                base + suffix,
+                username=username,
+                password=password,
+                body={} if method == "POST" else None,
+                headers={"Idempotency-Key": "archived"}
+                if suffix.endswith("/runs")
+                else None,
+            )
+            assert status == 409
         success = True
     except Exception as exc:
         errors.append(f"{type(exc).__name__}: {sanitize(str(exc), temp)}")
@@ -677,6 +766,8 @@ def main() -> int:
             status="PASS" if success else "FAILED",
             started_at=started,
             checks=[{"upgrade_head": success}, {"single_head": success}],
+            actual=migration_actual,
+            errors=errors,
         ),
     )
     write_json(
