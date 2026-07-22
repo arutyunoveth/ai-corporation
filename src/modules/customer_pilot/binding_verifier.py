@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+import json
 
 from src.modules.customer_pilot.canonical_snapshot import (
     CanonicalSnapshotConflictError,
@@ -33,10 +35,21 @@ class VerifiedRunSnapshotBinding:
     requirements_bytes: bytes
     canonical_report_bytes: bytes
     manifest_bytes: bytes
-    requirements_path: object
-    canonical_report_path: object
-    manifest_path: object
-    snapshot: object
+    parsed_requirements: dict
+    parsed_canonical_report: dict
+    parsed_manifest: dict
+    requirements_path: Path
+    canonical_report_path: Path
+    manifest_path: Path
+    requirements_file_sha256: str
+    canonical_report_file_sha256: str
+    binding_manifest_file_sha256: str
+    source_graph_hash: str
+    source_graph_hash_algorithm: str
+    production_model_hash: str
+    report_model_hash: str
+    verification_policy_version: str
+    source_analysis_run_id: str
 
 
 def verify_run_snapshot_binding(*, run, case, binding) -> VerifiedRunSnapshotBinding:
@@ -59,9 +72,14 @@ def verify_run_snapshot_binding(*, run, case, binding) -> VerifiedRunSnapshotBin
             report_model_hash=binding.report_model_hash,
         )
         return VerifiedRunSnapshotBinding(
-            snapshot.requirements_path.read_bytes(), snapshot.canonical_report_path.read_bytes(),
-            snapshot.binding_manifest_path.read_bytes(), snapshot.requirements_path,
-            snapshot.canonical_report_path, snapshot.binding_manifest_path, snapshot,
+            snapshot.requirements_bytes, snapshot.canonical_report_bytes, snapshot.manifest_bytes,
+            json.loads(snapshot.requirements_bytes), json.loads(snapshot.canonical_report_bytes), snapshot.manifest,
+            snapshot.requirements_path, snapshot.canonical_report_path, snapshot.binding_manifest_path,
+            snapshot.requirements_file_sha256, snapshot.canonical_report_file_sha256,
+            snapshot.binding_manifest_file_sha256, snapshot.source_graph_hash,
+            snapshot.source_graph_hash_algorithm, snapshot.production_model_hash,
+            snapshot.report_model_hash, snapshot.verification_policy_version,
+            binding.source_analysis_run_id,
         )
     except CanonicalSnapshotContractError as exc:
         raise RunSnapshotBindingContractError(str(exc)) from exc

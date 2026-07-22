@@ -11,7 +11,7 @@ import re
 import stat
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterator
@@ -93,6 +93,8 @@ class PublishedCanonicalSnapshot:
     created_at: str
     manifest: dict
     manifest_bytes: bytes
+    requirements_bytes: bytes = field(default=b"", kw_only=True)
+    canonical_report_bytes: bytes = field(default=b"", kw_only=True)
     idempotent: bool
 
 
@@ -660,4 +662,6 @@ def verify_customer_snapshot(
         raise CanonicalSnapshotConflictError(
             "Database binding manifest identity conflicts"
         )
-    return snapshot
+    return PublishedCanonicalSnapshot(
+        **{**snapshot.__dict__, "requirements_bytes": req, "canonical_report_bytes": report}
+    )
