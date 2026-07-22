@@ -565,7 +565,12 @@ def mark_client_ready(customer_id: str, case_id: str, session: DBSession):
         raise HTTPException(409, "Canonical result binding is required")
     verified = verified_pilot_artifact(run, case, result, artifact)
     verify_review_artifact_binding(
-        review=approved, run=run, artifact=artifact, verified_artifact=verified
+        review=approved,
+        run=run,
+        case=case,
+        result=result,
+        artifact=artifact,
+        verified_artifact=verified,
     )
     _transition(case, "client_ready")
     _audit(
@@ -604,7 +609,12 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
         raise HTTPException(409, "Canonical result binding is required")
     verified = verified_pilot_artifact(run, case, result, artifact)
     verify_review_artifact_binding(
-        review=review, run=run, artifact=artifact, verified_artifact=verified
+        review=review,
+        run=run,
+        case=case,
+        result=result,
+        artifact=artifact,
+        verified_artifact=verified,
     )
     _transition(case, "delivered")
     _audit(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -26,6 +25,7 @@ from src.modules.customer_pilot.binding_verifier import (
 from src.modules.customer_pilot.artifact_snapshot import (
     FinalPdfArtifactConflictError,
     FinalPdfArtifactError,
+    derive_final_pdf_artifact_identity,
     publish_final_pdf_generation,
 )
 from src.modules.customer_pilot.models import (
@@ -41,12 +41,6 @@ from src.tender_research.models import TenderAnalysisRun
 
 _ARTIFACT_TYPE = "final_pdf"
 _PDF_RENDERER_VERSION = "r7-persisted-pdf-v2"
-
-
-def _pdf_artifact_key(registry_number: str, run_id: str, report_model_hash: str) -> str:
-    return hashlib.sha256(
-        f"{registry_number}\0{run_id}\0{report_model_hash}\0{_PDF_RENDERER_VERSION}".encode()
-    ).hexdigest()[:24]
 
 
 def _root() -> Path:
@@ -223,8 +217,13 @@ def publish_final_pdf(
     if not binding:
         raise HTTPException(409, "Canonical result is required before publication")
     canonical = _load_canonical(run, case, binding)
-    artifact_key = _pdf_artifact_key(
-        run.registry_number, run.id, binding.report_model_hash
+    identity = derive_final_pdf_artifact_identity(
+        registry_number=run.registry_number,
+        run_id=run.id,
+        report_model_hash=binding.report_model_hash,
+        customer_id=run.customer_id,
+        project_id=run.project_id,
+        procurement_case_id=case.id,
     )
     try:
         with tempfile.NamedTemporaryFile(
@@ -254,8 +253,8 @@ def publish_final_pdf(
             registry_number=run.registry_number,
             source_analysis_run_id=binding.source_analysis_run_id,
             run_namespace_key=run.artifact_key,
-            artifact_key=artifact_key,
-            renderer_version=_PDF_RENDERER_VERSION,
+            artifact_key=identity.artifact_key,
+            renderer_version=identity.renderer_version,
             requirements_storage_key=binding.requirements_storage_key,
             requirements_file_sha256=binding.requirements_file_sha256,
             canonical_report_storage_key=binding.canonical_report_storage_key,
@@ -279,10 +278,10 @@ def publish_final_pdf(
         run_id=run.id,
         run_result_id=binding.id,
         artifact_type=_ARTIFACT_TYPE,
-        artifact_key=artifact_key,
+        artifact_key=identity.artifact_key,
         report_model_hash=binding.report_model_hash,
         source_graph_hash=binding.source_graph_hash,
-        renderer_version=_PDF_RENDERER_VERSION,
+        renderer_version=identity.renderer_version,
         manifest_relative_path=generation.manifest_relative_path,
         manifest_file_sha256=generation.manifest_file_sha256,
         verification_policy_version=generation.verification_policy_version,
