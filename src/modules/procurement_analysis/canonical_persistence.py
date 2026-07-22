@@ -21,6 +21,8 @@ class PersistedCanonicalFiles:
 
 @dataclass(frozen=True)
 class PersistedCanonicalOutputs(PersistedCanonicalFiles):
+    requirements_bytes: bytes
+    canonical_report_bytes: bytes
     source_graph: dict[str, Any]
     source_graph_hash: str
     production_model_hash: str
@@ -140,4 +142,4 @@ def verify_persisted_canonical_outputs(*, output_dir: Path, expected_outputs: di
         raise FrozenCanonicalContractError("Persisted frozen canonical report differs from in-memory result")
     validated_graph = validate_frozen_source_graph(graph, production_hash, persisted_canonical)
     model_hash = hashlib.sha256(json.dumps(persisted_canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-    return PersistedCanonicalOutputs(requirements_path, canonical_path, output_dir / "report.json", output_dir / "report.html", output_dir / "steps.json", persisted_canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_bytes).hexdigest(), hashlib.sha256(canonical_report_bytes).hexdigest())
+    return PersistedCanonicalOutputs(requirements_path, canonical_path, output_dir / "report.json", output_dir / "report.html", output_dir / "steps.json", persisted_canonical, requirements_bytes, canonical_report_bytes, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_bytes).hexdigest(), hashlib.sha256(canonical_report_bytes).hexdigest())
