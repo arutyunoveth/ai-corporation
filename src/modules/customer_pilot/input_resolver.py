@@ -14,6 +14,7 @@ from src.tender_research.models import (
     ProcurementTender,
     ProcurementTenderDocument,
 )
+from src.modules.procurement_analysis.document_roles import detect_document_role
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,14 @@ def resolve_customer_run_inputs(
             (ProcurementTender.registry_number == registry_number)
             | (ProcurementTender.purchase_number == registry_number)
         )
-        .order_by(ProcurementTender.updated_at.desc(), ProcurementTender.id.desc())
+        # External intake identity is stable across databases; a generated UUID is
+        # only a final tie-breaker and must not choose a different tender merely
+        # because equivalent rows were inserted in a different order.
+        .order_by(
+            ProcurementTender.updated_at.desc(),
+            ProcurementTender.external_id.desc(),
+            ProcurementTender.id.desc(),
+        )
     )
     if not tender:
         raise HTTPException(
@@ -57,7 +65,6 @@ def resolve_customer_run_inputs(
         )
     ).all()
     from src.modules.procurement_analysis.frozen_types import AnalyzedDocument
-    from src.modules.tender_operator_agent_demo.upload_service import _detect_role
 
     documents, identities = [], []
     for row in rows:
@@ -77,7 +84,7 @@ def resolve_customer_run_inputs(
             AnalyzedDocument(
                 name,
                 "." + name.rsplit(".", 1)[-1].lower() if "." in name else ".txt",
-                _detect_role(name),
+                detect_document_role(name),
                 text,
                 True,
                 [],

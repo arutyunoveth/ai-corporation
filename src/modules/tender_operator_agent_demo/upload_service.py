@@ -23,6 +23,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from src.modules.tender_connectors.text_extraction import extract_text_from_attachment_bytes
+from src.modules.procurement_analysis.document_roles import detect_document_role
 from src.tender_research.document_text_extractor import (
     EMPTY_STATUS as DOC_EMPTY_STATUS,
     EXTRACTED_STATUS as DOC_EXTRACTED_STATUS,
@@ -600,28 +601,8 @@ def _decode_text(content: bytes) -> str | None:
 
 
 def _detect_role(name: str) -> str:
-    lowered = name.lower()
-    if lowered.endswith(".xml") and any(
-        token in lowered
-        for token in (
-            "epnotification",
-            "epprotocol",
-            "fcsplacementresult",
-            "fcsproposalsresult",
-            "clarification",
-            "protocol",
-        )
-    ):
-        return "notice"
-    if any(token in lowered for token in ("tkp", "quote", "kp", "коммер", "proposal")):
-        return "tkp"
-    if any(token in lowered for token in ("contract", "договор", "agreement", "проект гк", "гк.doc", "контракт")):
-        return "contract_draft"
-    if any(token in lowered for token in ("spec", "специф", "technical", "тз", "техничес", "описание объекта")):
-        return "technical_spec"
-    if any(token in lowered for token in ("notice", "извещ", "tender", "закуп")):
-        return "notice"
-    return "supporting"
+    """Compatibility facade for the storage-neutral frozen-pipeline policy."""
+    return detect_document_role(name)
 
 
 def _derive_role_hint(filename: str) -> str | None:
