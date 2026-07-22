@@ -60,6 +60,19 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    # Preserve the report identity for verified rows before removing the
+    # explicit report_model_hash column introduced by this revision.
+    op.execute(
+        sa.text(
+            "UPDATE pilot_run_results "
+            "SET canonical_report_hash = COALESCE(canonical_report_hash, report_model_hash)"
+        )
+    )
+    nulls = bind.execute(
+        sa.text("SELECT COUNT(*) FROM pilot_run_results WHERE canonical_report_hash IS NULL")
+    ).scalar_one()
+    if nulls:
+        raise RuntimeError("Cannot downgrade 096 while canonical_report_hash is NULL")
     inspector = sa.inspect(bind)
     indexes = {item["name"] for item in inspector.get_indexes("pilot_run_results")}
     for name in (
@@ -82,3 +95,8 @@ def downgrade() -> None:
     ):
         if name in columns:
             op.drop_column("pilot_run_results", name)
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("pilot_run_results") as batch:
+            batch.alter_column("canonical_report_hash", existing_type=sa.String(length=64), nullable=False)
+    else:
+        op.alter_column("pilot_run_results", "canonical_report_hash", existing_type=sa.String(length=64), nullable=False)
