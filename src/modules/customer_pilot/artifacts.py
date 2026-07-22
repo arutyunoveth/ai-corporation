@@ -56,9 +56,11 @@ def verified_pilot_artifact(run, case, result, artifact, *, manifest_path: str |
     if any(payload.get(key) != value for key, value in expected.items()):
         raise HTTPException(409, "Final artifact does not belong to this customer run")
     if artifact:
-        fields = ("artifact_key", "report_model_hash", "source_graph_hash", "renderer_version", "manifest_relative_path", "pdf_relative_path", "pdf_sha256", "byte_size")
+        fields = ("artifact_key", "report_model_hash", "source_graph_hash", "renderer_version", "pdf_relative_path", "pdf_sha256", "byte_size")
         if any(payload.get(key) != getattr(artifact, key) for key in fields):
             raise HTTPException(409, "Final artifact database binding is invalid")
+        if relative_manifest != artifact.manifest_relative_path:
+            raise HTTPException(409, "Final artifact manifest path is invalid")
         if (artifact.customer_id, artifact.project_id, artifact.procurement_case_id, artifact.run_id, artifact.run_result_id) != (run.customer_id, run.project_id, case.id, run.id, result.id):
             raise HTTPException(409, "Final artifact ownership is invalid")
     pdf = _safe_file(payload["pdf_relative_path"])
