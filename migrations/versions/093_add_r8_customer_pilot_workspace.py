@@ -32,13 +32,14 @@ def upgrade() -> None:
         else:
             op.create_table(name, sa.Column("id", sa.String(36), primary_key=True), sa.Column("customer_id", sa.String(64)), sa.Column("project_id", sa.String(36)), sa.Column("procurement_case_id", sa.String(36)), sa.Column("run_id", sa.String(36)), sa.Column("event_type", sa.String(64), nullable=False), sa.Column("payload", sa.JSON(), nullable=False), sa.Column("created_at", sa.DateTime(timezone=True), nullable=False)); op.create_index("ix_pilot_audit_customer_created", name, ["customer_id", "created_at"])
     columns = {x["name"] for x in inspector.get_columns("tender_analysis_runs")}
-    for name, type_, fk in [("customer_id", sa.String(64), "customer_profiles.customer_id"), ("project_id", sa.String(36), "pilot_projects.id"), ("procurement_case_id", sa.String(36), "procurement_cases.id"), ("idempotency_key", sa.String(128), None), ("artifact_key", sa.String(96), None)]:
-        if name not in columns: op.add_column("tender_analysis_runs", sa.Column(name, type_, sa.ForeignKey(fk) if fk else None, nullable=True))
+    # SQLite cannot ALTER in a foreign-key constraint. The workflow validates these
+    # links atomically and fresh PostgreSQL deployments receive the model FKs.
+    for name, type_ in [("customer_id", sa.String(64)), ("project_id", sa.String(36)), ("procurement_case_id", sa.String(36)), ("idempotency_key", sa.String(128)), ("artifact_key", sa.String(96))]:
+        if name not in columns: op.add_column("tender_analysis_runs", sa.Column(name, type_, nullable=True))
     indexes = {x["name"] for x in inspector.get_indexes("tender_analysis_runs")}
     if "ix_tender_analysis_runs_customer_project_case" not in indexes: op.create_index("ix_tender_analysis_runs_customer_project_case", "tender_analysis_runs", ["customer_id", "project_id", "procurement_case_id"])
-    constraints = {x["name"] for x in inspector.get_unique_constraints("tender_analysis_runs")}
-    if "uq_r8_run_case_idempotency" not in constraints: op.create_unique_constraint("uq_r8_run_case_idempotency", "tender_analysis_runs", ["procurement_case_id", "idempotency_key"])
-    if "uq_tender_analysis_runs_artifact_key" not in constraints: op.create_unique_constraint("uq_tender_analysis_runs_artifact_key", "tender_analysis_runs", ["artifact_key"])
+    if "ux_r8_run_case_idempotency" not in indexes: op.create_index("ux_r8_run_case_idempotency", "tender_analysis_runs", ["procurement_case_id", "idempotency_key"], unique=True)
+    if "ux_tender_analysis_runs_artifact_key" not in indexes: op.create_index("ux_tender_analysis_runs_artifact_key", "tender_analysis_runs", ["artifact_key"], unique=True)
 
 
 def downgrade() -> None:

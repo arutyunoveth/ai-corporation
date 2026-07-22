@@ -6,7 +6,8 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.modules.customer_pilot.models import (
@@ -16,6 +17,7 @@ from src.modules.customer_pilot.models import (
     PilotReview,
     ProcurementCase,
 )
+from src.modules.customer_pilot.artifacts import verified_pdf_manifest
 from src.modules.customer_registry.models import CustomerProfile
 from src.shared.api.dependencies import DBSession
 from src.shared.db.base import utcnow
@@ -73,8 +75,6 @@ class ReviewIn(BaseModel):
     internal_comment: str | None = None
     client_comment: str | None = None
     source_graph_hash: str | None = None
-    report_model_hash: str | None = None
-    artifact_hashes: dict = Field(default_factory=dict)
 
 
 class FeedbackIn(BaseModel):
@@ -227,17 +227,32 @@ def start_run(
             "idempotent": True,
             "artifact_key": existing.artifact_key,
         }
-    if case.status == "analyzing":
-        raise HTTPException(409, "A run is already active")
-    if case.status not in {
-        "created",
-        "collecting_documents",
-        "failed",
-        "operator_review",
-    }:
-        raise HTTPException(409, "Case cannot be started in current state")
-    if case.status != "analyzing":
-        _transition(case, "analyzing")
+    startable = {"created", "collecting_documents", "failed", "operator_review"}
+    claimed = session.execute(
+        update(ProcurementCase)
+        .where(
+            ProcurementCase.id == case_id,
+            ProcurementCase.customer_id == customer_id,
+            ProcurementCase.status.in_(startable),
+        )
+        .values(status="analyzing", updated_at=utcnow())
+    ).rowcount
+    if claimed != 1:
+        session.rollback()
+        existing = session.scalar(
+            select(TenderAnalysisRun).where(
+                TenderAnalysisRun.procurement_case_id == case_id,
+                TenderAnalysisRun.idempotency_key == idempotency_key,
+            )
+        )
+        if existing:
+            return {
+                "id": existing.id,
+                "status": existing.status,
+                "idempotent": True,
+                "artifact_key": existing.artifact_key,
+            }
+        raise HTTPException(409, "A run is already active or case cannot be started")
     run = TenderAnalysisRun(
         registry_number=payload.registry_number
         or case.procurement_number
@@ -250,8 +265,25 @@ def start_run(
         artifact_key=f"r_{uuid4().hex}",
         source="customer_pilot",
     )
-    session.add(run)
-    session.flush()
+    try:
+        session.add(run)
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        existing = session.scalar(
+            select(TenderAnalysisRun).where(
+                TenderAnalysisRun.procurement_case_id == case_id,
+                TenderAnalysisRun.idempotency_key == idempotency_key,
+            )
+        )
+        if existing:
+            return {
+                "id": existing.id,
+                "status": existing.status,
+                "idempotent": True,
+                "artifact_key": existing.artifact_key,
+            }
+        raise HTTPException(409, "Concurrent analysis start was rejected")
     _audit(
         session,
         "analysis_started",
@@ -301,9 +333,16 @@ def review_run(
     customer_id: str, case_id: str, run_id: str, payload: ReviewIn, session: DBSession
 ):
     case = _case(session, customer_id, case_id)
-    _run(session, customer_id, case_id, run_id)
+    run = _run(session, customer_id, case_id, run_id)
     if payload.verdict not in VERDICTS or case.status != "operator_review":
         raise HTTPException(409, "Review is not permitted")
+    if session.scalar(select(PilotReview).where(PilotReview.run_id == run_id)):
+        raise HTTPException(409, "Review is immutable; create a new run for re-review")
+    manifest = (
+        verified_pdf_manifest(run, case)
+        if payload.verdict in {"approved", "approved_with_notes"}
+        else {}
+    )
     review = PilotReview(
         customer_id=customer_id,
         project_id=case.project_id,
@@ -315,8 +354,8 @@ def review_run(
         internal_comment=payload.internal_comment,
         client_comment=payload.client_comment,
         source_graph_hash=payload.source_graph_hash,
-        report_model_hash=payload.report_model_hash,
-        artifact_hashes=payload.artifact_hashes,
+        report_model_hash=manifest.get("report_model_hash"),
+        artifact_hashes={"pdf": manifest.get("pdf_sha256"), "manifest": manifest},
         immutable_at=utcnow()
         if payload.verdict in {"approved", "approved_with_notes"}
         else None,
@@ -350,6 +389,8 @@ def mark_client_ready(customer_id: str, case_id: str, session: DBSession):
     )
     if not approved:
         raise HTTPException(409, "Completed approved operator review is required")
+    run = _run(session, customer_id, case_id, approved.run_id)
+    verified_pdf_manifest(run, case)
     _transition(case, "client_ready")
     _audit(
         session,
@@ -373,6 +414,8 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
     )
     if not review or not review.artifact_hashes.get("pdf"):
         raise HTTPException(409, "Immutable final PDF is required")
+    run = _run(session, customer_id, case_id, review.run_id)
+    verified_pdf_manifest(run, case)
     _transition(case, "delivered")
     _audit(
         session,
