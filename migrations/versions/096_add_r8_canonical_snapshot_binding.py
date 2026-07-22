@@ -3,6 +3,7 @@
 Revision ID: 096_add_r8_canonical_snapshot_binding
 Revises: 095_add_r8_current_run
 """
+
 from collections.abc import Sequence
 
 from alembic import op
@@ -31,6 +32,22 @@ def upgrade() -> None:
     for name, type_ in additions:
         if name not in columns:
             op.add_column("pilot_run_results", sa.Column(name, type_, nullable=True))
+    # 094 used this ambiguous legacy field for a report identity. New verified
+    # bindings intentionally leave it NULL and persist the two real hashes.
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("pilot_run_results") as batch:
+            batch.alter_column(
+                "canonical_report_hash",
+                existing_type=sa.String(length=64),
+                nullable=True,
+            )
+    else:
+        op.alter_column(
+            "pilot_run_results",
+            "canonical_report_hash",
+            existing_type=sa.String(length=64),
+            nullable=True,
+        )
     indexes = {item["name"] for item in inspector.get_indexes("pilot_run_results")}
     for name, columns_ in (
         ("ix_pilot_run_results_binding_manifest_key", ["binding_manifest_storage_key"]),
@@ -54,9 +71,14 @@ def downgrade() -> None:
             op.drop_index(name, table_name="pilot_run_results")
     columns = {item["name"] for item in inspector.get_columns("pilot_run_results")}
     for name in (
-        "verification_policy_version", "report_model_hash", "source_graph_hash_algorithm",
-        "binding_manifest_file_sha256", "binding_manifest_storage_key",
-        "canonical_report_file_sha256", "requirements_file_sha256", "requirements_storage_key",
+        "verification_policy_version",
+        "report_model_hash",
+        "source_graph_hash_algorithm",
+        "binding_manifest_file_sha256",
+        "binding_manifest_storage_key",
+        "canonical_report_file_sha256",
+        "requirements_file_sha256",
+        "requirements_storage_key",
     ):
         if name in columns:
             op.drop_column("pilot_run_results", name)

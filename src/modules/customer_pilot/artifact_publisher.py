@@ -17,7 +17,9 @@ from src.modules.customer_pilot.canonical_snapshot import (
     CanonicalSnapshotConflictError,
     CanonicalSnapshotError,
     publish_canonical_snapshot,
+    verify_customer_snapshot,
 )
+from src.modules.customer_pilot.input_resolver import resolve_customer_run_inputs
 from src.modules.customer_pilot.models import (
     PilotArtifact,
     PilotRunResult,
@@ -88,23 +90,23 @@ def _verified_binding(
     ) != (run.customer_id, run.project_id, case.id, run.id):
         raise HTTPException(409, "Canonical snapshot ownership is invalid")
     try:
-        req = _path_under_root(binding.requirements_storage_key).read_bytes()
-        report = _path_under_root(binding.canonical_report_storage_key).read_bytes()
-        manifest = _path_under_root(binding.binding_manifest_storage_key).read_bytes()
-    except OSError as exc:
-        raise HTTPException(409, "Canonical snapshot files are unavailable") from exc
-    verified = verify_canonical_bytes(
-        requirements_bytes=req, canonical_report_bytes=report
-    )
-    if (
-        verified.requirements_file_sha256 != binding.requirements_file_sha256
-        or verified.canonical_report_file_sha256 != binding.canonical_report_file_sha256
-        or verified.source_graph_hash != binding.source_graph_hash
-        or verified.production_model_hash != binding.production_model_hash
-        or verified.report_model_hash != binding.report_model_hash
-        or hashlib.sha256(manifest).hexdigest() != binding.binding_manifest_file_sha256
-    ):
-        raise HTTPException(409, "Canonical snapshot identities are invalid")
+        verify_customer_snapshot(
+            customer_id=run.customer_id,
+            project_id=run.project_id,
+            procurement_case_id=case.id,
+            run_id=run.id,
+            registry_number=run.registry_number,
+            source_analysis_run_id=binding.source_analysis_run_id,
+            requirements_relative_path=binding.requirements_storage_key,
+            canonical_report_relative_path=binding.canonical_report_storage_key,
+            binding_manifest_relative_path=binding.binding_manifest_storage_key,
+            binding_manifest_file_sha256=binding.binding_manifest_file_sha256,
+            source_graph_hash=binding.source_graph_hash,
+            production_model_hash=binding.production_model_hash,
+            report_model_hash=binding.report_model_hash,
+        )
+    except CanonicalSnapshotError as exc:
+        raise HTTPException(409, "Canonical snapshot identities are invalid") from exc
 
 
 def bind_completed_analysis(
@@ -119,13 +121,18 @@ def bind_completed_analysis(
         return existing
     source_run_id = _source_analysis_run_id(run)
     try:
+        inputs = resolve_customer_run_inputs(session, run.registry_number)
         with tempfile.TemporaryDirectory(prefix="r8-frozen-producer-") as directory:
             production = produce_frozen_canonical_analysis(
                 registry_number=run.registry_number,
                 run_id=run.id,
                 output_dir=Path(directory),
-                metadata=_customer_metadata(run, case),
-                documents=[],
+                metadata={
+                    **_customer_metadata(run, case),
+                    "warnings": inputs.warnings,
+                    "limitations": inputs.limitations,
+                },
+                documents=inputs.documents,
                 source_analysis_run_id=source_run_id,
             )
             snapshot = publish_canonical_snapshot(
@@ -157,7 +164,7 @@ def bind_completed_analysis(
         "run_id": run.id,
         "source_analysis_run_id": production.source_analysis_run_id,
         "canonical_report_storage_key": snapshot.canonical_report_relative_path,
-        "canonical_report_hash": production.report_model_hash,  # deprecated compatibility alias
+        "canonical_report_hash": None,
         "source_graph_hash": snapshot.source_graph_hash,
         "production_model_hash": snapshot.production_model_hash,
         "requirements_storage_key": snapshot.requirements_relative_path,
@@ -269,6 +276,7 @@ def publish_final_pdf(
         "artifact_type": _ARTIFACT_TYPE,
         "canonical_report_storage_key": binding.canonical_report_storage_key,
         "canonical_report_file_sha256": binding.canonical_report_file_sha256,
+        "binding_manifest_storage_key": binding.binding_manifest_storage_key,
         "binding_manifest_file_sha256": binding.binding_manifest_file_sha256,
         "report_model_hash": binding.report_model_hash,
         "source_graph_hash": binding.source_graph_hash,

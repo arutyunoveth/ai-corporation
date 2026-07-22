@@ -1,13 +1,22 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from src.modules.customer_pilot import artifact_publisher, artifacts, canonical_snapshot
-from src.modules.customer_pilot.models import PilotProject, PilotRunResult, ProcurementCase
+from src.modules.customer_pilot.models import (
+    PilotProject,
+    PilotRunResult,
+    ProcurementCase,
+)
 from src.modules.customer_pilot.router import StartIn, start_run
 from src.modules.customer_registry.models import CustomerProfile
 from src.shared.db.base import Base
 from src.shared.api.middleware import _is_protected_path
 from src.shared.config.settings import Settings
 from src.tender_research.models import TenderAnalysisRun
+from src.tender_research.models import (
+    ProcurementDocumentChunk,
+    ProcurementTender,
+    ProcurementTenderDocument,
+)
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -49,18 +58,49 @@ def test_two_customers_are_isolated_and_same_procurement_has_distinct_keys(
     )
 
 
-def _trusted_analysis(monkeypatch, root):
+def _trusted_analysis(monkeypatch, root, session):
     config = lambda: type("Config", (), {"data_dir": str(root)})()
     monkeypatch.setattr(artifact_publisher, "load_config", config)
     monkeypatch.setattr(artifacts, "load_config", config)
     monkeypatch.setattr(canonical_snapshot, "load_config", config)
+    tender = ProcurementTender(
+        source="fixture",
+        external_id="r8-real-input",
+        registry_number="0379100000726000101",
+        title="Поставка кабельной продукции",
+    )
+    session.add(tender)
+    session.flush()
+    document = ProcurementTenderDocument(
+        tender_id=tender.id,
+        file_name="Техническое задание.txt",
+        download_status="downloaded",
+        text_extraction_status="completed",
+        sha256="a" * 64,
+    )
+    session.add(document)
+    session.flush()
+    session.add(
+        ProcurementDocumentChunk(
+            tender_id=tender.id,
+            document_id=document.id,
+            chunk_index=0,
+            text="Поставка кабеля ВВГнг 3х2.5. Количество 100 метров. Срок поставки 10 дней.",
+            text_hash="b" * 64,
+            char_start=0,
+            char_end=78,
+            token_estimate=20,
+            source_file_name=document.file_name,
+        )
+    )
+    session.commit()
 
 
 def test_idempotent_start_review_feedback_and_delivery_contract(
     client, session, tmp_path, monkeypatch
 ):
     _customer(session, "CUST-A")
-    _trusted_analysis(monkeypatch, tmp_path)
+    _trusted_analysis(monkeypatch, tmp_path, session)
     case = _case(client, "CUST-A")
     url = f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs"
     first = client.post(url, json={}, headers={"Idempotency-Key": "one"})
@@ -70,13 +110,20 @@ def test_idempotent_start_review_feedback_and_delivery_contract(
         again.json()["idempotent"] is True and first.json()["id"] == again.json()["id"]
     )
     run_id = first.json()["id"]
-    assert client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/complete").status_code == 200
+    assert (
+        client.post(
+            f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/complete"
+        ).status_code
+        == 200
+    )
     review = client.post(
         f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/review",
         json={"reviewer": "operator", "verdict": "approved"},
     )
     assert review.status_code == 409
-    published = client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/artifacts/final-pdf")
+    published = client.post(
+        f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/artifacts/final-pdf"
+    )
     assert published.status_code == 201
     review = client.post(
         f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/review",
@@ -117,23 +164,36 @@ def test_cross_customer_run_and_feedback_are_not_disclosed(client, session):
     assert response.status_code == 404
 
 
-def test_completed_customers_share_no_snapshot_or_binding_namespace(client, session, tmp_path, monkeypatch):
+def test_completed_customers_share_no_snapshot_or_binding_namespace(
+    client, session, tmp_path, monkeypatch
+):
     _customer(session, "CUST-A")
     _customer(session, "CUST-B")
-    _trusted_analysis(monkeypatch, tmp_path)
+    _trusted_analysis(monkeypatch, tmp_path, session)
     case_a, case_b = _case(client, "CUST-A"), _case(client, "CUST-B")
     run_a = client.post(
         f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs",
-        json={}, headers={"Idempotency-Key": "complete-a"},
+        json={},
+        headers={"Idempotency-Key": "complete-a"},
     ).json()["id"]
     run_b = client.post(
         f"/api/operator/pilot/customers/CUST-B/cases/{case_b['id']}/runs",
-        json={}, headers={"Idempotency-Key": "complete-b"},
+        json={},
+        headers={"Idempotency-Key": "complete-b"},
     ).json()["id"]
-    complete_a = client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs/{run_a}/complete")
-    complete_b = client.post(f"/api/operator/pilot/customers/CUST-B/cases/{case_b['id']}/runs/{run_b}/complete")
+    complete_a = client.post(
+        f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs/{run_a}/complete"
+    )
+    complete_b = client.post(
+        f"/api/operator/pilot/customers/CUST-B/cases/{case_b['id']}/runs/{run_b}/complete"
+    )
     assert complete_a.status_code == complete_b.status_code == 200
-    assert client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs/{run_a}/complete").json()["idempotent"] is True
+    assert (
+        client.post(
+            f"/api/operator/pilot/customers/CUST-A/cases/{case_a['id']}/runs/{run_a}/complete"
+        ).json()["idempotent"]
+        is True
+    )
     results = session.execute(select(PilotRunResult)).scalars().all()
     by_run = {item.run_id: item for item in results}
     left, right = by_run[run_a], by_run[run_b]

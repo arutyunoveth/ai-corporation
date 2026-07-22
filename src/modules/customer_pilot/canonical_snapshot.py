@@ -595,3 +595,69 @@ def publish_canonical_snapshot(
         manifest_bytes,
         False,
     )
+
+
+def verify_customer_snapshot(
+    *,
+    customer_id: str,
+    project_id: str,
+    procurement_case_id: str,
+    run_id: str,
+    registry_number: str,
+    source_analysis_run_id: str,
+    requirements_relative_path: str,
+    canonical_report_relative_path: str,
+    binding_manifest_relative_path: str,
+    binding_manifest_file_sha256: str,
+    source_graph_hash: str,
+    production_model_hash: str,
+    report_model_hash: str,
+) -> PublishedCanonicalSnapshot:
+    """Re-read a customer binding from disk before any lifecycle transition."""
+    segments = tuple(
+        _safe_segment(value)
+        for value in (customer_id, project_id, procurement_case_id, run_id)
+    )
+    run_root = _safe_namespace(*segments)
+    expected_base = _relative(*segments, "analysis")
+    paths = (
+        f"{expected_base}/requirements.json",
+        f"{expected_base}/canonical_report.json",
+        f"{expected_base}/canonical-binding.manifest.json",
+    )
+    if (
+        requirements_relative_path,
+        canonical_report_relative_path,
+        binding_manifest_relative_path,
+    ) != paths:
+        raise CanonicalSnapshotContractError("Database snapshot paths are invalid")
+    final = run_root / "analysis"
+    req = _read_regular(final / "requirements.json")
+    report = _read_regular(final / "canonical_report.json")
+    verified = verify_canonical_bytes(
+        requirements_bytes=req, canonical_report_bytes=report
+    )
+    expected = {
+        "customer_id": customer_id,
+        "project_id": project_id,
+        "procurement_case_id": procurement_case_id,
+        "run_id": run_id,
+        "registry_number": registry_number,
+        "source_analysis_run_id": source_analysis_run_id,
+        "source_graph_hash": source_graph_hash,
+        "source_graph_hash_algorithm": SOURCE_GRAPH_HASH_ALGORITHM,
+        "production_model_hash": production_model_hash,
+        "report_model_hash": report_model_hash,
+        "requirements_relative_path": paths[0],
+        "requirements_file_sha256": verified.requirements_file_sha256,
+        "canonical_report_relative_path": paths[1],
+        "canonical_report_file_sha256": verified.canonical_report_file_sha256,
+    }
+    snapshot = _snapshot_from_existing(
+        final=final, expected=expected, verified=verified, paths=paths
+    )
+    if snapshot.binding_manifest_file_sha256 != binding_manifest_file_sha256:
+        raise CanonicalSnapshotConflictError(
+            "Database binding manifest identity conflicts"
+        )
+    return snapshot

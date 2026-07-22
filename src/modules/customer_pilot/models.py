@@ -151,7 +151,7 @@ class PilotRunResult(UUIDPrimaryKeyMixin, Base):
     canonical_report_storage_key: Mapped[str] = mapped_column(Text, nullable=False)
     # ``canonical_report_hash`` is retained as a deprecated R8-pre-096 field.
     # It is never reused as a file hash or frozen report-model identity.
-    canonical_report_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    canonical_report_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_graph_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     production_model_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     requirements_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
