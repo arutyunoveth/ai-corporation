@@ -35,7 +35,11 @@ def verified_pdf_manifest(run, case) -> dict:
     manifest_path = (root / relative_manifest).resolve()
     try:
         manifest_path.relative_to(root)
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        # Resolve separately from lstat: a symlink within the root is still forbidden.
+        raw_manifest = root / relative_manifest
+        if raw_manifest.is_symlink() or not raw_manifest.is_file():
+            raise OSError("manifest must be a regular file")
+        payload = json.loads(raw_manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise HTTPException(
             409, "Final artifact manifest is missing or invalid"
@@ -56,11 +60,15 @@ def verified_pdf_manifest(run, case) -> dict:
         pdf_path.relative_to(root)
     except ValueError as exc:
         raise HTTPException(422, "Final artifact PDF path is unsafe") from exc
-    if not pdf_path.is_file() or pdf_path.stat().st_size != payload["byte_size"]:
+    raw_pdf = root / payload["pdf_relative_path"]
+    if raw_pdf.is_symlink() or not raw_pdf.is_file():
         raise HTTPException(409, "Final artifact PDF is missing or changed")
-    if pdf_path.read_bytes()[:5] != b"%PDF-":
+    pdf_bytes = raw_pdf.read_bytes()
+    if len(pdf_bytes) != payload["byte_size"]:
+        raise HTTPException(409, "Final artifact PDF is missing or changed")
+    if pdf_bytes[:5] != b"%PDF-":
         raise HTTPException(422, "Final artifact is not a PDF")
-    digest = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+    digest = hashlib.sha256(pdf_bytes).hexdigest()
     if digest != payload["pdf_sha256"]:
         raise HTTPException(409, "Final artifact PDF hash does not match manifest")
     return payload
