@@ -56,6 +56,12 @@ def matrix(
     checks: list[dict],
     actual: dict | None = None,
     errors: list[str] | None = None,
+    head_sha: str | None = None,
+    cleanup_status: str = "UNKNOWN",
+    scenario_count: int = 0,
+    passed_count: int = 0,
+    failed_count: int = 0,
+    pending_count: int = 0,
 ) -> dict:
     return {
         "schema_version": "r8-acceptance-evidence-v1",
@@ -67,6 +73,12 @@ def matrix(
         "expected": {},
         "actual": actual or {},
         "errors": errors or [],
+        "head_sha": head_sha or "UNKNOWN",
+        "cleanup_status": cleanup_status,
+        "scenario_count": scenario_count,
+        "passed_count": passed_count,
+        "failed_count": failed_count,
+        "pending_count": pending_count,
     }
 
 
