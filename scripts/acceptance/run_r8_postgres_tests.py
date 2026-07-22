@@ -54,6 +54,12 @@ def main() -> int:
             "tests/integration/test_r8_postgres_artifact_concurrency.py",
             env=env,
         )
+        # Exercise the actual R8 schema round-trip on the same disposable
+        # PostgreSQL service.  Migration 096 backfills the legacy report hash
+        # before restoring the old NOT NULL contract.
+        _run(sys.executable, "-m", "alembic", "downgrade", "095_add_r8_current_run", env=env)
+        _run(sys.executable, "-m", "alembic", "upgrade", "head", env=env)
+        _run(sys.executable, "-m", "alembic", "upgrade", "head", env=env)
         result = 0
     finally:
         subprocess.run((*compose, "down", "--volumes"), cwd=ROOT, env=env, check=False)
