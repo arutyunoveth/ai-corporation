@@ -15,6 +15,7 @@ def detect_document_role(name: str) -> str:
             "fcsproposalsresult",
             "clarification",
             "protocol",
+            "протокол",
         )
     ):
         return "notice"

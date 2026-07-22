@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any
 
 from fastapi import HTTPException
@@ -80,6 +81,14 @@ def resolve_customer_run_inputs(
         if not text:
             continue
         name = row.file_name
+        # A database UUID is only a lookup key.  It cannot be provenance because
+        # the same production intake imported into another database would then
+        # produce a different frozen source graph.
+        document_identity = row.document_identity_hash or row.sha256
+        if not document_identity:
+            document_identity = sha256(
+                (f"{name}\0{text}").encode("utf-8")
+            ).hexdigest()
         documents.append(
             AnalyzedDocument(
                 name,
@@ -89,11 +98,11 @@ def resolve_customer_run_inputs(
                 True,
                 [],
                 "persisted_procurement_intake",
-                row.id,
+                document_identity,
                 None,
             )
         )
-        identities.append(row.document_identity_hash or row.sha256 or row.id)
+        identities.append(document_identity)
     if not documents:
         raise HTTPException(
             409, "Persisted procurement intake has no usable extracted documents"

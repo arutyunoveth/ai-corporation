@@ -36,7 +36,7 @@ def _seed(factory, *, reverse: bool):
             ProcurementTenderDocument(
                 tender_id=selected.id, file_name="А-спецификация.txt",
                 download_status="downloaded", text_extraction_status="completed",
-                sha256="a" * 64,
+                sha256=None,
             ),
             ProcurementTenderDocument(
                 tender_id=selected.id, file_name="Б-извещение.txt",
@@ -70,7 +70,7 @@ def _seed(factory, *, reverse: bool):
         for chunk in reversed(chunks) if reverse else chunks:
             session.add(chunk)
         session.commit()
-        return [document.sha256 for document in documents]
+        return [document.id for document in documents]
 
 
 def test_resolver_reads_real_persisted_documents_in_deterministic_order(tmp_path):
@@ -92,5 +92,8 @@ def test_resolver_reads_real_persisted_documents_in_deterministic_order(tmp_path
             )
         )
     assert snapshots[0] == snapshots[1]
+    # The records carry generated UUIDs in each database, but canonical source
+    # identities are derived from stable content, not those UUIDs.
+    assert all(len(value) == 64 for value in snapshots[0][3])
     assert snapshots[0][1] == ["А-спецификация.txt", "Б-извещение.txt"]
     assert snapshots[0][2][0] == "first specification chunk\n\nsecond specification chunk"
