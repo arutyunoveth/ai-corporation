@@ -49,10 +49,8 @@ def resolve_customer_run_inputs(
             ),
         )
     ).all()
-    from src.modules.tender_operator_agent_demo.upload_service import (
-        AnalyzedDocument,
-        _detect_role,
-    )
+    from src.modules.procurement_analysis.frozen_types import AnalyzedDocument
+    from src.modules.tender_operator_agent_demo.upload_service import _detect_role
 
     documents, identities = [], []
     for row in rows:

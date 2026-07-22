@@ -122,17 +122,7 @@ def _translate_user_text(value: str) -> str:
     return TEXT_TRANSLATIONS.get(value, value)
 
 
-@dataclass
-class AnalyzedDocument:
-    display_name: str
-    extension: str
-    role: str
-    text: str | None
-    extracted_text_available: bool
-    warnings: list[str]
-    source: str
-    file_id: str
-    raw_content: bytes | None = None
+from src.modules.procurement_analysis.frozen_types import AnalyzedDocument
 
 
 @dataclass
