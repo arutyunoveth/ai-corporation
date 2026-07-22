@@ -35,6 +35,10 @@ SOURCE_GRAPH_HASH_ALGORITHM = "sha256-json-c14n-v1"
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 
 
+class FrozenCanonicalContractError(RuntimeError):
+    """Persisted R7 output is malformed; callers map this to a controlled failure."""
+
+
 def source_graph_hash(source_graph: dict[str, Any]) -> str:
     """Versioned canonical serialization of the persisted frozen graph."""
     return hashlib.sha256(json.dumps(source_graph, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -42,37 +46,38 @@ def source_graph_hash(source_graph: dict[str, Any]) -> str:
 
 def validate_frozen_source_graph(source_graph: dict[str, Any], production_model_hash: str, canonical_report: dict[str, Any]) -> ValidatedFrozenSourceGraph:
     if not isinstance(source_graph, dict) or not source_graph:
-        raise ValueError("Frozen R7 source graph is missing")
+        raise FrozenCanonicalContractError("Frozen R7 source graph is missing")
     if source_graph.get("graph_version") != "procurement-source-graph-v2":
-        raise ValueError("Frozen R7 source graph version is invalid")
+        raise FrozenCanonicalContractError("Frozen R7 source graph version is invalid")
     if source_graph.get("production_model_hash") != production_model_hash or not isinstance(production_model_hash, str) or not _HASH.fullmatch(production_model_hash):
-        raise ValueError("Frozen R7 source graph production hash is invalid")
+        raise FrozenCanonicalContractError("Frozen R7 source graph production hash is invalid")
     fragments = source_graph.get("structured_fragments")
     if not isinstance(fragments, list) or not isinstance(source_graph.get("canonical_item_edges"), list):
-        raise ValueError("Frozen R7 source graph records are invalid")
+        raise FrozenCanonicalContractError("Frozen R7 source graph records are invalid")
     keys = []
     for fragment in fragments:
         if not isinstance(fragment, dict) or not isinstance(fragment.get("fragment_key"), str) or not fragment["fragment_key"]:
-            raise ValueError("Frozen R7 source fragment is invalid")
+            raise FrozenCanonicalContractError("Frozen R7 source fragment is invalid")
         keys.append(fragment["fragment_key"])
     if len(keys) != len(set(keys)):
-        raise ValueError("Frozen R7 source fragments are not unique")
+        raise FrozenCanonicalContractError("Frozen R7 source fragments are not unique")
     keyset = set(keys)
     for edge in source_graph.get("parent_child_edges", []):
         if not isinstance(edge, dict) or edge.get("parent") not in keyset or edge.get("child") not in keyset:
-            raise ValueError("Frozen R7 parent-child edge is dangling")
+            raise FrozenCanonicalContractError("Frozen R7 parent-child edge is dangling")
     seen_edges = set()
     for edge in source_graph["canonical_item_edges"]:
         if not isinstance(edge, dict) or edge.get("source_fragment_key") not in keyset or not edge.get("canonical_item_id") or not edge.get("field_name"):
-            raise ValueError("Frozen R7 canonical item edge is dangling")
+            raise FrozenCanonicalContractError("Frozen R7 canonical item edge is dangling")
         identity = (edge["canonical_item_id"], edge["source_fragment_key"], edge["field_name"])
-        if identity in seen_edges: raise ValueError("Frozen R7 canonical item edge is duplicated")
+        if identity in seen_edges: raise FrozenCanonicalContractError("Frozen R7 canonical item edge is duplicated")
         seen_edges.add(identity)
     for key in ("cross_source_matches", "cardinality_decisions"):
         if not isinstance(source_graph.get(key), list):
-            raise ValueError("Frozen R7 source graph relation set is invalid")
-    if canonical_report.get("provenance", {}).get("production_model_hash") != production_model_hash:
-        raise ValueError("Frozen R7 production model hash mismatch")
+            raise FrozenCanonicalContractError("Frozen R7 source graph relation set is invalid")
+    provenance = canonical_report.get("provenance") if isinstance(canonical_report, dict) else None
+    if not isinstance(provenance, dict) or provenance.get("production_model_hash") != production_model_hash:
+        raise FrozenCanonicalContractError("Frozen R7 production model hash mismatch")
     return ValidatedFrozenSourceGraph(source_graph, source_graph_hash(source_graph))
 
 
