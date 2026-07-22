@@ -39,8 +39,16 @@ SOURCE_GRAPH_HASH_ALGORITHM = "sha256-json-c14n-v1"
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 
 
-class FrozenCanonicalContractError(RuntimeError):
+class FrozenCanonicalError(RuntimeError):
+    pass
+
+
+class FrozenCanonicalContractError(FrozenCanonicalError):
     """Persisted R7 output is malformed; callers map this to a controlled failure."""
+
+
+class FrozenCanonicalPersistenceError(FrozenCanonicalError):
+    pass
 
 
 def source_graph_hash(source_graph: dict[str, Any]) -> str:
@@ -108,13 +116,18 @@ def persist_canonical_outputs(*, output_dir: Path, run_id: str, metadata: dict, 
 def verify_persisted_canonical_outputs(*, output_dir: Path, expected_outputs: dict | None = None, expected_canonical_report: dict | None = None) -> PersistedCanonicalOutputs:
     requirements_path, canonical_path = output_dir / "requirements.json", output_dir / "canonical_report.json"
     try:
-        persisted_requirements = json.loads(requirements_path.read_bytes())
+        requirements_bytes = requirements_path.read_bytes()
+        canonical_report_bytes = canonical_path.read_bytes()
+    except OSError as exc:
+        raise FrozenCanonicalPersistenceError("Frozen canonical output files are unreadable") from exc
+    try:
+        persisted_requirements = json.loads(requirements_bytes)
         preliminary = persisted_requirements["preliminary_analysis"]
         canonical_model = preliminary["canonical_procurement_model"]
         graph = canonical_model["source_graph"]
         production_hash = canonical_model["production_model_hash"]
-        persisted_canonical = json.loads(canonical_path.read_bytes())
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        persisted_canonical = json.loads(canonical_report_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise FrozenCanonicalContractError("Frozen R7 canonical source-graph contract is incomplete") from exc
     if not isinstance(graph, dict) or not production_hash:
         raise FrozenCanonicalContractError("Frozen R7 canonical source-graph contract is invalid")
@@ -127,4 +140,4 @@ def verify_persisted_canonical_outputs(*, output_dir: Path, expected_outputs: di
         raise FrozenCanonicalContractError("Persisted frozen canonical report differs from in-memory result")
     validated_graph = validate_frozen_source_graph(graph, production_hash, persisted_canonical)
     model_hash = hashlib.sha256(json.dumps(persisted_canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
-    return PersistedCanonicalOutputs(requirements_path, canonical_path, output_dir / "report.json", output_dir / "report.html", output_dir / "steps.json", persisted_canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_path.read_bytes()).hexdigest(), hashlib.sha256(canonical_path.read_bytes()).hexdigest())
+    return PersistedCanonicalOutputs(requirements_path, canonical_path, output_dir / "report.json", output_dir / "report.html", output_dir / "steps.json", persisted_canonical, validated_graph.graph, validated_graph.source_graph_hash, production_hash, model_hash, hashlib.sha256(requirements_bytes).hexdigest(), hashlib.sha256(canonical_report_bytes).hexdigest())
