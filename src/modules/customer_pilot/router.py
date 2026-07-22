@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -12,12 +13,15 @@ from sqlalchemy.orm import Session
 
 from src.modules.customer_pilot.models import (
     PilotAuditEvent,
+    PilotArtifact,
     PilotFeedback,
     PilotProject,
     PilotReview,
+    PilotRunResult,
     ProcurementCase,
 )
-from src.modules.customer_pilot.artifacts import verified_pdf_manifest
+from src.modules.customer_pilot.artifact_publisher import bind_completed_analysis, publish_final_pdf
+from src.modules.customer_pilot.artifacts import verified_pilot_artifact
 from src.modules.customer_registry.models import CustomerProfile
 from src.shared.api.dependencies import DBSession
 from src.shared.db.base import utcnow
@@ -307,25 +311,71 @@ def complete_run(
     case_id: str,
     run_id: str,
     session: DBSession,
-    failed: bool = False,
 ):
     case = _case(session, customer_id, case_id)
     run = _run(session, customer_id, case_id, run_id)
     if run.status != "analyzing":
         raise HTTPException(409, "Run is not active")
-    run.status = "failed" if failed else "completed"
-    case.status = "failed" if failed else "operator_review"
+    try:
+        binding = bind_completed_analysis(session, run, case)
+    except HTTPException:
+        _audit(session, "analysis_failed", customer_id=customer_id, project_id=case.project_id, case_id=case_id, run_id=run_id, payload={"reason": "canonical_result_unavailable"})
+        session.commit()
+        raise
+    run.status = "completed"
+    case.status = "operator_review"
     case.updated_at = utcnow()
     _audit(
         session,
-        "analysis_failed" if failed else "analysis_completed",
+        "analysis_completed",
         customer_id=customer_id,
         project_id=case.project_id,
         case_id=case_id,
         run_id=run_id,
     )
     session.commit()
-    return {"id": run.id, "status": run.status, "case_status": case.status}
+    return {"id": run.id, "status": run.status, "case_status": case.status, "run_result_id": binding.id}
+
+
+def _artifact(session: Session, run: TenderAnalysisRun) -> PilotArtifact:
+    item = session.scalar(select(PilotArtifact).where(PilotArtifact.run_id == run.id, PilotArtifact.artifact_type == "final_pdf"))
+    if not item:
+        raise HTTPException(404, "Final artifact not found")
+    return item
+
+
+@router.post("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts/final-pdf", status_code=status.HTTP_201_CREATED)
+def publish_pdf(customer_id: str, case_id: str, run_id: str, session: DBSession):
+    case = _case(session, customer_id, case_id)
+    run = _run(session, customer_id, case_id, run_id)
+    artifact = publish_final_pdf(session, run, case)
+    _audit(session, "artifact_exported", customer_id=customer_id, project_id=case.project_id, case_id=case_id, run_id=run_id, payload={"artifact_key": artifact.artifact_key})
+    session.commit()
+    return _artifact_response(artifact)
+
+
+def _artifact_response(artifact: PilotArtifact) -> dict:
+    return {"id": artifact.id, "artifact_type": artifact.artifact_type, "artifact_key": artifact.artifact_key, "report_model_hash": artifact.report_model_hash, "renderer_version": artifact.renderer_version, "pdf_sha256": artifact.pdf_sha256, "byte_size": artifact.byte_size, "created_at": artifact.created_at, "immutable_at": artifact.immutable_at, "status": artifact.status}
+
+
+@router.get("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts")
+def list_artifacts(customer_id: str, case_id: str, run_id: str, session: DBSession):
+    _case(session, customer_id, case_id)
+    run = _run(session, customer_id, case_id, run_id)
+    return [_artifact_response(item) for item in session.scalars(select(PilotArtifact).where(PilotArtifact.customer_id == customer_id, PilotArtifact.procurement_case_id == case_id, PilotArtifact.run_id == run.id)).all()]
+
+
+@router.get("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/artifacts/final-pdf")
+def download_pdf(customer_id: str, case_id: str, run_id: str, session: DBSession):
+    case = _case(session, customer_id, case_id)
+    run = _run(session, customer_id, case_id, run_id)
+    artifact = _artifact(session, run)
+    result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+    if not result:
+        raise HTTPException(409, "Final artifact binding is missing")
+    verified_pilot_artifact(run, case, result, artifact)
+    from src.modules.customer_pilot.artifact_publisher import _path_under_root
+    return FileResponse(_path_under_root(artifact.pdf_relative_path), media_type="application/pdf", filename=f"{artifact.artifact_key}.pdf")
 
 
 @router.post("/customers/{customer_id}/cases/{case_id}/runs/{run_id}/review")
@@ -338,11 +388,14 @@ def review_run(
         raise HTTPException(409, "Review is not permitted")
     if session.scalar(select(PilotReview).where(PilotReview.run_id == run_id)):
         raise HTTPException(409, "Review is immutable; create a new run for re-review")
-    manifest = (
-        verified_pdf_manifest(run, case)
-        if payload.verdict in {"approved", "approved_with_notes"}
-        else {}
-    )
+    artifact = None
+    result = None
+    if payload.verdict in {"approved", "approved_with_notes"}:
+        artifact = _artifact(session, run)
+        result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+        if not result:
+            raise HTTPException(409, "Canonical result binding is required")
+        verified_pilot_artifact(run, case, result, artifact)
     review = PilotReview(
         customer_id=customer_id,
         project_id=case.project_id,
@@ -354,8 +407,12 @@ def review_run(
         internal_comment=payload.internal_comment,
         client_comment=payload.client_comment,
         source_graph_hash=payload.source_graph_hash,
-        report_model_hash=manifest.get("report_model_hash"),
-        artifact_hashes={"pdf": manifest.get("pdf_sha256"), "manifest": manifest},
+        artifact_id=artifact.id if artifact else None,
+        artifact_key=artifact.artifact_key if artifact else None,
+        pdf_sha256=artifact.pdf_sha256 if artifact else None,
+        renderer_version=artifact.renderer_version if artifact else None,
+        report_model_hash=artifact.report_model_hash if artifact else None,
+        artifact_hashes={"pdf": artifact.pdf_sha256} if artifact else {},
         immutable_at=utcnow()
         if payload.verdict in {"approved", "approved_with_notes"}
         else None,
@@ -390,7 +447,11 @@ def mark_client_ready(customer_id: str, case_id: str, session: DBSession):
     if not approved:
         raise HTTPException(409, "Completed approved operator review is required")
     run = _run(session, customer_id, case_id, approved.run_id)
-    verified_pdf_manifest(run, case)
+    artifact = _artifact(session, run)
+    result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+    if not result:
+        raise HTTPException(409, "Canonical result binding is required")
+    verified_pilot_artifact(run, case, result, artifact)
     _transition(case, "client_ready")
     _audit(
         session,
@@ -412,10 +473,14 @@ def delivered(customer_id: str, case_id: str, session: DBSession):
             PilotReview.immutable_at.is_not(None),
         )
     )
-    if not review or not review.artifact_hashes.get("pdf"):
+    if not review or not review.artifact_id:
         raise HTTPException(409, "Immutable final PDF is required")
     run = _run(session, customer_id, case_id, review.run_id)
-    verified_pdf_manifest(run, case)
+    artifact = _artifact(session, run)
+    result = session.scalar(select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id))
+    if not result:
+        raise HTTPException(409, "Canonical result binding is required")
+    verified_pilot_artifact(run, case, result, artifact)
     _transition(case, "delivered")
     _audit(
         session,

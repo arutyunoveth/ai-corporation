@@ -1,4 +1,4 @@
-"""Server-side verification of immutable R7-style PDF manifests for R8 runs."""
+"""Verification for server-published R8 customer artifacts only."""
 
 from __future__ import annotations
 
@@ -11,64 +11,65 @@ from fastapi import HTTPException
 from src.tender_research.config import load_config
 
 REQUIRED_MANIFEST_KEYS = {
-    "run_id",
-    "registry_number",
-    "artifact_key",
-    "report_model_hash",
-    "renderer_version",
-    "pdf_relative_path",
-    "pdf_sha256",
-    "byte_size",
+    "customer_id", "project_id", "procurement_case_id", "run_id", "run_result_id",
+    "registry_number", "run_namespace_key", "artifact_key", "artifact_type",
+    "report_model_hash", "source_graph_hash", "renderer_version", "pdf_relative_path",
+    "pdf_sha256", "byte_size", "created_at",
 }
 
 
-def verified_pdf_manifest(run, case) -> dict:
-    """Read an artifact manifest named by trusted persisted run metadata only."""
-    try:
-        metadata = json.loads(run.metadata_json or "{}")
-        relative_manifest = metadata["artifact_manifest_path"]
-    except (ValueError, KeyError, TypeError) as exc:
-        raise HTTPException(
-            409, "Final artifact manifest is not registered for this run"
-        ) from exc
+def _safe_file(relative: str) -> Path:
     root = Path(load_config().data_dir).resolve()
-    manifest_path = (root / relative_manifest).resolve()
+    candidate = Path(relative)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise HTTPException(422, "Artifact path is unsafe")
+    resolved = (root / candidate).resolve()
     try:
-        manifest_path.relative_to(root)
-        # Resolve separately from lstat: a symlink within the root is still forbidden.
-        raw_manifest = root / relative_manifest
-        if raw_manifest.is_symlink() or not raw_manifest.is_file():
-            raise OSError("manifest must be a regular file")
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(422, "Artifact path is unsafe") from exc
+    raw = root / candidate
+    if raw.is_symlink() or not raw.is_file():
+        raise HTTPException(409, "Artifact is missing or unsafe")
+    return raw
+
+
+def verified_pilot_artifact(run, case, result, artifact, *, manifest_path: str | None = None) -> dict:
+    """Verify every DB and manifest ownership edge and inspect PDF bytes once."""
+    relative_manifest = manifest_path or (artifact.manifest_relative_path if artifact else None)
+    if not relative_manifest:
+        raise HTTPException(409, "Final artifact is not registered")
+    try:
+        raw_manifest = _safe_file(relative_manifest)
         payload = json.loads(raw_manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise HTTPException(
-            409, "Final artifact manifest is missing or invalid"
-        ) from exc
+        raise HTTPException(409, "Final artifact manifest is missing or invalid") from exc
     if not REQUIRED_MANIFEST_KEYS.issubset(payload):
         raise HTTPException(422, "Final artifact manifest is incomplete")
     expected = {
-        "run_id": run.id,
-        "registry_number": run.registry_number,
-        "artifact_key": run.artifact_key,
+        "customer_id": run.customer_id, "project_id": run.project_id,
+        "procurement_case_id": case.id, "run_id": run.id, "run_result_id": result.id,
+        "registry_number": run.registry_number, "run_namespace_key": run.artifact_key,
+        "report_model_hash": result.canonical_report_hash, "source_graph_hash": result.source_graph_hash,
+        "artifact_type": "final_pdf",
     }
-    if any(payload[key] != value for key, value in expected.items()):
-        raise HTTPException(
-            409, "Final artifact manifest does not belong to this customer run"
-        )
-    pdf_path = (root / payload["pdf_relative_path"]).resolve()
-    try:
-        pdf_path.relative_to(root)
-    except ValueError as exc:
-        raise HTTPException(422, "Final artifact PDF path is unsafe") from exc
-    raw_pdf = root / payload["pdf_relative_path"]
-    if raw_pdf.is_symlink() or not raw_pdf.is_file():
-        raise HTTPException(409, "Final artifact PDF is missing or changed")
-    pdf_bytes = raw_pdf.read_bytes()
-    if len(pdf_bytes) != payload["byte_size"]:
-        raise HTTPException(409, "Final artifact PDF is missing or changed")
-    if pdf_bytes[:5] != b"%PDF-":
+    if any(payload.get(key) != value for key, value in expected.items()):
+        raise HTTPException(409, "Final artifact does not belong to this customer run")
+    if artifact:
+        fields = ("artifact_key", "report_model_hash", "source_graph_hash", "renderer_version", "manifest_relative_path", "pdf_relative_path", "pdf_sha256", "byte_size")
+        if any(payload.get(key) != getattr(artifact, key) for key in fields):
+            raise HTTPException(409, "Final artifact database binding is invalid")
+        if (artifact.customer_id, artifact.project_id, artifact.procurement_case_id, artifact.run_id, artifact.run_result_id) != (run.customer_id, run.project_id, case.id, run.id, result.id):
+            raise HTTPException(409, "Final artifact ownership is invalid")
+    pdf = _safe_file(payload["pdf_relative_path"])
+    pdf_bytes = pdf.read_bytes()
+    if not pdf_bytes.startswith(b"%PDF-"):
         raise HTTPException(422, "Final artifact is not a PDF")
-    digest = hashlib.sha256(pdf_bytes).hexdigest()
-    if digest != payload["pdf_sha256"]:
+    if len(pdf_bytes) != payload["byte_size"] or hashlib.sha256(pdf_bytes).hexdigest() != payload["pdf_sha256"]:
         raise HTTPException(409, "Final artifact PDF hash does not match manifest")
     return payload
+
+
+def verified_pdf_manifest(run, case) -> dict:
+    """Compatibility name retained for callers; R8 requires a persisted binding."""
+    raise HTTPException(409, "Use a persisted PilotArtifact for R8 final artifact verification")

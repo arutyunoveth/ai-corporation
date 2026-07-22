@@ -60,6 +60,12 @@ class PilotReview(UUIDPrimaryKeyMixin, Base):
     run_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("tender_analysis_runs.id"), nullable=False, unique=True
     )
+    artifact_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("pilot_artifacts.id"), nullable=True
+    )
+    artifact_key: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    pdf_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    renderer_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reviewer: Mapped[str] = mapped_column(String(256), nullable=False)
     reviewed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
@@ -115,6 +121,59 @@ class PilotAuditEvent(UUIDPrimaryKeyMixin, Base):
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+
+class PilotRunResult(UUIDPrimaryKeyMixin, Base):
+    """Server-owned binding between a customer run and its canonical report."""
+
+    __tablename__ = "pilot_run_results"
+    customer_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("customer_profiles.customer_id"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("pilot_projects.id"), nullable=False
+    )
+    procurement_case_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("procurement_cases.id"), nullable=False
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tender_analysis_runs.id"), nullable=False, unique=True
+    )
+    source_analysis_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    canonical_report_storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    canonical_report_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_graph_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    production_model_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    __table_args__ = (Index("ix_pilot_run_results_customer_case", "customer_id", "procurement_case_id"),)
+
+
+class PilotArtifact(UUIDPrimaryKeyMixin, Base):
+    """Immutable customer-scoped final output. Paths are always data-root relative."""
+
+    __tablename__ = "pilot_artifacts"
+    customer_id: Mapped[str] = mapped_column(String(64), ForeignKey("customer_profiles.customer_id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("pilot_projects.id"), nullable=False)
+    procurement_case_id: Mapped[str] = mapped_column(String(36), ForeignKey("procurement_cases.id"), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("tender_analysis_runs.id"), nullable=False)
+    run_result_id: Mapped[str] = mapped_column(String(36), ForeignKey("pilot_run_results.id"), nullable=False)
+    artifact_type: Mapped[str] = mapped_column(String(32), nullable=False, default="final_pdf")
+    artifact_key: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
+    report_model_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_graph_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    renderer_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    pdf_relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    pdf_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="published")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    immutable_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    __table_args__ = (
+        UniqueConstraint("run_id", "artifact_type", name="uq_pilot_artifact_run_type"),
+        Index("ix_pilot_artifacts_customer_case", "customer_id", "procurement_case_id"),
     )
     __table_args__ = (
         Index("ix_pilot_audit_customer_created", "customer_id", "created_at"),

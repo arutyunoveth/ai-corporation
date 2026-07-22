@@ -1,8 +1,6 @@
-import hashlib
-import json
 from concurrent.futures import ThreadPoolExecutor
 
-from src.modules.customer_pilot import artifacts
+from src.modules.customer_pilot import artifact_publisher, artifacts
 from src.modules.customer_pilot.models import PilotProject, ProcurementCase
 from src.modules.customer_pilot.router import StartIn, start_run
 from src.modules.customer_registry.models import CustomerProfile
@@ -51,38 +49,27 @@ def test_two_customers_are_isolated_and_same_procurement_has_distinct_keys(
     )
 
 
-def _manifest_for_run(session, run_id, root, monkeypatch):
-    run = session.get(TenderAnalysisRun, run_id)
-    folder = root / "customer" / run.customer_id / run.project_id / run.id
-    folder.mkdir(parents=True)
-    pdf = folder / "final.pdf"
-    pdf.write_bytes(b"%PDF-1.4\nR8 acceptance\n")
-    manifest = {
-        "run_id": run.id,
-        "registry_number": run.registry_number,
-        "artifact_key": run.artifact_key,
-        "report_model_hash": "f" * 64,
-        "renderer_version": "r7-persisted-pdf-v2",
-        "pdf_relative_path": str(pdf.relative_to(root)),
-        "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
-        "byte_size": pdf.stat().st_size,
-    }
-    manifest_path = folder / "final.manifest.json"
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    run.metadata_json = json.dumps(
-        {"artifact_manifest_path": str(manifest_path.relative_to(root))}
-    )
-    session.commit()
-    monkeypatch.setattr(
-        artifacts, "load_config", lambda: type("Config", (), {"data_dir": str(root)})()
-    )
-    return pdf
+def _trusted_analysis(monkeypatch, root):
+    class Source:
+        chunk_id = "chunk-1"; document_id = "doc-1"; quote_preview = "source"
+    class Section:
+        id = "requirements"; title = "Требования"; question = "?"; answer = "ok"; status = "completed"; sources = [Source()]
+    class Result:
+        run_id = "production-run"; status = "completed"; report_markdown = "# Отчёт\nПроверенный результат"; sections = [Section()]
+    monkeypatch.setattr(artifact_publisher, "analyze_tender", lambda *args, **kwargs: Result())
+    config = lambda: type("Config", (), {"data_dir": str(root)})()
+    monkeypatch.setattr(artifact_publisher, "load_config", config)
+    monkeypatch.setattr(artifacts, "load_config", config)
+    def render(_title, _metadata, _markdown, output):
+        output.write_bytes(b"%PDF-1.4\nR8 trusted artifact\n")
+    monkeypatch.setattr(artifact_publisher, "_render_pdf", render)
 
 
 def test_idempotent_start_review_feedback_and_delivery_contract(
     client, session, tmp_path, monkeypatch
 ):
     _customer(session, "CUST-A")
+    _trusted_analysis(monkeypatch, tmp_path)
     case = _case(client, "CUST-A")
     url = f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs"
     first = client.post(url, json={}, headers={"Idempotency-Key": "one"})
@@ -92,18 +79,14 @@ def test_idempotent_start_review_feedback_and_delivery_contract(
         again.json()["idempotent"] is True and first.json()["id"] == again.json()["id"]
     )
     run_id = first.json()["id"]
-    assert (
-        client.post(
-            f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/complete"
-        ).status_code
-        == 200
-    )
+    assert client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/complete").status_code == 200
     review = client.post(
         f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/review",
         json={"reviewer": "operator", "verdict": "approved"},
     )
     assert review.status_code == 409
-    _manifest_for_run(session, run_id, tmp_path, monkeypatch)
+    published = client.post(f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/artifacts/final-pdf")
+    assert published.status_code == 201
     review = client.post(
         f"/api/operator/pilot/customers/CUST-A/cases/{case['id']}/runs/{run_id}/review",
         json={"reviewer": "operator", "verdict": "approved"},
