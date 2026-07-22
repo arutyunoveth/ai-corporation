@@ -7,6 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${PILOT_DB_NAME:-arvectum_pilot}
       POSTGRES_USER: ${PILOT_DB_USER:-arvectum}
+      POSTGRES_PASSWORD: ${PILOT_DB_PASSWORD:?set PILOT_DB_PASSWORD}
     volumes: [pilot-db:/var/lib/postgresql/data]
     networks: [pilot-internal]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
