@@ -269,7 +269,7 @@ def _tenant_concurrency(
         "review_id": review["id"],
         "run_result_id": complete["run_result_id"],
     }
-    binventory, bcounts = _verified_state(env, bstate)
+    binventory, bcounts = _verified_state(env, bstate, CUSTOMER_B)
     # Cross-tenant paths use B as actor and A-owned opaque identifiers supplied by caller.
     a_case, a_run = customer_a_state["case_id"], customer_a_state["run_id"]
     forbidden = [
@@ -303,27 +303,32 @@ def _tenant_concurrency(
                 "response_leak_check": True,
             }
         )
-    return (
-        {
-            "customer_b": bstate,
-            "customer_b_inventory": binventory,
-            "worker_count": 4,
-            "responses": [
-                {
-                    "status": status,
-                    "artifact_id": body["id"],
-                    "artifact_key": body["artifact_key"],
-                    "pdf_sha256": body["pdf_sha256"],
-                }
-                for status, body in responses
-            ],
-            "cross_tenant_matrix": matrix,
-        },
-        {"customer_b_counts": bcounts},
-    )
+    tenant_result = {
+        "customer_b": bstate,
+        "customer_b_inventory": binventory,
+        "cross_tenant_matrix": matrix,
+    }
+    concurrency_result = {
+        "worker_count": 4,
+        "responses": [
+            {
+                "status": status,
+                "artifact_id": body["id"],
+                "artifact_key": body["artifact_key"],
+                "pdf_sha256": body["pdf_sha256"],
+            }
+            for status, body in responses
+        ],
+        "unique_artifact_id_count": len(artifact_ids),
+        "unique_artifact_key_count": len(artifact_keys),
+        "unique_pdf_sha_count": len(hashes),
+    }
+    return tenant_result, concurrency_result, {"customer_b_counts": bcounts}
 
 
-def _verified_state(env: dict[str, str], state: dict) -> tuple[dict, dict]:
+def _verified_state(
+    env: dict[str, str], state: dict, customer_id: str = CUSTOMER
+) -> tuple[dict, dict]:
     """Read authoritative DB rows and filesystem bytes once through strict verifiers."""
     from sqlalchemy import create_engine, func, select
     from sqlalchemy.orm import Session
@@ -414,11 +419,11 @@ def _verified_state(env: dict[str, str], state: dict) -> tuple[dict, dict]:
             for name, model in tables.items()
         }
         counts["by_customer"] = {
-            CUSTOMER: {
+            customer_id: {
                 name: session.scalar(
                     select(func.count())
                     .select_from(model)
-                    .where(model.customer_id == CUSTOMER)
+                    .where(model.customer_id == customer_id)
                 )
                 for name, model in tables.items()
                 if hasattr(model, "customer_id")
@@ -481,6 +486,7 @@ def main() -> int:
     restart_snapshots: list[dict] = []
     tenant_actual: dict = {}
     concurrency_actual: dict = {}
+    tenant_counts: dict = {}
     migration_actual: dict = {}
     success = False
     try:
@@ -600,7 +606,7 @@ def main() -> int:
             "run_result_id": complete["run_result_id"],
         }
         if phase == "tenant-concurrency":
-            tenant_actual, concurrency_actual = _tenant_concurrency(
+            tenant_actual, concurrency_actual, tenant_counts = _tenant_concurrency(
                 base=base,
                 username=username,
                 password=password,
@@ -810,7 +816,7 @@ def main() -> int:
             checks=[{"cross_tenant_rejected": True}]
             if phase == "tenant-concurrency"
             else [],
-            actual=tenant_actual,
+            actual={**tenant_actual, **tenant_counts},
             errors=errors,
         ),
     )
