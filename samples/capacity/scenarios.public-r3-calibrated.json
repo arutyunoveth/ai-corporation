@@ -1,0 +1,66 @@
+{
+  "scenario_id": "ARV-009-B2-R3-CALIBRATED-FORECAST",
+  "description": "R3 metadata capacity forecast calibrated from 18-case measurement run",
+  "derived_from": "ARV-009-B2-R3-METADATA-CALIBRATION",
+  "assumptions": {
+    "cases_per_year_low": 10000,
+    "cases_per_year_high": 100000,
+    "retention_years": 5,
+    "analysis_runs_per_case": 3,
+    "compression_ratio": 1.0,
+    "growth_factor_pct": 20
+  },
+  "per_case_estimates": {
+    "ingestion": {
+      "filesystem_delta_bytes_mean": 337820,
+      "filesystem_delta_bytes_p50": 310093,
+      "filesystem_delta_bytes_p95": 531198,
+      "pg_delta_bytes_mean": 15019,
+      "pg_delta_bytes_p50": 8192,
+      "pg_delta_bytes_p95": 122880,
+      "documents_mean": 4.1,
+      "chunks_mean": 850,
+      "embeddings_mean": 850,
+      "extracted_chars_mean": 120516
+    },
+    "analysis_run": {
+      "filesystem_delta_bytes_mean": 337820,
+      "filesystem_delta_bytes_p50": 310093,
+      "pg_delta_bytes_mean": 15019,
+      "pg_delta_bytes_p50": 8192,
+      "note": "Estimates same as ingestion -- each run re-ingests from archived documents."
+    }
+  },
+  "five_year_forecast": {
+    "low_volume": {
+      "cases": 10000,
+      "total_ingestion_fs_bytes": {
+        "mean": 3378198801,
+        "p50": 3100930000
+      },
+      "total_ingestion_pg_bytes": {
+        "mean": 150186667,
+        "p50": 81920000
+      },
+      "analysis_runs_total": 30000,
+      "notes": [
+        "10K cases/yr x 5 years = 50K total cases at low volume"
+      ]
+    },
+    "high_volume": {
+      "cases": 100000,
+      "total_ingestion_fs_bytes": {
+        "mean": 33781988007,
+        "p50": 31009300000
+      },
+      "total_ingestion_pg_bytes": {
+        "mean": 1501866667,
+        "p50": 819200000
+      },
+      "analysis_runs_total": 300000,
+      "notes": [
+        "100K cases/yr x 5 years = 500K total cases at high volume"
+      ]
+    }
+  }
+}

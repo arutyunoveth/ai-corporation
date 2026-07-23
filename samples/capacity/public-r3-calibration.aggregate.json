@@ -1,0 +1,69 @@
+{
+  "measurement_id": "ARV-009-B2-R3-METADATA-CALIBRATION",
+  "description": "Calibration aggregate for R3 metadata storage on 18-case cohort (R3 XML archives)",
+  "cohort": {
+    "version": "r3-v1",
+    "total_cases": 18,
+    "tertile_groups": { "lower": 6, "middle": 6, "upper": 6 },
+    "scenario": "full_r3_metadata_calibration"
+  },
+  "baseline": {
+    "postgresql_database_bytes_baseline": 26214400,
+    "filesystem_data_bytes_baseline": 0,
+    "filesystem_index_bytes_baseline": 0,
+    "postgresql_dump_bytes_baseline": 26214400
+  },
+  "final_state": {
+    "postgresql_database_bytes": 65918643,
+    "filesystem_live_bytes": 6771918,
+    "total_backup_bytes": 4536159,
+    "unique_live_source_bytes": 6080758,
+    "document_count": 73,
+    "analysis_run_count": 0
+  },
+  "overall_aggregate": {
+    "xml_document_count": { "min": 1, "p25": 4, "p50": 4, "p75": 4, "max": 5, "count": 18, "sum": 73, "mean": 4.1 },
+    "extracted_text_chars": { "min": 69521, "p25": 104429, "p50": 118745, "p75": 138699, "max": 216446, "count": 18, "sum": 2169283, "mean": 120515.7 },
+    "chunk_count": { "min": 485, "p25": 753, "p50": 832, "p75": 985, "max": 1179, "count": 18, "sum": 15293, "mean": 849.6 },
+    "embedding_rows": { "min": 485, "p25": 753, "p50": 832, "p75": 985, "max": 1179, "count": 18, "sum": 15293, "mean": 849.6 },
+    "archive_bytes": { "min": 17428, "p25": 31729, "p50": 38389, "p75": 47454, "max": 65609, "count": 18, "sum": 691160, "mean": 38397.8 },
+    "filesystem_data_delta_bytes": { "min": 218539, "p25": 287867, "p50": 310093, "p75": 390495, "max": 531198, "count": 18, "sum": 6080758, "mean": 337819.9 }
+  },
+  "group_aggregates": {
+    "lower": {
+      "xml_document_count": { "min": 4, "p25": 4, "p50": 4, "p75": 4, "max": 4, "count": 6, "sum": 24, "mean": 4.0 },
+      "extracted_text_chars": { "min": 79906, "p25": 84385, "p50": 110023, "p75": 110306, "max": 118745, "count": 6, "sum": 606285, "mean": 101047.5 },
+      "chunk_count": { "min": 561, "p25": 735, "p50": 823, "p75": 832, "max": 929, "count": 6, "sum": 4698, "mean": 783.0 },
+      "embedding_rows": { "min": 561, "p25": 735, "p50": 823, "p75": 832, "max": 929, "count": 6, "sum": 4698, "mean": 783.0 },
+      "archive_bytes": { "min": 26425, "p25": 26588, "p50": 35746, "p75": 37644, "max": 38158, "count": 6, "sum": 192819, "mean": 32136.5 },
+      "filesystem_data_delta_bytes": { "min": 218539, "p25": 224965, "p50": 274950, "p75": 287867, "max": 296021, "count": 6, "sum": 1552589, "mean": 258764.8 }
+    },
+    "middle": {
+      "xml_document_count": { "min": 1, "p25": 4, "p50": 4, "p75": 4, "max": 5, "count": 6, "sum": 22, "mean": 3.7 },
+      "extracted_text_chars": { "min": 69521, "p25": 104429, "p50": 118837, "p75": 138699, "max": 144721, "count": 6, "sum": 689002, "mean": 114833.7 },
+      "chunk_count": { "min": 485, "p25": 748, "p50": 911, "p75": 994, "max": 1021, "count": 6, "sum": 4991, "mean": 831.8 },
+      "embedding_rows": { "min": 485, "p25": 748, "p50": 911, "p75": 994, "max": 1021, "count": 6, "sum": 4991, "mean": 831.8 },
+      "archive_bytes": { "min": 17428, "p25": 38389, "p50": 38973, "p75": 48222, "max": 49131, "count": 6, "sum": 230679, "mean": 38446.5 },
+      "filesystem_data_delta_bytes": { "min": 293643, "p25": 296842, "p50": 310093, "p75": 335607, "max": 367140, "count": 6, "sum": 1910334, "mean": 318389.0 }
+    },
+    "upper": {
+      "xml_document_count": { "min": 4, "p25": 4, "p50": 5, "p75": 5, "max": 5, "count": 6, "sum": 27, "mean": 4.5 },
+      "extracted_text_chars": { "min": 107253, "p25": 124736, "p50": 141591, "p75": 155523, "max": 216446, "count": 6, "sum": 873996, "mean": 145666.0 },
+      "chunk_count": { "min": 753, "p25": 775, "p50": 985, "p75": 992, "max": 1179, "count": 6, "sum": 5604, "mean": 934.0 },
+      "embedding_rows": { "min": 753, "p25": 775, "p50": 985, "p75": 992, "max": 1179, "count": 6, "sum": 5604, "mean": 934.0 },
+      "archive_bytes": { "min": 31729, "p25": 32172, "p50": 47454, "p75": 51205, "max": 65609, "count": 6, "sum": 267662, "mean": 44610.3 },
+      "filesystem_data_delta_bytes": { "min": 354998, "p25": 390495, "p50": 429298, "p75": 512435, "max": 531198, "count": 6, "sum": 2617835, "mean": 436305.8 }
+    }
+  },
+  "compression_ratios": {
+    "observed_backup_ratio": 1.49,
+    "forecast_compression_ratio": 1.0,
+    "metadata_overhead_ratio": 6.53
+  },
+  "notes": [
+    "PG dump compression: observed 1.49x on this sample. Forecast uses 1.0x (conservative).",
+    "Metadata overhead ratio: PG growth / FS growth after baseline subtraction.",
+    "Analysis runs use subprocess pipeline -- no formal TenderAnalysisRun rows created.",
+    "Forecast compression ratio set to 1.0 for conservative capacity planning."
+  ]
+}
