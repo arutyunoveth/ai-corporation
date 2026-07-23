@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -57,12 +58,32 @@ def matrix(
     actual: dict | None = None,
     errors: list[str] | None = None,
     head_sha: str | None = None,
-    cleanup_status: str = "UNKNOWN",
+    cleanup_status: str = "PASS",
     scenario_count: int = 0,
     passed_count: int = 0,
     failed_count: int = 0,
     pending_count: int = 0,
+    implementation_sha: str | None = None,
+    workflow_context: dict | None = None,
 ) -> dict:
+    if status == "PASS" and scenario_count == passed_count == 0 and checks:
+        scenario_count = passed_count = len(checks)
+    implementation_sha = implementation_sha or subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], text=True
+    ).strip()
+    head_sha = head_sha or implementation_sha
+    valid_pass = (
+        status == "PASS"
+        and scenario_count > 0
+        and passed_count == scenario_count
+        and failed_count == pending_count == 0
+        and bool(checks)
+        and cleanup_status == "PASS"
+        and head_sha != "UNKNOWN"
+    )
+    if status == "PASS" and not valid_pass:
+        status = "FAILED_EVIDENCE_CONTRACT"
+        errors = [*(errors or []), "PASS matrix metadata contract is incomplete"]
     return {
         "schema_version": "r8-acceptance-evidence-v1",
         "phase": phase,
@@ -73,7 +94,9 @@ def matrix(
         "expected": {},
         "actual": actual or {},
         "errors": errors or [],
-        "head_sha": head_sha or "UNKNOWN",
+        "implementation_sha": implementation_sha,
+        "head_sha": head_sha,
+        "workflow_context": workflow_context or {},
         "cleanup_status": cleanup_status,
         "scenario_count": scenario_count,
         "passed_count": passed_count,

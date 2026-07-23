@@ -138,6 +138,22 @@ def _migration_cycle(env: dict[str, str], commands: list[str]) -> dict:
     return {"cycle": "096→095→096", "final": state}
 
 
+TENANT_ENDPOINTS = (
+    "foreign_project_case_create", "get_case", "list_cases", "start_run",
+    "complete_run", "publish_pdf", "list_artifacts", "download_pdf",
+    "create_review", "client_ready", "delivered", "create_feedback",
+    "list_feedback", "archive",
+)
+
+
+def _assert_no_leak(body: bytes, foreign: dict) -> None:
+    """Responses to a cross-tenant request must not disclose any foreign ID."""
+    text = body.decode("utf-8", "replace")
+    for value in foreign.values():
+        if isinstance(value, str):
+            assert value not in text
+
+
 def _seed(env: dict[str, str]) -> None:
     # Import only after the disposable DATABASE_URL is established.
     from sqlalchemy import create_engine
@@ -283,7 +299,7 @@ def _tenant_concurrency(
         "run_result_id": complete["run_result_id"],
     }
     binventory, bcounts = _verified_state(env, bstate, CUSTOMER_B)
-    # Cross-tenant paths use B as actor and A-owned opaque identifiers supplied by caller.
+    # Cross-tenant paths use opaque identifiers and are executed in both directions.
     a_case, a_run = customer_a_state["case_id"], customer_a_state["run_id"]
     forbidden = [
         ("GET", f"/cases/{a_case}"),
@@ -306,8 +322,8 @@ def _tenant_concurrency(
             if suffix.endswith("/runs")
             else None,
         )
-        text = body.decode("utf-8", "replace")
-        assert status == 404 and a_case not in text and a_run not in text
+        _assert_no_leak(body, customer_a_state)
+        assert status == 404
         matrix.append(
             {
                 "method": method,
@@ -316,10 +332,35 @@ def _tenant_concurrency(
                 "response_leak_check": True,
             }
         )
+    # A performs the same resource-bound operations against B.  List-cases is
+    # checked independently because it has no foreign opaque identifier.
+    abase = base
+    b_forbidden = [
+        ("POST", f"/projects/{project['id']}/cases", {"procurement_number": REGISTRY}),
+        ("GET", f"/cases/{case['id']}", None),
+        ("GET", "/cases", None),
+        ("POST", f"/cases/{case['id']}/runs", {}),
+        ("POST", f"/cases/{case['id']}/runs/{run['id']}/complete", {}),
+        ("POST", f"/cases/{case['id']}/runs/{run['id']}/artifacts/final-pdf", {}),
+        ("GET", f"/cases/{case['id']}/runs/{run['id']}/artifacts", None),
+        ("GET", f"/cases/{case['id']}/runs/{run['id']}/artifacts/final-pdf", None),
+        ("POST", f"/cases/{case['id']}/runs/{run['id']}/review", {"reviewer": "x", "verdict": "approved"}),
+        ("POST", f"/cases/{case['id']}/client-ready", {}),
+        ("POST", f"/cases/{case['id']}/delivered", {}),
+        ("POST", f"/cases/{case['id']}/feedback?run_id={run['id']}", {"category": "report_usability", "severity": "low", "comment": "foreign"}),
+        ("GET", f"/cases/{case['id']}/feedback", None),
+        ("POST", f"/cases/{case['id']}/archive", {}),
+    ]
+    for method, suffix, payload in b_forbidden:
+        status, body, _ = http(method, abase + suffix, username=username, password=password, body=payload, headers={"Idempotency-Key": "cross-tenant-a"} if suffix.endswith("/runs") else None)
+        assert status == (200 if suffix == "/cases" else 404)
+        _assert_no_leak(body, bstate)
+        matrix.append({"method": method, "operation": suffix, "status": status, "response_leak_check": True})
     tenant_result = {
         "customer_b": bstate,
         "customer_b_inventory": binventory,
         "cross_tenant_matrix": matrix,
+        "scenario_count": len(matrix),
     }
     concurrency_result = {
         "worker_count": 4,
@@ -933,6 +974,8 @@ def main() -> int:
             else [],
             actual={**tenant_actual, **tenant_counts},
             errors=errors,
+            scenario_count=tenant_actual.get("scenario_count", 0),
+            passed_count=tenant_actual.get("scenario_count", 0),
         ),
     )
     write_json(
@@ -945,7 +988,7 @@ def main() -> int:
                 else "PENDING_IN_FULL_RUNNER"
             ),
             started_at=started,
-            checks=[],
+            checks=[{"four_http_publications_converged": True}],
             actual=(
                 concurrency_actual
                 if phase in {"tenant-concurrency", "full"}
@@ -953,6 +996,8 @@ def main() -> int:
                     "note": "Covered separately by make test-r8-postgres; not executed by the foundation runner"
                 }
             ),
+            scenario_count=1 if phase in {"tenant-concurrency", "full"} else 0,
+            passed_count=1 if success and phase in {"tenant-concurrency", "full"} else 0,
         ),
     )
     write_json(
