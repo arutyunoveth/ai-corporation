@@ -6,7 +6,9 @@
 
 The tenant stage records 30 real HTTP scenarios, split equally in both
 directions, with foreign-leak, database, filesystem, lifecycle, audit and
-cleanup assertions. The evidence contract is fail-closed.
+cleanup assertions. Actor-owned list/read semantics and branch-SHA evidence
+metadata are corrected. Publication concurrency is PENDING, not exercised by
+this tenant-evidence stage. The evidence contract is fail-closed.
 
 ## Required before a merge-ready recommendation
 
