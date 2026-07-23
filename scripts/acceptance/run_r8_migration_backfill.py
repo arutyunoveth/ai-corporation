@@ -473,6 +473,7 @@ def main():
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
     finally:
+        engine.dispose()
         subprocess.run(
             compose + ["down", "--volumes", "--remove-orphans"],
             cwd=ROOT,

@@ -10,9 +10,11 @@ cleanup assertions. Actor-owned list/read semantics and branch-SHA evidence
 metadata are corrected. Publication concurrency is PENDING, not exercised by
 this tenant-evidence stage. The evidence contract is fail-closed.
 
-The dedicated PostgreSQL 095→096 stage verifies schema preservation, explicit
-legacy binding backfill, and the 096→095→096 transition. Tampering, recovery,
-and executable R7 matrices remain pending.
+The dedicated PostgreSQL 095→096 stage now seeds four real tenant-scoped legacy
+fixtures, captures database/filesystem snapshots, verifies fail-closed
+incomplete/conflict fixtures, runs two locked concurrent backfills, exercises
+the failing downgrade path, and verifies the 096→095→096 transition. Tampering,
+recovery, and executable R7 matrices remain pending.
 
 ## Required before a merge-ready recommendation
 
