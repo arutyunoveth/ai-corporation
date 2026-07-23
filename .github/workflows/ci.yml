@@ -42,11 +42,19 @@ jobs:
       - run: make test-r8-acceptance-migration-backfill
         env:
           GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - run: make test-r8-acceptance-tampering
+        env:
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: r8-migration-backfill-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: output/r8-acceptance-migration-backfill-*/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r8-tampering-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: output/r8-acceptance-tampering-*/
   r8-acceptance-integration:
     runs-on: ubuntu-latest
     steps:

@@ -13,6 +13,7 @@ from src.modules.customer_pilot.canonical_snapshot import (
     CanonicalSnapshotStorageError,
     verify_customer_snapshot,
 )
+from src.modules.procurement_analysis.canonical_persistence import FrozenCanonicalError
 
 
 class RunSnapshotBindingError(RuntimeError):
@@ -110,5 +111,9 @@ def verify_run_snapshot_binding(*, run, case, binding) -> VerifiedRunSnapshotBin
         raise RunSnapshotBindingContractError(str(exc)) from exc
     except CanonicalSnapshotStorageError as exc:
         raise RunSnapshotBindingStorageError(str(exc)) from exc
-    except (CanonicalSnapshotConflictError, CanonicalSnapshotError) as exc:
+    except (
+        CanonicalSnapshotConflictError,
+        CanonicalSnapshotError,
+        FrozenCanonicalError,
+    ) as exc:
         raise RunSnapshotBindingConflictError(str(exc)) from exc
