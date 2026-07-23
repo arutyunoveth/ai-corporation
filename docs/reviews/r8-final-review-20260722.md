@@ -2,7 +2,7 @@
 
 ## Current assessment
 
-`R8_TAMPERING_MATRIX_VERIFIED_RECOVERY_R7_REQUIRED`.
+`R8_CUSTOMER_PILOT_WORKSPACE_ACCEPTED_R9_OPERATIONAL_HARDENING_DEFERRED`.
 
 The tenant stage records 30 real HTTP scenarios, split equally in both
 directions, with foreign-leak, database, filesystem, lifecycle, audit and
@@ -23,13 +23,16 @@ HTTP operations fail closed, no PDF disclosure, no auto-repair, unchanged
 control customer, and exact runner-owned restoration. The evidence contract was
 then corrected to require recorded filesystem and DB snapshots, audit deltas,
 separate review/lifecycle fixtures, branch-head SHA metadata, control download,
-and cleanup evidence before it may issue PASS. Recovery and executable R7
-regression remain pending.
+and cleanup evidence before it may issue PASS.
+
+Restart, crash recovery, publication concurrency, and backup/restore are
+accepted operational-hardening work for R9; they are not merge blockers for
+the controlled R8 customer-pilot workspace. PostgreSQL integration, immutable
+artifact binding, review/feedback/lifecycle, and accepted CI evidence are PASS.
 
 ## Required before a merge-ready recommendation
 
-- genuine recovery and executable R7 checks;
-- independent verification of the CI artifact.
+- executable R7 regression;
+- R9 operational-hardening evidence.
 
-PR #12 remains Draft. No merge, tag, deployment, or auto-merge was performed.
-This is not a full acceptance certificate.
+This is not a disaster-recovery or full operational-resilience certificate.
