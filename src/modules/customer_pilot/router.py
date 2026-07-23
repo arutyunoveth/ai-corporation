@@ -496,7 +496,9 @@ def review_run(
             )
         )
         if not artifact:
-            raise HTTPException(409, "Immutable final PDF is required before approval")
+            # A missing expected artifact can result from a tampered run/artifact
+            # binding; keep the review endpoint on the same fail-closed trust path.
+            raise HTTPException(409, "Final artifact trust binding is invalid")
         result = session.scalar(
             select(PilotRunResult).where(PilotRunResult.id == artifact.run_result_id)
         )

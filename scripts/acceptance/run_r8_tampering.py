@@ -218,6 +218,29 @@ def db_mutation(scenario: str, target: dict, control: dict):
     return table, field, original, value
 
 
+def db_field_mutation(table: str, field: str, row: dict, foreign_customer: str, suffix: str):
+    """Generate a single valid-looking but incorrect value for one DB subcheck."""
+    original = row[field]
+    if field.endswith("storage_key") or field.endswith("relative_path"):
+        value = f"acceptance/non-matching-safe-path-{suffix}"
+    elif field == "customer_id":
+        value = foreign_customer
+    elif field == "status":
+        value = "revoked"
+    elif field.endswith("algorithm") or field.endswith("version"):
+        value = "r8-tampered-policy-v1"
+    elif field == "artifact_key":
+        value = f"tampered-{suffix[:32]}"
+    elif field == "byte_size":
+        value = int(original) + 1
+    elif field in {"project_id", "procurement_case_id", "run_id", "run_result_id"}:
+        # Existing FK values from the control fixture remain constraint-valid.
+        value = row[f"foreign_{field}"]
+    else:
+        value = "f" * 64
+    return original, value
+
+
 def direct(engine, target):
     from src.modules.customer_pilot.artifacts import verify_pilot_artifact_binding
     from src.modules.customer_pilot.binding_verifier import verify_run_snapshot_binding
@@ -300,6 +323,7 @@ def main() -> int:
         target, control = _fixture(data, "LIFECYCLE_TARGET", 2), _fixture(data, "CONTROL", 3)
         _seed_095(engine, [review_target, target, control])
         target["foreign_customer_id"] = "R8-LEGACY-FOREIGN-OWNER"
+        review_target["foreign_customer_id"] = target["foreign_customer_id"]
         with engine.begin() as connection:
             connection.execute(
                 text("INSERT INTO customer_profiles (id, customer_id, legal_name, customer_status, created_at, updated_at) VALUES (:id, :customer_id, :legal_name, 'prospect', :now, :now)"),
@@ -335,6 +359,18 @@ def main() -> int:
         copy_tree(data, pristine)
         target_db, review_db = rows(engine, target["customer_id"]), rows(engine, review_target["customer_id"])
         control_db = rows(engine, control["customer_id"])
+        for fixture, fixture_db in ((target, target_db), (review_target, review_db)):
+            fixture["foreign_project_id"] = control["project_id"]
+            fixture["foreign_procurement_case_id"] = control["case_id"]
+            fixture["foreign_run_id"] = control["run_id"]
+            fixture["foreign_run_result_id"] = control["run_result_id"]
+        foreign_run_id, foreign_review_run_id = str(uuid.uuid4()), str(uuid.uuid4())
+        with engine.begin() as connection:
+            for foreign_id in (foreign_run_id, foreign_review_run_id):
+                connection.execute(text("INSERT INTO tender_analysis_runs (id, registry_number, status, used_llm, sections_count, sources_count, created_at, updated_at, customer_id, project_id, procurement_case_id, idempotency_key, artifact_key) VALUES (:id, '0379100000726000101', 'completed', false, 0, 0, :now, :now, :customer_id, :project_id, :case_id, :idempotency_key, :artifact_key)"), {"id": foreign_id, "now": datetime.now(UTC), "customer_id": control["customer_id"], "project_id": control["project_id"], "case_id": control["case_id"], "idempotency_key": foreign_id, "artifact_key": secrets.token_hex(12)})
+        target["foreign_run_id"] = foreign_run_id
+        review_target["foreign_run_id"] = foreign_review_run_id
+        control_db = rows(engine, control["customer_id"])
         original_pdf = (data / target["pdf_relative_path"]).read_bytes()
         base = f"http://127.0.0.1:{server_port}/api/operator/pilot/customers/{target['customer_id']}/cases/{target['case_id']}"
         review_base = f"http://127.0.0.1:{server_port}/api/operator/pilot/customers/{review_target['customer_id']}/cases/{review_target['case_id']}"
@@ -347,6 +383,59 @@ def main() -> int:
             raise RuntimeError("pristine review creation is not available")
         with engine.begin() as connection:
             connection.execute(text("DELETE FROM pilot_reviews WHERE customer_id=:customer_id"), {"customer_id": review_target["customer_id"]})
+
+        def extra_subcheck(scenario_id: str, layer_name: str, field: str) -> dict:
+            """Execute one combined DB subcheck in its own restore/mutate/HTTP cycle."""
+            table = "pilot_run_results" if layer_name == "run-result DB" else "pilot_artifacts"
+            for fixture_db in (target_db, review_db):
+                with engine.begin() as connection:
+                    item = fixture_db[table][0]
+                    fields = [key for key in item if key not in {"id", "created_at", "completed_at", "immutable_at"}]
+                    connection.execute(text(f"UPDATE {table} SET " + ", ".join(f"{key}=:{key}" for key in fields) + " WHERE id=:id"), item)
+            copy_tree(pristine, data)
+            target_original, target_value = db_field_mutation(table, field, {**target_db[table][0], **target}, target["foreign_customer_id"], f"{scenario_id}-lifecycle")
+            review_original, review_value = db_field_mutation(table, field, {**review_db[table][0], **review_target}, review_target["foreign_customer_id"], f"{scenario_id}-review")
+            with engine.begin() as connection:
+                connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": target_value, "id": target["run_result_id"] if table == "pilot_run_results" else target["artifact_id"]})
+                connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": review_value, "id": review_target["run_result_id"] if table == "pilot_run_results" else review_target["artifact_id"]})
+            before_fs, tampered_fs = snapshot_filesystem(pristine), snapshot_filesystem(data)
+            before_audit = audit_rows(engine, (target["customer_id"], review_target["customer_id"]))
+            canonical, artifact = direct(engine, target)
+            download_status, download_body = http("GET", endpoint)
+            review_status, review_body = http("POST", review_base + f"/runs/{review_target['run_id']}/review", {"reviewer": "tamper", "verdict": "approved", "checklist": {}})
+            ready_status, _ = http("POST", base + "/client-ready")
+            delivered_status, _ = http("POST", base + "/delivered")
+            after_fs = snapshot_filesystem(data)
+            after_audit = audit_rows(engine, (target["customer_id"], review_target["customer_id"]))
+            with engine.connect() as connection:
+                target_changed = connection.execute(text(f"SELECT {field} FROM {table} WHERE id=:id"), {"id": target["run_result_id"] if table == "pilot_run_results" else target["artifact_id"]}).scalar_one() == target_value
+                review_changed = connection.execute(text(f"SELECT {field} FROM {table} WHERE id=:id"), {"id": review_target["run_result_id"] if table == "pilot_run_results" else review_target["artifact_id"]}).scalar_one() == review_value
+            copy_tree(pristine, data)
+            with engine.begin() as connection:
+                connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": target_original, "id": target["run_result_id"] if table == "pilot_run_results" else target["artifact_id"]})
+                connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": review_original, "id": review_target["run_result_id"] if table == "pilot_run_results" else review_target["artifact_id"]})
+            restored_canonical, restored_artifact = direct(engine, target)
+            restored_status, restored_pdf = http("GET", endpoint)
+            verifier_rejected = canonical != "UNEXPECTED_PASS" if layer_name == "run-result DB" else artifact != "UNEXPECTED_PASS"
+            passed_subcheck = (
+                verifier_rejected
+                and all(code in {403, 404, 409} for code in (download_status, review_status, ready_status, delivered_status))
+                and 500 not in (download_status, review_status, ready_status, delivered_status)
+                and b"%PDF" not in download_body and original_pdf not in download_body
+                and target_changed and review_changed and tampered_fs == after_fs
+                and after_audit == before_audit and review_status == 409
+                and (b"binding" in review_body.lower() or b"trust" in review_body.lower())
+                and restored_canonical == "UNEXPECTED_PASS" and restored_artifact == "UNEXPECTED_PASS"
+                and restored_status == 200 and sha(restored_pdf) == sha(original_pdf)
+            )
+            return {"subcheck_id": field, "field": field, "table": table,
+                    "original_value": target_original, "tampered_value": target_value,
+                    "direct_canonical_verifier": canonical, "direct_artifact_verifier": artifact,
+                    "download_http_status": download_status, "review_http_status": review_status,
+                    "client_ready_http_status": ready_status, "delivered_http_status": delivered_status,
+                    "target_fs_pristine": before_fs, "target_fs_after_tampering": tampered_fs,
+                    "target_fs_after_failed_operations": after_fs, "audit_before": before_audit,
+                    "audit_after": after_audit, "debug": {"verifier_rejected": verifier_rejected, "target_changed": target_changed, "review_changed": review_changed, "fs_unchanged": tampered_fs == after_fs, "audit_unchanged": after_audit == before_audit, "review_binding": b"binding" in review_body.lower() or b"trust" in review_body.lower(), "restored": restored_canonical == "UNEXPECTED_PASS" and restored_artifact == "UNEXPECTED_PASS" and restored_status == 200 and sha(restored_pdf) == sha(original_pdf)}, "status": "PASS" if passed_subcheck else "FAILED"}
         for scenario, layer, mutation in REGISTRY:
             copy_tree(pristine, data)
             # Restore the two mutable rows explicitly before each isolated scenario.
@@ -427,11 +516,16 @@ def main() -> int:
             restored_db = rows(engine, target["customer_id"])
             restored_review_db = rows(engine, review_target["customer_id"])
             subcheck_fields = COMBINED_SUBCHECKS.get(scenario, (mutation_data.get("field", scenario),))
-            subchecks = [{"subcheck_id": field, "field": field, "status": "PASS"} for field in subcheck_fields]
+            primary_field = mutation_data.get("field", scenario)
+            subchecks = [{"subcheck_id": primary_field, "field": primary_field, "table": db_info[0] if db_info else None, "status": "PASS" if result.get("no_auto_repair") else "FAILED"}]
+            for subcheck_field in subcheck_fields:
+                if subcheck_field != primary_field:
+                    subchecks.append(extra_subcheck(scenario, layer, subcheck_field))
+            completed_subchecks = [item["subcheck_id"] for item in subchecks]
             result.update({"target_fs_after_restoration": target_fs_after_restoration,
-                           "required_subcheck_ids": list(subcheck_fields), "executed_subcheck_ids": list(subcheck_fields),
-                           "subcheck_count": len(subcheck_fields), "passed_subcheck_count": len(subcheck_fields), "subchecks": subchecks,
-                           "subchecks_complete": True,
+                           "required_subcheck_ids": list(subcheck_fields), "executed_subcheck_ids": completed_subchecks,
+                           "subcheck_count": len(subcheck_fields), "passed_subcheck_count": sum(item["status"] == "PASS" for item in subchecks), "subchecks": subchecks,
+                           "subchecks_complete": set(completed_subchecks) == set(subcheck_fields) and len(completed_subchecks) == len(subcheck_fields) and all(item["status"] == "PASS" for item in subchecks),
                            "restoration_passed": post_canonical == "UNEXPECTED_PASS" and post_artifact == "UNEXPECTED_PASS" and restored_status == 200 and sha(restored_pdf) == sha(original_pdf) and target_fs_after_restoration == target_fs_pristine and restored_db == target_db and restored_review_db == review_db,
                            "post_restore_canonical_verifier": "PASS" if post_canonical == "UNEXPECTED_PASS" else post_canonical,
                            "post_restore_artifact_verifier": "PASS" if post_artifact == "UNEXPECTED_PASS" else post_artifact,
