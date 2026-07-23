@@ -118,6 +118,7 @@ def test_valid_legacy_bundle_backfills_then_is_idempotent(tmp_path, monkeypatch)
         and artifact.manifest_file_sha256
         and artifact.verification_policy_version
     )
+    result.is_verified_snapshot_binding = True
     assert (
         backfill_legacy_run_binding(
             session=session,

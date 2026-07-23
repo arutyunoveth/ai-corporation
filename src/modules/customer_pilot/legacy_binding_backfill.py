@@ -8,6 +8,8 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy import select
+
 from src.modules.customer_pilot.artifact_snapshot import (
     EXACT_FILE_SET as ARTIFACT_FILE_SET,
 )
@@ -60,6 +62,27 @@ def backfill_legacy_run_binding(*, session, run, case, run_result, artifact, dat
     All validation is performed before assigning a mapped value, so errors leave
     both the caller's transaction and the filesystem untouched.
     """
+    # PostgreSQL callers lock result first, then artifact.  Re-reading after the
+    # lock makes a concurrent caller observe the completed binding instead of
+    # racing to write the same nullable columns.
+    if hasattr(session, "scalar"):
+        from src.modules.customer_pilot.models import PilotArtifact, PilotRunResult
+
+        locked_result = session.scalar(
+            select(PilotRunResult)
+            .where(PilotRunResult.id == run_result.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        locked_artifact = session.scalar(
+            select(PilotArtifact)
+            .where(PilotArtifact.id == artifact.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked_result is None or locked_artifact is None:
+            return _result("CONFLICT", "missing_locked_row")
+        run_result, artifact = locked_result, locked_artifact
     if (
         run.customer_id,
         run.project_id,
@@ -102,6 +125,15 @@ def backfill_legacy_run_binding(*, session, run, case, run_result, artifact, dat
         "verification_policy_version",
     )
     if all(getattr(run_result, field, None) is not None for field in new_fields):
+        from src.modules.customer_pilot.binding_verifier import (
+            RunSnapshotBindingError,
+            verify_run_snapshot_binding,
+        )
+
+        try:
+            verify_run_snapshot_binding(run=run, case=case, binding=run_result)
+        except RunSnapshotBindingError:
+            return _result("CONFLICT", "invalid_verified_binding")
         return _result("ALREADY_VERIFIED")
     if any(getattr(run_result, field, None) is not None for field in new_fields):
         return _result("CONFLICT", "partial_preexisting_binding")
