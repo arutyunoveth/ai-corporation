@@ -20,8 +20,11 @@ The dedicated PostgreSQL/uvicorn tampering runner records the immutable 32-case
 matrix: canonical filesystem 8/8, artifact filesystem 6/6, run-result DB 12/12
 and artifact DB 6/6. Each case verifies both production verifiers, protected
 HTTP operations fail closed, no PDF disclosure, no auto-repair, unchanged
-control customer, and exact runner-owned restoration. Recovery and executable
-R7 regression remain pending.
+control customer, and exact runner-owned restoration. The evidence contract was
+then corrected to require recorded filesystem and DB snapshots, audit deltas,
+separate review/lifecycle fixtures, branch-head SHA metadata, control download,
+and cleanup evidence before it may issue PASS. Recovery and executable R7
+regression remain pending.
 
 ## Required before a merge-ready recommendation
 

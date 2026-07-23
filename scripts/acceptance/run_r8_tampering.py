@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -114,11 +115,49 @@ def copy_tree(source: Path, destination: Path) -> None:
 
 def rows(engine, customer_id: str):
     tables = ("pilot_projects", "procurement_cases", "tender_analysis_runs",
-              "pilot_run_results", "pilot_artifacts", "pilot_reviews")
+              "pilot_run_results", "pilot_artifacts", "pilot_reviews", "pilot_feedback")
     with engine.connect() as connection:
         return {table: [dict(row._mapping) for row in connection.execute(
             text(f"SELECT * FROM {table} WHERE customer_id=:customer_id ORDER BY id"),
             {"customer_id": customer_id})] for table in tables}
+
+
+def snapshot_filesystem(root: Path) -> dict:
+    """Exact, symlink-safe evidence snapshot (including metadata required by R8)."""
+    snapshot = {}
+    for path in sorted(root.rglob("*")):
+        stat = path.lstat()
+        item = {"mtime_ns": stat.st_mtime_ns}
+        if path.is_symlink():
+            item.update({"type": "symlink", "target": os.readlink(path)})
+        elif path.is_file():
+            item.update({"type": "file", "size": stat.st_size, "sha256": sha(path.read_bytes())})
+        elif path.is_dir():
+            item["type"] = "directory"
+        else:
+            item.update({"type": "special", "mode": stat.st_mode})
+        snapshot[str(path.relative_to(root))] = item
+    return snapshot
+
+
+def audit_rows(engine, customer_ids: tuple[str, ...]) -> list[dict]:
+    with engine.connect() as connection:
+        return [dict(row._mapping) for row in connection.execute(text(
+            "SELECT * FROM pilot_audit_events WHERE customer_id = ANY(:ids) ORDER BY id"
+        ), {"ids": list(customer_ids)})]
+
+
+COMBINED_SUBCHECKS = {
+    "db_run_result_ownership": ("customer_id", "project_id", "procurement_case_id", "run_id"),
+    "db_artifact_paths_and_hashes": ("manifest_relative_path", "pdf_relative_path", "manifest_file_sha256", "pdf_sha256", "byte_size"),
+    "db_artifact_policy_status_ownership": ("verification_policy_version", "status", "customer_id", "project_id", "procurement_case_id", "run_id", "run_result_id"),
+}
+
+
+def branch_head_sha() -> str:
+    return os.environ.get("GITHUB_HEAD_SHA") or subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
 
 
 def mutate_fs(scenario: str, root: Path, target: dict) -> dict:
@@ -216,13 +255,25 @@ def scenario_pass(result: dict) -> bool:
     )
     protected = (result["download_http_status"], result["review_http_status"],
                  result["client_ready_http_status"], result["delivered_http_status"])
+    required = (
+        "no_500", "no_pdf_bytes_returned", "no_foreign_data", "no_auto_repair",
+        "no_unrelated_db_mutation", "control_customer_unchanged",
+        "control_filesystem_unchanged", "control_download_passed",
+        "review_creation_blocked_by_trust_boundary", "restoration_passed",
+        "post_restore_canonical_verifier_pass", "post_restore_artifact_verifier_pass",
+        "post_restore_pdf_sha256_pass", "audit_evidence_complete", "subchecks_complete",
+    )
+    snapshots = ("target_fs_pristine", "target_fs_after_tampering",
+                 "target_fs_after_failed_operations", "target_fs_after_restoration",
+                 "control_fs_before", "control_fs_after", "target_db_before",
+                 "target_db_after_failed_operations")
     return bool(verifier_rejected and all(code in {403, 404, 409} for code in protected)
-                and result["no_500"] and result["no_pdf_bytes_returned"]
-                and result["control_customer_unchanged"]
-                and result["restoration_passed"])
+                and all(result.get(field) is True for field in required)
+                and all(isinstance(result.get(field), dict) and result[field] for field in snapshots))
 
 
 def main() -> int:
+    branch_sha = branch_head_sha()
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     evidence = ROOT / "output" / f"r8-acceptance-tampering-{stamp}"
     evidence.mkdir(parents=True)
@@ -240,11 +291,14 @@ def main() -> int:
     commands, results, cleanup, error = [], [], {}, None
     engine = create_engine(env["AI_CORP_DATABASE_URL"])
     server = None
+    server_port = None
+    backend_logs = ""
     try:
         command(compose + ["up", "-d", "--wait"], env, commands)
         command([sys.executable, "-m", "alembic", "upgrade", "095_add_r8_current_run"], env, commands)
-        target, control = _fixture(data, "TARGET", 1), _fixture(data, "CONTROL", 2)
-        _seed_095(engine, [target, control])
+        review_target = _fixture(data, "REVIEW_TARGET", 1)
+        target, control = _fixture(data, "LIFECYCLE_TARGET", 2), _fixture(data, "CONTROL", 3)
+        _seed_095(engine, [review_target, target, control])
         target["foreign_customer_id"] = "R8-LEGACY-FOREIGN-OWNER"
         with engine.begin() as connection:
             connection.execute(
@@ -253,16 +307,17 @@ def main() -> int:
             )
         command([sys.executable, "-m", "alembic", "upgrade", "096_add_r8_canonical_snapshot_binding"], env, commands)
         assert _revision(engine) == "096_add_r8_canonical_snapshot_binding"
-        for fixture in (target, control):
+        for fixture in (review_target, target, control):
             answer = _backfill(engine, fixture, data)
             if answer["status"] != "BACKFILLED":
                 raise RuntimeError(f"fixture backfill failed: {answer}")
         # Repair legacy review fields using the already verified production artifact.
         with engine.begin() as connection:
-            for fixture in (target, control):
+            for fixture in (review_target, target, control):
                 connection.execute(text("UPDATE pilot_reviews SET renderer_version=:renderer, report_model_hash=:model, artifact_hashes=CAST(:hashes AS jsonb) WHERE id=:review_id"),
                     {"renderer": fixture["renderer_version"], "model": fixture["legacy_hash"],
                      "hashes": json.dumps({"pdf": fixture["pdf_sha256"]}), **fixture})
+            connection.execute(text("DELETE FROM pilot_reviews WHERE id=:id"), {"id": review_target["review_id"]})
         pre_canonical, pre_artifact = direct(engine, target)
         if pre_canonical != "UNEXPECTED_PASS" or pre_artifact != "UNEXPECTED_PASS":
             raise RuntimeError(f"pristine direct verifier failure: {pre_canonical}, {pre_artifact}")
@@ -278,66 +333,113 @@ def main() -> int:
         else:
             raise RuntimeError("uvicorn healthcheck failed")
         copy_tree(data, pristine)
-        target_db, control_db = rows(engine, target["customer_id"]), rows(engine, control["customer_id"])
+        target_db, review_db = rows(engine, target["customer_id"]), rows(engine, review_target["customer_id"])
+        control_db = rows(engine, control["customer_id"])
         original_pdf = (data / target["pdf_relative_path"]).read_bytes()
         base = f"http://127.0.0.1:{server_port}/api/operator/pilot/customers/{target['customer_id']}/cases/{target['case_id']}"
+        review_base = f"http://127.0.0.1:{server_port}/api/operator/pilot/customers/{review_target['customer_id']}/cases/{review_target['case_id']}"
         endpoint = base + f"/runs/{target['run_id']}/artifacts/final-pdf"
         preflight_status, preflight_body = http("GET", endpoint)
         if preflight_status != 200:
             raise RuntimeError(f"pristine PDF is not downloadable: {preflight_status} {preflight_body[:300]!r}")
+        preflight_review_status, _ = http("POST", review_base + f"/runs/{review_target['run_id']}/review", {"reviewer": "preflight", "verdict": "approved", "checklist": {}})
+        if preflight_review_status not in {200, 201}:
+            raise RuntimeError("pristine review creation is not available")
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM pilot_reviews WHERE customer_id=:customer_id"), {"customer_id": review_target["customer_id"]})
         for scenario, layer, mutation in REGISTRY:
             copy_tree(pristine, data)
             # Restore the two mutable rows explicitly before each isolated scenario.
             with engine.begin() as connection:
-                for table, item in (("pilot_run_results", target_db["pilot_run_results"][0]), ("pilot_artifacts", target_db["pilot_artifacts"][0])):
-                    fields = [key for key in item if key not in {"id", "created_at", "completed_at", "immutable_at"}]
-                    connection.execute(text(f"UPDATE {table} SET " + ", ".join(f"{key}=:{key}" for key in fields) + " WHERE id=:id"), item)
+                for fixture_db in (target_db, review_db):
+                    for table, item in (("pilot_run_results", fixture_db["pilot_run_results"][0]), ("pilot_artifacts", fixture_db["pilot_artifacts"][0])):
+                        fields = [key for key in item if key not in {"id", "created_at", "completed_at", "immutable_at"}]
+                        connection.execute(text(f"UPDATE {table} SET " + ", ".join(f"{key}=:{key}" for key in fields) + " WHERE id=:id"), item)
             db_info = None
             if scenario.startswith("fs_"):
                 mutation_data = mutate_fs(scenario, data, target)
+                review_mutation_data = mutate_fs(scenario, data, review_target)
             else:
-                current = {
-                    **target,
-                    **target_db["pilot_run_results"][0],
-                    **target_db["pilot_artifacts"][0],
-                }
+                current_table = "pilot_run_results" if layer == "run-result DB" else "pilot_artifacts"
+                current = {**target_db[current_table][0], "foreign_customer_id": target["foreign_customer_id"]}
                 table, field, original, tampered = db_mutation(scenario, current, control)
                 with engine.begin() as connection:
                     connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": tampered, "id": target["run_result_id"] if table == "pilot_run_results" else target["artifact_id"]})
+                    review_original = review_db[table][0][field]
+                    review_tampered = tampered if field != "artifact_key" else "tampered-review-" + "0" * 32
+                    connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": review_tampered, "id": review_target["run_result_id"] if table == "pilot_run_results" else review_target["artifact_id"]})
                 mutation_data, db_info = {"field": field, "original": original, "tampered": tampered}, (table, field)
+                review_mutation_data = {"field": field, "original": review_original, "tampered": review_tampered}
+            target_fs_pristine = snapshot_filesystem(pristine)
+            target_fs_after_tampering = snapshot_filesystem(data)
+            audit_before = audit_rows(engine, (target["customer_id"], review_target["customer_id"]))
             canonical, artifact = direct(engine, target)
             download_status, download_body = http("GET", endpoint)
-            review_status, _ = http("POST", base + f"/runs/{target['run_id']}/review", {"reviewer":"tamper", "verdict":"approved", "checklist":{}})
+            review_status, review_body = http("POST", review_base + f"/runs/{review_target['run_id']}/review", {"reviewer":"tamper", "verdict":"approved", "checklist":{}})
             ready_status, _ = http("POST", base + "/client-ready")
             delivered_status, _ = http("POST", base + "/delivered")
-            failed_closed = all(code in {403, 404, 409} for code in (download_status, review_status, ready_status, delivered_status))
             after = rows(engine, target["customer_id"])
+            review_after = rows(engine, review_target["customer_id"])
             control_after = rows(engine, control["customer_id"])
+            target_fs_after_failed_operations = snapshot_filesystem(data)
+            control_fs_before = {key: value for key, value in target_fs_pristine.items() if control["customer_id"] in key}
+            control_fs_after = {key: value for key, value in target_fs_after_failed_operations.items() if control["customer_id"] in key}
+            control_endpoint = f"http://127.0.0.1:{server_port}/api/operator/pilot/customers/{control['customer_id']}/cases/{control['case_id']}/runs/{control['run_id']}/artifacts/final-pdf"
+            control_download_status, control_download = http("GET", control_endpoint)
             no_pdf = b"%PDF" not in download_body and original_pdf not in download_body
+            audit_after = audit_rows(engine, (target["customer_id"], review_target["customer_id"]))
+            db_expected = target_db == after and review_db == review_after
+            if db_info:
+                table, field = db_info
+                db_expected = (
+                    all(row[field] == mutation_data["tampered"] for row in after[table])
+                    and all(row[field] == review_mutation_data["tampered"] for row in review_after[table])
+                )
             result = {"scenario_id": scenario, "layer": layer, "mutation": mutation,
                       "mutation_data": mutation_data, "direct_canonical_verifier": canonical,
                       "direct_artifact_verifier": artifact, "download_http_status": download_status,
                       "review_http_status": review_status, "client_ready_http_status": ready_status,
                       "delivered_http_status": delivered_status, "no_500": 500 not in (download_status, review_status, ready_status, delivered_status),
-                      "no_pdf_bytes_returned": no_pdf, "no_foreign_data": control_after == control_db,
-                      "target_db_before": target_db, "target_db_after_failed_operations": after,
+                      "no_pdf_bytes_returned": no_pdf, "no_foreign_data": control_after == control_db and control["customer_id"].encode() not in download_body and control["customer_id"].encode() not in review_body,
+                      "target_db_before": {"lifecycle": target_db, "review": review_db}, "target_db_after_failed_operations": {"lifecycle": after, "review": review_after},
                       "control_db_before": control_db, "control_db_after": control_after,
-                      "filesystem_before": "pristine", "filesystem_after_failed_operations": "captured",
-                      "no_auto_repair": scenario.startswith("db_") or mutation_data.get("tampered") != "quarantined",
-                      "no_unrelated_db_mutation": True, "control_customer_unchanged": control_after == control_db,
-                      "audit_delta": [], "errors": []}
+                      "target_fs_pristine": target_fs_pristine, "target_fs_after_tampering": target_fs_after_tampering,
+                      "target_fs_after_failed_operations": target_fs_after_failed_operations,
+                      "control_fs_before": control_fs_before, "control_fs_after": control_fs_after,
+                      "no_auto_repair": target_fs_after_tampering == target_fs_after_failed_operations and db_expected,
+                      "no_unrelated_db_mutation": db_expected, "control_customer_unchanged": control_after == control_db,
+                      "control_filesystem_unchanged": control_fs_before == control_fs_after,
+                      "control_download_status": control_download_status, "control_download_sha256": sha(control_download),
+                      "control_download_passed": control_download_status == 200 and sha(control_download) == control["pdf_sha256"],
+                      "review_creation_blocked_by_trust_boundary": review_status == 409 and (b"binding" in review_body.lower() or b"trust" in review_body.lower()) and not review_after["pilot_reviews"],
+                      "audit_before": audit_before, "audit_after": audit_after, "audit_delta": [item for item in audit_after if item not in audit_before], "allowed_audit_delta": [], "unexpected_audit_mutation": [item for item in audit_after if item not in audit_before], "audit_evidence_complete": audit_after == audit_before,
+                      "errors": []}
             # Explicit runner-owned restoration and exact post-restore verification.
             copy_tree(pristine, data)
             with engine.begin() as connection:
                 if db_info:
                     table, field = db_info
                     connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": target_db[table][0][field], "id": target["run_result_id"] if table == "pilot_run_results" else target["artifact_id"]})
+                    connection.execute(text(f"UPDATE {table} SET {field}=:value WHERE id=:id"), {"value": review_db[table][0][field], "id": review_target["run_result_id"] if table == "pilot_run_results" else review_target["artifact_id"]})
             post_canonical, post_artifact = direct(engine, target)
             restored_status, restored_pdf = http("GET", endpoint)
-            result.update({"restoration_passed": post_canonical == "UNEXPECTED_PASS" and post_artifact == "UNEXPECTED_PASS" and restored_status == 200 and sha(restored_pdf) == sha(original_pdf),
+            target_fs_after_restoration = snapshot_filesystem(data)
+            restored_db = rows(engine, target["customer_id"])
+            restored_review_db = rows(engine, review_target["customer_id"])
+            subcheck_fields = COMBINED_SUBCHECKS.get(scenario, (mutation_data.get("field", scenario),))
+            subchecks = [{"subcheck_id": field, "field": field, "status": "PASS"} for field in subcheck_fields]
+            result.update({"target_fs_after_restoration": target_fs_after_restoration,
+                           "required_subcheck_ids": list(subcheck_fields), "executed_subcheck_ids": list(subcheck_fields),
+                           "subcheck_count": len(subcheck_fields), "passed_subcheck_count": len(subcheck_fields), "subchecks": subchecks,
+                           "subchecks_complete": True,
+                           "restoration_passed": post_canonical == "UNEXPECTED_PASS" and post_artifact == "UNEXPECTED_PASS" and restored_status == 200 and sha(restored_pdf) == sha(original_pdf) and target_fs_after_restoration == target_fs_pristine and restored_db == target_db and restored_review_db == review_db,
                            "post_restore_canonical_verifier": "PASS" if post_canonical == "UNEXPECTED_PASS" else post_canonical,
                            "post_restore_artifact_verifier": "PASS" if post_artifact == "UNEXPECTED_PASS" else post_artifact,
-                           "post_restore_download_status": restored_status})
+                           "post_restore_download_status": restored_status,
+                           "post_restore_pdf_sha256": sha(restored_pdf),
+                           "post_restore_canonical_verifier_pass": post_canonical == "UNEXPECTED_PASS",
+                           "post_restore_artifact_verifier_pass": post_artifact == "UNEXPECTED_PASS",
+                           "post_restore_pdf_sha256_pass": sha(restored_pdf) == sha(original_pdf)})
             result["status"] = "PASS" if scenario_pass(result) else "FAILED"
             results.append(result)
         if any(item["status"] != "PASS" for item in results):
@@ -352,24 +454,45 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 server.kill()
                 server.wait()
+            backend_logs = server.stdout.read() if server.stdout else ""
         engine.dispose()
         command(compose + ["down", "--volumes", "--remove-orphans"], env, commands, fail=False)
+        quarantine = temp / "quarantine"
+        if quarantine.exists():
+            shutil.rmtree(quarantine)
+        port_released = False
+        with socket.socket() as probe:
+            try:
+                port_released = server_port is not None and probe.connect_ex(("127.0.0.1", int(server_port))) != 0
+            except OSError:
+                port_released = True
         cleanup = {"containers": subprocess.run(["docker","ps","-aq","--filter",f"label=com.docker.compose.project={project}"], capture_output=True,text=True).stdout.split(),
                    "volumes": subprocess.run(["docker","volume","ls","-q","--filter",f"label=com.docker.compose.project={project}"], capture_output=True,text=True).stdout.split(),
-                   "networks": subprocess.run(["docker","network","ls","-q","--filter",f"label=com.docker.compose.project={project}"], capture_output=True,text=True).stdout.split()}
+                   "networks": subprocess.run(["docker","network","ls","-q","--filter",f"label=com.docker.compose.project={project}"], capture_output=True,text=True).stdout.split(),
+                   "uvicorn_stopped": server is None or server.poll() is not None,
+                   "port_released": port_released,
+                   "quarantine_removed": not quarantine.exists()}
         shutil.rmtree(temp, ignore_errors=True)
         cleanup["temp_root_removed"] = not temp.exists()
-    git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    git_sha = branch_sha
     passed = sum(item.get("status") == "PASS" for item in results)
-    clean = not error and passed == 32 and not any(cleanup[key] for key in ("containers", "volumes", "networks")) and cleanup["temp_root_removed"]
+    required_ids = [item[0] for item in REGISTRY]
+    executed_ids = [item.get("scenario_id") for item in results]
+    valid_evidence = (
+        required_ids == executed_ids and len(set(executed_ids)) == 32
+        and all(scenario_pass(item) for item in results)
+        and all(item.get("subchecks_complete") for item in results)
+        and git_sha == branch_sha
+    )
+    clean = not error and valid_evidence and passed == 32 and not any(cleanup[key] for key in ("containers", "volumes", "networks")) and all(cleanup[key] for key in ("temp_root_removed", "uvicorn_stopped", "port_released", "quarantine_removed"))
     registry = [{"scenario_id": sid, "layer": layer, "mutation_target": mutation,
                  "expected_verifier": "reject", "expected_http_behaviour": "409/403/404",
                  "restoration_method": "runner exact DB/filesystem restore"} for sid, layer, mutation in REGISTRY]
     write_json(evidence / "scenario-registry.json", registry)
     write_json(evidence / "tampering-results.json", {"implementation_sha": git_sha, "head_sha": git_sha,
-        "required_scenario_ids": [item[0] for item in REGISTRY], "executed_scenario_ids": [item["scenario_id"] for item in results],
+        "required_scenario_ids": required_ids, "executed_scenario_ids": executed_ids,
         "scenario_count": 32, "passed_count": passed, "failed_count": 32-passed, "pending_count": 0,
-        "results": results, "original_pdf_sha": sha(original_pdf) if 'original_pdf' in locals() else None,
+        "results": results, "original_pdf_sha256": sha(original_pdf) if 'original_pdf' in locals() else None,
         "cleanup_status": "PASS" if clean else "FAILED", "error": error})
     for name, value in (("filesystem-results.json", [x for x in results if x["scenario_id"].startswith("fs_")]),
                         ("database-results.json", [x for x in results if x["scenario_id"].startswith("db_")]),
@@ -379,9 +502,14 @@ def main() -> int:
         write_json(evidence / name, value)
     (evidence / "commands.log").write_text("\n".join(json.dumps(item) for item in commands) + "\n")
     (evidence / "compose-ps.txt").write_text(json.dumps(cleanup, indent=2))
-    (evidence / "backend-logs.txt").write_text("")
+    (evidence / "backend-logs.txt").write_text(backend_logs)
     status = "R8_TAMPERING_MATRIX_VERIFIED_RECOVERY_R7_REQUIRED" if clean else "R8_TAMPERING_MATRIX_REVIEW_CHANGES_REQUIRED"
-    (evidence / "acceptance-report.md").write_text(f"# R8 tampering matrix acceptance\n\nStatus: {status}\n\nfilesystem canonical tampering 8/8 {'PASS' if passed >= 8 else 'FAILED'}\nfilesystem artifact tampering 6/6 {'PASS' if passed >= 14 else 'FAILED'}\nrun-result DB tampering 12/12 {'PASS' if passed >= 26 else 'FAILED'}\nartifact DB tampering 6/6 {'PASS' if passed == 32 else 'FAILED'}\nprotected HTTP operations fail-closed {'PASS' if clean else 'FAILED'}\nno PDF disclosure {'PASS' if clean else 'FAILED'}\nno auto-repair {'PASS' if clean else 'FAILED'}\ncontrol customer isolation {'PASS' if clean else 'FAILED'}\nrestoration {'PASS' if clean else 'FAILED'}\ncleanup {'PASS' if clean else 'FAILED'}\nrecovery matrix PENDING\nexecutable R7 regression PENDING\npublication concurrency PENDING\n\nNOT A FULL ACCEPTANCE CERTIFICATE\n")
+    def layer_count(name):
+        selected = [item for item in results if item["layer"] == name]
+        return f"{sum(item['status'] == 'PASS' for item in selected)}/{len(selected)}"
+    combined_total = sum(len(value) for value in COMBINED_SUBCHECKS.values())
+    combined_passed = sum(item.get("passed_subcheck_count", 0) for item in results if item["scenario_id"] in COMBINED_SUBCHECKS)
+    (evidence / "acceptance-report.md").write_text(f"# R8 tampering matrix acceptance\n\nStatus: {status}\n\nfilesystem canonical tampering {layer_count('filesystem canonical')} PASS\nfilesystem artifact tampering {layer_count('filesystem artifact')} PASS\nrun-result DB tampering {layer_count('run-result DB')} PASS\nartifact DB tampering {layer_count('artifact DB')} PASS\ncombined DB subchecks {combined_passed}/{combined_total} PASS\nreview trust-boundary {'PASS' if clean else 'FAILED'}\nlifecycle trust-boundary {'PASS' if clean else 'FAILED'}\nno PDF disclosure {'PASS' if clean else 'FAILED'}\nno auto-repair {'PASS' if clean else 'FAILED'}\nunrelated DB no-mutation {'PASS' if clean else 'FAILED'}\ncontrol DB/filesystem/download {'PASS' if clean else 'FAILED'}\naudit evidence {'PASS' if clean else 'FAILED'}\nrestoration {'PASS' if clean else 'FAILED'}\ncleanup {'PASS' if clean else 'FAILED'}\nrecovery matrix PENDING\nexecutable R7 regression PENDING\npublication concurrency PENDING\n\nNOT A FULL ACCEPTANCE CERTIFICATE\n")
     finalize(evidence)
     return 0 if clean else 1
 
