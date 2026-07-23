@@ -11,10 +11,12 @@ from pathlib import Path
 from sqlalchemy import select
 
 from src.modules.customer_pilot.artifact_snapshot import (
-    EXACT_FILE_SET as ARTIFACT_FILE_SET,
+    VERIFICATION_POLICY_VERSION as ARTIFACT_POLICY_VERSION,
 )
 from src.modules.customer_pilot.artifact_snapshot import (
-    VERIFICATION_POLICY_VERSION as ARTIFACT_POLICY_VERSION,
+    FinalPdfArtifactError,
+    derive_final_pdf_artifact_identity,
+    verify_final_pdf_generation,
 )
 from src.modules.customer_pilot.canonical_snapshot import (
     EXACT_FILE_SET,
@@ -132,8 +134,17 @@ def backfill_legacy_run_binding(*, session, run, case, run_result, artifact, dat
 
         try:
             verify_run_snapshot_binding(run=run, case=case, binding=run_result)
+            from src.modules.customer_pilot.artifacts import (
+                verify_pilot_artifact_binding,
+            )
+
+            verify_pilot_artifact_binding(
+                run=run, case=case, result=run_result, artifact=artifact
+            )
         except RunSnapshotBindingError:
             return _result("CONFLICT", "invalid_verified_binding")
+        except Exception:
+            return _result("CONFLICT", "artifact_manifest_invalid")
         return _result("ALREADY_VERIFIED")
     if any(getattr(run_result, field, None) is not None for field in new_fields):
         return _result("CONFLICT", "partial_preexisting_binding")
@@ -205,26 +216,107 @@ def backfill_legacy_run_binding(*, session, run, case, run_result, artifact, dat
         return _result("CONFLICT", "canonical_identity_conflict", identities)
     if run_result.canonical_report_hash != verified.report_model_hash:
         return _result("CONFLICT", "legacy_report_hash_conflict", identities)
-    artifact_dir = root / artifact.manifest_relative_path
+    identity = derive_final_pdf_artifact_identity(
+        registry_number=run.registry_number,
+        run_id=run.id,
+        report_model_hash=identities["report_model_hash"],
+        customer_id=run.customer_id,
+        project_id=run.project_id,
+        procurement_case_id=case.id,
+    )
+    if (
+        artifact.artifact_type != "final_pdf"
+        or artifact.status != "published"
+        or artifact.artifact_key != identity.artifact_key
+        or artifact.renderer_version != identity.renderer_version
+        or artifact.manifest_relative_path != identity.manifest_relative_path
+        or artifact.pdf_relative_path != identity.pdf_relative_path
+        or artifact.report_model_hash != identities["report_model_hash"]
+        or artifact.source_graph_hash != run_result.source_graph_hash
+    ):
+        return _result("CONFLICT", "artifact_identity_conflict", identities)
     try:
-        _directory(artifact_dir)
-        if {path.name for path in artifact_dir.iterdir()} != set(ARTIFACT_FILE_SET):
-            return _result("CONFLICT", "artifact_file_set")
-        artifact_manifest = _regular(artifact_dir / "artifact.manifest.json")
-    except (FileNotFoundError, OSError, ValueError):
-        return _result("CONFLICT", "artifact_snapshot_invalid")
+        generation = verify_final_pdf_generation(
+            customer_id=run.customer_id,
+            project_id=run.project_id,
+            procurement_case_id=case.id,
+            run_id=run.id,
+            expected={
+                "customer_id": run.customer_id,
+                "project_id": run.project_id,
+                "procurement_case_id": case.id,
+                "run_id": run.id,
+                "run_result_id": run_result.id,
+                "registry_number": run.registry_number,
+                "source_analysis_run_id": run_result.source_analysis_run_id,
+                "run_namespace_key": run.artifact_key,
+                "artifact_key": identity.artifact_key,
+                "artifact_type": "final_pdf",
+                "renderer_version": identity.renderer_version,
+                "requirements_storage_key": identities["requirements_storage_key"],
+                "requirements_file_sha256": identities["requirements_file_sha256"],
+                "canonical_report_storage_key": run_result.canonical_report_storage_key,
+                "canonical_report_file_sha256": identities[
+                    "canonical_report_file_sha256"
+                ],
+                "binding_manifest_storage_key": identities[
+                    "binding_manifest_storage_key"
+                ],
+                "binding_manifest_file_sha256": identities[
+                    "binding_manifest_file_sha256"
+                ],
+                "source_graph_hash": run_result.source_graph_hash,
+                "source_graph_hash_algorithm": identities[
+                    "source_graph_hash_algorithm"
+                ],
+                "production_model_hash": run_result.production_model_hash,
+                "report_model_hash": identities["report_model_hash"],
+                "pdf_relative_path": identity.pdf_relative_path,
+                "pdf_sha256": artifact.pdf_sha256,
+                "byte_size": artifact.byte_size,
+            },
+        )
+    except FinalPdfArtifactError as exc:
+        category = (
+            "artifact_pdf_hash_conflict"
+            if "PDF" in str(exc)
+            else "artifact_manifest_invalid"
+        )
+        return _result("CONFLICT", category, identities)
     values = {
         **identities,
-        "manifest_file_sha256": _sha(artifact_manifest),
+        "manifest_file_sha256": generation.manifest_file_sha256,
         "artifact_verification_policy_version": ARTIFACT_POLICY_VERSION,
     }
+    original = {field: getattr(run_result, field) for field in new_fields}
+    artifact_original = (
+        artifact.manifest_file_sha256,
+        artifact.verification_policy_version,
+    )
     for field in new_fields:
         setattr(run_result, field, values[field])
     artifact.manifest_file_sha256 = values["manifest_file_sha256"]
     artifact.verification_policy_version = values[
         "artifact_verification_policy_version"
     ]
-    session.flush()
+    try:
+        session.flush()
+        from src.modules.customer_pilot.artifacts import verify_pilot_artifact_binding
+        from src.modules.customer_pilot.binding_verifier import (
+            verify_run_snapshot_binding,
+        )
+
+        verify_run_snapshot_binding(run=run, case=case, binding=run_result)
+        verify_pilot_artifact_binding(
+            run=run, case=case, result=run_result, artifact=artifact
+        )
+    except Exception:
+        for field, value in original.items():
+            setattr(run_result, field, value)
+        artifact.manifest_file_sha256, artifact.verification_policy_version = (
+            artifact_original
+        )
+        return _result("CONFLICT", "artifact_manifest_invalid", identities)
     return LegacyBackfillResult(
         "BACKFILLED",
         tuple((*new_fields, "manifest_file_sha256", "verification_policy_version")),

@@ -138,6 +138,10 @@ def _filesystem(root):
 
 def _fixture(root, kind, ordinal):
     from src.modules.customer_pilot import canonical_snapshot
+    from src.modules.customer_pilot.artifact_snapshot import (
+        derive_final_pdf_artifact_identity,
+        publish_final_pdf_generation,
+    )
     from src.modules.procurement_analysis.frozen_producer import (
         produce_frozen_canonical_analysis,
     )
@@ -154,7 +158,7 @@ def _fixture(root, kind, ordinal):
         )
     }
     ids["customer_id"] = f"R8-LEGACY-{kind}-{ordinal}"
-    ids["artifact_key"] = secrets.token_hex(12)
+    ids["run_namespace_key"] = secrets.token_hex(12)
     ids["source_run_id"] = str(uuid.uuid4())
     canonical_snapshot.load_config = lambda: type(
         "Config", (), {"data_dir": str(root)}
@@ -176,25 +180,57 @@ def _fixture(root, kind, ordinal):
         source_analysis_run_id=ids["source_run_id"],
         verified=product.persisted,
     )
-    artifact_dir = (
-        root
-        / "customer-pilot"
-        / ids["customer_id"]
-        / ids["project_id"]
-        / ids["case_id"]
-        / ids["run_id"]
-        / "artifacts"
-        / ids["artifact_key"]
+    identity = derive_final_pdf_artifact_identity(
+        registry_number="0379100000726000101",
+        run_id=ids["run_id"],
+        report_model_hash=product.persisted.report_model_hash,
+        customer_id=ids["customer_id"],
+        project_id=ids["project_id"],
+        procurement_case_id=ids["case_id"],
     )
-    artifact_dir.mkdir(parents=True)
-    (artifact_dir / "final.pdf").write_bytes(b"%PDF-1.4\nlegacy\n")
-    (artifact_dir / "artifact.manifest.json").write_text("{}\n")
+    from src.modules.tender_operator_agent_demo.report_export_service import (
+        _build_pdf_from_canonical,
+    )
+
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as rendered:
+        _build_pdf_from_canonical(
+            json.loads(product.persisted.canonical_report_bytes),
+            "Legacy acceptance",
+            Path(rendered.name),
+        )
+        generation = publish_final_pdf_generation(
+            customer_id=ids["customer_id"],
+            project_id=ids["project_id"],
+            procurement_case_id=ids["case_id"],
+            run_id=ids["run_id"],
+            run_result_id=ids["run_result_id"],
+            registry_number="0379100000726000101",
+            source_analysis_run_id=ids["source_run_id"],
+            run_namespace_key=ids["run_namespace_key"],
+            artifact_key=identity.artifact_key,
+            renderer_version=identity.renderer_version,
+            requirements_storage_key=published.requirements_relative_path,
+            requirements_file_sha256=published.requirements_file_sha256,
+            canonical_report_storage_key=published.canonical_report_relative_path,
+            canonical_report_file_sha256=published.canonical_report_file_sha256,
+            binding_manifest_storage_key=published.binding_manifest_relative_path,
+            binding_manifest_file_sha256=published.binding_manifest_file_sha256,
+            source_graph_hash=published.source_graph_hash,
+            source_graph_hash_algorithm=published.source_graph_hash_algorithm,
+            production_model_hash=published.production_model_hash,
+            report_model_hash=published.report_model_hash,
+            pdf_bytes=Path(rendered.name).read_bytes(),
+        )
     ids.update(
         {
             "type": kind,
+            "artifact_key": identity.artifact_key,
             "canonical_report_storage_key": published.canonical_report_relative_path,
-            "manifest_relative_path": str(artifact_dir.relative_to(root)),
-            "pdf_relative_path": str((artifact_dir / "final.pdf").relative_to(root)),
+            "manifest_relative_path": generation.manifest_relative_path,
+            "pdf_relative_path": generation.pdf_relative_path,
+            "renderer_version": identity.renderer_version,
+            "pdf_sha256": generation.pdf_sha256,
+            "byte_size": generation.byte_size,
             "legacy_hash": product.persisted.report_model_hash,
             "source_graph_hash": product.persisted.source_graph_hash,
             "production_model_hash": product.persisted.production_model_hash,
@@ -204,6 +240,8 @@ def _fixture(root, kind, ordinal):
         (published.analysis_directory / "canonical-binding.manifest.json").unlink()
     if kind == "CONFLICTING":
         ids["legacy_hash"] = "f" * 64
+    if kind == "ARTIFACT_CONFLICTING":
+        (root / generation.pdf_relative_path).write_bytes(b"%PDF-tampered")
     return ids
 
 
@@ -235,13 +273,13 @@ def _seed_095(engine, fixtures):
             )
             connection.execute(
                 text(
-                    "INSERT INTO procurement_cases (id,customer_id,project_id,procurement_number,status,artifact_key,current_run_id,created_at,updated_at) VALUES (:case_id,:customer_id,:project_id,'0379100000726000101','operator_review',:artifact_key,NULL,:now,:now)"
+                    "INSERT INTO procurement_cases (id,customer_id,project_id,procurement_number,status,artifact_key,current_run_id,created_at,updated_at) VALUES (:case_id,:customer_id,:project_id,'0379100000726000101','operator_review',:run_namespace_key,NULL,:now,:now)"
                 ),
                 {**item, "now": now},
             )
             connection.execute(
                 text(
-                    "INSERT INTO tender_analysis_runs (id,registry_number,status,used_llm,sections_count,sources_count,created_at,updated_at,customer_id,project_id,procurement_case_id,idempotency_key,artifact_key) VALUES (:run_id,'0379100000726000101','completed',false,0,0,:now,:now,:customer_id,:project_id,:case_id,:run_id,:artifact_key)"
+                    "INSERT INTO tender_analysis_runs (id,registry_number,status,used_llm,sections_count,sources_count,created_at,updated_at,customer_id,project_id,procurement_case_id,idempotency_key,artifact_key) VALUES (:run_id,'0379100000726000101','completed',false,0,0,:now,:now,:customer_id,:project_id,:case_id,:run_id,:run_namespace_key)"
                 ),
                 {**item, "now": now},
             )
@@ -259,15 +297,15 @@ def _seed_095(engine, fixtures):
             )
             connection.execute(
                 text(
-                    "INSERT INTO pilot_artifacts (id,customer_id,project_id,procurement_case_id,run_id,run_result_id,artifact_type,artifact_key,report_model_hash,source_graph_hash,renderer_version,manifest_relative_path,pdf_relative_path,pdf_sha256,byte_size,status,created_at,immutable_at) VALUES (:artifact_id,:customer_id,:project_id,:case_id,:run_id,:run_result_id,'final_pdf',:artifact_key,:legacy_hash,:source_graph_hash,'legacy',:manifest_relative_path,:pdf_relative_path,:pdf_sha256,12,'published',:now,:now)"
+                    "INSERT INTO pilot_artifacts (id,customer_id,project_id,procurement_case_id,run_id,run_result_id,artifact_type,artifact_key,report_model_hash,source_graph_hash,renderer_version,manifest_relative_path,pdf_relative_path,pdf_sha256,byte_size,status,created_at,immutable_at) VALUES (:artifact_id,:customer_id,:project_id,:case_id,:run_id,:run_result_id,'final_pdf',:artifact_key,:legacy_hash,:source_graph_hash,:renderer_version,:manifest_relative_path,:pdf_relative_path,:pdf_sha256,:byte_size,'published',:now,:now)"
                 ),
-                {**item, "pdf_sha256": _sha(b"%PDF-1.4\nlegacy\n"), "now": now},
+                {**item, "now": now},
             )
             connection.execute(
                 text(
                     "INSERT INTO pilot_reviews (id,customer_id,project_id,procurement_case_id,run_id,artifact_id,artifact_key,pdf_sha256,renderer_version,reviewer,reviewed_at,verdict,checklist,source_graph_hash,report_model_hash,artifact_hashes,immutable_at) VALUES (:review_id,:customer_id,:project_id,:case_id,:run_id,:artifact_id,:artifact_key,:pdf_sha256,'legacy','acceptance',:now,'approved','{}'::jsonb,:source_graph_hash,:legacy_hash,'{}'::jsonb,:now)"
                 ),
-                {**item, "pdf_sha256": _sha(b"%PDF-1.4\nlegacy\n"), "now": now},
+                {**item, "now": now},
             )
 
 
@@ -292,6 +330,8 @@ def _backfill(engine, ids, root):
     from src.modules.customer_pilot.legacy_binding_backfill import (
         backfill_legacy_run_binding,
     )
+    from src.modules.customer_pilot.artifacts import verify_pilot_artifact_binding
+    from src.modules.customer_pilot.binding_verifier import verify_run_snapshot_binding
 
     with Session(engine) as session:
         run, case, result, artifact = _objects(session, ids)
@@ -306,6 +346,15 @@ def _backfill(engine, ids, root):
             artifact=artifact,
             data_root=root,
         )
+        canonical_verifier_status = "NOT_EXECUTED"
+        artifact_verifier_status = "NOT_EXECUTED"
+        if answer.status in {"BACKFILLED", "ALREADY_VERIFIED"}:
+            verify_run_snapshot_binding(run=run, case=case, binding=result)
+            canonical_verifier_status = "PASS"
+            verify_pilot_artifact_binding(
+                run=run, case=case, result=result, artifact=artifact
+            )
+            artifact_verifier_status = "PASS"
         session.commit()
         after = {
             field: getattr(result, field) for field in result.__table__.columns.keys()
@@ -315,6 +364,8 @@ def _backfill(engine, ids, root):
             "changed_fields": answer.changed_fields,
             "error_category": answer.error_category,
             "mutation_performed": answer.mutation_performed,
+            "canonical_verifier_status": canonical_verifier_status,
+            "artifact_verifier_status": artifact_verifier_status,
             "before": before,
             "after": after,
         }
@@ -373,7 +424,14 @@ def main():
         fixtures = [
             _fixture(data, kind, index)
             for index, kind in enumerate(
-                ("RECOVERABLE", "INCOMPLETE", "CONFLICTING", "CONCURRENT"), 1
+                (
+                    "RECOVERABLE",
+                    "INCOMPLETE",
+                    "CONFLICTING",
+                    "ARTIFACT_CONFLICTING",
+                    "CONCURRENT",
+                ),
+                1,
             )
         ]
         _seed_095(engine, fixtures)
@@ -396,12 +454,13 @@ def main():
         scenarios["recoverable"] = _backfill(engine, fixtures[0], data)
         scenarios["incomplete"] = _backfill(engine, fixtures[1], data)
         scenarios["conflicting"] = _backfill(engine, fixtures[2], data)
+        scenarios["artifact_conflicting"] = _backfill(engine, fixtures[3], data)
         scenarios["idempotent"] = _backfill(engine, fixtures[0], data)
         barrier = threading.Barrier(2)
 
         def concurrent_call(_):
             barrier.wait()
-            return _backfill(engine, fixtures[3], data)
+            return _backfill(engine, fixtures[4], data)
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             scenarios["concurrency"] = list(pool.map(concurrent_call, range(2)))
@@ -458,12 +517,14 @@ def main():
             "idempotent": _backfill(engine, fixtures[0], data),
             "incomplete": _backfill(engine, fixtures[1], data),
             "conflicting": _backfill(engine, fixtures[2], data),
+            "artifact_conflicting": _backfill(engine, fixtures[3], data),
         }
         assert (
             scenarios["recoverable"]["status"] == "BACKFILLED"
             and scenarios["idempotent"]["status"] == "ALREADY_VERIFIED"
             and scenarios["incomplete"]["status"] == "INCOMPLETE"
             and scenarios["conflicting"]["status"] == "CONFLICT"
+            and scenarios["artifact_conflicting"]["status"] == "CONFLICT"
             and sorted(item["status"] for item in scenarios["concurrency"])
             == ["ALREADY_VERIFIED", "BACKFILLED"]
             and scenarios["invalid_downgrade"]["exit_code"] != 0
@@ -535,7 +596,12 @@ def main():
         evidence / "backfill-results.json",
         {
             key: scenarios.get(key)
-            for key in ("recoverable", "incomplete", "conflicting")
+            for key in (
+                "recoverable",
+                "incomplete",
+                "conflicting",
+                "artifact_conflicting",
+            )
         },
     )
     _write(evidence / "idempotency-results.json", scenarios.get("idempotent", {}))
@@ -577,8 +643,40 @@ def main():
         if clean
         else "R8_PRE096_MIGRATION_BACKFILL_REVIEW_CHANGES_REQUIRED"
     )
+    summary = {
+        "recoverable": scenarios.get("recoverable", {}).get("status", "FAILED"),
+        "idempotent": scenarios.get("idempotent", {}).get("status", "FAILED"),
+        "incomplete": scenarios.get("incomplete", {}).get("status", "FAILED"),
+        "conflicting": scenarios.get("conflicting", {}).get("status", "FAILED"),
+        "artifact_conflicting": scenarios.get("artifact_conflicting", {}).get(
+            "status", "FAILED"
+        ),
+        "concurrency": " + ".join(
+            item.get("status", "FAILED") for item in scenarios.get("concurrency", [])
+        ),
+        "invalid_downgrade": "PASS"
+        if scenarios.get("invalid_downgrade", {}).get("exit_code")
+        else "FAILED",
+        "normal_downgrade": "PASS"
+        if scenarios.get("downgrade", {}).get("revision") == "095_add_r8_current_run"
+        else "FAILED",
+        "repeat_upgrade": "PASS"
+        if scenarios.get("repeat_upgrade", {}).get("revision")
+        == "096_add_r8_canonical_snapshot_binding"
+        else "FAILED",
+        "canonical_verifier": scenarios.get("recoverable", {}).get(
+            "canonical_verifier_status", "FAILED"
+        ),
+        "artifact_verifier": scenarios.get("recoverable", {}).get(
+            "artifact_verifier_status", "FAILED"
+        ),
+        "cleanup": "PASS" if clean else "FAILED",
+    }
     (evidence / "acceptance-report.md").write_text(
-        f"# R8 migration backfill acceptance\n\nStatus: {status}\n\nScenarios: {json.dumps({key: value.get('status') if isinstance(value, dict) else value for key, value in scenarios.items()}, default=str)}\n\nNOT A FULL ACCEPTANCE CERTIFICATE\n"
+        "# R8 migration backfill acceptance\n\n"
+        f"Status: {status}\n\n"
+        + "\n".join(f"{key}: {value}" for key, value in summary.items())
+        + "\n\nNOT A FULL ACCEPTANCE CERTIFICATE\n"
     )
     _finalize(evidence)
     return 0 if clean else 1
