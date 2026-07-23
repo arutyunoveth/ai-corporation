@@ -1,20 +1,18 @@
-# R8 independent review — changes required
+# R8 tenant acceptance review
 
 ## Current assessment
 
-`R8_FULL_ACCEPTANCE_REVIEW_CHANGES_REQUIRED`.
+`R8_EVIDENCE_CONTRACT_AND_BIDIRECTIONAL_TENANT_VERIFIED_REMAINING_MATRICES_REQUIRED`.
 
-The previous 14-file archive and green CI prove only a limited subset of the
-required acceptance contract: five filesystem mutations, two DB mutations, and
-seven tenant checks in only the B→A direction. Its general `success` flag was
-also used to mark unrelated matrices PASS; it is therefore not merge evidence.
+The tenant stage records 30 real HTTP scenarios, split equally in both
+directions, with foreign-leak, database, filesystem, lifecycle, audit and
+cleanup assertions. The evidence contract is fail-closed.
 
 ## Required before a merge-ready recommendation
 
-- bidirectional endpoint-by-endpoint tenant isolation with leak and no-mutation checks;
-- complete real-HTTP publication and idempotency concurrency assertions;
 - parameterized filesystem and DB immutable-field matrices;
 - genuine recovery/conflict, pre-096 backfill, cleanup and executable R7 checks;
-- self-contained evidence metadata and independent verification of the CI artifact.
+- independent verification of the CI artifact.
 
 PR #12 remains Draft. No merge, tag, deployment, or auto-merge was performed.
+This is not a full acceptance certificate.
