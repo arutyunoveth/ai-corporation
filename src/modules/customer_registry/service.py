@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from src.modules.customer_registry.models import CustomerContour, CustomerExternalRef, CustomerProfile
 from src.modules.customer_registry.schemas import CreateCustomerRequest, UpdateCustomerRequest
 from src.modules.event_log.service import append_event_record
+from src.modules.customer_pilot.models import PilotAuditEvent
 from src.shared.db.base import utcnow
 from src.shared.enums import CustomerStatus, EventSeverity
 from src.shared.errors import NotFoundError
@@ -116,6 +117,7 @@ def create_customer(session: Session, payload: CreateCustomerRequest) -> tuple[C
         severity=EventSeverity.INFO,
         payload_json={"customer_id": profile.customer_id, "legal_name": profile.legal_name},
     )
+    session.add(PilotAuditEvent(customer_id=profile.customer_id, event_type="customer_created", payload={"customer_id": profile.customer_id}))
     session.commit()
     session.refresh(profile)
     return profile, False

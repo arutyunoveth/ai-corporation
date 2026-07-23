@@ -215,6 +215,15 @@ from src.modules.supplier_progress.models import (
     SupplierProgressSet,
 )
 from src.modules.customer_registry.models import CustomerContour, CustomerExternalRef, CustomerProfile
+from src.modules.customer_pilot.models import (
+    PilotArtifact,
+    PilotAuditEvent,
+    PilotFeedback,
+    PilotProject,
+    PilotReview,
+    PilotRunResult,
+    ProcurementCase,
+)
 from src.modules.intake_priority.models import IntakePriorityFactor, IntakePriorityRecord, IntakePrioritySet
 from src.modules.requirement_extraction.models import (
     RequirementExtractionRecord,

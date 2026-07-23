@@ -28,6 +28,7 @@ from src.modules.contract_risks.router import router as contract_risks_router
 from src.modules.contract_negotiation.router import router as contract_negotiation_router
 from src.modules.cost_model.router import router as cost_model_router
 from src.modules.customer_registry.router import router as customer_registry_router
+from src.modules.customer_pilot.router import router as customer_pilot_router
 from src.modules.dashboard_snapshots.router import router as dashboard_snapshots_router
 from src.modules.deal_registry.router import router as deals_router
 from src.modules.deal_closure.router import router as deal_closure_router
@@ -121,6 +122,7 @@ app.include_router(action_queue_router)
 app.include_router(action_console_router)
 app.include_router(acceptance_control_router)
 app.include_router(customer_registry_router)
+app.include_router(customer_pilot_router)
 app.include_router(integration_tasks_router)
 app.include_router(intake_priority_router)
 app.include_router(operator_sessions_router)

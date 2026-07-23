@@ -29,3 +29,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python scripts/ops/secret_scan.py
+  r8-postgres-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: sudo apt-get update && sudo apt-get install --yes poppler-utils
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - run: make test-r8-postgres
+      - run: make test-r8-acceptance-migration-backfill
+        env:
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - run: make test-r8-acceptance-tampering
+        env:
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r8-migration-backfill-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: output/r8-acceptance-migration-backfill-*/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r8-tampering-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: output/r8-acceptance-tampering-*/
+  r8-acceptance-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: sudo apt-get update && sudo apt-get install --yes poppler-utils
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - run: make test-r8-acceptance-tenant-concurrency
+        env:
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r8-tenant-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: output/r8-acceptance-tenant-concurrency-*/

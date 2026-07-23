@@ -7,6 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${PILOT_DB_NAME:-arvectum_pilot}
       POSTGRES_USER: ${PILOT_DB_USER:-arvectum}
+      POSTGRES_PASSWORD: ${PILOT_DB_PASSWORD:?set PILOT_DB_PASSWORD}
     volumes: [pilot-db:/var/lib/postgresql/data]
     networks: [pilot-internal]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
@@ -33,6 +34,9 @@ services:
       AI_CORP_LLM_PROVIDER: stub
       AI_CORP_LLM_ALLOW_RAW_PARTNER_DATA: "false"
       AI_CORP_LLM_STORE_RAW_RESPONSE: "false"
+      AI_CORP_PILOT_AUTH_ENABLED: ${AI_CORP_PILOT_AUTH_ENABLED:-true}
+      AI_CORP_PILOT_AUTH_USERNAME: ${AI_CORP_PILOT_AUTH_USERNAME:?set AI_CORP_PILOT_AUTH_USERNAME}
+      AI_CORP_PILOT_AUTH_PASSWORD: ${AI_CORP_PILOT_AUTH_PASSWORD:?set AI_CORP_PILOT_AUTH_PASSWORD}
       ZAKUPKI_GOV_RU_SOAP_ENABLED: "true"
       ARVECTUM_ETP_TLS_ENABLED: "true"
       ARVECTUM_ETP_TLS_FAIL_CLOSED: "true"

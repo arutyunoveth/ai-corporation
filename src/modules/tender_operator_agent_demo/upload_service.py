@@ -23,6 +23,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from src.modules.tender_connectors.text_extraction import extract_text_from_attachment_bytes
+from src.modules.procurement_analysis.document_roles import detect_document_role
 from src.tender_research.document_text_extractor import (
     EMPTY_STATUS as DOC_EMPTY_STATUS,
     EXTRACTED_STATUS as DOC_EXTRACTED_STATUS,
@@ -122,17 +123,7 @@ def _translate_user_text(value: str) -> str:
     return TEXT_TRANSLATIONS.get(value, value)
 
 
-@dataclass
-class AnalyzedDocument:
-    display_name: str
-    extension: str
-    role: str
-    text: str | None
-    extracted_text_available: bool
-    warnings: list[str]
-    source: str
-    file_id: str
-    raw_content: bytes | None = None
+from src.modules.procurement_analysis.frozen_types import AnalyzedDocument
 
 
 @dataclass
@@ -610,28 +601,8 @@ def _decode_text(content: bytes) -> str | None:
 
 
 def _detect_role(name: str) -> str:
-    lowered = name.lower()
-    if lowered.endswith(".xml") and any(
-        token in lowered
-        for token in (
-            "epnotification",
-            "epprotocol",
-            "fcsplacementresult",
-            "fcsproposalsresult",
-            "clarification",
-            "protocol",
-        )
-    ):
-        return "notice"
-    if any(token in lowered for token in ("tkp", "quote", "kp", "коммер", "proposal")):
-        return "tkp"
-    if any(token in lowered for token in ("contract", "договор", "agreement", "проект гк", "гк.doc", "контракт")):
-        return "contract_draft"
-    if any(token in lowered for token in ("spec", "специф", "technical", "тз", "техничес", "описание объекта")):
-        return "technical_spec"
-    if any(token in lowered for token in ("notice", "извещ", "tender", "закуп")):
-        return "notice"
-    return "supporting"
+    """Compatibility facade for the storage-neutral frozen-pipeline policy."""
+    return detect_document_role(name)
 
 
 def _derive_role_hint(filename: str) -> str | None:
@@ -5023,36 +4994,8 @@ body{{margin:0;background:#f5f8fa;color:#10243e;font:16px Arial,sans-serif}}main
 
 
 def _persist_outputs(run_id: str, metadata: dict[str, Any], outputs: dict[str, dict[str, Any]], steps: list[DemoStep]) -> None:
-    from src.modules.tender_operator_agent_demo.report_model import (
-        build_procurement_report_model,
-        canonical_report_to_markdown,
-    )
-    output_dir = _output_dir(run_id)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    for name, payload in outputs.items():
-        _write_json(output_dir / f"{name}.json", payload)
-
-    canonical_report = build_procurement_report_model(metadata, outputs)
-    canonical_markdown = canonical_report_to_markdown(canonical_report)
-    _write_json(output_dir / "canonical_report.json", canonical_report)
-    report_html = _render_canonical_report_html(canonical_report)
-    (output_dir / "report.html").write_text(report_html, encoding="utf-8")
-    report_json = {
-        "run_id": run_id,
-        "report_title": "Отчёт по загруженному прогону тендерного агента",
-        "generated_at": _safe_datetime(),
-        "recommendation": outputs["final_recommendation"]["recommendation"],
-        "recommendation_label": outputs["final_recommendation"]["label"],
-        "executive_summary": outputs["final_recommendation"]["rationale"],
-        "manual_checks": outputs["final_recommendation"]["manual_checks"],
-        "sections": [
-            {"title": step.title, "kind": "bullets", "items": step.findings}
-            for step in steps
-        ],
-        "report_markdown": canonical_markdown,
-    }
-    _write_json(output_dir / "report.json", report_json)
-    _write_json(output_dir / "steps.json", {"steps": [item.model_dump(mode="json") for item in steps]})
+    from src.modules.procurement_analysis.frozen_producer import persist_frozen_r7_outputs
+    persist_frozen_r7_outputs(output_dir=_output_dir(run_id), run_id=run_id, metadata=metadata, outputs=outputs, steps=steps, render_html=_render_canonical_report_html, now_factory=_safe_datetime)
 
 
 def _render_procurement_blocked_report_html(metadata: dict[str, Any]) -> str:
