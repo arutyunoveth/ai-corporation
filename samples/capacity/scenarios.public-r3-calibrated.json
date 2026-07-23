@@ -1,66 +1,289 @@
 {
-  "scenario_id": "ARV-009-B2-R3-CALIBRATED-FORECAST",
-  "description": "R3 metadata capacity forecast calibrated from 18-case measurement run",
-  "derived_from": "ARV-009-B2-R3-METADATA-CALIBRATION",
-  "assumptions": {
-    "cases_per_year_low": 10000,
-    "cases_per_year_high": 100000,
-    "retention_years": 5,
-    "analysis_runs_per_case": 3,
-    "compression_ratio": 1.0,
-    "growth_factor_pct": 20
-  },
-  "per_case_estimates": {
-    "ingestion": {
-      "filesystem_delta_bytes_mean": 337820,
-      "filesystem_delta_bytes_p50": 310093,
-      "filesystem_delta_bytes_p95": 531198,
-      "pg_delta_bytes_mean": 15019,
-      "pg_delta_bytes_p50": 8192,
-      "pg_delta_bytes_p95": 122880,
-      "documents_mean": 4.1,
-      "chunks_mean": 850,
-      "embeddings_mean": 850,
-      "extracted_chars_mean": 120516
+  "note": "This file contains example assumptions for capacity forecasting. All values are marked source=assumption and do not represent actual Arvectum production data. Replace with measured or derived values before using for procurement decisions.",
+  "notes": [
+    "Aggregate SHA-256: 2ce8fb70524d8e8bfbb8c8849c93cd05307b606ab2df2256e05016d0aae9457d",
+    "Calibrated from 18-case R3/XML metadata ingestion cohort. Attachments unavailable, placeholder metadata, hashing embeddings, stub LLM. This is a lower-bound estimate. Not a production capacity guarantee."
+  ],
+  "profiles": {
+    "commercial_mvp": {
+      "analysis_runs_per_procurement": {
+        "note": "Average analysis iterations per procurement",
+        "source": "assumption",
+        "value": 5
+      },
+      "backup_compression_ratio": {
+        "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
+        "source": "assumption",
+        "value": 0.7465
+      },
+      "chunks_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: commercial_mvp. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 985
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "note": "200 MB database storage per procurement",
+        "source": "assumption",
+        "value": 209715200
+      },
+      "database_non_vector_bytes_per_run": {
+        "note": "50 MB database storage per analysis run",
+        "source": "assumption",
+        "value": 52428800
+      },
+      "description": "Commercial MVP with moderate procurement volume and automated analysis",
+      "documents_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: commercial_mvp. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 4
+      },
+      "embedding_rows_per_chunk": {
+        "note": "Two embedding vectors per chunk (original + augmented)",
+        "source": "assumption",
+        "value": 1
+      },
+      "extracted_text_bytes_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: commercial_mvp. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 138699
+      },
+      "free_space_reserve_percent": {
+        "note": "Minimum free space reserve percentage",
+        "source": "assumption",
+        "value": 25
+      },
+      "full_backups_retained": {
+        "note": "Number of full backups retained",
+        "source": "assumption",
+        "value": 14
+      },
+      "operational_margin_bytes": {
+        "note": "20 GiB for Docker images, logs, updates, service files",
+        "source": "assumption",
+        "value": 21474836480
+      },
+      "other_artifact_bytes_per_run": {
+        "note": "100 MB other artifacts per run",
+        "source": "assumption",
+        "value": 104857600
+      },
+      "procurements_per_month": {
+        "note": "Expected monthly procurement volume at commercial MVP stage",
+        "source": "assumption",
+        "value": 50
+      },
+      "raw_document_bytes_per_procurement": {
+        "note": "1 GB raw documents per procurement",
+        "source": "assumption",
+        "value": 1073741824
+      },
+      "report_artifact_bytes_per_run": {
+        "note": "20 MB report artifacts per run",
+        "source": "assumption",
+        "value": 20971520
+      },
+      "temporary_space_peak_factor": {
+        "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
+        "source": "assumption",
+        "value": 19.83
+      },
+      "vector_bytes_per_component": {
+        "note": "float32 per vector component",
+        "source": "assumption",
+        "value": 4
+      },
+      "vector_dimension": {
+        "note": "Example vector dimension; replace with the actual embedding model dimension measured in the Arvectum runtime",
+        "source": "assumption",
+        "value": 256
+      }
     },
-    "analysis_run": {
-      "filesystem_delta_bytes_mean": 337820,
-      "filesystem_delta_bytes_p50": 310093,
-      "pg_delta_bytes_mean": 15019,
-      "pg_delta_bytes_p50": 8192,
-      "note": "Estimates same as ingestion -- each run re-ingests from archived documents."
+    "pilot": {
+      "analysis_runs_per_procurement": {
+        "note": "Average analysis iterations per procurement",
+        "source": "assumption",
+        "value": 3
+      },
+      "backup_compression_ratio": {
+        "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
+        "source": "assumption",
+        "value": 0.7465
+      },
+      "chunks_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: pilot. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 832
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "note": "100 MB database storage for procurement metadata, excluding vectors",
+        "source": "assumption",
+        "value": 104857600
+      },
+      "database_non_vector_bytes_per_run": {
+        "note": "20 MB database storage per analysis run metadata",
+        "source": "assumption",
+        "value": 20971520
+      },
+      "description": "Controlled pilot with limited procurements and manual analysis runs",
+      "documents_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: pilot. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 4
+      },
+      "embedding_rows_per_chunk": {
+        "note": "One embedding vector per chunk",
+        "source": "assumption",
+        "value": 1
+      },
+      "extracted_text_bytes_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: pilot. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 112795
+      },
+      "free_space_reserve_percent": {
+        "note": "Minimum free space reserve percentage",
+        "source": "assumption",
+        "value": 20
+      },
+      "full_backups_retained": {
+        "note": "Number of full backups retained",
+        "source": "assumption",
+        "value": 7
+      },
+      "operational_margin_bytes": {
+        "note": "10 GiB for Docker images, logs, updates, service files",
+        "source": "assumption",
+        "value": 10737418240
+      },
+      "other_artifact_bytes_per_run": {
+        "note": "50 MB other artifacts per run (logs, intermediate files)",
+        "source": "assumption",
+        "value": 52428800
+      },
+      "procurements_per_month": {
+        "note": "Expected monthly procurement volume during pilot",
+        "source": "assumption",
+        "value": 5
+      },
+      "raw_document_bytes_per_procurement": {
+        "note": "500 MB raw documents per procurement (PDF, DOCX, images)",
+        "source": "assumption",
+        "value": 524288000
+      },
+      "report_artifact_bytes_per_run": {
+        "note": "10 MB report artifacts per run (DOCX, PDF exports)",
+        "source": "assumption",
+        "value": 10485760
+      },
+      "temporary_space_peak_factor": {
+        "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
+        "source": "assumption",
+        "value": 19.83
+      },
+      "vector_bytes_per_component": {
+        "note": "float32 per vector component",
+        "source": "assumption",
+        "value": 4
+      },
+      "vector_dimension": {
+        "note": "Example vector dimension; replace with the actual embedding model dimension measured in the Arvectum runtime",
+        "source": "assumption",
+        "value": 256
+      }
+    },
+    "scaling": {
+      "analysis_runs_per_procurement": {
+        "note": "Average analysis iterations per procurement",
+        "source": "assumption",
+        "value": 10
+      },
+      "backup_compression_ratio": {
+        "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
+        "source": "assumption",
+        "value": 0.7465
+      },
+      "chunks_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: scaling. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 1021
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "note": "500 MB database storage per procurement",
+        "source": "assumption",
+        "value": 524288000
+      },
+      "database_non_vector_bytes_per_run": {
+        "note": "100 MB database storage per analysis run",
+        "source": "assumption",
+        "value": 104857600
+      },
+      "description": "Full-scale production with high procurement volume",
+      "documents_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: scaling. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 5
+      },
+      "embedding_rows_per_chunk": {
+        "note": "Three embedding vectors per chunk (original + two augmentations)",
+        "source": "assumption",
+        "value": 1
+      },
+      "extracted_text_bytes_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: scaling. See aggregate notes for full calibration context.",
+        "source": "assumption",
+        "value": 155523
+      },
+      "free_space_reserve_percent": {
+        "note": "Minimum free space reserve percentage",
+        "source": "assumption",
+        "value": 20
+      },
+      "full_backups_retained": {
+        "note": "Number of full backups retained",
+        "source": "assumption",
+        "value": 30
+      },
+      "operational_margin_bytes": {
+        "note": "50 GiB for Docker images, logs, updates, service files",
+        "source": "assumption",
+        "value": 53687091200
+      },
+      "other_artifact_bytes_per_run": {
+        "note": "200 MB other artifacts per run",
+        "source": "assumption",
+        "value": 209715200
+      },
+      "procurements_per_month": {
+        "note": "Expected monthly procurement volume at full scale",
+        "source": "assumption",
+        "value": 500
+      },
+      "raw_document_bytes_per_procurement": {
+        "note": "5 GB raw documents per procurement",
+        "source": "assumption",
+        "value": 5368709120
+      },
+      "report_artifact_bytes_per_run": {
+        "note": "50 MB report artifacts per run",
+        "source": "assumption",
+        "value": 52428800
+      },
+      "temporary_space_peak_factor": {
+        "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
+        "source": "assumption",
+        "value": 19.83
+      },
+      "vector_bytes_per_component": {
+        "note": "float32 per vector component",
+        "source": "assumption",
+        "value": 4
+      },
+      "vector_dimension": {
+        "note": "Example vector dimension; replace with the actual embedding model dimension measured in the Arvectum runtime",
+        "source": "assumption",
+        "value": 256
+      }
     }
   },
-  "five_year_forecast": {
-    "low_volume": {
-      "cases": 10000,
-      "total_ingestion_fs_bytes": {
-        "mean": 3378198801,
-        "p50": 3100930000
-      },
-      "total_ingestion_pg_bytes": {
-        "mean": 150186667,
-        "p50": 81920000
-      },
-      "analysis_runs_total": 30000,
-      "notes": [
-        "10K cases/yr x 5 years = 50K total cases at low volume"
-      ]
-    },
-    "high_volume": {
-      "cases": 100000,
-      "total_ingestion_fs_bytes": {
-        "mean": 33781988007,
-        "p50": 31009300000
-      },
-      "total_ingestion_pg_bytes": {
-        "mean": 1501866667,
-        "p50": 819200000
-      },
-      "analysis_runs_total": 300000,
-      "notes": [
-        "100K cases/yr x 5 years = 500K total cases at high volume"
-      ]
-    }
-  }
+  "schema_version": "1.1"
 }
