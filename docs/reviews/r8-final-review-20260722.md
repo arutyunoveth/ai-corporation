@@ -1,32 +1,20 @@
-# R8 final independent review
+# R8 independent review — changes required
 
-## Scope
+## Current assessment
 
-- Implementation reviewed: `55efec70696a79bf82db79735b940f6673ad62e2`
-- Base: `8bb52591372475dde63dc32260cd2a0c4cf0e422`
-- PR: #12 (Draft)
+`R8_FULL_ACCEPTANCE_REVIEW_CHANGES_REQUIRED`.
 
-## Verified
+The previous 14-file archive and green CI prove only a limited subset of the
+required acceptance contract: five filesystem mutations, two DB mutations, and
+seven tenant checks in only the B→A direction. Its general `success` flag was
+also used to mark unrelated matrices PASS; it is therefore not merge evidence.
 
-- `make test-r8-acceptance` creates exactly fourteen checksum-verified
-  evidence files from a disposable PostgreSQL 16 + pgvector service and real
-  uvicorn processes.
-- The acceptance runner performs `096→095→096`, then confirms the one
-  Alembic head is `096_add_r8_canonical_snapshot_binding`.
-- Lifecycle, two restarts, tenant isolation, and four parallel final-PDF
-  publications pass against real HTTP endpoints.
-- The filesystem matrix proves fail-closed handling of modified PDF,
-  modified manifest, unexpected file, symlink, and missing generation. Each
-  case is restored and reverified before the next case.
-- The database matrix proves fail-closed handling and recovery for an altered
-  artifact digest and an altered canonical snapshot binding.
-- `make check`, the full `make test` suite, and `make test-r8-postgres` pass
-  locally. The latter also validates the R8 migration downgrade/upgrade path.
-- R7 accepted PDF SHA256 remains
-  `3021d1d38be7256b1c41f1f916e0652893d55f6f5edb032359c4efcc41c7fd73`.
+## Required before a merge-ready recommendation
 
-## Recommendation
+- bidirectional endpoint-by-endpoint tenant isolation with leak and no-mutation checks;
+- complete real-HTTP publication and idempotency concurrency assertions;
+- parameterized filesystem and DB immutable-field matrices;
+- genuine recovery/conflict, pre-096 backfill, cleanup and executable R7 checks;
+- self-contained evidence metadata and independent verification of the CI artifact.
 
-**R8_FULL_ACCEPTANCE_PASS**. The CI full-acceptance job uploads the complete
-evidence pack. PR #12 remains Draft; no merge, tag, deployment, or auto-merge
-was performed.
+PR #12 remains Draft. No merge, tag, deployment, or auto-merge was performed.
