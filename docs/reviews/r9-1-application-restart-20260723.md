@@ -3,7 +3,10 @@
 Branch: `codex/r9-operational-hardening`; frozen R8 origin:
 `e0cb0ffdf0f10c75fb92f74be698c61f4f32cdce`.
 
-The corrected local run recorded first/second uvicorn PIDs `6310` and `6349`;
+The fail-closed local run recorded separate uvicorn processes and writes their
+complete lifecycle, actual health probes, termination method, and return codes
+to the evidence pack. Evidence hygiene is scanned before SHA256SUMS generation.
+The prior corrected local run recorded first/second uvicorn PIDs `6310` and `6349`;
 both processes stopped with `-15` after SIGTERM. Both `/health` probes, the
 post-restart case/artifact requests, and both PDF downloads returned 200.
 Post-stop `/health` returned connection failure. PostgreSQL container ID, StartedAt, and RestartCount

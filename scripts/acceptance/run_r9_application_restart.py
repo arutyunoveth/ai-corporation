@@ -50,12 +50,25 @@ def pg_identity(project):
     return {"id":inspect[0],"started_at":inspect[1],"restart_count":inspect[2]}
 def sums(evidence):
     (evidence/"SHA256SUMS").write_text("\n".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}" for p in sorted(evidence.iterdir()) if p.is_file() and p.name!="SHA256SUMS")+"\n")
+def safe(value, temp=None, password=None, url=None):
+    text=str(value).replace(str(ROOT),"<REPOSITORY_ROOT>").replace(str(Path.home()),"<USER_HOME>").replace(sys.executable,"<PROJECT_PYTHON>")
+    for secret, replacement in ((url,"<REDACTED_DATABASE_URL>"),(password,"<REDACTED>"),(str(temp) if temp else None,"<TEMP_DATA_ROOT>")):
+        if secret: text=text.replace(secret,replacement)
+    return text
+def hygiene(evidence, password, url, temp):
+    forbidden={"password":password,"database_url":url,"repository_root":str(ROOT),"temporary_root":str(temp),"user_home":str(Path.home()),"authorization":"Authorization"}
+    hits=[]
+    for path in evidence.iterdir():
+        if path.is_file() and path.name!="SHA256SUMS":
+            raw=path.read_bytes().decode("utf-8","ignore")
+            hits += [{"file":path.name,"marker":name} for name, marker in forbidden.items() if marker and marker in raw]
+    return hits
 def main():
     stamp=datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"); evidence=ROOT/"output"/f"r9-application-restart-{stamp}";evidence.mkdir(parents=True)
     temp=Path(tempfile.mkdtemp(prefix="r9-restart-",dir=ROOT/"output"));data=temp/"data";data.mkdir();pg,api=free_port(),free_port();assert pg!=api
     password="r9-"+secrets.token_urlsafe(20);project="r9restart"+secrets.token_hex(5);url=f"postgresql+psycopg://r8_acceptance:{password}@127.0.0.1:{pg}/r8_acceptance"
     env=os.environ.copy();env.update({"R8_POSTGRES_PASSWORD":password,"R8_POSTGRES_PORT":str(pg),"AI_CORP_DATABASE_URL":url,"AI_CORP_ARVECTUM_DATA_DIR":str(data),"AI_CORP_PILOT_AUTH_ENABLED":"false","AI_CORP_TENDER_PILOT_BASIC_AUTH_ENABLED":"false"})
-    commands=[]; first=second=None; cleanup={}; result={"status":"FAILED","assertions":{}}; state={}
+    commands=[]; first=second=first_process=second_process=None; cleanup={}; result={"status":"FAILED","assertions":{}}; state={}; lifecycle={"first":{},"second":{}}
     try:
         compose=["docker","compose","-p",project,"-f",str(COMPOSE)]; command(compose+["up","-d","--wait"],env,commands); command([sys.executable,"-m","alembic","upgrade","head"],env,commands); assert revision(env,commands)=="096_add_r8_canonical_snapshot_binding"
         _seed(env)
@@ -64,13 +77,13 @@ def main():
         from src.modules.customer_registry.models import CustomerProfile
         with Session(create_engine(env["AI_CORP_DATABASE_URL"])) as session:
             session.add(CustomerProfile(customer_id=CUSTOMER, legal_name="R9 synthetic customer", customer_status="prospect")); session.commit()
-        first=Uvicorn(root=ROOT,env=env,port=api,log=evidence/"backend-first.log");first.start("first");first.wait_ready("",""); first_health=status(f"http://127.0.0.1:{api}/health"); assert first_health==200
+        lifecycle["first"]["start_requested_at"]=now();first=Uvicorn(root=ROOT,env=env,port=api,log=evidence/"backend-first.log");first.start("first");first_process=first.process;lifecycle["first"].update({"pid":first_process.pid,"process_started_at":now()});first.wait_ready("",""); first_health=status(f"http://127.0.0.1:{api}/health"); lifecycle["first"].update({"health_checked_at":now(),"health_status":first_health}); assert first_health==200
         base=f"http://127.0.0.1:{api}/api/operator/pilot/customers/{{customer}}";state=_prepare_customer(base,"","",CUSTOMER);_enrich_states(env,[state])
         case_status,case_body,_=http("GET",base.format(customer=CUSTOMER)+f"/cases/{state['case_id']}",username="",password=""); assert case_status==200 and json.loads(case_body)["status"]=="delivered"
         pdf_url=base.format(customer=CUSTOMER)+f"/cases/{state['case_id']}/runs/{state['run_id']}/artifacts/final-pdf";s,pdf,_=http("GET",pdf_url,username="",password="");assert s==200
         pre_db={"business":snapshot_business_db(env),"audit":snapshot_audit(env)};pre_fs=snapshot_filesystem(data);pre_v=verifiers(env,state);pg_pre=pg_identity(project)
-        first_pid=first.process.pid;first_process=first.process;first.stop("first"); first_return=first_process.returncode; first_unavailable=status(f"http://127.0.0.1:{api}/health"); assert first_unavailable is None
-        second=Uvicorn(root=ROOT,env=env,port=api,log=evidence/"backend-second.log");second.start("second");second_process=second.process;second.start_time=now();second.wait_ready("",""); second_health=status(f"http://127.0.0.1:{api}/health"); assert second_health==200 and second.process.pid!=first_pid
+        first_pid=first_process.pid;lifecycle["first"]["stop_requested_at"]=now();first.stop("first"); first_return=first_process.returncode;lifecycle["first"].update({"exited_at":now(),"return_code":first_return,"termination_method":"SIGTERM","process_exited":first_process.poll() is not None}); first_unavailable=status(f"http://127.0.0.1:{api}/health"); assert first_unavailable is None
+        lifecycle["second"]["start_requested_at"]=now();second=Uvicorn(root=ROOT,env=env,port=api,log=evidence/"backend-second.log");second.start("second");second_process=second.process;lifecycle["second"].update({"pid":second_process.pid,"process_started_at":now()});second.wait_ready("",""); second_health=status(f"http://127.0.0.1:{api}/health");lifecycle["second"].update({"health_checked_at":now(),"health_status":second_health}); assert second_health==200 and second.process.pid!=first_pid
         post_case_status,post_case_body,_=http("GET",base.format(customer=CUSTOMER)+f"/cases/{state['case_id']}",username="",password=""); assert post_case_status==200 and json.loads(post_case_body)["status"]=="delivered"
         artifact_status,artifact_body,_=http("GET",base.format(customer=CUSTOMER)+f"/cases/{state['case_id']}/runs/{state['run_id']}/artifacts",username="",password=""); assert artifact_status==200 and len(json.loads(artifact_body))==1
         s,pdf_after,_=http("GET",pdf_url,username="",password="");assert s==200
@@ -86,6 +99,7 @@ def main():
         down=subprocess.run(["docker","compose","-p",project,"-f",str(COMPOSE),"down","-v","--remove-orphans"],cwd=ROOT,text=True,capture_output=True);commands.append({"command":"compose down","exit_code":down.returncode,"stdout":down.stdout,"stderr":down.stderr})
         def ids(a): return subprocess.run(a,text=True,capture_output=True).stdout.strip().splitlines()
         cleanup={"containers":ids(["docker","ps","-aq","--filter",f"label=com.docker.compose.project={project}"]),"volumes":ids(["docker","volume","ls","-q","--filter",f"label=com.docker.compose.project={project}"]),"networks":ids(["docker","network","ls","-q","--filter",f"label=com.docker.compose.project={project}"])};shutil.rmtree(temp,ignore_errors=True);cleanup["temporary_directory_removed"]=not temp.exists()
-        cleanup_complete=down.returncode==0 and not cleanup["containers"]+cleanup["volumes"]+cleanup["networks"] and cleanup["temporary_directory_removed"]; result.setdefault("assertions",{})["both_return_codes_recorded"]=all(v is not None for v in result.get("return_codes",{}).values());result["assertions"]["cleanup_complete"]=cleanup_complete; result["assertions"]["evidence_hygiene_pass"]=True; result["cleanup"]=cleanup; result["status"]="R9_1_APPLICATION_RESTART_SMOKE_PASS_LOCAL_EVIDENCE_CORRECTED" if result.get("status","").startswith("R9_1_") and all(result["assertions"].values()) else "FAILED";write(evidence/"process-lifecycle.json",result.get("pids",{}));write(evidence/"commands.log",commands);write(evidence/"cleanup.json",cleanup);write(evidence/"restart-result.json",result);(evidence/"backend-first.log").touch(exist_ok=True);(evidence/"backend-second.log").touch(exist_ok=True);sums(evidence)
+        if second_process: lifecycle["second"].update({"stop_requested_at":now(),"exited_at":now(),"return_code":second_process.returncode,"termination_method":"SIGTERM","process_exited":second_process.poll() is not None})
+        cleanup_complete=down.returncode==0 and not cleanup["containers"]+cleanup["volumes"]+cleanup["networks"] and cleanup["temporary_directory_removed"] and evidence.exists(); result.setdefault("assertions",{})["both_return_codes_recorded"]=len(result.get("return_codes",{}))==2 and all(v is not None for v in result["return_codes"].values());result["assertions"]["first_exited_before_second_started"]=lifecycle["first"].get("exited_at","")<=lifecycle["second"].get("start_requested_at","");result["assertions"]["process_termination_expected"]=all(x.get("return_code") == -15 for x in lifecycle.values());result["assertions"]["cleanup_complete"]=cleanup_complete; result["cleanup"]=cleanup;write(evidence/"process-lifecycle.json",lifecycle);write(evidence/"commands.log",[{**x,"command":safe(x["command"],temp,password,url),"stdout":safe(x["stdout"],temp,password,url),"stderr":safe(x["stderr"],temp,password,url)} for x in commands]);write(evidence/"cleanup.json",cleanup);(evidence/"backend-first.log").touch(exist_ok=True);(evidence/"backend-second.log").touch(exist_ok=True); result["assertions"]["evidence_hygiene_pass"]=not hygiene(evidence,password,url,temp); result["status"]="R9_1_APPLICATION_RESTART_SMOKE_PASS_LOCAL_FAIL_CLOSED_EVIDENCE" if result.get("status","").startswith("R9_1_") and all(result["assertions"].values()) else "FAILED";write(evidence/"restart-result.json",result);result["assertions"]["evidence_hygiene_pass"]=not hygiene(evidence,password,url,temp);write(evidence/"restart-result.json",result);sums(evidence)
     print(evidence);return 0 if result["status"].startswith("R9_1_") and not cleanup["containers"]+cleanup["volumes"]+cleanup["networks"] else 1
 if __name__=="__main__": raise SystemExit(main())
