@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -245,6 +246,41 @@ def publish_final_pdf(
     finally:
         if "temporary" in locals():
             temporary.unlink(missing_ok=True)
+
+    # Serialize only the publication/binding boundary. Rendering remains outside
+    # the row lock so identical and conflicting first-publication races still
+    # compare their independently produced candidate bytes.
+    locked_run_id = session.scalar(
+        select(TenderAnalysisRun.id)
+        .where(TenderAnalysisRun.id == run.id)
+        .with_for_update()
+    )
+    if locked_run_id != run.id:
+        raise HTTPException(409, "Analysis run publication lock is unavailable")
+    concurrent = session.scalar(
+        select(PilotArtifact).where(
+            PilotArtifact.run_id == run.id,
+            PilotArtifact.artifact_type == _ARTIFACT_TYPE,
+        )
+    )
+    if concurrent:
+        concurrent_binding = session.scalar(
+            select(PilotRunResult).where(
+                PilotRunResult.id == concurrent.run_result_id
+            )
+        )
+        if not concurrent_binding:
+            raise HTTPException(409, "Final artifact binding is missing")
+        from src.modules.customer_pilot.artifacts import verified_pilot_artifact
+
+        verified_pilot_artifact(run, case, concurrent_binding, concurrent)
+        if (
+            concurrent.pdf_sha256 != hashlib.sha256(pdf_bytes).hexdigest()
+            or concurrent.byte_size != len(pdf_bytes)
+        ):
+            raise HTTPException(409, "Immutable final PDF conflicts with this run")
+        return concurrent, False
+
     try:
         generation = publish_final_pdf_generation(
             customer_id=run.customer_id,
@@ -274,6 +310,8 @@ def publish_final_pdf(
         raise HTTPException(409, "Immutable final PDF conflicts with this run") from exc
     except FinalPdfArtifactError as exc:
         raise HTTPException(422, "Final PDF cannot be published safely") from exc
+    if generation.idempotent:
+        raise HTTPException(409, "Final PDF generation exists without DB binding")
     artifact = PilotArtifact(
         customer_id=run.customer_id,
         project_id=run.project_id,
@@ -298,8 +336,8 @@ def publish_final_pdf(
             session.add(artifact)
             session.flush()
     except IntegrityError:
-        # A concurrent request may have committed the only permitted DB row
-        # after the immutable filesystem generation was already verified.
+        # Defensive recovery for non-PostgreSQL dialects that may ignore the row
+        # lock. PostgreSQL publication is serialized before this point.
         recovered = session.scalar(
             select(PilotArtifact).where(
                 PilotArtifact.run_id == run.id,
