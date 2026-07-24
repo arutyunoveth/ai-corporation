@@ -185,17 +185,17 @@ with Session(create_engine(os.environ["AI_CORP_DATABASE_URL"])) as x:
  print(json.dumps(out,sort_keys=True))'''
 
 MUTATE = '''import json,os
-from sqlalchemy import create_engine,select
-from sqlalchemy.orm import Session
-from src.modules.customer_pilot.models import PilotArtifact,PilotRunResult
+from sqlalchemy import create_engine,text
 s=json.loads(os.environ["R9_STATE"]); action=os.environ["R9_ACTION"]
-with Session(create_engine(os.environ["AI_CORP_DATABASE_URL"])) as x:
- b=x.scalar(select(PilotRunResult).where(PilotRunResult.run_id==s["run_id"])); a=x.scalar(select(PilotArtifact).where(PilotArtifact.run_id==s["run_id"]))
- if action=="delete_binding": x.delete(b)
- elif action=="delete_artifact": x.delete(a)
- elif action=="binding_mismatch": b.requirements_file_sha256="0"*64
- elif action=="artifact_mismatch": a.pdf_sha256="0"*64; a.byte_size=1
- x.commit()'''
+statements={
+ "delete_binding":"DELETE FROM pilot_run_results WHERE run_id=:run_id",
+ "delete_artifact":"DELETE FROM pilot_artifacts WHERE run_id=:run_id",
+ "binding_mismatch":"UPDATE pilot_run_results SET requirements_file_sha256=:hash WHERE run_id=:run_id",
+ "artifact_mismatch":"UPDATE pilot_artifacts SET pdf_sha256=:hash,byte_size=1 WHERE run_id=:run_id"
+}
+with create_engine(os.environ["AI_CORP_DATABASE_URL"]).begin() as x:
+ result=x.execute(text(statements[action]),{"run_id":s["run_id"],"hash":"0"*64})
+ if result.rowcount!=1: raise RuntimeError(f"mutation {action} matched {result.rowcount} rows")'''
 
 
 def database(env: dict[str, str], state: dict[str, str]) -> dict[str, Any]:
@@ -215,7 +215,17 @@ def database(env: dict[str, str], state: dict[str, str]) -> dict[str, Any]:
 def mutate(env: dict[str, str], state: dict[str, str], action: str) -> None:
     local = env.copy()
     local.update(R9_STATE=json.dumps(state), R9_ACTION=action)
-    subprocess.run([sys.executable, "-c", MUTATE], cwd=ROOT, env=local, check=True)
+    result = subprocess.run(
+        [sys.executable, "-c", MUTATE],
+        cwd=ROOT,
+        env=local,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode:
+        raise RuntimeError(
+            f"mutation {action} failed: {(result.stderr or result.stdout)[-4000:]}"
+        )
 
 
 def filesystem(
