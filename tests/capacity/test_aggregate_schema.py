@@ -388,6 +388,33 @@ class TestScenario:
         assert "lower-bound" in all_notes
         assert "metadata" in all_notes
 
+    def test_scenario_all_notes_have_full_aggregate_sha(self):
+        agg = load_aggregate()
+        actual_sha = hashlib.sha256(
+            json.dumps(agg, indent=2, sort_keys=True).encode()
+        ).hexdigest()
+        assert len(actual_sha) == 64
+
+        sce = load_scenario()
+
+        # Top-level notes
+        top_notes = " ".join(sce.get("notes", []))
+        assert actual_sha in top_notes, "Top-level notes missing aggregate SHA"
+        assert "..." not in top_notes, "Top-level notes contain ellipsis"
+
+        # Calibrated parameter notes across all profiles
+        calibrated_keys = (
+            "backup_compression_ratio",
+            "documents_per_procurement",
+            "extracted_text_bytes_per_procurement",
+            "chunks_per_procurement",
+        )
+        for name, profile in sce["profiles"].items():
+            for key in calibrated_keys:
+                note = profile[key].get("note", "")
+                assert actual_sha in note, f"{name}/{key}: note missing full aggregate SHA"
+                assert "..." not in note, f"{name}/{key}: note contains ellipsis"
+
 
 class TestPeakSampler:
     def test_symlink_root_rejection(self):

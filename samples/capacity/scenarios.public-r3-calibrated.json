@@ -12,12 +12,12 @@
         "value": 5
       },
       "backup_compression_ratio": {
-        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 0.0934
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 985
       },
@@ -33,7 +33,7 @@
       },
       "description": "Commercial MVP with moderate procurement volume and automated analysis",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 4
       },
@@ -43,7 +43,7 @@
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 144233
       },
@@ -105,12 +105,12 @@
         "value": 3
       },
       "backup_compression_ratio": {
-        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 0.0934
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 832
       },
@@ -126,7 +126,7 @@
       },
       "description": "Controlled pilot with limited procurements and manual analysis runs",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 4
       },
@@ -136,7 +136,7 @@
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 121916
       },
@@ -198,12 +198,12 @@
         "value": 10
       },
       "backup_compression_ratio": {
-        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 0.0934
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 1021
       },
@@ -219,7 +219,7 @@
       },
       "description": "Full-scale production with high procurement volume",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 5
       },
@@ -229,7 +229,7 @@
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
         "source": "assumption",
         "value": 162378
       },
