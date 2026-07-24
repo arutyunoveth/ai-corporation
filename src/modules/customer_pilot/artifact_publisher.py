@@ -266,6 +266,7 @@ def publish_final_pdf(
             production_model_hash=binding.production_model_hash,
             report_model_hash=binding.report_model_hash,
             pdf_bytes=pdf_bytes,
+            allow_existing_verified=False,
         )
     except FinalPdfArtifactConflictError as exc:
         raise HTTPException(409, "Immutable final PDF conflicts with this run") from exc
