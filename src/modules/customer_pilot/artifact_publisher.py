@@ -142,6 +142,8 @@ def bind_completed_analysis(
         raise HTTPException(
             422, "Frozen R7 analysis did not produce a trusted result"
         ) from exc
+    if snapshot.idempotent and existing is None:
+        raise HTTPException(409, "Canonical snapshot exists without DB binding")
     values = {
         "customer_id": run.customer_id,
         "project_id": run.project_id,
