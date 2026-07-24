@@ -1,0 +1,980 @@
+{
+  "aggregate_sha256": "8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+  "arv_010_gate": {
+    "basic_contour_ready": true,
+    "note": "ARV-009 completion does not unblock VPS purchase by itself. ARV-011 still requires ARV-010 completion and CPU/RAM evidence.",
+    "remaining": [
+      "structured runtime metrics",
+      "error monitoring",
+      "jobs/queue monitoring",
+      "regular restore drill",
+      "CPU/RAM/load evidence"
+    ]
+  },
+  "arv_011_handoff": {
+    "cpu_status": "not_measured",
+    "note": "ARV-009 provides the disk envelope. ARV-010 provides runtime/operations evidence. ARV-011 combines storage + CPU/RAM + provider constraints. Do not purchase VPS before ARV-011.",
+    "provider_selected": false,
+    "ram_status": "not_measured",
+    "runtime_metrics_status": "blocked_by_ARV_010",
+    "server_purchased": false,
+    "storage_status": "ready_for_provider_comparison"
+  },
+  "evidence_classification": {
+    "assumption": [
+      "procurements_per_month",
+      "analysis_runs_per_procurement",
+      "raw_document_bytes_per_procurement",
+      "database_non_vector_bytes_per_procurement",
+      "database_non_vector_bytes_per_run",
+      "report_artifact_bytes_per_run",
+      "other_artifact_bytes_per_run",
+      "full_backups_retained",
+      "temporary_space_peak_factor",
+      "operational_margin_bytes",
+      "free_space_reserve_percent"
+    ],
+    "measured": [
+      "documents_per_procurement",
+      "extracted_text_bytes_per_procurement",
+      "chunks_per_procurement",
+      "embedding_rows_per_chunk",
+      "vector_dimension",
+      "vector_bytes_per_component",
+      "backup_compression_ratio"
+    ],
+    "measured_derived": [
+      "backup_compression_ratio"
+    ],
+    "note": "Classification is based on aggregate provenance and parameter notes. Parameters marked source=assumption in the scenario may have been calibrated from measurements."
+  },
+  "forecast_tool_version": "1.0.0",
+  "generated_from_main_commit": "efe182182a3a6a6299c8a384f3257fc0c9d891c6",
+  "limitations": [
+    "R3/XML metadata only \u2014 no attachments, no full document bodies",
+    "Embedding provider: hashing (dim=256). Not a production embedding model",
+    "LLM: stub. No generation cost measured",
+    "Metadata fidelity: placeholder (truncated field values)",
+    "AnalysisRun not available \u2014 pipeline subprocess used",
+    "Temporary peak measurements unavailable \u2014 template defaults retained",
+    "This is a planning envelope, not a production capacity guarantee",
+    "Full-document calibration remains outstanding",
+    "No VPS provider was selected",
+    "No server was purchased",
+    "CPU and RAM requirements were not determined by ARV-009",
+    "No customer data was used"
+  ],
+  "metadata_only_lower_bound": {
+    "excluded": [
+      "procurement attachments",
+      "production AnalysisRun artifacts",
+      "production embedding model dimensions",
+      "real LLM outputs",
+      "long-term operational growth"
+    ],
+    "measured_parameters": [
+      {
+        "p50": 4,
+        "p75": 4,
+        "p90": 5,
+        "parameter": "documents_per_procurement"
+      },
+      {
+        "p50": 121916,
+        "p75": 144233,
+        "p90": 162378,
+        "parameter": "extracted_text_utf8_bytes_per_procurement"
+      },
+      {
+        "p50": 832,
+        "p75": 985,
+        "p90": 1021,
+        "parameter": "chunks_per_procurement"
+      },
+      {
+        "parameter": "embedding_rows_per_chunk",
+        "value": 1
+      },
+      {
+        "parameter": "vector_dimension",
+        "value": 256
+      },
+      {
+        "parameter": "vector_bytes_per_component",
+        "value": 4
+      },
+      {
+        "B1": 0.0572,
+        "B2": 0.0934,
+        "forecast": 0.0934,
+        "parameter": "backup_compression_ratio"
+      }
+    ],
+    "note": "Metadata-only lower bound based on R3/XML calibration only. Excludes attachments, production embeddings, AnalysisRun artifacts, and LLM outputs.",
+    "recommendation_guard": "This lower-bound view is not a disk recommendation. It illustrates metadata-only storage requirements without full-document or production workload components."
+  },
+  "plan_id": "ARV-009-FINAL-CAPACITY-PLAN",
+  "profiles": {
+    "commercial_mvp": {
+      "1_year": {
+        "analysis_runs_total": 3000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 283115520000,
+          "extracted_text_bytes": 86539800,
+          "free_space_reserve_bytes": 1664664969111,
+          "operational_margin_bytes": 21474836480,
+          "other_artifact_bytes": 314572800000,
+          "primary_storage_bytes": 1305562428619,
+          "raw_documents_bytes": 644245094400,
+          "report_artifact_bytes": 62914560000,
+          "retained_backups_bytes": 1707153431662,
+          "temporary_storage_bytes": 1958343642928,
+          "vector_bytes": 605184000
+        },
+        "horizon_years": 1,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            1958343642928
+          ],
+          [
+            "retained_backups_bytes",
+            1707153431662
+          ],
+          [
+            "free_space_reserve_bytes",
+            1664664969111
+          ],
+          [
+            "primary_storage_bytes",
+            1305562428619
+          ],
+          [
+            "raw_documents_bytes",
+            644245094400
+          ]
+        ],
+        "procurements_total": 600,
+        "profile": "commercial_mvp",
+        "provisioned_floor_gib": 6200,
+        "total_required_bytes": 6657199308800,
+        "total_required_gib": 6200.0
+      },
+      "3_year": {
+        "analysis_runs_total": 9000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 849346560000,
+          "extracted_text_bytes": 259619400,
+          "free_space_reserve_bytes": 4983430585778,
+          "operational_margin_bytes": 21474836480,
+          "other_artifact_bytes": 943718400000,
+          "primary_storage_bytes": 3916641825019,
+          "raw_documents_bytes": 1932735283200,
+          "report_artifact_bytes": 188743680000,
+          "retained_backups_bytes": 5121400850394,
+          "temporary_storage_bytes": 5874962737528,
+          "vector_bytes": 1815552000
+        },
+        "horizon_years": 3,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            5874962737528
+          ],
+          [
+            "retained_backups_bytes",
+            5121400850394
+          ],
+          [
+            "free_space_reserve_bytes",
+            4983430585778
+          ],
+          [
+            "primary_storage_bytes",
+            3916641825019
+          ],
+          [
+            "raw_documents_bytes",
+            1932735283200
+          ]
+        ],
+        "procurements_total": 1800,
+        "profile": "commercial_mvp",
+        "provisioned_floor_gib": 18550,
+        "total_required_bytes": 19917910835200,
+        "total_required_gib": 18550.0
+      },
+      "5_year": {
+        "analysis_runs_total": 15000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 1415577600000,
+          "extracted_text_bytes": 432699000,
+          "free_space_reserve_bytes": 8302196202446,
+          "operational_margin_bytes": 21474836480,
+          "other_artifact_bytes": 1572864000000,
+          "primary_storage_bytes": 6527721221419,
+          "raw_documents_bytes": 3221225472000,
+          "report_artifact_bytes": 314572800000,
+          "retained_backups_bytes": 8535648269127,
+          "temporary_storage_bytes": 9791581832128,
+          "vector_bytes": 3025920000
+        },
+        "horizon_years": 5,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            9791581832128
+          ],
+          [
+            "retained_backups_bytes",
+            8535648269127
+          ],
+          [
+            "free_space_reserve_bytes",
+            8302196202446
+          ],
+          [
+            "primary_storage_bytes",
+            6527721221419
+          ],
+          [
+            "raw_documents_bytes",
+            3221225472000
+          ]
+        ],
+        "procurements_total": 3000,
+        "profile": "commercial_mvp",
+        "provisioned_floor_gib": 30900,
+        "total_required_bytes": 33178622361600,
+        "total_required_gib": 30900.0
+      }
+    },
+    "pilot": {
+      "1_year": {
+        "analysis_runs_total": 180,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 10066329600,
+          "extracted_text_bytes": 7314960,
+          "free_space_reserve_bytes": 47819642448,
+          "operational_margin_bytes": 10737418240,
+          "other_artifact_bytes": 9437184000,
+          "primary_storage_bytes": 52929393859,
+          "raw_documents_bytes": 31457280000,
+          "report_artifact_bytes": 1887436800,
+          "retained_backups_bytes": 34605237705,
+          "temporary_storage_bytes": 79394090788,
+          "vector_bytes": 51118080
+        },
+        "horizon_years": 1,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            79394090788
+          ],
+          [
+            "primary_storage_bytes",
+            52929393859
+          ],
+          [
+            "free_space_reserve_bytes",
+            47819642448
+          ],
+          [
+            "retained_backups_bytes",
+            34605237705
+          ],
+          [
+            "raw_documents_bytes",
+            31457280000
+          ]
+        ],
+        "procurements_total": 60,
+        "profile": "pilot",
+        "provisioned_floor_gib": 210,
+        "total_required_bytes": 225485783040,
+        "total_required_gib": 210.0
+      },
+      "3_year": {
+        "analysis_runs_total": 540,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 30198988800,
+          "extracted_text_bytes": 21944880,
+          "free_space_reserve_bytes": 132864883494,
+          "operational_margin_bytes": 10737418240,
+          "other_artifact_bytes": 28311552000,
+          "primary_storage_bytes": 158742720739,
+          "raw_documents_bytes": 94371840000,
+          "report_artifact_bytes": 5662310400,
+          "retained_backups_bytes": 103785990819,
+          "temporary_storage_bytes": 238114081108,
+          "vector_bytes": 153354240
+        },
+        "horizon_years": 3,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            238114081108
+          ],
+          [
+            "primary_storage_bytes",
+            158742720739
+          ],
+          [
+            "free_space_reserve_bytes",
+            132864883494
+          ],
+          [
+            "retained_backups_bytes",
+            103785990819
+          ],
+          [
+            "raw_documents_bytes",
+            94371840000
+          ]
+        ],
+        "procurements_total": 180,
+        "profile": "pilot",
+        "provisioned_floor_gib": 600,
+        "total_required_bytes": 644245094400,
+        "total_required_gib": 600.0
+      },
+      "5_year": {
+        "analysis_runs_total": 900,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 50331648000,
+          "extracted_text_bytes": 36574800,
+          "free_space_reserve_bytes": 217910124540,
+          "operational_margin_bytes": 10737418240,
+          "other_artifact_bytes": 47185920000,
+          "primary_storage_bytes": 264556047619,
+          "raw_documents_bytes": 157286400000,
+          "report_artifact_bytes": 9437184000,
+          "retained_backups_bytes": 172966743933,
+          "temporary_storage_bytes": 396834071428,
+          "vector_bytes": 255590400
+        },
+        "horizon_years": 5,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            396834071428
+          ],
+          [
+            "primary_storage_bytes",
+            264556047619
+          ],
+          [
+            "free_space_reserve_bytes",
+            217910124540
+          ],
+          [
+            "retained_backups_bytes",
+            172966743933
+          ],
+          [
+            "raw_documents_bytes",
+            157286400000
+          ]
+        ],
+        "procurements_total": 300,
+        "profile": "pilot",
+        "provisioned_floor_gib": 990,
+        "total_required_bytes": 1063004405760,
+        "total_required_gib": 990.0
+      }
+    },
+    "scaling": {
+      "1_year": {
+        "analysis_runs_total": 60000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 9437184000000,
+          "extracted_text_bytes": 974268000,
+          "free_space_reserve_bytes": 73215588844819,
+          "operational_margin_bytes": 53687091200,
+          "other_artifact_bytes": 12582912000000,
+          "primary_storage_bytes": 57385348742419,
+          "raw_documents_bytes": 32212254720000,
+          "report_artifact_bytes": 3145728000000,
+          "retained_backups_bytes": 160793747176258,
+          "temporary_storage_bytes": 74600953365144,
+          "vector_bytes": 6273024000
+        },
+        "horizon_years": 1,
+        "largest_components": [
+          [
+            "retained_backups_bytes",
+            160793747176258
+          ],
+          [
+            "temporary_storage_bytes",
+            74600953365144
+          ],
+          [
+            "free_space_reserve_bytes",
+            73215588844819
+          ],
+          [
+            "primary_storage_bytes",
+            57385348742419
+          ],
+          [
+            "raw_documents_bytes",
+            32212254720000
+          ]
+        ],
+        "procurements_total": 6000,
+        "profile": "scaling",
+        "provisioned_floor_gib": 340910,
+        "total_required_bytes": 366049325219840,
+        "total_required_gib": 340910.0
+      },
+      "3_year": {
+        "analysis_runs_total": 180000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 28311552000000,
+          "extracted_text_bytes": 2922804000,
+          "free_space_reserve_bytes": 219604048802691,
+          "operational_margin_bytes": 53687091200,
+          "other_artifact_bytes": 37748736000000,
+          "primary_storage_bytes": 172156000766419,
+          "raw_documents_bytes": 96636764160000,
+          "report_artifact_bytes": 9437184000000,
+          "retained_backups_bytes": 482381114147506,
+          "temporary_storage_bytes": 223802800996344,
+          "vector_bytes": 18819072000
+        },
+        "horizon_years": 3,
+        "largest_components": [
+          [
+            "retained_backups_bytes",
+            482381114147506
+          ],
+          [
+            "temporary_storage_bytes",
+            223802800996344
+          ],
+          [
+            "free_space_reserve_bytes",
+            219604048802691
+          ],
+          [
+            "primary_storage_bytes",
+            172156000766419
+          ],
+          [
+            "raw_documents_bytes",
+            96636764160000
+          ]
+        ],
+        "procurements_total": 18000,
+        "profile": "scaling",
+        "provisioned_floor_gib": 1022590,
+        "total_required_bytes": 1097997651804160,
+        "total_required_gib": 1022590.0
+      },
+      "5_year": {
+        "analysis_runs_total": 300000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 47185920000000,
+          "extracted_text_bytes": 4871340000,
+          "free_space_reserve_bytes": 365992508760563,
+          "operational_margin_bytes": 53687091200,
+          "other_artifact_bytes": 62914560000000,
+          "primary_storage_bytes": 286926652790419,
+          "raw_documents_bytes": 161061273600000,
+          "report_artifact_bytes": 15728640000000,
+          "retained_backups_bytes": 803968481118754,
+          "temporary_storage_bytes": 373004648627544,
+          "vector_bytes": 31365120000
+        },
+        "horizon_years": 5,
+        "largest_components": [
+          [
+            "retained_backups_bytes",
+            803968481118754
+          ],
+          [
+            "temporary_storage_bytes",
+            373004648627544
+          ],
+          [
+            "free_space_reserve_bytes",
+            365992508760563
+          ],
+          [
+            "primary_storage_bytes",
+            286926652790419
+          ],
+          [
+            "raw_documents_bytes",
+            161061273600000
+          ]
+        ],
+        "procurements_total": 30000,
+        "profile": "scaling",
+        "provisioned_floor_gib": 1704270,
+        "total_required_bytes": 1829945978388480,
+        "total_required_gib": 1704270.0
+      }
+    }
+  },
+  "reference_configurations": {
+    "commercial_mvp": {
+      "description": "Commercial MVP reference configuration at 3 years",
+      "other_horizons": {
+        "1_year": {
+          "analysis_runs_total": 3000,
+          "components": {
+            "baseline_database_bytes": 22730419,
+            "baseline_filesystem_bytes": 0,
+            "database_non_vector_bytes": 283115520000,
+            "extracted_text_bytes": 86539800,
+            "free_space_reserve_bytes": 1664664969111,
+            "operational_margin_bytes": 21474836480,
+            "other_artifact_bytes": 314572800000,
+            "primary_storage_bytes": 1305562428619,
+            "raw_documents_bytes": 644245094400,
+            "report_artifact_bytes": 62914560000,
+            "retained_backups_bytes": 1707153431662,
+            "temporary_storage_bytes": 1958343642928,
+            "vector_bytes": 605184000
+          },
+          "horizon_years": 1,
+          "largest_components": [
+            [
+              "temporary_storage_bytes",
+              1958343642928
+            ],
+            [
+              "retained_backups_bytes",
+              1707153431662
+            ],
+            [
+              "free_space_reserve_bytes",
+              1664664969111
+            ],
+            [
+              "primary_storage_bytes",
+              1305562428619
+            ],
+            [
+              "raw_documents_bytes",
+              644245094400
+            ]
+          ],
+          "procurements_total": 600,
+          "profile": "commercial_mvp",
+          "provisioned_floor_gib": 6200,
+          "total_required_bytes": 6657199308800,
+          "total_required_gib": 6200.0
+        },
+        "5_year": {
+          "analysis_runs_total": 15000,
+          "components": {
+            "baseline_database_bytes": 22730419,
+            "baseline_filesystem_bytes": 0,
+            "database_non_vector_bytes": 1415577600000,
+            "extracted_text_bytes": 432699000,
+            "free_space_reserve_bytes": 8302196202446,
+            "operational_margin_bytes": 21474836480,
+            "other_artifact_bytes": 1572864000000,
+            "primary_storage_bytes": 6527721221419,
+            "raw_documents_bytes": 3221225472000,
+            "report_artifact_bytes": 314572800000,
+            "retained_backups_bytes": 8535648269127,
+            "temporary_storage_bytes": 9791581832128,
+            "vector_bytes": 3025920000
+          },
+          "horizon_years": 5,
+          "largest_components": [
+            [
+              "temporary_storage_bytes",
+              9791581832128
+            ],
+            [
+              "retained_backups_bytes",
+              8535648269127
+            ],
+            [
+              "free_space_reserve_bytes",
+              8302196202446
+            ],
+            [
+              "primary_storage_bytes",
+              6527721221419
+            ],
+            [
+              "raw_documents_bytes",
+              3221225472000
+            ]
+          ],
+          "procurements_total": 3000,
+          "profile": "commercial_mvp",
+          "provisioned_floor_gib": 30900,
+          "total_required_bytes": 33178622361600,
+          "total_required_gib": 30900.0
+        }
+      },
+      "profile": "commercial_mvp",
+      "reference": {
+        "analysis_runs_total": 9000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 849346560000,
+          "extracted_text_bytes": 259619400,
+          "free_space_reserve_bytes": 4983430585778,
+          "operational_margin_bytes": 21474836480,
+          "other_artifact_bytes": 943718400000,
+          "primary_storage_bytes": 3916641825019,
+          "raw_documents_bytes": 1932735283200,
+          "report_artifact_bytes": 188743680000,
+          "retained_backups_bytes": 5121400850394,
+          "temporary_storage_bytes": 5874962737528,
+          "vector_bytes": 1815552000
+        },
+        "horizon_years": 3,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            5874962737528
+          ],
+          [
+            "retained_backups_bytes",
+            5121400850394
+          ],
+          [
+            "free_space_reserve_bytes",
+            4983430585778
+          ],
+          [
+            "primary_storage_bytes",
+            3916641825019
+          ],
+          [
+            "raw_documents_bytes",
+            1932735283200
+          ]
+        ],
+        "procurements_total": 1800,
+        "profile": "commercial_mvp",
+        "provisioned_floor_gib": 18550,
+        "total_required_bytes": 19917910835200,
+        "total_required_gib": 18550.0
+      },
+      "reference_horizon_years": 3
+    },
+    "controlled_pilot": {
+      "description": "Controlled pilot reference configuration at 1 year",
+      "other_horizons": {
+        "3_year": {
+          "analysis_runs_total": 540,
+          "components": {
+            "baseline_database_bytes": 22730419,
+            "baseline_filesystem_bytes": 0,
+            "database_non_vector_bytes": 30198988800,
+            "extracted_text_bytes": 21944880,
+            "free_space_reserve_bytes": 132864883494,
+            "operational_margin_bytes": 10737418240,
+            "other_artifact_bytes": 28311552000,
+            "primary_storage_bytes": 158742720739,
+            "raw_documents_bytes": 94371840000,
+            "report_artifact_bytes": 5662310400,
+            "retained_backups_bytes": 103785990819,
+            "temporary_storage_bytes": 238114081108,
+            "vector_bytes": 153354240
+          },
+          "horizon_years": 3,
+          "largest_components": [
+            [
+              "temporary_storage_bytes",
+              238114081108
+            ],
+            [
+              "primary_storage_bytes",
+              158742720739
+            ],
+            [
+              "free_space_reserve_bytes",
+              132864883494
+            ],
+            [
+              "retained_backups_bytes",
+              103785990819
+            ],
+            [
+              "raw_documents_bytes",
+              94371840000
+            ]
+          ],
+          "procurements_total": 180,
+          "profile": "pilot",
+          "provisioned_floor_gib": 600,
+          "total_required_bytes": 644245094400,
+          "total_required_gib": 600.0
+        },
+        "5_year": {
+          "analysis_runs_total": 900,
+          "components": {
+            "baseline_database_bytes": 22730419,
+            "baseline_filesystem_bytes": 0,
+            "database_non_vector_bytes": 50331648000,
+            "extracted_text_bytes": 36574800,
+            "free_space_reserve_bytes": 217910124540,
+            "operational_margin_bytes": 10737418240,
+            "other_artifact_bytes": 47185920000,
+            "primary_storage_bytes": 264556047619,
+            "raw_documents_bytes": 157286400000,
+            "report_artifact_bytes": 9437184000,
+            "retained_backups_bytes": 172966743933,
+            "temporary_storage_bytes": 396834071428,
+            "vector_bytes": 255590400
+          },
+          "horizon_years": 5,
+          "largest_components": [
+            [
+              "temporary_storage_bytes",
+              396834071428
+            ],
+            [
+              "primary_storage_bytes",
+              264556047619
+            ],
+            [
+              "free_space_reserve_bytes",
+              217910124540
+            ],
+            [
+              "retained_backups_bytes",
+              172966743933
+            ],
+            [
+              "raw_documents_bytes",
+              157286400000
+            ]
+          ],
+          "procurements_total": 300,
+          "profile": "pilot",
+          "provisioned_floor_gib": 990,
+          "total_required_bytes": 1063004405760,
+          "total_required_gib": 990.0
+        }
+      },
+      "profile": "pilot",
+      "reference": {
+        "analysis_runs_total": 180,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 10066329600,
+          "extracted_text_bytes": 7314960,
+          "free_space_reserve_bytes": 47819642448,
+          "operational_margin_bytes": 10737418240,
+          "other_artifact_bytes": 9437184000,
+          "primary_storage_bytes": 52929393859,
+          "raw_documents_bytes": 31457280000,
+          "report_artifact_bytes": 1887436800,
+          "retained_backups_bytes": 34605237705,
+          "temporary_storage_bytes": 79394090788,
+          "vector_bytes": 51118080
+        },
+        "horizon_years": 1,
+        "largest_components": [
+          [
+            "temporary_storage_bytes",
+            79394090788
+          ],
+          [
+            "primary_storage_bytes",
+            52929393859
+          ],
+          [
+            "free_space_reserve_bytes",
+            47819642448
+          ],
+          [
+            "retained_backups_bytes",
+            34605237705
+          ],
+          [
+            "raw_documents_bytes",
+            31457280000
+          ]
+        ],
+        "procurements_total": 60,
+        "profile": "pilot",
+        "provisioned_floor_gib": 210,
+        "total_required_bytes": 225485783040,
+        "total_required_gib": 210.0
+      },
+      "reference_horizon_years": 1
+    },
+    "scaling": {
+      "description": "Full-scale production reference configuration at 5 years",
+      "other_horizons": {
+        "1_year": {
+          "analysis_runs_total": 60000,
+          "components": {
+            "baseline_database_bytes": 22730419,
+            "baseline_filesystem_bytes": 0,
+            "database_non_vector_bytes": 9437184000000,
+            "extracted_text_bytes": 974268000,
+            "free_space_reserve_bytes": 73215588844819,
+            "operational_margin_bytes": 53687091200,
+            "other_artifact_bytes": 12582912000000,
+            "primary_storage_bytes": 57385348742419,
+            "raw_documents_bytes": 32212254720000,
+            "report_artifact_bytes": 3145728000000,
+            "retained_backups_bytes": 160793747176258,
+            "temporary_storage_bytes": 74600953365144,
+            "vector_bytes": 6273024000
+          },
+          "horizon_years": 1,
+          "largest_components": [
+            [
+              "retained_backups_bytes",
+              160793747176258
+            ],
+            [
+              "temporary_storage_bytes",
+              74600953365144
+            ],
+            [
+              "free_space_reserve_bytes",
+              73215588844819
+            ],
+            [
+              "primary_storage_bytes",
+              57385348742419
+            ],
+            [
+              "raw_documents_bytes",
+              32212254720000
+            ]
+          ],
+          "procurements_total": 6000,
+          "profile": "scaling",
+          "provisioned_floor_gib": 340910,
+          "total_required_bytes": 366049325219840,
+          "total_required_gib": 340910.0
+        },
+        "3_year": {
+          "analysis_runs_total": 180000,
+          "components": {
+            "baseline_database_bytes": 22730419,
+            "baseline_filesystem_bytes": 0,
+            "database_non_vector_bytes": 28311552000000,
+            "extracted_text_bytes": 2922804000,
+            "free_space_reserve_bytes": 219604048802691,
+            "operational_margin_bytes": 53687091200,
+            "other_artifact_bytes": 37748736000000,
+            "primary_storage_bytes": 172156000766419,
+            "raw_documents_bytes": 96636764160000,
+            "report_artifact_bytes": 9437184000000,
+            "retained_backups_bytes": 482381114147506,
+            "temporary_storage_bytes": 223802800996344,
+            "vector_bytes": 18819072000
+          },
+          "horizon_years": 3,
+          "largest_components": [
+            [
+              "retained_backups_bytes",
+              482381114147506
+            ],
+            [
+              "temporary_storage_bytes",
+              223802800996344
+            ],
+            [
+              "free_space_reserve_bytes",
+              219604048802691
+            ],
+            [
+              "primary_storage_bytes",
+              172156000766419
+            ],
+            [
+              "raw_documents_bytes",
+              96636764160000
+            ]
+          ],
+          "procurements_total": 18000,
+          "profile": "scaling",
+          "provisioned_floor_gib": 1022590,
+          "total_required_bytes": 1097997651804160,
+          "total_required_gib": 1022590.0
+        }
+      },
+      "profile": "scaling",
+      "reference": {
+        "analysis_runs_total": 300000,
+        "components": {
+          "baseline_database_bytes": 22730419,
+          "baseline_filesystem_bytes": 0,
+          "database_non_vector_bytes": 47185920000000,
+          "extracted_text_bytes": 4871340000,
+          "free_space_reserve_bytes": 365992508760563,
+          "operational_margin_bytes": 53687091200,
+          "other_artifact_bytes": 62914560000000,
+          "primary_storage_bytes": 286926652790419,
+          "raw_documents_bytes": 161061273600000,
+          "report_artifact_bytes": 15728640000000,
+          "retained_backups_bytes": 803968481118754,
+          "temporary_storage_bytes": 373004648627544,
+          "vector_bytes": 31365120000
+        },
+        "horizon_years": 5,
+        "largest_components": [
+          [
+            "retained_backups_bytes",
+            803968481118754
+          ],
+          [
+            "temporary_storage_bytes",
+            373004648627544
+          ],
+          [
+            "free_space_reserve_bytes",
+            365992508760563
+          ],
+          [
+            "primary_storage_bytes",
+            286926652790419
+          ],
+          [
+            "raw_documents_bytes",
+            161061273600000
+          ]
+        ],
+        "procurements_total": 30000,
+        "profile": "scaling",
+        "provisioned_floor_gib": 1704270,
+        "total_required_bytes": 1829945978388480,
+        "total_required_gib": 1704270.0
+      },
+      "reference_horizon_years": 5
+    }
+  },
+  "scenario_sha256": "b64fd35336cad0223b5307623f4ca2c35d8e709e3d57c9c5015eacd0ef679e6d",
+  "schema_version": "1.0",
+  "sensitivity": {},
+  "snapshot_sha256": "e472c624d2c59b55acedea71c64c30b3b4b8af92b38dfa7a68de417789e2d0b1"
+}

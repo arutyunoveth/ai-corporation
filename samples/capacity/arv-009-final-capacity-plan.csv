@@ -1,0 +1,10 @@
+profile,horizon_years,procurements_total,analysis_runs_total,primary_storage_gib,backups_gib,temporary_gib,operational_margin_gib,reserve_gib,total_required_gib,provisioned_floor_gib,largest_component,evidence_status,provider_selected
+pilot,1,60,180,49.29,32.23,73.94,10.0,44.54,210.0,210,temporary_storage_bytes,mixed,False
+pilot,3,180,540,147.84,96.66,221.76,10.0,123.74,600.0,600,temporary_storage_bytes,mixed,False
+pilot,5,300,900,246.39,161.09,369.58,10.0,202.94,990.0,990,temporary_storage_bytes,mixed,False
+commercial_mvp,1,600,3000,1215.9,1589.91,1823.85,20.0,1550.34,6200.0,6200,temporary_storage_bytes,mixed,False
+commercial_mvp,3,1800,9000,3647.66,4769.68,5471.49,20.0,4641.18,18550.0,18550,temporary_storage_bytes,mixed,False
+commercial_mvp,5,3000,15000,6079.41,7949.44,9119.12,20.0,7732.02,30900.0,30900,temporary_storage_bytes,mixed,False
+scaling,1,6000,60000,53444.27,149750.85,69477.55,50.0,68187.33,340910.0,340910,retained_backups_bytes,mixed,False
+scaling,3,18000,180000,160332.77,449252.42,208432.6,50.0,204522.21,1022590.0,1022590,retained_backups_bytes,mixed,False
+scaling,5,30000,300000,267221.27,748754.0,347387.65,50.0,340857.09,1704270.0,1704270,retained_backups_bytes,mixed,False
