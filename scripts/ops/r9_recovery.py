@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from datetime import UTC, datetime
@@ -19,6 +20,18 @@ from sqlalchemy import create_engine, text
 
 FORMAT_VERSION = "r9-recovery-v1"
 BACKUP_FILES = {"database.dump", "filesystem.tar", "manifest.json"}
+MANIFEST_KEYS = {
+    "format_version",
+    "backup_id",
+    "created_at",
+    "quiesced",
+    "exact_file_set",
+    "database_sha256",
+    "filesystem_sha256",
+    "database_tenants",
+    "filesystem_tenants",
+    "tenant_scope",
+}
 
 
 class RecoveryError(RuntimeError):
@@ -47,7 +60,9 @@ def _pg_connection(database_url: str) -> tuple[str, dict[str, str]]:
         host = f"[{host}]"
     auth = f"{quote(user, safe='')}@" if user else ""
     port = f":{parsed.port}" if parsed.port else ""
-    safe_url = urlunsplit(("postgresql", f"{auth}{host}{port}", parsed.path, parsed.query, ""))
+    safe_url = urlunsplit(
+        ("postgresql", f"{auth}{host}{port}", parsed.path, parsed.query, "")
+    )
     env = os.environ.copy()
     if password:
         env["PGPASSWORD"] = password
@@ -83,14 +98,18 @@ def _filesystem_tenants(data_dir: Path) -> list[str]:
         return []
     if not root.is_dir() or root.is_symlink():
         raise RecoveryError("Customer-pilot root is unsafe")
-    return sorted(item.name for item in root.iterdir() if item.is_dir() and not item.is_symlink())
+    return sorted(
+        item.name for item in root.iterdir() if item.is_dir() and not item.is_symlink()
+    )
 
 
 def _database_tenants(database_url: str) -> list[str]:
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
-            rows = connection.execute(text("SELECT customer_id FROM customer_profiles ORDER BY customer_id"))
+            rows = connection.execute(
+                text("SELECT customer_id FROM customer_profiles ORDER BY customer_id")
+            )
             return [str(row[0]) for row in rows]
     finally:
         engine.dispose()
@@ -118,6 +137,22 @@ def _run(command: list[str], env: dict[str, str]) -> None:
         raise RecoveryError(message)
 
 
+def _valid_hash(value: object) -> bool:
+    return bool(
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _valid_tenants(value: object) -> bool:
+    return bool(
+        isinstance(value, list)
+        and all(isinstance(item, str) and item for item in value)
+        and value == sorted(set(value))
+    )
+
+
 def create_backup(
     *,
     database_url: str,
@@ -127,10 +162,14 @@ def create_backup(
 ) -> Path:
     if not quiesced:
         raise RecoveryError("Backup requires an explicitly quiesced application")
+    if data_dir.is_symlink():
+        raise RecoveryError("Data directory must be an existing real directory")
     data_dir = data_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     _validate_data_tree(data_dir)
-    backup_id = f"r9-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    backup_id = (
+        f"r9-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+    )
     partial = output_dir / f".{backup_id}.partial"
     final = output_dir / backup_id
     if partial.exists() or final.exists():
@@ -166,7 +205,9 @@ def create_backup(
             "filesystem_sha256": sha256(filesystem_tar),
             "database_tenants": database_tenants,
             "filesystem_tenants": filesystem_tenants,
-            "tenant_scope": sorted(set(database_tenants) | set(filesystem_tenants)),
+            "tenant_scope": sorted(
+                set(database_tenants) | set(filesystem_tenants)
+            ),
         }
         (partial / "manifest.json").write_text(
             json.dumps(manifest, sort_keys=True, indent=2) + "\n"
@@ -183,26 +224,51 @@ def create_backup(
 
 
 def verify_backup(backup_dir: Path) -> dict[str, Any]:
-    backup_dir = backup_dir.resolve()
-    if not backup_dir.is_dir() or backup_dir.is_symlink():
+    if backup_dir.is_symlink():
         raise RecoveryError("Backup directory is invalid")
-    names = {path.name for path in backup_dir.iterdir() if path.is_file()}
+    backup_dir = backup_dir.resolve()
+    if not backup_dir.is_dir():
+        raise RecoveryError("Backup directory is invalid")
+    try:
+        children = list(backup_dir.iterdir())
+    except OSError as exc:
+        raise RecoveryError("Backup directory is unreadable") from exc
+    if any(path.is_symlink() or not path.is_file() for path in children):
+        raise RecoveryError("Backup file set is invalid")
+    names = {path.name for path in children}
     if names != BACKUP_FILES:
         raise RecoveryError("Backup file set is invalid")
-    manifest = json.loads((backup_dir / "manifest.json").read_text())
+    try:
+        manifest = json.loads((backup_dir / "manifest.json").read_text())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RecoveryError("Backup manifest is invalid") from exc
+    if not isinstance(manifest, dict) or set(manifest) != MANIFEST_KEYS:
+        raise RecoveryError("Backup manifest schema is invalid")
     if (
         manifest.get("format_version") != FORMAT_VERSION
         or manifest.get("quiesced") is not True
         or manifest.get("exact_file_set") != sorted(BACKUP_FILES)
+        or not isinstance(manifest.get("backup_id"), str)
+        or not manifest["backup_id"].startswith("r9-")
+        or not _valid_hash(manifest.get("database_sha256"))
+        or not _valid_hash(manifest.get("filesystem_sha256"))
+        or not _valid_tenants(manifest.get("database_tenants"))
+        or not _valid_tenants(manifest.get("filesystem_tenants"))
+        or not _valid_tenants(manifest.get("tenant_scope"))
     ):
         raise RecoveryError("Backup manifest policy is invalid")
-    if sha256(backup_dir / "database.dump") != manifest.get("database_sha256"):
+    try:
+        created_at = datetime.fromisoformat(manifest["created_at"])
+    except (TypeError, ValueError) as exc:
+        raise RecoveryError("Backup manifest timestamp is invalid") from exc
+    if created_at.tzinfo is None or created_at.utcoffset() is None:
+        raise RecoveryError("Backup manifest timestamp is invalid")
+    if sha256(backup_dir / "database.dump") != manifest["database_sha256"]:
         raise RecoveryError("Database dump checksum mismatch")
-    if sha256(backup_dir / "filesystem.tar") != manifest.get("filesystem_sha256"):
+    if sha256(backup_dir / "filesystem.tar") != manifest["filesystem_sha256"]:
         raise RecoveryError("Filesystem archive checksum mismatch")
-    if manifest.get("tenant_scope") != sorted(
-        set(manifest.get("database_tenants", []))
-        | set(manifest.get("filesystem_tenants", []))
+    if manifest["tenant_scope"] != sorted(
+        set(manifest["database_tenants"]) | set(manifest["filesystem_tenants"])
     ):
         raise RecoveryError("Backup tenant scope is invalid")
     return manifest
@@ -210,18 +276,35 @@ def verify_backup(backup_dir: Path) -> dict[str, Any]:
 
 def _safe_extract(archive_path: Path, staging: Path) -> Path:
     staging.mkdir(mode=0o700, exist_ok=True)
-    with tarfile.open(archive_path, "r") as archive:
-        members = archive.getmembers()
-        for member in members:
-            if member.issym() or member.islnk() or member.isdev():
-                raise RecoveryError("Unsafe archive member")
-            parts = Path(member.name).parts
-            if not parts or parts[0] != "data" or ".." in parts:
-                raise RecoveryError("Archive path escapes data root")
-            destination = (staging / member.name).resolve()
-            if staging.resolve() not in destination.parents and destination != staging.resolve():
-                raise RecoveryError("Archive path escapes staging root")
-        archive.extractall(staging)
+    try:
+        with tarfile.open(archive_path, "r") as archive:
+            members = archive.getmembers()
+            names: set[str] = set()
+            for member in members:
+                if member.name in names:
+                    raise RecoveryError("Duplicate archive member")
+                names.add(member.name)
+                if member.issym() or member.islnk() or member.isdev():
+                    raise RecoveryError("Unsafe archive member")
+                parts = Path(member.name).parts
+                if (
+                    not parts
+                    or Path(member.name).is_absolute()
+                    or parts[0] != "data"
+                    or ".." in parts
+                ):
+                    raise RecoveryError("Archive path escapes data root")
+                destination = (staging / member.name).resolve()
+                if (
+                    staging.resolve() not in destination.parents
+                    and destination != staging.resolve()
+                ):
+                    raise RecoveryError("Archive path escapes staging root")
+            archive.extractall(staging)
+    except RecoveryError:
+        raise
+    except (OSError, tarfile.TarError) as exc:
+        raise RecoveryError("Filesystem archive is invalid") from exc
     restored = staging / "data"
     _validate_data_tree(restored)
     return restored
@@ -234,6 +317,7 @@ def restore_database(*, database_url: str, database_dump: Path) -> None:
     _run(
         [
             "pg_restore",
+            "--single-transaction",
             "--exit-on-error",
             "--no-owner",
             "--no-privileges",
@@ -246,12 +330,16 @@ def restore_database(*, database_url: str, database_dump: Path) -> None:
 
 
 def restore_filesystem(*, filesystem_tar: Path, data_dir: Path) -> None:
+    if data_dir.is_symlink():
+        raise RecoveryError("Restore target data directory is not empty")
     data_dir = data_dir.resolve()
     if data_dir.exists() and (not data_dir.is_dir() or any(data_dir.iterdir())):
         raise RecoveryError("Restore target data directory is not empty")
     parent = data_dir.parent
     parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{data_dir.name}.restore.", dir=parent))
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{data_dir.name}.restore.", dir=parent)
+    )
     try:
         restored = _safe_extract(filesystem_tar, staging)
         if data_dir.exists():
@@ -275,6 +363,8 @@ def restore_backup(
     manifest = verify_backup(backup_dir)
     if expected_tenants is not None and set(manifest["tenant_scope"]) != expected_tenants:
         raise RecoveryError("Backup tenant scope does not match restore target")
+    if data_dir.is_symlink():
+        raise RecoveryError("Restore target data directory is not empty")
     data_dir = data_dir.resolve()
     if data_dir.exists() and (not data_dir.is_dir() or any(data_dir.iterdir())):
         raise RecoveryError("Restore target data directory is not empty")
@@ -282,10 +372,15 @@ def restore_backup(
         raise RecoveryError("Restore target database is not empty")
     parent = data_dir.parent
     parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{data_dir.name}.restore.", dir=parent))
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{data_dir.name}.restore.", dir=parent)
+    )
     try:
         restored = _safe_extract(backup_dir / "filesystem.tar", staging)
-        restore_database(database_url=database_url, database_dump=backup_dir / "database.dump")
+        restore_database(
+            database_url=database_url,
+            database_dump=backup_dir / "database.dump",
+        )
         if data_dir.exists():
             data_dir.rmdir()
         os.replace(restored, data_dir)
@@ -341,7 +436,11 @@ def main() -> int:
         else:
             expected = None
             if args.expected_tenants is not None:
-                expected = {item for item in args.expected_tenants.split(",") if item}
+                expected = {
+                    item.strip()
+                    for item in args.expected_tenants.split(",")
+                    if item.strip()
+                }
             result = restore_backup(
                 database_url=args.database_url,
                 data_dir=args.data_dir,
@@ -352,7 +451,16 @@ def main() -> int:
         print(json.dumps({"ok": True, "result": result}, sort_keys=True))
         return 0
     except RecoveryError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, sort_keys=True), file=sys.stderr)
+        print(
+            json.dumps({"ok": False, "error": str(exc)}, sort_keys=True),
+            file=sys.stderr,
+        )
+        return 2
+    except Exception:
+        print(
+            json.dumps({"ok": False, "error": "Recovery command failed"}, sort_keys=True),
+            file=sys.stderr,
+        )
         return 2
 
 
