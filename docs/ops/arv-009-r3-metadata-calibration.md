@@ -27,24 +27,23 @@ R3/XML metadata ingestion calibration only. No attachments, no full document bod
 | Metric | p50 | p75 | p90 | Max |
 |--------|-----|-----|-----|-----|
 | Documents per procurement | 4 | 4 | 5 | 5 |
-| Chunks per procurement | 832 | 985 | 1,021 | 1,179 |
-| FS delta per procurement (B) | 307,009 | 390,495 | 512,435 | 531,198 |
-| PG delta per procurement (B) | 8,192 | 8,192 | 24,576 | 122,880 |
+| Extracted text (B) per procurement | 112,795 | 138,699 | 155,523 | 233,175 |
+| Chunks per procurement | 832 | 985 | 1,021 | 1,266 |
+| FS delta per procurement (B) | 1,895,971 | 2,214,572 | 2,483,196 | 2,657,169 |
+| PG delta per procurement (B) | 1,611,231 | 1,943,378 | 2,179,107 | 2,367,200 |
 
-### Per-group FS deltas (cumulative)
-| Group | Total FS (B) | Cases |
-|-------|-------------|-------|
-| lower | 1,552,589 | 6 |
-| middle | 3,462,923 | 12 |
-| upper | 6,080,758 | 18 |
+### Character vs UTF-8 Byte Ratio
+- Total extracted chars: 2,186,012
+- Total UTF-8 bytes: 2,346,347
+- Char→byte ratio: **1.073** (7.3% overhead for Russian XML data)
 
 ### Backup Measurements
 | Metric | B1 (9 cases) | B2 (18 cases) |
 |--------|-------------|---------------|
-| `pg_dump` size | 2.8 MB | 4.5 MB |
-| Unique live source | 3.2 MB | 6.1 MB |
-| Archive-to-source ratio | 0.88 | 0.75 |
-| Compression factor | 22.94 | 14.80 |
+| `pg_dump` size | 2.7 MB | 4.4 MB |
+| Unique live source | 19.1 MB | 35.8 MB |
+| Archive-to-source ratio | 0.144 | 0.123 |
+| Compression factor | 21.36 | 20.31 |
 
 **Formulas:**
 - `archive_to_source_ratio = total_backup_bytes / unique_live_source_bytes`
@@ -55,18 +54,20 @@ R3/XML metadata ingestion calibration only. No attachments, no full document bod
 - `pg_database_size` delta includes schema overhead, WAL, autovacuum bloat.
 - Relation-level deltas sum to less than `pg_database_size` delta.
 - `pg_database_size` does not shrink after DELETEs.
+- S0→S9: PG +16.7 MB, S9→S18: PG +14.2 MB.
+- `pg_database_size` grows faster than relation logical bytes due to block-level allocation.
 
 ### Temporary Peak Measurements
-Per-tertile cumulative before/after FS deltas (each case ingestion completes faster than one 2-second sampling interval).
+Continuous peak sampling via `peak_sampler.py` at ≥2s intervals. Peak delta reflects the maximum observed logical/allocated bytes during ingestion. SIGINT/SIGTERM captures a final sample before exit. The `--oneshot` flag has been removed; all runs now capture a final signal-triggered sample.
 
 ## Calibrated Parameters
 - `documents_per_procurement` (p50=4, p75=4, p90=5)
-- `extracted_text_bytes_per_procurement` (p50=113K, p75=139K, p90=156K)
+- `extracted_text_bytes_per_procurement` (p50=112,795, p75=138,699, p90=155,523)
 - `chunks_per_procurement` (p50=832, p75=985, p90=1,021)
-- `backup_compression_ratio` (0.7465, forecast uses 1.0×)
+- `backup_compression_ratio` (0.123, forecast uses 1.0×)
 - `vector_dimension` (256)
 - `embedding_rows_per_chunk` (1)
-- `temporary_space_peak_factor` (19.83)
+- `temporary_space_peak_factor` (165.0)
 
 ## Uncalibrated Parameters (Kept as Original Assumptions)
 - `procurements_per_month`
@@ -111,12 +112,12 @@ python scripts/capacity/arv_capacity.py forecast \
 | `samples/capacity/public-r3-calibration.aggregate.json` | Aggregate measurements (public) |
 | `samples/capacity/scenarios.public-r3-calibrated.json` | Calibrated forecast scenario |
 | `scripts/capacity/calibration/calibrate_cohort.py` | Deterministic calibration harness |
-| `scripts/capacity/calibration/peak_sampler.py` | Peak filesystem sampler |
+| `scripts/capacity/calibration/peak_sampler.py` | Peak filesystem sampler (SIGINT/TERM captures final sample; no --oneshot) |
 | `tests/capacity/test_aggregate_schema.py` | Schema and logic tests |
 | `tests/capacity/test_peak_sampler.py` | Peak sampler tests |
 | `docs/ops/arv-009-r3-metadata-calibration.md` | This document |
 
 ## Aggregate SHA-256
 ```
-2ce8fb70524d8e8bfbb8c8849c93cd05307b606ab2df2256e05016d0aae9457d
+425e53706e44721c9bc3dce1b055f25ba3511ca669fdf00113c2774ef03500e3
 ```

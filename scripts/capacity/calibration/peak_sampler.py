@@ -2,18 +2,11 @@
 Sample filesystem peak logical/allocated bytes during an operation.
 
 Usage:
-    # Background sampling (SIGINT/SIGTERM to stop)
+    # Background sampling (SIGINT/SIGTERM captures final sample)
     python scripts/capacity/calibration/peak_sampler.py \\
-        --root data=/tmp/arvectum-arv009-b22/data \\
+        --root data=/tmp/arvectum-arv009-b22b/data \\
         --interval-seconds 5 \\
         --output /tmp/peak-data.json
-
-    # Before/after (single interval)
-    python scripts/capacity/calibration/peak_sampler.py \\
-        --root data=/tmp/arvectum-arv009-b22/data \\
-        --interval-seconds 2 \\
-        --output /tmp/peak-data.json \\
-        --oneshot
 """
 
 import argparse
@@ -26,7 +19,6 @@ import time
 
 
 def _real_path(path):
-    """Resolve symlinks. Reject if root itself is a symlink."""
     st = os.lstat(path)
     if stat.S_ISLNK(st.st_mode):
         raise ValueError(f"Root path is a symlink: {path}")
@@ -34,18 +26,11 @@ def _real_path(path):
 
 
 def _collect(root, follow_symlinks=False):
-    """Collect logical and allocated bytes under root.
-
-    Does NOT follow directory or file symlinks when follow_symlinks=False.
-    Does NOT read file contents.
-    Does NOT return file names.
-    """
     logical = 0
     allocated = 0
     has_allocated = False
     try:
         for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_symlinks):
-            # Filter out symlinked directories
             dirnames[:] = [
                 d
                 for d in dirnames
@@ -73,7 +58,6 @@ def _collect(root, follow_symlinks=False):
 
 
 def _sanitize(output, roots):
-    """Remove absolute paths from output, replacing with root names."""
     sanitized = json.loads(json.dumps(output))
     for entry in sanitized.get("samples", []):
         if "root_path" in entry and isinstance(entry["root_path"], str):
@@ -98,8 +82,7 @@ def _name_for(abspath, roots):
     return "<unknown>"
 
 
-def sample(roots, interval, output_path, oneshot=False):
-    """Sample filesystem roots at interval until SIGINT/SIGTERM."""
+def sample(roots, interval, output_path):
     roots_resolved = {}
     for name, path in roots.items():
         roots_resolved[name] = _real_path(path)
@@ -118,9 +101,11 @@ def sample(roots, interval, output_path, oneshot=False):
     peak_allocated = {name: bl["allocated_bytes"] for name, bl in baseline.items()}
 
     running = True
+    signal_received = None
 
     def _stop(signum, frame):
-        nonlocal running
+        nonlocal running, signal_received
+        signal_received = signum
         running = False
 
     signal.signal(signal.SIGINT, _stop)
@@ -128,7 +113,7 @@ def sample(roots, interval, output_path, oneshot=False):
 
     start = time.monotonic()
 
-    while running:
+    while True:
         t = time.monotonic() - start
         sample_entry = {"elapsed_seconds": round(t, 2)}
         for name, rp in roots_resolved.items():
@@ -142,20 +127,29 @@ def sample(roots, interval, output_path, oneshot=False):
             sample_entry[name] = entry
         samples.append(sample_entry)
 
-        if oneshot:
+        if not running:
             break
 
-        # Wait for interval (check every 0.1s for signal)
         deadline = time.monotonic() + interval
         while time.monotonic() < deadline and running:
             time.sleep(0.1)
 
-        if not running:
-            break
-
     end = time.monotonic() - start
 
-    # Compute peak deltas
+    if signal_received is not None:
+        t = time.monotonic() - start
+        final_entry = {"elapsed_seconds": round(t, 2), "status": "final"}
+        for name, rp in roots_resolved.items():
+            logical, allocated = _collect(rp)
+            peak_logical[name] = max(peak_logical[name], logical)
+            if allocated is not None and peak_allocated.get(name) is not None:
+                peak_allocated[name] = max(peak_allocated[name], allocated)
+            final_entry[name] = {
+                "logical_bytes": logical,
+                "allocated_bytes": allocated,
+            }
+        samples.append(final_entry)
+
     peak_deltas = {}
     for name in roots_resolved:
         bl = baseline[name]["logical_bytes"]
@@ -183,6 +177,7 @@ def sample(roots, interval, output_path, oneshot=False):
         "baseline": baseline,
         "peak_deltas": peak_deltas,
         "samples": samples,
+        "signal": signal_received,
         "limitations": [],
     }
 
@@ -192,10 +187,8 @@ def sample(roots, interval, output_path, oneshot=False):
             "Peak delta reflects before/after comparison, not intermediate peak."
         )
 
-    # Sanitize: no absolute paths
     sanitized = _sanitize(output, roots)
 
-    # Deterministic JSON
     out_str = json.dumps(sanitized, indent=2, sort_keys=True, ensure_ascii=False)
     with open(output_path, "w") as f:
         f.write(out_str)
@@ -218,11 +211,6 @@ def main():
         help="Sampling interval in seconds (minimum 2.0)",
     )
     parser.add_argument("--output", required=True, help="Output JSON path")
-    parser.add_argument(
-        "--oneshot",
-        action="store_true",
-        help="Single before/after sample instead of continuous",
-    )
     args = parser.parse_args()
 
     if args.interval_seconds < 2.0:
@@ -244,7 +232,7 @@ def main():
             sys.exit(1)
         roots[name.strip()] = path.strip()
 
-    sample(roots, args.interval_seconds, args.output, oneshot=args.oneshot)
+    sample(roots, args.interval_seconds, args.output)
 
 
 if __name__ == "__main__":

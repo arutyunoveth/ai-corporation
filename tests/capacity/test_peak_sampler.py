@@ -47,12 +47,15 @@ class TestPeakSampler:
     def test_no_absolute_paths_in_output(self):
         with tempfile.TemporaryDirectory() as td:
             out_path = os.path.join(td, "peak.json")
-            subprocess.run(
+            proc = subprocess.Popen(
                 [sys.executable, str(CAP_SCRIPTS / "peak_sampler.py"),
                  "--root", f"test={td}", "--interval-seconds", "2",
-                 "--oneshot", "--output", out_path],
-                capture_output=True, timeout=10
+                 "--output", out_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
+            time.sleep(0.5)
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=10)
             data = json.loads(open(out_path).read())
             text = json.dumps(data)
             # Should not contain absolute paths (baseline.path is sanitized to root name)
@@ -66,18 +69,20 @@ class TestPeakSampler:
             test_file = os.path.join(td, "test.txt")
             with open(test_file, "w") as f:
                 f.write("x" * 1000)
-            subprocess.run(
+            proc = subprocess.Popen(
                 [sys.executable, str(CAP_SCRIPTS / "peak_sampler.py"),
                  "--root", f"test={td}", "--interval-seconds", "2",
-                 "--oneshot", "--output", out_path],
-                capture_output=True, timeout=10
+                 "--output", out_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
+            time.sleep(0.5)
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=10)
             data = json.loads(open(out_path).read())
             pd = data.get("peak_deltas", {}).get("test", {})
-            # Oneshot: baseline == peak, delta = 0
+            # After SIGTERM: peak >= baseline (file exists), delta >= 0
             assert pd.get("peak_logical_bytes", 0) >= 1000
-            assert pd.get("peak_delta_logical_bytes", 0) == 0
-            assert len(data.get("samples", [])) == 1
+            assert pd.get("peak_delta_logical_bytes", 0) >= 0
 
     def test_symlink_skipped(self):
         from scripts.capacity.calibration.peak_sampler import _collect
@@ -105,12 +110,15 @@ class TestPeakSampler:
             out1 = os.path.join(td, "p1.json")
             out2 = os.path.join(td, "p2.json")
             for out in (out1, out2):
-                subprocess.run(
+                proc = subprocess.Popen(
                     [sys.executable, str(CAP_SCRIPTS / "peak_sampler.py"),
                      "--root", f"test={td}", "--interval-seconds", "2",
-                     "--oneshot", "--output", out],
-                    capture_output=True, timeout=10
+                     "--output", out],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE
                 )
+                time.sleep(0.5)
+                proc.send_signal(signal.SIGTERM)
+                proc.wait(timeout=10)
             d1 = json.loads(open(out1).read())
             d2 = json.loads(open(out2).read())
             # Check structural equality (keys, types) not exact values
@@ -129,26 +137,31 @@ class TestPeakSampler:
             out_path = os.path.join(td, "peak.json")
             with open(os.path.join(td, "a.txt"), "w") as f:
                 f.write("x" * 500)
-            subprocess.run(
+            proc = subprocess.Popen(
                 [sys.executable, str(CAP_SCRIPTS / "peak_sampler.py"),
                  "--root", f"test={td}", "--interval-seconds", "2",
-                 "--oneshot", "--output", out_path],
-                capture_output=True, timeout=10
+                 "--output", out_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
+            time.sleep(0.5)
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=10)
             data = json.loads(open(out_path).read())
             pd = data.get("peak_deltas", {}).get("test", {})
-            # allocated_bytes might be None on some filesystems
             assert "peak_allocated_bytes" in pd
 
     def test_tool_and_schema(self):
         with tempfile.TemporaryDirectory() as td:
             out_path = os.path.join(td, "peak.json")
-            subprocess.run(
+            proc = subprocess.Popen(
                 [sys.executable, str(CAP_SCRIPTS / "peak_sampler.py"),
                  "--root", f"test={td}", "--interval-seconds", "2",
-                 "--oneshot", "--output", out_path],
-                capture_output=True, timeout=10
+                 "--output", out_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
+            time.sleep(0.5)
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=10)
             data = json.loads(open(out_path).read())
             assert data.get("tool") == "peak_sampler"
             assert data.get("schema_version") == "1.0"
@@ -158,12 +171,15 @@ class TestPeakSampler:
             out_path = os.path.join(td, "peak.json")
             with open(os.path.join(td, "secret.txt"), "w") as f:
                 f.write("sensitive")
-            subprocess.run(
+            proc = subprocess.Popen(
                 [sys.executable, str(CAP_SCRIPTS / "peak_sampler.py"),
                  "--root", f"test={td}", "--interval-seconds", "2",
-                 "--oneshot", "--output", out_path],
-                capture_output=True, timeout=10
+                 "--output", out_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
+            time.sleep(0.5)
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=10)
             data = json.loads(open(out_path).read())
             text = json.dumps(data)
             assert "secret.txt" not in text

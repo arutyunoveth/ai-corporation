@@ -253,15 +253,18 @@ class TestPeakSampler:
         assert "error" in result.stderr.lower() or "error" in result.stdout.lower()
 
     def test_no_absolute_paths_in_output(self):
-        import subprocess, sys, json, tempfile, os
+        import subprocess, sys, json, tempfile, os, time, signal
         with tempfile.TemporaryDirectory() as td:
             out_path = os.path.join(td, "peak.json")
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 [sys.executable, str(CAP_SCRIPTS / "peak_sampler.py"),
                  "--root", f"test={td}", "--interval-seconds", "2",
-                 "--oneshot", "--output", out_path],
-                capture_output=True, timeout=10
+                 "--output", out_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
+            time.sleep(0.5)
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=10)
             data = json.loads(open(out_path).read())
             text = json.dumps(data)
             assert td not in text, "Output contains absolute path"

@@ -1,7 +1,7 @@
 {
   "note": "This file contains example assumptions for capacity forecasting. All values are marked source=assumption and do not represent actual Arvectum production data. Replace with measured or derived values before using for procurement decisions.",
   "notes": [
-    "Aggregate SHA-256: 2ce8fb70524d8e8bfbb8c8849c93cd05307b606ab2df2256e05016d0aae9457d",
+    "Aggregate SHA-256: 425e53706e44721c9bc3dce1b055f25ba3511ca669fdf00113c2774ef03500e3",
     "Calibrated from 18-case R3/XML metadata ingestion cohort. Attachments unavailable, placeholder metadata, hashing embeddings, stub LLM. This is a lower-bound estimate. Not a production capacity guarantee."
   ],
   "profiles": {
@@ -14,7 +14,7 @@
       "backup_compression_ratio": {
         "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
         "source": "assumption",
-        "value": 0.7465
+        "value": 0.1231
       },
       "chunks_per_procurement": {
         "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: commercial_mvp. See aggregate notes for full calibration context.",
@@ -85,7 +85,7 @@
       "temporary_space_peak_factor": {
         "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
         "source": "assumption",
-        "value": 19.83
+        "value": 165.0
       },
       "vector_bytes_per_component": {
         "note": "float32 per vector component",
@@ -107,7 +107,7 @@
       "backup_compression_ratio": {
         "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
         "source": "assumption",
-        "value": 0.7465
+        "value": 0.1231
       },
       "chunks_per_procurement": {
         "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: pilot. See aggregate notes for full calibration context.",
@@ -178,7 +178,7 @@
       "temporary_space_peak_factor": {
         "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
         "source": "assumption",
-        "value": 19.83
+        "value": 165.0
       },
       "vector_bytes_per_component": {
         "note": "float32 per vector component",
@@ -200,7 +200,7 @@
       "backup_compression_ratio": {
         "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
         "source": "assumption",
-        "value": 0.7465
+        "value": 0.1231
       },
       "chunks_per_procurement": {
         "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: scaling. See aggregate notes for full calibration context.",
@@ -271,7 +271,7 @@
       "temporary_space_peak_factor": {
         "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
         "source": "assumption",
-        "value": 19.83
+        "value": 165.0
       },
       "vector_bytes_per_component": {
         "note": "float32 per vector component",
