@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,7 @@ from sqlalchemy import create_engine, text
 
 FORMAT_VERSION = "r9-recovery-v1"
 BACKUP_FILES = {"database.dump", "filesystem.tar", "manifest.json"}
+BACKUP_ID_PATTERN = re.compile(r"^r9-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$")
 MANIFEST_KEYS = {
     "format_version",
     "backup_id",
@@ -249,7 +251,7 @@ def verify_backup(backup_dir: Path) -> dict[str, Any]:
         or manifest.get("quiesced") is not True
         or manifest.get("exact_file_set") != sorted(BACKUP_FILES)
         or not isinstance(manifest.get("backup_id"), str)
-        or not manifest["backup_id"].startswith("r9-")
+        or not BACKUP_ID_PATTERN.fullmatch(manifest["backup_id"])
         or not _valid_hash(manifest.get("database_sha256"))
         or not _valid_hash(manifest.get("filesystem_sha256"))
         or not _valid_tenants(manifest.get("database_tenants"))
@@ -281,9 +283,10 @@ def _safe_extract(archive_path: Path, staging: Path) -> Path:
             members = archive.getmembers()
             names: set[str] = set()
             for member in members:
-                if member.name in names:
+                normalized_name = str(Path(member.name))
+                if normalized_name in names:
                     raise RecoveryError("Duplicate archive member")
-                names.add(member.name)
+                names.add(normalized_name)
                 if member.issym() or member.islnk() or member.isdev():
                     raise RecoveryError("Unsafe archive member")
                 parts = Path(member.name).parts
