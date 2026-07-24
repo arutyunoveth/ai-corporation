@@ -1,0 +1,95 @@
+name: R9 recovery patch
+
+on:
+  push:
+    branches:
+      - codex/r9-operational-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/r9-operational-hardening
+          fetch-depth: 0
+      - name: Apply restore compensation fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/ops/r9_recovery.py')
+          text = path.read_text()
+          old = '''    parent = data_dir.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{data_dir.name}.restore.", dir=parent)
+    )
+    try:
+        restored = _safe_extract(backup_dir / "filesystem.tar", staging)
+        restore_database(
+            database_url=database_url,
+            database_dump=backup_dir / "database.dump",
+        )
+        if data_dir.exists():
+            data_dir.rmdir()
+        os.replace(restored, data_dir)
+        _fsync_dir(parent)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+'''
+          new = '''    target_existed = data_dir.exists()
+    parent = data_dir.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{data_dir.name}.restore.", dir=parent)
+    )
+    try:
+        restored = _safe_extract(backup_dir / "filesystem.tar", staging)
+        if target_existed:
+            data_dir.rmdir()
+        try:
+            os.replace(restored, data_dir)
+            _fsync_dir(parent)
+        except BaseException:
+            if target_existed and not data_dir.exists():
+                data_dir.mkdir()
+                _fsync_dir(parent)
+            raise
+        try:
+            restore_database(
+                database_url=database_url,
+                database_dump=backup_dir / "database.dump",
+            )
+        except BaseException:
+            if data_dir.exists():
+                shutil.rmtree(data_dir)
+            if target_existed:
+                data_dir.mkdir()
+            _fsync_dir(parent)
+            raise
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+'''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected one restore block, found {count}')
+          path.write_text(text.replace(old, new))
+          PY
+      - name: Verify focused regression
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+          python -m pytest -q tests/test_r9_recovery_security.py::test_restore_rolls_back_installed_filesystem_when_database_restore_fails
+      - name: Commit fix and remove temporary workflow
+        run: |
+          rm .github/workflows/r9-recovery-self-patch.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/ops/r9_recovery.py .github/workflows/r9-recovery-self-patch.yml
+          git commit -m 'fix(r9): compensate filesystem when database restore fails'
+          git push origin HEAD:codex/r9-operational-hardening
