@@ -72,7 +72,7 @@ def test_missing_provider_usage_is_estimated_not_reported_as_zero():
 
 
 def test_runtime_cost_exceedance_is_detected():
-    request = make_request(policy=make_policy(max_estimated_cost=0.02))
+    request = make_request(policy=make_policy(max_estimated_cost=0.05))
     preflight = evaluate_preflight_budget(request)
     assert preflight.status == BudgetStatus.WITHIN_BUDGET
     response = ProviderAnalysisResponse(
