@@ -1,9 +1,10 @@
-"""Non-destructive runtime preflight for the Mac mini contour."""
 from __future__ import annotations
 
+"""Non-destructive runtime preflight for the Mac mini contour."""
+
 import shutil
-from urllib.request import urlopen
 from pathlib import Path
+from urllib.request import urlopen
 
 from src.shared.config.settings import get_settings
 
@@ -11,7 +12,7 @@ from src.shared.config.settings import get_settings
 def _reachable(url: str) -> bool:
     try:
         endpoint = url.rstrip("/") + "/models"
-        with urlopen(endpoint, timeout=3) as response:  # noqa: S310 - endpoint is local runtime configuration
+        with urlopen(endpoint, timeout=3) as response:
             return response.status == 200
     except (OSError, ValueError):
         return False
