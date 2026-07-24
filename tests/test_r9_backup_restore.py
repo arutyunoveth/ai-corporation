@@ -54,7 +54,9 @@ def test_backup_restore_matrix_is_consistent_and_fail_closed() -> None:
 
     assert manifest["format_version"] == "r9-recovery-v1"
     assert manifest["quiesced"] is True
-    assert manifest["tenant_scope"] == ["R9-RECOVERY"]
+    assert "R9-RECOVERY" in manifest["tenant_scope"]
+    assert set(manifest["filesystem_tenants"]) == {"R9-RECOVERY"}
+    assert set(manifest["filesystem_tenants"]).issubset(set(manifest["database_tenants"]))
     assert manifest["exact_file_set"] == ["database.dump", "filesystem.tar", "manifest.json"]
 
     assert consistent["safe"] is True
