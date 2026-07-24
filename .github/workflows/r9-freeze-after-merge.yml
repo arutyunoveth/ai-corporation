@@ -1,4 +1,4 @@
-name: R9 freeze after merge
+name: R9 freeze evidence recorder
 
 on:
   push:
@@ -8,18 +8,18 @@ on:
 permissions:
   actions: read
   contents: write
-  issues: write
 
 jobs:
-  freeze:
+  record:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: codex/r9-operational-hardening
           fetch-depth: 0
-      - name: Verify post-merge CI, create annotated tag, publish evidence
+      - name: Record post-merge CI and annotated tag evidence
         env:
           GH_TOKEN: ${{ github.token }}
           MERGE_SHA: 58bef2da2342bff1e6f63215ee2697e96fefe6f7
@@ -27,23 +27,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          run_id=""
-          conclusion=""
-          for attempt in $(seq 1 40); do
-            runs_json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${MERGE_SHA}&event=push&per_page=20")
-            run_id=$(jq -r '.workflow_runs | map(select(.name == "CI")) | sort_by(.created_at) | last | .id // empty' <<<"$runs_json")
-            if [[ -n "$run_id" ]]; then
-              status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')
-              conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')
-              if [[ "$status" == "completed" ]]; then
-                break
-              fi
-            fi
-            sleep 30
-          done
+          runs_json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${MERGE_SHA}&event=push&per_page=20")
+          run_id=$(jq -r '.workflow_runs | map(select(.name == "CI")) | sort_by(.created_at) | last | .id // empty' <<<"$runs_json")
+          if [[ -z "$run_id" ]]; then
+            echo "No post-merge CI run found for ${MERGE_SHA}" >&2
+            exit 1
+          fi
 
-          if [[ -z "$run_id" || "$conclusion" != "success" ]]; then
-            echo "Post-merge CI did not complete successfully: run=${run_id:-none} conclusion=${conclusion:-none}" >&2
+          status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // ""')
+          if [[ "$status" != "completed" || "$conclusion" != "success" ]]; then
+            echo "Post-merge CI is not green: run=${run_id} status=${status} conclusion=${conclusion}" >&2
             exit 1
           fi
 
@@ -56,39 +50,35 @@ jobs:
             exit 1
           fi
 
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin main --tags
-
-          if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
-            peeled=$(git rev-parse "${TAG_NAME}^{}")
-            if [[ "$peeled" != "$MERGE_SHA" ]]; then
-              echo "Existing tag points to ${peeled}, expected ${MERGE_SHA}" >&2
-              exit 1
-            fi
-          else
-            git tag -a "$TAG_NAME" "$MERGE_SHA" -m 'R9 operational hardening frozen after verified post-merge CI'
-            git push origin "refs/tags/${TAG_NAME}"
+          tag_type=$(git cat-file -t "refs/tags/${TAG_NAME}")
+          if [[ "$tag_type" != "tag" ]]; then
+            echo "${TAG_NAME} is not an annotated tag" >&2
+            exit 1
+          fi
+          tag_object=$(git rev-parse "refs/tags/${TAG_NAME}")
+          peeled=$(git rev-parse "${TAG_NAME}^{}")
+          if [[ "$peeled" != "$MERGE_SHA" ]]; then
+            echo "Tag peels to ${peeled}, expected ${MERGE_SHA}" >&2
+            exit 1
           fi
 
-          tag_object=$(git rev-parse "${TAG_NAME}^{tag}")
-          peeled=$(git rev-parse "${TAG_NAME}^{}")
-          job_summary=$(jq -r '.jobs | sort_by(.name) | map("- `" + .name + "`: `" + .conclusion + "`") | join("\n")' <<<"$jobs_json")
+          mkdir -p docs/evidence
+          jq -n \
+            --arg status_marker "R9_OPERATIONAL_HARDENING_MERGED_TAGGED_AND_POST_MERGE_VERIFIED" \
+            --arg merge_commit "$MERGE_SHA" \
+            --argjson workflow_run_id "$run_id" \
+            --arg workflow_status "$status" \
+            --arg workflow_conclusion "$conclusion" \
+            --arg tag_name "$TAG_NAME" \
+            --arg tag_object "$tag_object" \
+            --arg peeled_commit "$peeled" \
+            --argjson jobs "$(jq '[.jobs | sort_by(.name)[] | {name,status,conclusion}]' <<<"$jobs_json")" \
+            '{status_marker:$status_marker,merge_commit:$merge_commit,post_merge_ci:{run_id:$workflow_run_id,status:$workflow_status,conclusion:$workflow_conclusion,jobs:$jobs},annotated_tag:{name:$tag_name,tag_object:$tag_object,peeled_commit:$peeled_commit}}' \
+            > docs/evidence/r9-freeze-result.json
 
-          body=$(cat <<EOF
-          R9 post-merge freeze verification completed.
-
-          - merge commit: \`${MERGE_SHA}\`
-          - post-merge CI run: \`${run_id}\`
-          - CI conclusion: \`${conclusion}\`
-          - annotated tag: \`${TAG_NAME}\`
-          - tag object: \`${tag_object}\`
-          - peeled commit: \`${peeled}\`
-
-          Post-merge jobs:
-          ${job_summary}
-
-          Status: \`R9_OPERATIONAL_HARDENING_MERGED_TAGGED_AND_POST_MERGE_VERIFIED\`.
-          EOF
-          )
-          gh api "repos/${GITHUB_REPOSITORY}/issues/16/comments" -f body="$body"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/evidence/r9-freeze-result.json
+          git commit -m 'docs(r9): record post-merge freeze evidence'
+          git push origin HEAD:codex/r9-operational-hardening
