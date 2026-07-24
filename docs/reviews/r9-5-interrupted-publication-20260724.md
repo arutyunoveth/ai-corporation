@@ -2,14 +2,18 @@
 
 Status: `R9_5_INTERRUPTED_PUBLICATION_BOUNDARIES_CHARACTERIZED_LOCAL_FAIL_CLOSED_EVIDENCE_FINAL`
 
-Evidence: `output/r9-interrupted-publication-20260724T101225Z`.
+Evidence: `output/r9-interrupted-publication-20260724T105027Z`.
 
-The disposable run took 32.10 seconds, used Compose project `r9int426d3aab` and PostgreSQL port `61032`. It recorded an 8-point canonical matrix, a 6-point artifact matrix, five hard-kill scenarios, five faulted processes exiting 97, healthy clean processes with orderly exits, six fresh verifier subprocesses, 24/24 assertions, hygiene success, error-free cleanup, and a valid 16-entry SHA256SUMS. Containers, networks, volumes, and the temporary root were absent after cleanup.
+The disposable local run took 32.64 seconds. It recorded an 8-point canonical matrix, a 6-point artifact matrix, five hard-kill scenarios, and 65/65 passing assertions. All five faulted processes exited 97; each clean process returned health 200 and exited cleanly. The final hygiene scan passed with `hits: []`; the real hygiene negative self-test and real failure-finalization negative self-test both passed.
 
-- Canonical pre-rename: no final analysis existed after the kill; a server-shaped partial existed. Retry returned 200, removed the partial, and left one binding and final analysis directory.
-- Canonical post-rename: final analysis existed without a DB binding. Retry returned 200 and reused immutable bytes and mtimes unchanged.
-- Artifact pre-rename: no final generation, PilotArtifact, or `artifact_exported` event existed; a partial existed. Retry returned 201 and produced one generation, DB row, and audit event.
-- Artifact post-rename, same bytes: a filesystem generation existed without DB/audit. Retry returned 201 and replay 201, without changing hashes, sizes, or mtimes.
-- Artifact post-rename, conflicting bytes: generation A remained filesystem-only; retry B returned a safe 409 without PilotArtifact or `artifact_exported`. A was unchanged and B was absent from DB, manifest, and filesystem. Classification: `filesystem_only_orphan_conflicting_retry`.
+Six fresh verifier subprocesses passed with exact expected/actual identities: two canonical, three persisted-artifact, and one `filesystem_only_orphan`. The conflicting orphan verifier recorded expected and actual PDF SHA-256 `5027a7331b308945fd4e4062586e893a4f716eb67672de276ea4562ae84dc398`, expected and actual manifest SHA-256 `db8f01647e3667f2f94ee4bda5536a2c80ef31756153a96773349ac480e28fb5`, and byte size 28. It also proved `PilotArtifact` absent, `artifact_exported` audit absent, and payload B absent.
 
-`canonical.after_temp_created` may leave a server-shaped partial; the next normal publish removes it. This requires no production repair: no immutable final exists and ownership is never imported from filesystem. Automatic orphan repair is not implemented, filesystem ownership is not imported into DB, conflicting orphans are not deleted, and general DB/filesystem reconciliation remains the next stage.
+- Canonical pre-rename: post-exit had no binding or final analysis and one partial. Retry returned 200, removed the partial, and left one binding and the exact final analysis file set.
+- Canonical post-rename: post-exit final analysis existed without a binding. Retry returned 200 and preserved hashes, sizes, mtimes, and file set.
+- Artifact pre-rename: post-exit had no final generation, artifact, or `artifact_exported` audit event and one partial. Retry returned 201, replay returned 201, and the final state has one generation, row, and audit event.
+- Artifact post-rename, same bytes: a filesystem generation existed without DB/audit. Retry and replay both returned 201 without changing hashes, sizes, mtimes, DB, audit, or filesystem state.
+- Artifact post-rename, conflicting bytes: generation A remained filesystem-only; retry B returned a safe 409 without artifact or export audit. A remained immutable and B was absent from DB, manifest, and all generation files. Classification: `filesystem_only_orphan_conflicting_retry`.
+
+Database, filesystem, and audit snapshots are content-separated. Cleanup recorded Compose down and container/network/volume checks with return code 0, empty resource arrays, and a removed temporary root. SHA256SUMS has 16 valid entries for exactly the 16 required evidence files.
+
+Runtime evidence is local only. Automatic repair is not implemented, ownership is never imported from filesystem, and orphan generations are not deleted. General DB/filesystem reconciliation remains the next stage.
