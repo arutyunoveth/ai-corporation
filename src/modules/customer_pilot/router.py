@@ -407,16 +407,17 @@ def publish_pdf(customer_id: str, case_id: str, run_id: str, session: DBSession)
     run = _run(session, customer_id, case_id, run_id)
     if case.current_run_id != run.id:
         raise HTTPException(409, "Analysis run is no longer current")
-    artifact = publish_final_pdf(session, run, case)
-    _audit(
-        session,
-        "artifact_exported",
-        customer_id=customer_id,
-        project_id=case.project_id,
-        case_id=case_id,
-        run_id=run_id,
-        payload={"artifact_key": artifact.artifact_key},
-    )
+    artifact, created = publish_final_pdf(session, run, case)
+    if created:
+        _audit(
+            session,
+            "artifact_exported",
+            customer_id=customer_id,
+            project_id=case.project_id,
+            case_id=case_id,
+            run_id=run_id,
+            payload={"artifact_key": artifact.artifact_key},
+        )
     session.commit()
     return _artifact_response(artifact)
 
