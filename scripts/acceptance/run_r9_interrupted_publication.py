@@ -27,7 +27,6 @@ from r8_acceptance.runtime import http  # noqa: E402
 
 STATUS = "R9_5_INTERRUPTED_PUBLICATION_BOUNDARIES_CHARACTERIZED_LOCAL_FAIL_CLOSED_EVIDENCE_FINAL"
 FILES = ("interrupted-publication-result.json","fault-matrix-canonical.json","fault-matrix-artifact.json","canonical-pre-rename.json","canonical-post-rename.json","artifact-pre-rename.json","artifact-post-rename-same-bytes.json","artifact-post-rename-conflicting-bytes.json","database-snapshots.json","filesystem-snapshots.json","audit-snapshots.json","process-lifecycle.json","verifier-results.json","commands.log","backend-logs.json","cleanup.json")
-
 CUSTOMER = "R9-INTERRUPTED"
 SCENARIOS = (
     ("canonical-pre-rename", "canonical", "after_manifest_written", None, 200),
@@ -92,6 +91,47 @@ def checksums(evidence: Path) -> dict[str,Any]:
     return {"valid":not missing and not unexpected and len(rows)==len(expected) and len(names)==len(set(names)) and set(names)==expected and not bad and "SHA256SUMS" not in names,"entry_count":len(rows),"expected_file_count":len(expected),"duplicate_files":sorted({x for x in names if names.count(x)>1}),"missing_files":missing,"unexpected_files":unexpected,"hash_mismatches":bad,"self_included":"SHA256SUMS" in names}
 
 
+def cleanup_runtime(state: dict[str, Any], evidence: Path) -> dict[str, str]:
+    """Best-effort runtime-owned cleanup; no secondary error may stop finalization."""
+    failures=state["finalization_failures"]; cleanup=state["cleanup"]
+    def failed(operation: str, exc: Exception, cleanup_error: bool = False) -> None:
+        row={"type":type(exc).__name__,"operation":operation,"message":sanitize(str(exc)),"timestamp":utcnow()}; failures.append(row)
+        if cleanup_error: state["cleanup_errors"].append(row)
+    for process,row in state.get("processes",[]):
+        try: stop(process,row)
+        except Exception as exc: failed("stop process",exc,True)
+    compose=state.get("compose")
+    if compose:
+        try: cleanup["compose_down_returncode"]=subprocess.run(compose+["down","--volumes","--remove-orphans"],cwd=ROOT,env=state["env"],text=True,capture_output=True,check=False).returncode
+        except Exception as exc: failed("compose down",exc,True);cleanup["compose_down_returncode"]=1
+    else: cleanup["compose_down_returncode"]=0
+    project=state.get("project","")
+    for name,cmd in (("container",["docker","ps","-aq","--filter",f"label=com.docker.compose.project={project}"]),("network",["docker","network","ls","-q","--filter",f"name={project}"]),("volume",["docker","volume","ls","-q","--filter",f"name={project}"])):
+        try:
+            result=subprocess.run(cmd,text=True,capture_output=True);cleanup[f"{name}_check_returncode"]=result.returncode;cleanup[f"{name}_ids"]=result.stdout.split()
+        except Exception as exc: failed(f"{name} check",exc,True);cleanup[f"{name}_check_returncode"]=1;cleanup[f"{name}_ids"]=[]
+    logs={}
+    for path in evidence.glob("backend-*.log"):
+        try: logs[path.name]=path.read_text(errors="replace")
+        except Exception as exc: failed("backend log read",exc)
+        try: path.unlink()
+        except Exception as exc: failed("backend log removal",exc)
+    cleanup["containers"]=cleanup["container_ids"];cleanup["networks"]=cleanup["network_ids"];cleanup["volumes"]=cleanup["volume_ids"]
+    return logs
+
+
+def emergency_failed_result(evidence: Path, state: dict[str, Any], exc: BaseException) -> FinalizationResult:
+    """Last-resort atomic result writer; deliberately independent of normal pipeline."""
+    payload={"status":"FAILED","final_status_reached":False,"emergency_result":True,"primary_failure":state.get("primary_failure"),"finalizer_failure":{"type":type(exc).__name__,"message":sanitize(str(exc))},"stage":state.get("stage"),"operation":state.get("operation"),"timestamp":utcnow(),"process_state":state.get("process_state","unknown"),"compose_state":state.get("compose_state","unknown"),"cleanup_attempted":True,"evidence_files_present":sorted(p.name for p in evidence.iterdir() if p.is_file()),"exit_code":2}
+    try:
+        target=evidence/"interrupted-publication-result.json"; temporary=target.with_suffix(".json.emergency.tmp")
+        with temporary.open("w") as handle: handle.write(json.dumps(payload,sort_keys=True)+"\n");handle.flush();os.fsync(handle.fileno())
+        os.replace(temporary,target)
+    except BaseException:
+        print(json.dumps(payload,sort_keys=True),file=sys.stderr)
+    return FinalizationResult("FAILED",2,False,{"valid":False,"emergency":True})
+
+
 def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: set[str] | None = None) -> FinalizationResult:
     """Write, scan and checksum evidence through one fail-closed finalization path."""
     evidence.mkdir(parents=True,exist_ok=True)
@@ -99,6 +139,10 @@ def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: 
     failures=state["finalization_failures"]; cleanup=state["cleanup"]; assertions=state["assertions"]
     def record_failure(operation: str, exc: Exception) -> None:
         failures.append({"type":type(exc).__name__,"operation":operation,"message":sanitize(str(exc)),"timestamp":utcnow()})
+    provisional={"status":"FAILED","final_status_reached":False,"emergency_result":False,"stage":"finalization_start","operation":"initialize finalization","primary_failure":state["primary_failure"],"finalization_failures":failures,"cleanup_errors":state["cleanup_errors"]}
+    try: write(evidence/"interrupted-publication-result.json",provisional)
+    except Exception as exc: record_failure("write provisional result",exc)
+    state["stage"]="process_stop"; state["operation"]="cleanup runtime resources"; state["payloads"]["backend-logs.json"]=cleanup_runtime(state,evidence)
     state["stage"]="evidence_write"; state["operation"]="write evidence files"
     for filename,value in state["payloads"].items():
         try:
@@ -117,7 +161,7 @@ def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: 
     assertions["cleanup_complete"]=cleanup["cleanup_complete"]
     try: write(evidence/"cleanup.json",cleanup)
     except Exception as exc: record_failure("write:cleanup.json",exc)
-    provisional={"status":"FAILED","duration_seconds":state.get("duration_seconds",0),"primary_failure":state["primary_failure"],"finalization_failures":failures,"cleanup_errors":state["cleanup_errors"],"assertions":assertions,"compose_project":state.get("project"),"postgres_port":state.get("port"),"process_state":state.get("process_state","started"),"compose_state":state.get("compose_state","started"),"evidence_pack_complete":False,"evidence_hygiene":{},"sha256sums_validator":{}}
+    provisional={"status":"FAILED","final_status_reached":False,"emergency_result":False,"duration_seconds":state.get("duration_seconds",0),"primary_failure":state["primary_failure"],"finalization_failures":failures,"cleanup_errors":state["cleanup_errors"],"assertions":assertions,"compose_project":state.get("project"),"postgres_port":state.get("port"),"process_state":state.get("process_state","started"),"compose_state":state.get("compose_state","started"),"evidence_pack_complete":False,"evidence_hygiene":{},"sha256sums_validator":{}}
     try: write(evidence/"interrupted-publication-result.json",provisional)
     except Exception as exc: record_failure("write:interrupted-publication-result.json",exc)
     state["stage"]="hygiene_scan"; state["operation"]="scan written evidence"
@@ -130,7 +174,7 @@ def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: 
         entries=sorted(p for p in evidence.iterdir() if p.is_file() and p.name!="SHA256SUMS")
         (evidence/"SHA256SUMS").write_text("".join(f"{digest(path)}  {path.name}\n" for path in entries))
     provisional.update(assertions=assertions,finalization_failures=failures,evidence_hygiene=hygiene_result,sha256sums_validator=details)
-    provisional["status"]=STATUS if state["primary_failure"] is None and not failures and not state["cleanup_errors"] and all(assertions.values()) else "FAILED"
+    provisional["status"]=STATUS if state["primary_failure"] is None and not failures and not state["cleanup_errors"] and all(assertions.values()) else "FAILED";provisional["final_status_reached"]=provisional["status"]==STATUS
     try: write(evidence/"interrupted-publication-result.json",provisional)
     except Exception as exc: record_failure("rewrite:interrupted-publication-result.json",exc)
     state["stage"]="checksum_validation"; state["operation"]="validate checksums"
@@ -328,19 +372,14 @@ def main() -> int:
         stage="process_stop";operation="controller";stop(controller,lifecycle["controller"])
     except Exception as exc: primary={"type":type(exc).__name__,"message":sanitize(str(exc)),"traceback":sanitize(traceback.format_exc()),"stage":stage,"operation":operation,"timestamp":utcnow()}
     finally:
-        for process in processes:
-            if process.poll() is None:
-                try: process.terminate();process.wait(timeout=5)
-                except Exception as exc: cleanup["errors"].append(str(exc))
-        stage="compose_down";operation="tear down disposable PostgreSQL";down=subprocess.run(["docker","compose","-p",project,"-f",str(COMPOSE),"down","--volumes","--remove-orphans"],cwd=ROOT,env=env,text=True,capture_output=True,check=False); stage="resource_checks";operation="check compose resources";containers=subprocess.run(["docker","ps","-aq","--filter",f"label=com.docker.compose.project={project}"],text=True,capture_output=True); networks=subprocess.run(["docker","network","ls","-q","--filter",f"name={project}"],text=True,capture_output=True); volumes=subprocess.run(["docker","volume","ls","-q","--filter",f"name={project}"],text=True,capture_output=True); cleanup.update(project=project,compose_down_returncode=down.returncode,container_check_returncode=containers.returncode,network_check_returncode=networks.returncode,volume_check_returncode=volumes.returncode,container_ids=containers.stdout.split(),network_ids=networks.stdout.split(),volume_ids=volumes.stdout.split());cleanup["containers"]=cleanup["container_ids"];cleanup["networks"]=cleanup["network_ids"];cleanup["volumes"]=cleanup["volume_ids"];
+        cleanup.update(project=project,containers=[],networks=[],volumes=[],container_ids=[],network_ids=[],volume_ids=[])
         expected_c={"after_temp_created","after_requirements_written","after_canonical_written","after_manifest_written","before_temp_directory_fsync","before_rename","after_rename","before_parent_fsync"};expected_a={"after_pdf_written","after_manifest_written","before_temp_directory_fsync","before_rename","after_rename","before_parent_fsync"}
         assertions={"matrix_canonical_count_8":len(matrix.get("canonical",[]))==8,"matrix_artifact_count_6":len(matrix.get("artifact",[]))==6,"matrix_fault_points_exact":{x.get("fault_point") for x in matrix.get("canonical",[])}==expected_c and {x.get("fault_point") for x in matrix.get("artifact",[])}==expected_a,"matrix_all_retries_pass":all(x.get("retry_success",x.get("same_bytes_retry_success")) for group in matrix.values() for x in group),"matrix_post_rename_immutable":all(x.get("bytes_unchanged") for group in matrix.values() for x in group if x.get("phase")=="post_rename"),"hard_kill_scenario_count_5":len(raw)==5,"fault_marker_count_5":sum(bool(v.get("fault_marker")) for v in raw.values())==5,"faulted_exit_codes_all_97":all(v.get("faulted_process",{}).get("return_code")==97 for v in raw.values()),"clean_processes_all_healthy":all(v.get("clean_processes",[{}])[0].get("health")==200 for v in raw.values()),"clean_processes_all_exited":all(v.get("clean_processes",[{}])[0].get("process_exited") for v in raw.values()),"canonical_pre_rename_retry_recovered":raw.get("canonical-pre-rename",{}).get("requests",[{},{"status":0}])[1].get("status")==200,"canonical_post_rename_retry_reused_generation":raw.get("canonical-post-rename",{}).get("requests",[{},{"status":0}])[1].get("status")==200,"artifact_pre_rename_retry_recovered":raw.get("artifact-pre-rename",{}).get("requests",[{},{"status":0}])[1].get("status")==201,"artifact_post_rename_same_retry_and_replay_201":raw.get("artifact-post-rename-same-bytes",{}).get("requests",[{},{"status":0}])[1].get("status")==201 and raw.get("artifact-post-rename-same-bytes",{}).get("replay_status")==201,"artifact_post_rename_conflict_retry_409":raw.get("artifact-post-rename-conflicting-bytes",{}).get("requests",[{},{"status":0}])[1].get("status")==409,"artifact_post_rename_conflict_classified_orphan":raw.get("artifact-post-rename-conflicting-bytes",{}).get("classification")=="filesystem_only_orphan_conflicting_retry","verifier_count_6":len(verifiers)==6,"all_verifiers_pass":all(v.get("exit_code")==0 and v.get("verified") for v in verifiers),"cleanup_errors_empty":not cleanup["errors"],"compose_resources_absent":not cleanup["containers"] and not cleanup["networks"] and not cleanup["volumes"]}
         scenario_state=scenario_assertions(raw); assertions.update(scenario_state)
-        backend_logs={p.name:p.read_text(errors="replace") for p in evidence.glob("backend-*.log")}
-        for p in evidence.glob("backend-*.log"): p.unlink()
-        payloads={"fault-matrix-canonical.json":matrix.get("canonical",[]),"fault-matrix-artifact.json":matrix.get("artifact",[]),"canonical-pre-rename.json":raw.get("canonical-pre-rename",{}),"canonical-post-rename.json":raw.get("canonical-post-rename",{}),"artifact-pre-rename.json":raw.get("artifact-pre-rename",{}),"artifact-post-rename-same-bytes.json":raw.get("artifact-post-rename-same-bytes",{}),"artifact-post-rename-conflicting-bytes.json":raw.get("artifact-post-rename-conflicting-bytes",{}),"database-snapshots.json":{k:{s:x["db"] for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"filesystem-snapshots.json":{k:{s:x["fs"] for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"audit-snapshots.json":{k:{s:x["db"].get("audit",[]) for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"process-lifecycle.json":lifecycle,"verifier-results.json":verifiers,"commands.log":commands,"backend-logs.json":backend_logs}
-        final_state={"stage":stage,"operation":operation,"primary_failure":primary,"finalization_failures":finalization_failures,"cleanup_errors":cleanup_errors,"assertions":assertions,"cleanup":cleanup,"payloads":payloads,"temp":temp,"forbidden":[password,str(temp)],"duration_seconds":time.monotonic()-started,"project":project,"port":port,"process_state":"started","compose_state":"started"}
-        finalized=finalize_evidence(final_state,evidence)
+        payloads={"fault-matrix-canonical.json":matrix.get("canonical",[]),"fault-matrix-artifact.json":matrix.get("artifact",[]),"canonical-pre-rename.json":raw.get("canonical-pre-rename",{}),"canonical-post-rename.json":raw.get("canonical-post-rename",{}),"artifact-pre-rename.json":raw.get("artifact-pre-rename",{}),"artifact-post-rename-same-bytes.json":raw.get("artifact-post-rename-same-bytes",{}),"artifact-post-rename-conflicting-bytes.json":raw.get("artifact-post-rename-conflicting-bytes",{}),"database-snapshots.json":{k:{s:x["db"] for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"filesystem-snapshots.json":{k:{s:x["fs"] for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"audit-snapshots.json":{k:{s:x["db"].get("audit",[]) for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"process-lifecycle.json":lifecycle,"verifier-results.json":verifiers,"commands.log":commands,"backend-logs.json":{}}
+        final_state={"stage":stage,"operation":operation,"primary_failure":primary,"finalization_failures":finalization_failures,"cleanup_errors":cleanup_errors,"assertions":assertions,"cleanup":cleanup,"payloads":payloads,"temp":temp,"forbidden":[password,str(temp)],"duration_seconds":time.monotonic()-started,"project":project,"port":port,"process_state":"started","compose_state":"started","processes":[(process,lifecycle.get(next((key for key,value in lifecycle.items() if value.get("pid")==process.pid),""),{})) for process in processes],"compose":compose,"env":env}
+        try: finalized=finalize_evidence(final_state,evidence)
+        except BaseException as exc: finalized=emergency_failed_result(evidence,final_state,exc)
     print(evidence);return finalized.exit_code
 
 
