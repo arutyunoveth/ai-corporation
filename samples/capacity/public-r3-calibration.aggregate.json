@@ -1,0 +1,329 @@
+{
+  "alembic_head": "096_add_r8_canonical_snapshot_binding",
+  "analysis_run_statistics": {
+    "database_non_vector_bytes_per_run": null,
+    "other_artifact_bytes_per_run": null,
+    "reason": "R8 AnalysisRun path does not exist without src/ changes.",
+    "report_artifact_bytes_per_run": null,
+    "status": "unavailable"
+  },
+  "backup_measurements": {
+    "B1": {
+      "case_count": 9,
+      "compression_factor": 17.4749,
+      "database_archive_to_source_ratio": 0.0694,
+      "database_source_bytes": 39586963,
+      "filesystem_archive_bytes": 610273,
+      "filesystem_archive_to_source_ratio": 0.032,
+      "filesystem_source_bytes": 19062425,
+      "full_backup_archive_to_source_ratio": 0.0572,
+      "notes": "B1 backup from first 9 cohort cases. Full archive ratio = total_backup / total_source = 0.0572. Compression factor = total_source / total_backup = 17.4749. Metadata-only limitation. Aggregate SHA: see scenario file.",
+      "postgresql_dump_bytes": 2745932,
+      "total_backup_bytes": 3356205,
+      "total_source_bytes": 58649388
+    },
+    "B2": {
+      "case_count": 18,
+      "compression_factor": 10.7082,
+      "database_archive_to_source_ratio": 0.082,
+      "database_source_bytes": 53759123,
+      "filesystem_archive_bytes": 3954693,
+      "filesystem_archive_to_source_ratio": 0.1104,
+      "filesystem_source_bytes": 35810085,
+      "full_backup_archive_to_source_ratio": 0.0934,
+      "notes": "B2 backup from all 18 cohort cases. Full archive ratio = total_backup / total_source = 0.0934. Compression factor = total_source / total_backup = 10.7082. Metadata-only limitation. Aggregate SHA: see scenario file.",
+      "postgresql_dump_bytes": 4409820,
+      "total_backup_bytes": 8364513,
+      "total_source_bytes": 89569208
+    }
+  },
+  "baseline_commit": "9bf0571",
+  "calibration_scope": "metadata_ingestion_only",
+  "cohort": {
+    "attempted_count": 18,
+    "excluded_count": 0,
+    "failed_count": 0,
+    "failure_reason_counts": {},
+    "successful_count": 18,
+    "tertile_groups": {
+      "lower": 6,
+      "middle": 6,
+      "upper": 6
+    },
+    "total_cases": 18
+  },
+  "formulas": {
+    "compression_factor": "total_source_bytes / total_backup_bytes",
+    "coverage_percent": "available_count / count * 100",
+    "database_archive_to_source_ratio": "postgresql_dump_bytes / database_source_bytes",
+    "filesystem_archive_to_source_ratio": "filesystem_archive_bytes / filesystem_source_bytes",
+    "forecast_backup_compression_ratio": "max(B1.full_backup_archive_to_source_ratio, B2.full_backup_archive_to_source_ratio)",
+    "forecast_ratio_source": "max_observed_full_backup_ratio",
+    "full_backup_archive_to_source_ratio": "total_backup_bytes / total_source_bytes",
+    "ingestion_fs_delta_per_case": "filesystem_data_delta_bytes after ingest + chunk + embed",
+    "nearest_rank_percentile": "rank = ceil(p/100 * n), index = rank - 1",
+    "p50": "nearest_rank(sorted_values, 50)",
+    "p75": "nearest_rank(sorted_values, 75)",
+    "p90": "nearest_rank(sorted_values, 90)",
+    "utf8_bytes_per_character_ratio": "total_extracted_text_utf8_bytes / total_extracted_text_chars"
+  },
+  "group_statistics": {
+    "lower": {
+      "chunks_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 994,
+        "mean": 869.0,
+        "min": 735,
+        "p50": 818,
+        "p75": 985,
+        "p90": 994,
+        "unavailable_count": 0
+      },
+      "filesystem_data_delta_bytes_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 2214572,
+        "mean": 1800883.8,
+        "min": 1347354,
+        "p50": 1712481,
+        "p75": 1991628,
+        "p90": 2214572,
+        "unavailable_count": 0
+      },
+      "postgresql_delta_bytes_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 1943378,
+        "mean": 1580349.8,
+        "min": 1182358,
+        "p50": 1502773,
+        "p75": 1747736,
+        "p90": 1943378,
+        "unavailable_count": 0
+      }
+    },
+    "middle": {
+      "chunks_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 1266,
+        "mean": 817.0,
+        "min": 485,
+        "p50": 775,
+        "p75": 992,
+        "p90": 1266,
+        "unavailable_count": 0
+      },
+      "filesystem_data_delta_bytes_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 3723046,
+        "mean": 2106129.0,
+        "min": 1173551,
+        "p50": 1857246,
+        "p75": 2483196,
+        "p90": 3723046,
+        "unavailable_count": 0
+      },
+      "postgresql_delta_bytes_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 3267126,
+        "mean": 1825350.5,
+        "min": 993079,
+        "p50": 1571634,
+        "p75": 2179107,
+        "p90": 3267126,
+        "unavailable_count": 0
+      }
+    },
+    "upper": {
+      "chunks_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 1021,
+        "mean": 877.3,
+        "min": 748,
+        "p50": 832,
+        "p75": 920,
+        "p90": 1021,
+        "unavailable_count": 0
+      },
+      "filesystem_data_delta_bytes_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 2442967,
+        "mean": 2061334.7,
+        "min": 1762817,
+        "p50": 1904039,
+        "p75": 2390131,
+        "p90": 2442967,
+        "unavailable_count": 0
+      },
+      "postgresql_delta_bytes_per_procurement": {
+        "available_count": 6,
+        "count": 6,
+        "coverage_percent": 100.0,
+        "max": 2067281,
+        "mean": 1744337.0,
+        "min": 1491726,
+        "p50": 1611231,
+        "p75": 2022570,
+        "p90": 2067281,
+        "unavailable_count": 0
+      }
+    }
+  },
+  "ingestion_statistics": {
+    "archive_bytes_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 65609,
+      "mean": 38397.8,
+      "min": 17428,
+      "p50": 38158,
+      "p75": 47454,
+      "p90": 51205,
+      "unavailable_count": 0
+    },
+    "chunks_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 1266,
+      "mean": 854.4,
+      "min": 485,
+      "p50": 832,
+      "p75": 985,
+      "p90": 1021,
+      "unavailable_count": 0
+    },
+    "documents_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 5,
+      "mean": 4.1,
+      "min": 1,
+      "p50": 4,
+      "p75": 4,
+      "p90": 5,
+      "unavailable_count": 0
+    },
+    "embedding_rows_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 1266,
+      "mean": 854.4,
+      "min": 485,
+      "p50": 832,
+      "p75": 985,
+      "p90": 1021,
+      "unavailable_count": 0
+    },
+    "extracted_text_chars_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 233175,
+      "mean": 121445.1,
+      "min": 69521,
+      "p50": 112795,
+      "p75": 138699,
+      "p90": 155523,
+      "unavailable_count": 0
+    },
+    "extracted_text_utf8_bytes_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 246179,
+      "mean": 130352.6,
+      "min": 82069,
+      "p50": 121916,
+      "p75": 144233,
+      "p90": 162378,
+      "unavailable_count": 0
+    },
+    "filesystem_data_delta_bytes_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 3723046,
+      "mean": 1989449.2,
+      "min": 1173551,
+      "p50": 1895971,
+      "p75": 2214572,
+      "p90": 2483196,
+      "unavailable_count": 0
+    },
+    "postgresql_delta_bytes_per_procurement": {
+      "available_count": 18,
+      "count": 18,
+      "coverage_percent": 100.0,
+      "max": 3267126,
+      "mean": 1716679.1,
+      "min": 993079,
+      "p50": 1611231,
+      "p75": 1943378,
+      "p90": 2179107,
+      "unavailable_count": 0
+    },
+    "total_extracted_text_chars": 2186012,
+    "total_extracted_text_utf8_bytes": 2346347,
+    "utf8_bytes_per_character_ratio": 1.0733
+  },
+  "limitations": [
+    "R3/XML metadata only \u2014 no attachments, no full document bodies.",
+    "Embeddings provider: hashing (dim=256, no paid API).",
+    "LLM: stub (no generation cost measured).",
+    "metadata_fidelity: placeholder (truncated field values).",
+    "AnalysisRun not available \u2014 pipeline subprocess used instead.",
+    "pg_database_size does not shrink after DELETEs."
+  ],
+  "measurement_id": "ARV-009-B2-R3-METADATA-CALIBRATION",
+  "metadata_fidelity": "placeholder",
+  "pgvector_version": "0.8.0",
+  "postgresql_reconciliation": {
+    "note": "pg_database_size delta includes PostgreSQL block-level allocation, catalog bloat, and unused space from DELETEs. Relation-level deltas are logical bytes and may be smaller.",
+    "pg_baseline_bytes": 22858899,
+    "pg_database_size_delta_bytes": 30900224,
+    "pg_final_bytes": 53759123,
+    "relation_deltas_by_table": {
+      "procurement_document_chunks": 20676608,
+      "procurement_document_embeddings": 9961472,
+      "procurement_raw_artifacts": 40960,
+      "procurement_tender_documents": 155648,
+      "procurement_tenders": 65536
+    },
+    "relation_total_baseline_bytes": 10502144,
+    "relation_total_delta_bytes": 30900224,
+    "relation_total_final_bytes": 41402368
+  },
+  "postgresql_version": "17",
+  "providers": {
+    "embeddings": "hashing",
+    "llm": "stub"
+  },
+  "repeat_run_statistics": {
+    "reason": "R8 AnalysisRun path does not exist. Repeat runs measured via pipeline subprocess only.",
+    "status": "unavailable"
+  },
+  "schema_version": "2.0",
+  "temporary_peak_measurements": {
+    "reason": "Continuous peak sampling would require R8 runtime integration with ingestion pipeline. Cumulative before/after deltas are available in group statistics instead.",
+    "status": "unavailable"
+  },
+  "workload_type": "public_eis_r3_xml"
+}

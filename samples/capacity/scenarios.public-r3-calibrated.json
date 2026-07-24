@@ -1,0 +1,289 @@
+{
+  "note": "This file contains example assumptions for capacity forecasting. All values are marked source=assumption and do not represent actual Arvectum production data. Replace with measured or derived values before using for procurement decisions.",
+  "notes": [
+    "Aggregate SHA-256: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+    "Calibrated from 18-case R3/XML metadata ingestion cohort. Attachments unavailable, placeholder metadata, hashing embeddings, stub LLM. This is a lower-bound estimate. Not a production capacity guarantee."
+  ],
+  "profiles": {
+    "commercial_mvp": {
+      "analysis_runs_per_procurement": {
+        "note": "Average analysis iterations per procurement",
+        "source": "assumption",
+        "value": 5
+      },
+      "backup_compression_ratio": {
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 0.0934
+      },
+      "chunks_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 985
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "note": "200 MB database storage per procurement",
+        "source": "assumption",
+        "value": 209715200
+      },
+      "database_non_vector_bytes_per_run": {
+        "note": "50 MB database storage per analysis run",
+        "source": "assumption",
+        "value": 52428800
+      },
+      "description": "Commercial MVP with moderate procurement volume and automated analysis",
+      "documents_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 4
+      },
+      "embedding_rows_per_chunk": {
+        "note": "Calibrated from R3/XML metadata ingestion: 1 embedding row per chunk (hashing). Production models may generate multiple vectors per chunk.",
+        "source": "assumption",
+        "value": 1
+      },
+      "extracted_text_bytes_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 144233
+      },
+      "free_space_reserve_percent": {
+        "note": "Minimum free space reserve percentage",
+        "source": "assumption",
+        "value": 25
+      },
+      "full_backups_retained": {
+        "note": "Number of full backups retained",
+        "source": "assumption",
+        "value": 14
+      },
+      "operational_margin_bytes": {
+        "note": "20 GiB for Docker images, logs, updates, service files",
+        "source": "assumption",
+        "value": 21474836480
+      },
+      "other_artifact_bytes_per_run": {
+        "note": "100 MB other artifacts per run",
+        "source": "assumption",
+        "value": 104857600
+      },
+      "procurements_per_month": {
+        "note": "Expected monthly procurement volume at commercial MVP stage",
+        "source": "assumption",
+        "value": 50
+      },
+      "raw_document_bytes_per_procurement": {
+        "note": "1 GB raw documents per procurement",
+        "source": "assumption",
+        "value": 1073741824
+      },
+      "report_artifact_bytes_per_run": {
+        "note": "20 MB report artifacts per run",
+        "source": "assumption",
+        "value": 20971520
+      },
+      "temporary_space_peak_factor": {
+        "note": "Temporary peak unavailable (no continuous sampling in R3 metadata ingestion). Template assumption retained. Not calibrated from this measurement run.",
+        "source": "assumption",
+        "value": 1.5
+      },
+      "vector_bytes_per_component": {
+        "note": "float32 per vector component (4 bytes). Standard for embedding models.",
+        "source": "assumption",
+        "value": 4
+      },
+      "vector_dimension": {
+        "note": "Calibrated from R3/XML metadata ingestion: hashing embeddings (dim=256). Replace with the actual production embedding model dimension.",
+        "source": "assumption",
+        "value": 256
+      }
+    },
+    "pilot": {
+      "analysis_runs_per_procurement": {
+        "note": "Average analysis iterations per procurement",
+        "source": "assumption",
+        "value": 3
+      },
+      "backup_compression_ratio": {
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 0.0934
+      },
+      "chunks_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 832
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "note": "100 MB database storage for procurement metadata, excluding vectors",
+        "source": "assumption",
+        "value": 104857600
+      },
+      "database_non_vector_bytes_per_run": {
+        "note": "20 MB database storage per analysis run metadata",
+        "source": "assumption",
+        "value": 20971520
+      },
+      "description": "Controlled pilot with limited procurements and manual analysis runs",
+      "documents_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 4
+      },
+      "embedding_rows_per_chunk": {
+        "note": "Calibrated from R3/XML metadata ingestion: 1 embedding row per chunk (hashing). Production models may generate multiple vectors per chunk.",
+        "source": "assumption",
+        "value": 1
+      },
+      "extracted_text_bytes_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 121916
+      },
+      "free_space_reserve_percent": {
+        "note": "Minimum free space reserve percentage",
+        "source": "assumption",
+        "value": 20
+      },
+      "full_backups_retained": {
+        "note": "Number of full backups retained",
+        "source": "assumption",
+        "value": 7
+      },
+      "operational_margin_bytes": {
+        "note": "10 GiB for Docker images, logs, updates, service files",
+        "source": "assumption",
+        "value": 10737418240
+      },
+      "other_artifact_bytes_per_run": {
+        "note": "50 MB other artifacts per run (logs, intermediate files)",
+        "source": "assumption",
+        "value": 52428800
+      },
+      "procurements_per_month": {
+        "note": "Expected monthly procurement volume during pilot",
+        "source": "assumption",
+        "value": 5
+      },
+      "raw_document_bytes_per_procurement": {
+        "note": "500 MB raw documents per procurement (PDF, DOCX, images)",
+        "source": "assumption",
+        "value": 524288000
+      },
+      "report_artifact_bytes_per_run": {
+        "note": "10 MB report artifacts per run (DOCX, PDF exports)",
+        "source": "assumption",
+        "value": 10485760
+      },
+      "temporary_space_peak_factor": {
+        "note": "Temporary peak unavailable (no continuous sampling in R3 metadata ingestion). Template assumption retained. Not calibrated from this measurement run.",
+        "source": "assumption",
+        "value": 1.5
+      },
+      "vector_bytes_per_component": {
+        "note": "float32 per vector component (4 bytes). Standard for embedding models.",
+        "source": "assumption",
+        "value": 4
+      },
+      "vector_dimension": {
+        "note": "Calibrated from R3/XML metadata ingestion: hashing embeddings (dim=256). Replace with the actual production embedding model dimension.",
+        "source": "assumption",
+        "value": 256
+      }
+    },
+    "scaling": {
+      "analysis_runs_per_procurement": {
+        "note": "Average analysis iterations per procurement",
+        "source": "assumption",
+        "value": 10
+      },
+      "backup_compression_ratio": {
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 0.0934
+      },
+      "chunks_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 1021
+      },
+      "database_non_vector_bytes_per_procurement": {
+        "note": "500 MB database storage per procurement",
+        "source": "assumption",
+        "value": 524288000
+      },
+      "database_non_vector_bytes_per_run": {
+        "note": "100 MB database storage per analysis run",
+        "source": "assumption",
+        "value": 104857600
+      },
+      "description": "Full-scale production with high procurement volume",
+      "documents_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 5
+      },
+      "embedding_rows_per_chunk": {
+        "note": "Calibrated from R3/XML metadata ingestion: 1 embedding row per chunk (hashing). Production models may generate multiple vectors per chunk.",
+        "source": "assumption",
+        "value": 1
+      },
+      "extracted_text_bytes_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
+        "source": "assumption",
+        "value": 162378
+      },
+      "free_space_reserve_percent": {
+        "note": "Minimum free space reserve percentage",
+        "source": "assumption",
+        "value": 20
+      },
+      "full_backups_retained": {
+        "note": "Number of full backups retained",
+        "source": "assumption",
+        "value": 30
+      },
+      "operational_margin_bytes": {
+        "note": "50 GiB for Docker images, logs, updates, service files",
+        "source": "assumption",
+        "value": 53687091200
+      },
+      "other_artifact_bytes_per_run": {
+        "note": "200 MB other artifacts per run",
+        "source": "assumption",
+        "value": 209715200
+      },
+      "procurements_per_month": {
+        "note": "Expected monthly procurement volume at full scale",
+        "source": "assumption",
+        "value": 500
+      },
+      "raw_document_bytes_per_procurement": {
+        "note": "5 GB raw documents per procurement",
+        "source": "assumption",
+        "value": 5368709120
+      },
+      "report_artifact_bytes_per_run": {
+        "note": "50 MB report artifacts per run",
+        "source": "assumption",
+        "value": 52428800
+      },
+      "temporary_space_peak_factor": {
+        "note": "Temporary peak unavailable (no continuous sampling in R3 metadata ingestion). Template assumption retained. Not calibrated from this measurement run.",
+        "source": "assumption",
+        "value": 1.3
+      },
+      "vector_bytes_per_component": {
+        "note": "float32 per vector component (4 bytes). Standard for embedding models.",
+        "source": "assumption",
+        "value": 4
+      },
+      "vector_dimension": {
+        "note": "Calibrated from R3/XML metadata ingestion: hashing embeddings (dim=256). Replace with the actual production embedding model dimension.",
+        "source": "assumption",
+        "value": 256
+      }
+    }
+  },
+  "schema_version": "1.1"
+}
