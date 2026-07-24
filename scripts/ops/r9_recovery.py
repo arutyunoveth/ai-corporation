@@ -209,7 +209,7 @@ def verify_backup(backup_dir: Path) -> dict[str, Any]:
 
 
 def _safe_extract(archive_path: Path, staging: Path) -> Path:
-    staging.mkdir(mode=0o700)
+    staging.mkdir(mode=0o700, exist_ok=True)
     with tarfile.open(archive_path, "r") as archive:
         members = archive.getmembers()
         for member in members:
