@@ -379,6 +379,7 @@ def restore_backup(
         raise RecoveryError("Restore target data directory is not empty")
     if not _database_is_empty(database_url):
         raise RecoveryError("Restore target database is not empty")
+    target_existed = data_dir.exists()
     parent = data_dir.parent
     parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
@@ -386,14 +387,28 @@ def restore_backup(
     )
     try:
         restored = _safe_extract(backup_dir / "filesystem.tar", staging)
-        restore_database(
-            database_url=database_url,
-            database_dump=backup_dir / "database.dump",
-        )
-        if data_dir.exists():
+        if target_existed:
             data_dir.rmdir()
-        os.replace(restored, data_dir)
-        _fsync_dir(parent)
+        try:
+            os.replace(restored, data_dir)
+            _fsync_dir(parent)
+        except BaseException:
+            if target_existed and not data_dir.exists():
+                data_dir.mkdir()
+                _fsync_dir(parent)
+            raise
+        try:
+            restore_database(
+                database_url=database_url,
+                database_dump=backup_dir / "database.dump",
+            )
+        except BaseException:
+            if data_dir.exists():
+                shutil.rmtree(data_dir)
+            if target_existed:
+                data_dir.mkdir()
+            _fsync_dir(parent)
+            raise
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     receipt = {
