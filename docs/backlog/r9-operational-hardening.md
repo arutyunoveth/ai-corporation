@@ -1,10 +1,12 @@
 # R9 Operational Hardening
 
-Status: `R9_OPERATIONAL_HARDENING_REMOTE_AUDIT_CORRECTED_SOURCE_CI_EVIDENCE_AND_RUNBOOK_ALIGNED`.
+Status: `R9_OPERATIONAL_HARDENING_CROSS_STORE_COMPENSATION_IMPLEMENTED_CI_VERIFIED_AND_DOCUMENTED`.
 
-Final verified source/evidence baseline: `726080a08c7b97f572b12285012667ac6a985921`.
+Corrective implementation commit: `245b3f3dd65d2400a2ce4ba61d53dea6f19ef9a9`.
 
-Final source CI: workflow run `30120854910`, all five jobs successful. The quality job completed `make check` and `make test`; the full suite reported 1679 passed and 188 skipped tests. R9 evidence was published as artifact `r9-operational-hardening-evidence-726080a08c7b97f572b12285012667ac6a985921`, digest `sha256:c7bd35784dec4a5c95410a2739b16171a5c615b15892dbbcd818812109bc800d`.
+Main-synchronized code baseline: `5b026e7ebcae6e43257968f7609fbd45e4ba1da1`. At that baseline the R9 branch is ahead of and zero commits behind `main` (`efe182182a3a6a6299c8a384f3257fc0c9d891c6`).
+
+Corrective source CI: workflow run `30124640673`, all five jobs successful. The quality job completed `make check` and `make test`; the full suite reported 1680 passed and 188 skipped tests. R9 evidence was published as artifact `r9-operational-hardening-evidence-e1015bb927393c3f3f514c2492836bf320b329d7`, digest `sha256:94df6cd7d859a8f9ff4c18196e3bee9b573e68f66204377a605111dd0fae8b8f`.
 
 ## P0 — completed
 
@@ -31,16 +33,19 @@ Final source CI: workflow run `30120854910`, all five jobs successful. The quali
 - [x] consistent restore;
 - [x] DB-only and filesystem-only restore mismatch;
 - [x] cross-tenant restore mismatch;
+- [x] filesystem installation before DB restore plus compensation back to the original absent-or-empty target state on DB restore failure;
+- [x] no successful restore receipt on compensated or interrupted failure paths;
 - [x] sanitized recovery CLI failures;
 - [x] recovery runbook — `docs/runbooks/r9-recovery.md`;
 - [x] source/evidence review — `docs/reviews/r9-p2-backup-restore.md`.
 
 ## Remote source audit corrections
 
-The independent post-completion GitHub audit found and corrected two safety classes that the original acceptance evidence did not fully prove:
+The independent post-completion GitHub audits found and corrected three safety classes that the original acceptance evidence did not fully prove:
 
 1. A deterministic renderer could reproduce an existing filesystem-only final-PDF generation and recreate a `PilotArtifact` DB binding. Publication is now serialized at the DB binding boundary, concurrent candidates are compared by hash and size, and an idempotent generation without a DB row is explicitly rejected.
 2. Recovery failure handling and validation were incomplete: missing `sys` import on error output, top-level symlink following, ignored non-file backup entries, weak manifest and backup-ID validation, optional tenant scope, raw external-tool stderr and non-transactional `pg_restore`. These paths now fail closed and have focused regression tests.
+3. `restore_backup()` restored PostgreSQL before installing the filesystem, leaving a DB-only interruption window. The corrected sequence installs the staged filesystem first, invokes single-transaction PostgreSQL restore, rolls the filesystem target back if that call fails, fsyncs the compensated parent state, and writes no receipt on failure. Regression test `tests/test_r9_recovery_security.py::test_restore_rolls_back_installed_filesystem_when_database_restore_fails` covers this boundary.
 
 ## Final R9 guarantees
 
@@ -51,8 +56,11 @@ The independent post-completion GitHub audit found and corrected two safety clas
 - review and lifecycle transitions require the verified current run, artifact and review binding;
 - PostgreSQL and filesystem backups form one explicitly quiesced recovery unit with strict hash, identity, archive-path and tenant-scope validation;
 - restore requires an explicit expected tenant inventory and uses transactional PostgreSQL restoration;
+- filesystem installation precedes DB restore and is compensated on a handled DB restore failure;
+- restore receipts are emitted only after both stores succeed;
 - DB-only, filesystem-only and cross-tenant restore mismatches fail closed;
+- abrupt host/process loss can still leave filesystem-only state because R9 does not claim a distributed cross-store transaction; that state cannot establish ownership and is not considered a successful restore;
 - expected and unexpected recovery CLI failures are sanitized;
-- no automatic repair, tenant-selective restore, ownership import or orphan deletion is introduced.
+- no tenant-selective restore, ownership import, orphan deletion or unsafe automatic cross-store reconstruction is introduced.
 
-PR #16 remains Draft. R9 is complete and independently corrected on the remote branch but is not merged by this document.
+This document records the branch contract and evidence. GitHub PR state, merge state, post-merge CI and release-tag state are verified separately and are not implied by this file alone.
