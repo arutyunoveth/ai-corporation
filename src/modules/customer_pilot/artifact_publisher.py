@@ -186,7 +186,7 @@ def _load_canonical(
 
 def publish_final_pdf(
     session: Session, run: TenderAnalysisRun, case: ProcurementCase
-) -> PilotArtifact:
+) -> tuple[PilotArtifact, bool]:
     existing = session.scalar(
         select(PilotArtifact).where(
             PilotArtifact.run_id == run.id,
@@ -202,7 +202,7 @@ def publish_final_pdf(
         from src.modules.customer_pilot.artifacts import verified_pilot_artifact
 
         verified_pilot_artifact(run, case, binding, existing)
-        return existing
+        return existing, False
     if run.status != "completed" or case.status not in {
         "operator_review",
         "client_ready",
@@ -308,5 +308,5 @@ def publish_final_pdf(
         from src.modules.customer_pilot.artifacts import verified_pilot_artifact
 
         verified_pilot_artifact(run, case, binding, recovered)
-        return recovered
-    return artifact
+        return recovered, False
+    return artifact, True
