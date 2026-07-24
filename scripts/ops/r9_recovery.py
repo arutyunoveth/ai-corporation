@@ -135,8 +135,10 @@ def _database_is_empty(database_url: str) -> bool:
 def _run(command: list[str], env: dict[str, str]) -> None:
     result = subprocess.run(command, env=env, text=True, capture_output=True)
     if result.returncode:
-        message = (result.stderr or result.stdout or "recovery command failed")[-2000:]
-        raise RecoveryError(message)
+        executable = Path(command[0]).name if command else "recovery tool"
+        raise RecoveryError(
+            f"{executable} failed with exit code {result.returncode}"
+        )
 
 
 def _valid_hash(value: object) -> bool:
@@ -166,6 +168,8 @@ def create_backup(
         raise RecoveryError("Backup requires an explicitly quiesced application")
     if data_dir.is_symlink():
         raise RecoveryError("Data directory must be an existing real directory")
+    if output_dir.is_symlink():
+        raise RecoveryError("Backup output directory is invalid")
     data_dir = data_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     _validate_data_tree(data_dir)
@@ -363,8 +367,10 @@ def restore_backup(
 ) -> dict[str, Any]:
     if not quiesced:
         raise RecoveryError("Restore requires an explicitly quiesced application")
+    if expected_tenants is None:
+        raise RecoveryError("Expected tenant scope is required")
     manifest = verify_backup(backup_dir)
-    if expected_tenants is not None and set(manifest["tenant_scope"]) != expected_tenants:
+    if set(manifest["tenant_scope"]) != expected_tenants:
         raise RecoveryError("Backup tenant scope does not match restore target")
     if data_dir.is_symlink():
         raise RecoveryError("Restore target data directory is not empty")
@@ -400,6 +406,8 @@ def restore_backup(
     }
     receipt_path = parent / f".r9-restore-{manifest['backup_id']}.json"
     receipt_path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+    _fsync_file(receipt_path)
+    _fsync_dir(parent)
     return receipt
 
 
