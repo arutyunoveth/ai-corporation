@@ -65,3 +65,34 @@ def test_malformed_manifest_cli_is_sanitized(tmp_path) -> None:
         "ok": False,
         "error": "Backup manifest is invalid",
     }
+
+
+def test_restore_requires_explicit_expected_tenant_scope(tmp_path) -> None:
+    with pytest.raises(r9_recovery.RecoveryError, match="Expected tenant scope"):
+        r9_recovery.restore_backup(
+            database_url="postgresql://invalid/unused",
+            data_dir=tmp_path / "data",
+            backup_dir=tmp_path / "missing-backup",
+            expected_tenants=None,
+            quiesced=True,
+        )
+
+
+def test_external_tool_failure_does_not_echo_stderr_or_credentials(monkeypatch) -> None:
+    secret = "postgresql://operator:super-secret@example.invalid/database"
+
+    def failed(*_args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args=["pg_restore"],
+            returncode=9,
+            stdout="",
+            stderr=f"connection failed for {secret}",
+        )
+
+    monkeypatch.setattr(r9_recovery.subprocess, "run", failed)
+    with pytest.raises(r9_recovery.RecoveryError) as captured:
+        r9_recovery._run(["pg_restore", secret], {})
+    message = str(captured.value)
+    assert message == "pg_restore failed with exit code 9"
+    assert "super-secret" not in message
+    assert secret not in message
