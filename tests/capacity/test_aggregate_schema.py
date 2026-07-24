@@ -79,7 +79,11 @@ class TestAggregateSchema:
     def test_ingestion_statistics_exist(self):
         ing = load_aggregate()["ingestion_statistics"]
         for k in ("documents_per_procurement", "chunks_per_procurement",
-                   "extracted_text_bytes_per_procurement",
+                   "extracted_text_chars_per_procurement",
+                   "extracted_text_utf8_bytes_per_procurement",
+                   "total_extracted_text_chars",
+                   "total_extracted_text_utf8_bytes",
+                   "utf8_bytes_per_character_ratio",
                    "filesystem_data_delta_bytes_per_procurement",
                    "postgresql_delta_bytes_per_procurement"):
             assert k in ing, f"Missing {k}"
@@ -91,16 +95,34 @@ class TestAggregateSchema:
         assert bm["B1"]["case_count"] == 9
         assert bm["B2"]["case_count"] == 18
 
-    def test_backup_formulas(self):
+    def test_backup_has_filesystem_archive_bytes(self):
         bm = load_aggregate()["backup_measurements"]
         for bk in ("B1", "B2"):
             b = bm[bk]
-            assert b["archive_to_source_ratio"] == round(
-                b["postgresql_dump_bytes"] / max(b["unique_live_source_bytes"], 1), 4
+            assert "filesystem_archive_bytes" in b
+            assert "total_backup_bytes" in b
+            assert b["total_backup_bytes"] == b["postgresql_dump_bytes"] + b["filesystem_archive_bytes"]
+
+    def test_backup_component_ratios(self):
+        bm = load_aggregate()["backup_measurements"]
+        for bk in ("B1", "B2"):
+            b = bm[bk]
+            expected_db = round(
+                b["postgresql_dump_bytes"] / max(b["database_source_bytes"], 1), 4
             )
-            assert b["compression_factor"] == round(
-                b["total_source_bytes"] / max(b["postgresql_dump_bytes"], 1), 4
+            expected_fs = round(
+                b["filesystem_archive_bytes"] / max(b["filesystem_source_bytes"], 1), 4
             )
+            expected_full = round(
+                b["total_backup_bytes"] / max(b["unique_live_source_bytes"], 1), 4
+            )
+            expected_cf = round(
+                b["total_source_bytes"] / max(b["total_backup_bytes"], 1), 4
+            )
+            assert b["database_archive_to_source_ratio"] == expected_db
+            assert b["filesystem_archive_to_source_ratio"] == expected_fs
+            assert b["full_backup_archive_to_source_ratio"] == expected_full
+            assert b["compression_factor"] == expected_cf
 
     def test_no_case_ids(self):
         text = json.dumps(load_aggregate())
@@ -114,16 +136,20 @@ class TestAggregateSchema:
 
     def test_limitations_present(self):
         lims = load_aggregate()["limitations"]
-        assert len(lims) >= 5
+        assert len(lims) >= 4
         assert any("metadata only" in l.lower() for l in lims)
         assert any("AnalysisRun" in l for l in lims)
         assert any("placeholder" in l.lower() for l in lims)
+        assert not any("WAL" in l for l in lims), "WAL claim should not appear in limitations"
 
     def test_formulas_present(self):
         formulas = load_aggregate()["formulas"]
-        for k in ("archive_to_source_ratio", "compression_factor",
+        for k in ("database_archive_to_source_ratio", "filesystem_archive_to_source_ratio",
+                   "full_backup_archive_to_source_ratio", "compression_factor",
+                   "forecast_backup_compression_ratio",
+                   "utf8_bytes_per_character_ratio",
                    "nearest_rank_percentile", "p50", "p75", "p90"):
-            assert k in formulas
+            assert k in formulas, f"Missing formula key: {k}"
 
     def test_percentile_p50_exact(self):
         c = load_aggregate()["ingestion_statistics"]["chunks_per_procurement"]
@@ -133,22 +159,63 @@ class TestAggregateSchema:
         assert c["p50"] > 0
 
     def test_percentiles_include_p90(self):
-        for stat in load_aggregate()["ingestion_statistics"].values():
-            assert "p90" in stat, f"Missing p90 in {stat}"
+        for key, stat in load_aggregate()["ingestion_statistics"].items():
+            if not isinstance(stat, dict):
+                continue
+            assert "p90" in stat, f"Missing p90 in {key}"
             assert "p50" in stat
             assert "p75" in stat
 
     def test_coverage_present(self):
-        for stat in load_aggregate()["ingestion_statistics"].values():
-            assert "coverage_percent" in stat
+        for key, stat in load_aggregate()["ingestion_statistics"].items():
+            if not isinstance(stat, dict):
+                continue
+            assert "coverage_percent" in stat, f"Missing coverage_percent in {key}"
             assert "available_count" in stat
             assert "unavailable_count" in stat
 
     def test_unavailable_not_zero(self):
-        for stat in load_aggregate()["ingestion_statistics"].values():
+        for key, stat in load_aggregate()["ingestion_statistics"].items():
+            if not isinstance(stat, dict):
+                continue
             assert None not in [
                 stat.get("unavailable_count"), stat.get("available_count")
             ]
+
+    def test_utf8_consistency(self):
+        ing = load_aggregate()["ingestion_statistics"]
+        total_chars = ing["total_extracted_text_chars"]
+        total_utf8 = ing["total_extracted_text_utf8_bytes"]
+        ratio = ing["utf8_bytes_per_character_ratio"]
+        assert total_chars > 0
+        assert total_utf8 > 0
+        assert total_utf8 >= total_chars
+        expected_ratio = round(total_utf8 / total_chars, 4)
+        assert ratio == expected_ratio
+
+    def test_utf8_per_case_present(self):
+        # The harness reads extracted_text_utf8_bytes from cohort for per-case
+        ing = load_aggregate()["ingestion_statistics"]
+        assert "extracted_text_utf8_bytes_per_procurement" in ing
+        utf8_stat = ing["extracted_text_utf8_bytes_per_procurement"]
+        assert utf8_stat["count"] == 18
+        assert utf8_stat["available_count"] == 18
+
+    def test_temporary_peak_unavailable(self):
+        tp = load_aggregate()["temporary_peak_measurements"]
+        assert tp["status"] == "unavailable"
+        assert "reason" in tp
+
+    def test_pg_reconciliation_union_keys(self):
+        pr = load_aggregate()["postgresql_reconciliation"]
+        assert "relation_total_baseline_bytes" in pr
+        assert "relation_total_final_bytes" in pr
+        assert pr["relation_total_baseline_bytes"] > 0
+        assert pr["relation_total_final_bytes"] > 0
+
+    def test_pg_note_no_wal(self):
+        note = load_aggregate()["postgresql_reconciliation"]["note"]
+        assert "WAL" not in note, "WAL claim should not appear in PG note"
 
     def test_deterministic_output(self):
         agg_a = json.loads((SAMPLES / "capacity" / "public-r3-calibration.aggregate.json").read_text())
@@ -176,7 +243,8 @@ class TestScenario:
         for name, profile in sce["profiles"].items():
             for k in ("procurements_per_month", "analysis_runs_per_procurement",
                        "documents_per_procurement", "raw_document_bytes_per_procurement",
-                       "extracted_text_bytes_per_procurement", "chunks_per_procurement",
+                       "extracted_text_bytes_per_procurement", "extracted_text_chars_per_procurement",
+                       "chunks_per_procurement",
                        "backup_compression_ratio", "temporary_space_peak_factor",
                        "vector_dimension", "embedding_rows_per_chunk",
                        "full_backups_retained", "free_space_reserve_percent"):
@@ -222,6 +290,54 @@ class TestScenario:
 
     def test_scenario_schema_version(self):
         assert load_scenario()["schema_version"] == "1.1"
+
+    def test_scenario_embedding_notes(self):
+        sce = load_scenario()
+        for name, prof in sce["profiles"].items():
+            vd = prof.get("vector_dimension", {})
+            assert "note" in vd, f"{name}: vector_dimension missing note"
+            assert "hashing" in vd["note"].lower(), f"{name}: vector_dimension note missing 'hashing'"
+            assert vd.get("value") == 256, f"{name}: vector_dimension should be 256"
+
+    def test_scenario_backup_ratio_uses_max_b1_b2(self):
+        sce = load_scenario()
+        agg = load_aggregate()
+        b1_ratio = agg["backup_measurements"]["B1"]["full_backup_archive_to_source_ratio"]
+        b2_ratio = agg["backup_measurements"]["B2"]["full_backup_archive_to_source_ratio"]
+        expected = min(1.0, max(b1_ratio, b2_ratio))
+        for name, prof in sce["profiles"].items():
+            bcr = prof.get("backup_compression_ratio", {})
+            assert bcr.get("value") == expected, f"{name}: backup ratio {bcr.get('value')} != {expected}"
+            assert "max" in bcr.get("note", "").lower(), f"{name}: note missing max(B1,B2)"
+
+    def test_scenario_temp_factor_kept(self):
+        sce = load_scenario()
+        expected = {"pilot": 1.5, "commercial_mvp": 1.5, "scaling": 1.3}
+        for name, prof in sce["profiles"].items():
+            tf = prof.get("temporary_space_peak_factor", {})
+            assert tf.get("value") == expected[name], f"{name}: temp factor should be {expected[name]}"
+            assert "unavailable" in tf.get("note", "").lower(), f"{name}: temp note missing 'unavailable'"
+
+    def test_scenario_percentile_notes(self):
+        sce = load_scenario()
+        for name, prof in sce["profiles"].items():
+            dp = prof.get("documents_per_procurement", {})
+            note = dp.get("note", "")
+            assert "p50=4" in note, f"{name}: documents_per_procurement note missing p50=4"
+            cp = prof.get("chunks_per_procurement", {})
+            cnote = cp.get("note", "")
+            assert "p50=" in cnote, f"{name}: chunks note missing p50"
+            assert "p90=" in cnote
+
+    def test_scenario_extracted_text_chars_per_procurement(self):
+        sce = load_scenario()
+        ing = load_aggregate()["ingestion_statistics"]
+        expected_p50 = ing["extracted_text_chars_per_procurement"]["p50"]
+        expected_p75 = ing["extracted_text_chars_per_procurement"]["p75"]
+        expected_p90 = ing["extracted_text_chars_per_procurement"]["p90"]
+        assert sce["profiles"]["pilot"]["extracted_text_chars_per_procurement"]["value"] == expected_p50
+        assert sce["profiles"]["commercial_mvp"]["extracted_text_chars_per_procurement"]["value"] == expected_p75
+        assert sce["profiles"]["scaling"]["extracted_text_chars_per_procurement"]["value"] == expected_p90
 
 
 class TestPeakSampler:
@@ -313,15 +429,35 @@ class TestPercentiles:
 
 
 class TestBackupRatios:
-    def test_archive_to_source_ratio_definition(self):
-        """archive_to_source_ratio = total_backup_bytes / unique_live_source_bytes"""
+    def test_database_archive_to_source_ratio_definition(self):
+        """database_archive_to_source_ratio = postgresql_dump_bytes / database_source_bytes"""
         bm = load_aggregate()["backup_measurements"]
         for bk in ("B1", "B2"):
             b = bm[bk]
             expected = round(
-                b["postgresql_dump_bytes"] / max(b["unique_live_source_bytes"], 1), 4
+                b["postgresql_dump_bytes"] / max(b["database_source_bytes"], 1), 4
             )
-            assert b["archive_to_source_ratio"] == expected
+            assert b["database_archive_to_source_ratio"] == expected
+
+    def test_filesystem_archive_to_source_ratio_definition(self):
+        """filesystem_archive_to_source_ratio = filesystem_archive_bytes / filesystem_source_bytes"""
+        bm = load_aggregate()["backup_measurements"]
+        for bk in ("B1", "B2"):
+            b = bm[bk]
+            expected = round(
+                b["filesystem_archive_bytes"] / max(b["filesystem_source_bytes"], 1), 4
+            )
+            assert b["filesystem_archive_to_source_ratio"] == expected
+
+    def test_full_backup_archive_to_source_ratio_definition(self):
+        """full_backup_archive_to_source_ratio = total_backup_bytes / unique_live_source_bytes"""
+        bm = load_aggregate()["backup_measurements"]
+        for bk in ("B1", "B2"):
+            b = bm[bk]
+            expected = round(
+                b["total_backup_bytes"] / max(b["unique_live_source_bytes"], 1), 4
+            )
+            assert b["full_backup_archive_to_source_ratio"] == expected
 
     def test_compression_factor_definition(self):
         """compression_factor = total_source_bytes / total_backup_bytes"""
@@ -329,7 +465,7 @@ class TestBackupRatios:
         for bk in ("B1", "B2"):
             b = bm[bk]
             expected = round(
-                b["total_source_bytes"] / max(b["postgresql_dump_bytes"], 1), 4
+                b["total_source_bytes"] / max(b["total_backup_bytes"], 1), 4
             )
             assert b["compression_factor"] == expected
 
@@ -337,7 +473,5 @@ class TestBackupRatios:
         bm = load_aggregate()["backup_measurements"]
         for bk in ("B1", "B2"):
             b = bm[bk]
-            # - archive_to_source_ratio < 1 means dump < source (compression)
-            # - compression_factor > 1 means total_source > dump
             assert b["compression_factor"] >= 1.0, f"{bk}: compression_factor < 1.0"
-            assert b["archive_to_source_ratio"] >= 0
+            assert b["full_backup_archive_to_source_ratio"] > 0

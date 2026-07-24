@@ -27,7 +27,7 @@ R3/XML metadata ingestion calibration only. No attachments, no full document bod
 | Metric | p50 | p75 | p90 | Max |
 |--------|-----|-----|-----|-----|
 | Documents per procurement | 4 | 4 | 5 | 5 |
-| Extracted text (B) per procurement | 112,795 | 138,699 | 155,523 | 233,175 |
+| Extracted text chars per procurement | 112,795 | 138,699 | 155,523 | 233,175 |
 | Chunks per procurement | 832 | 985 | 1,021 | 1,266 |
 | FS delta per procurement (B) | 1,895,971 | 2,214,572 | 2,483,196 | 2,657,169 |
 | PG delta per procurement (B) | 1,611,231 | 1,943,378 | 2,179,107 | 2,367,200 |
@@ -36,38 +36,47 @@ R3/XML metadata ingestion calibration only. No attachments, no full document bod
 - Total extracted chars: 2,186,012
 - Total UTF-8 bytes: 2,346,347
 - Char→byte ratio: **1.073** (7.3% overhead for Russian XML data)
+- `extracted_text_chars_per_procurement` replaces `extracted_text_bytes_per_procurement`.
 
 ### Backup Measurements
 | Metric | B1 (9 cases) | B2 (18 cases) |
 |--------|-------------|---------------|
 | `pg_dump` size | 2.7 MB | 4.4 MB |
-| Unique live source | 19.1 MB | 35.8 MB |
-| Archive-to-source ratio | 0.144 | 0.123 |
-| Compression factor | 21.36 | 20.31 |
+| Filesystem archive (tar.gz) | 0.6 MB | 3.8 MB |
+| Total backup | 3.2 MB | 8.0 MB |
+| Database source | 37.8 MB | 51.3 MB |
+| Filesystem source | 19.1 MB | 35.8 MB |
+| DB archive-to-source ratio | 0.069 | 0.082 |
+| FS archive-to-source ratio | 0.032 | 0.110 |
+| Full backup archive-to-source ratio | 0.176 | 0.234 |
+| Compression factor | 17.47 | 10.71 |
 
 **Formulas:**
-- `archive_to_source_ratio = total_backup_bytes / unique_live_source_bytes`
+- `database_archive_to_source_ratio = postgresql_dump_bytes / database_source_bytes`
+- `filesystem_archive_to_source_ratio = filesystem_archive_bytes / filesystem_source_bytes`
+- `full_backup_archive_to_source_ratio = total_backup_bytes / unique_live_source_bytes`
 - `compression_factor = total_source_bytes / total_backup_bytes`
-- Forecast uses `min(1.0, archive_to_source_ratio)` for conservative backup sizing.
+- `forecast_backup_compression_ratio = max(B1.full_backup_archive_to_source_ratio, B2.full_backup_archive_to_source_ratio)`
+- Forecast uses `min(1.0, max(B1, B2))` for conservative backup sizing.
 
 ### PostgreSQL Reconciliation
-- `pg_database_size` delta includes schema overhead, WAL, autovacuum bloat.
-- Relation-level deltas sum to less than `pg_database_size` delta.
+- `pg_database_size` delta includes PostgreSQL block-level allocation, catalog bloat, and unused space from DELETEs.
+- Relation-level deltas are logical bytes and may be smaller than `pg_database_size` delta.
 - `pg_database_size` does not shrink after DELETEs.
 - S0→S9: PG +16.7 MB, S9→S18: PG +14.2 MB.
-- `pg_database_size` grows faster than relation logical bytes due to block-level allocation.
+- Relation reconciliation uses union of all table names from baseline and final snapshots.
 
 ### Temporary Peak Measurements
-Continuous peak sampling via `peak_sampler.py` at ≥2s intervals. Peak delta reflects the maximum observed logical/allocated bytes during ingestion. SIGINT/SIGTERM captures a final sample before exit. The `--oneshot` flag has been removed; all runs now capture a final signal-triggered sample.
+**Unavailable.** Continuous peak sampling would require R8 runtime integration with the ingestion pipeline, which is not available in this R3/XML metadata-only calibration. Cumulative before/after filesystem and PG deltas are available in per-case and group statistics instead.
 
 ## Calibrated Parameters
 - `documents_per_procurement` (p50=4, p75=4, p90=5)
-- `extracted_text_bytes_per_procurement` (p50=112,795, p75=138,699, p90=155,523)
+- `extracted_text_chars_per_procurement` (p50=112,795, p75=138,699, p90=155,523; replaces `extracted_text_bytes_per_procurement`)
 - `chunks_per_procurement` (p50=832, p75=985, p90=1,021)
-- `backup_compression_ratio` (0.123, forecast uses 1.0×)
+- `backup_compression_ratio` (0.234, uses `max(B1, B2).full_backup_archive_to_source_ratio`)
 - `vector_dimension` (256)
 - `embedding_rows_per_chunk` (1)
-- `temporary_space_peak_factor` (165.0)
+- `temporary_space_peak_factor` (unavailable — template defaults retained: pilot=1.5, commercial_mvp=1.5, scaling=1.3)
 
 ## Uncalibrated Parameters (Kept as Original Assumptions)
 - `procurements_per_month`
@@ -119,5 +128,5 @@ python scripts/capacity/arv_capacity.py forecast \
 
 ## Aggregate SHA-256
 ```
-425e53706e44721c9bc3dce1b055f25ba3511ca669fdf00113c2774ef03500e3
+041f7cab206af6c6a3d737001daa98446ab29a0f255905114576ccbae1098470
 ```

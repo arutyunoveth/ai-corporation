@@ -1,7 +1,7 @@
 {
   "note": "This file contains example assumptions for capacity forecasting. All values are marked source=assumption and do not represent actual Arvectum production data. Replace with measured or derived values before using for procurement decisions.",
   "notes": [
-    "Aggregate SHA-256: 425e53706e44721c9bc3dce1b055f25ba3511ca669fdf00113c2774ef03500e3",
+    "Aggregate SHA-256: 041f7cab206af6c6a3d737001daa98446ab29a0f255905114576ccbae1098470",
     "Calibrated from 18-case R3/XML metadata ingestion cohort. Attachments unavailable, placeholder metadata, hashing embeddings, stub LLM. This is a lower-bound estimate. Not a production capacity guarantee."
   ],
   "profiles": {
@@ -12,12 +12,12 @@
         "value": 5
       },
       "backup_compression_ratio": {
-        "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
+        "note": "Calibrated from max(B1, B2) full_backup_archive_to_source_ratio (0.1761, 0.2336). Forecast uses min(1.0, max(B1, B2)) = 0.2336.",
         "source": "assumption",
-        "value": 0.1231
+        "value": 0.2336
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: commercial_mvp. See aggregate notes for full calibration context.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=832, p75=985, p90=1021 chunks per procurement.",
         "source": "assumption",
         "value": 985
       },
@@ -33,17 +33,22 @@
       },
       "description": "Commercial MVP with moderate procurement volume and automated analysis",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: commercial_mvp. See aggregate notes for full calibration context.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=4, p75=4, p90=5 documents per procurement.",
         "source": "assumption",
         "value": 4
       },
       "embedding_rows_per_chunk": {
-        "note": "Two embedding vectors per chunk (original + augmented)",
+        "note": "Calibrated from R3/XML metadata ingestion: 1 embedding row per chunk (hashing). Production models may generate multiple vectors per chunk.",
         "source": "assumption",
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: commercial_mvp. See aggregate notes for full calibration context.",
+        "note": "100 MB extracted text per procurement",
+        "source": "assumption",
+        "value": 104857600
+      },
+      "extracted_text_chars_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=112795, p75=138699, p90=155523 characters per procurement.",
         "source": "assumption",
         "value": 138699
       },
@@ -83,17 +88,17 @@
         "value": 20971520
       },
       "temporary_space_peak_factor": {
-        "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
+        "note": "Temporary peak unavailable (no continuous sampling in R3 metadata ingestion). Template assumption retained. Not calibrated from this measurement run.",
         "source": "assumption",
-        "value": 165.0
+        "value": 1.5
       },
       "vector_bytes_per_component": {
-        "note": "float32 per vector component",
+        "note": "float32 per vector component (4 bytes). Standard for embedding models.",
         "source": "assumption",
         "value": 4
       },
       "vector_dimension": {
-        "note": "Example vector dimension; replace with the actual embedding model dimension measured in the Arvectum runtime",
+        "note": "Calibrated from R3/XML metadata ingestion: hashing embeddings (dim=256). Replace with the actual production embedding model dimension.",
         "source": "assumption",
         "value": 256
       }
@@ -105,12 +110,12 @@
         "value": 3
       },
       "backup_compression_ratio": {
-        "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
+        "note": "Calibrated from max(B1, B2) full_backup_archive_to_source_ratio (0.1761, 0.2336). Forecast uses min(1.0, max(B1, B2)) = 0.2336.",
         "source": "assumption",
-        "value": 0.1231
+        "value": 0.2336
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: pilot. See aggregate notes for full calibration context.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=832, p75=985, p90=1021 chunks per procurement.",
         "source": "assumption",
         "value": 832
       },
@@ -126,17 +131,22 @@
       },
       "description": "Controlled pilot with limited procurements and manual analysis runs",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: pilot. See aggregate notes for full calibration context.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=4, p75=4, p90=5 documents per procurement.",
         "source": "assumption",
         "value": 4
       },
       "embedding_rows_per_chunk": {
-        "note": "One embedding vector per chunk",
+        "note": "Calibrated from R3/XML metadata ingestion: 1 embedding row per chunk (hashing). Production models may generate multiple vectors per chunk.",
         "source": "assumption",
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: pilot. See aggregate notes for full calibration context.",
+        "note": "50 MB extracted text per procurement",
+        "source": "assumption",
+        "value": 52428800
+      },
+      "extracted_text_chars_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=112795, p75=138699, p90=155523 characters per procurement.",
         "source": "assumption",
         "value": 112795
       },
@@ -176,17 +186,17 @@
         "value": 10485760
       },
       "temporary_space_peak_factor": {
-        "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
+        "note": "Temporary peak unavailable (no continuous sampling in R3 metadata ingestion). Template assumption retained. Not calibrated from this measurement run.",
         "source": "assumption",
-        "value": 165.0
+        "value": 1.5
       },
       "vector_bytes_per_component": {
-        "note": "float32 per vector component",
+        "note": "float32 per vector component (4 bytes). Standard for embedding models.",
         "source": "assumption",
         "value": 4
       },
       "vector_dimension": {
-        "note": "Example vector dimension; replace with the actual embedding model dimension measured in the Arvectum runtime",
+        "note": "Calibrated from R3/XML metadata ingestion: hashing embeddings (dim=256). Replace with the actual production embedding model dimension.",
         "source": "assumption",
         "value": 256
       }
@@ -198,12 +208,12 @@
         "value": 10
       },
       "backup_compression_ratio": {
-        "note": "Calibrated from B2 backup. Forecast uses min(1.0, archive_to_source_ratio) for conservative estimate.",
+        "note": "Calibrated from max(B1, B2) full_backup_archive_to_source_ratio (0.1761, 0.2336). Forecast uses min(1.0, max(B1, B2)) = 0.2336.",
         "source": "assumption",
-        "value": 0.1231
+        "value": 0.2336
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: scaling. See aggregate notes for full calibration context.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=832, p75=985, p90=1021 chunks per procurement.",
         "source": "assumption",
         "value": 1021
       },
@@ -219,17 +229,22 @@
       },
       "description": "Full-scale production with high procurement volume",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: scaling. See aggregate notes for full calibration context.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=4, p75=4, p90=5 documents per procurement.",
         "source": "assumption",
         "value": 5
       },
       "embedding_rows_per_chunk": {
-        "note": "Three embedding vectors per chunk (original + two augmentations)",
+        "note": "Calibrated from R3/XML metadata ingestion: 1 embedding row per chunk (hashing). Production models may generate multiple vectors per chunk.",
         "source": "assumption",
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: scaling. See aggregate notes for full calibration context.",
+        "note": "500 MB extracted text per procurement",
+        "source": "assumption",
+        "value": 524288000
+      },
+      "extracted_text_chars_per_procurement": {
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=112795, p75=138699, p90=155523 characters per procurement.",
         "source": "assumption",
         "value": 155523
       },
@@ -269,17 +284,17 @@
         "value": 52428800
       },
       "temporary_space_peak_factor": {
-        "note": "Calibrated from total_source_bytes / total_backup_bytes. Reflects observed temporary storage overhead.",
+        "note": "Temporary peak unavailable (no continuous sampling in R3 metadata ingestion). Template assumption retained. Not calibrated from this measurement run.",
         "source": "assumption",
-        "value": 165.0
+        "value": 1.3
       },
       "vector_bytes_per_component": {
-        "note": "float32 per vector component",
+        "note": "float32 per vector component (4 bytes). Standard for embedding models.",
         "source": "assumption",
         "value": 4
       },
       "vector_dimension": {
-        "note": "Example vector dimension; replace with the actual embedding model dimension measured in the Arvectum runtime",
+        "note": "Calibrated from R3/XML metadata ingestion: hashing embeddings (dim=256). Replace with the actual production embedding model dimension.",
         "source": "assumption",
         "value": 256
       }

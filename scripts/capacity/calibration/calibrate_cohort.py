@@ -82,15 +82,24 @@ def build_aggregate(cohort, baseline, backup_b1, backup_b2, peak_all):
     # Per-case values for ingestion
     doc_counts = [c["measurements"].get("xml_document_count", {}).get("value") for c in case_list]
     text_chars = [c["measurements"].get("extracted_text_chars", {}).get("value") for c in case_list]
+    text_utf8 = [c["measurements"].get("extracted_text_utf8_bytes", {}).get("value") for c in case_list]
     chunk_counts = [c["measurements"].get("chunk_count", {}).get("value") for c in case_list]
     emb_rows = [c["measurements"].get("embedding_rows", {}).get("value") for c in case_list]
     fs_deltas = [c["measurements"].get("filesystem_data_delta_bytes", {}).get("value") for c in case_list]
     pg_deltas = [c["measurements"].get("postgresql_delta_bytes", {}).get("value") for c in case_list]
     archive_bytes = [c["measurements"].get("archive_bytes", {}).get("value") for c in case_list]
 
+    total_chars = sum(v for v in text_chars if v is not None)
+    total_utf8 = sum(v for v in text_utf8 if v is not None)
+    utf8_ratio = round(total_utf8 / total_chars, 4) if total_chars else None
+
     ingestion_stats = {
         "documents_per_procurement": compute_percentiles(doc_counts),
-        "extracted_text_bytes_per_procurement": compute_percentiles(text_chars),
+        "extracted_text_chars_per_procurement": compute_percentiles(text_chars),
+        "extracted_text_utf8_bytes_per_procurement": compute_percentiles(text_utf8),
+        "total_extracted_text_chars": total_chars,
+        "total_extracted_text_utf8_bytes": total_utf8,
+        "utf8_bytes_per_character_ratio": utf8_ratio,
         "chunks_per_procurement": compute_percentiles(chunk_counts),
         "embedding_rows_per_procurement": compute_percentiles(emb_rows),
         "archive_bytes_per_procurement": compute_percentiles(archive_bytes),
@@ -172,23 +181,36 @@ def build_aggregate(cohort, baseline, backup_b1, backup_b2, peak_all):
             "B1": {
                 "case_count": backup_b1.get("case_count", 9),
                 "postgresql_dump_bytes": backup_b1.get("postgresql_dump_bytes", 0),
+                "filesystem_archive_bytes": backup_b1.get("filesystem_archive_bytes", 0),
+                "total_backup_bytes": backup_b1.get("total_backup_bytes", 0),
                 "database_source_bytes": backup_b1.get("database_source_bytes", 0),
+                "filesystem_source_bytes": backup_b1.get("filesystem_source_bytes", 0),
                 "unique_live_source_bytes": backup_b1.get("unique_live_source_bytes", 0),
                 "total_source_bytes": backup_b1.get("total_source_bytes", 0),
-                "archive_to_source_ratio": backup_b1.get("archive_to_source_ratio", 0),
+                "database_archive_to_source_ratio": backup_b1.get("database_archive_to_source_ratio", 0),
+                "filesystem_archive_to_source_ratio": backup_b1.get("filesystem_archive_to_source_ratio", 0),
+                "full_backup_archive_to_source_ratio": backup_b1.get("full_backup_archive_to_source_ratio", 0),
                 "compression_factor": backup_b1.get("compression_factor", 0),
             },
             "B2": {
                 "case_count": backup_b2.get("case_count", 18),
                 "postgresql_dump_bytes": backup_b2.get("postgresql_dump_bytes", 0),
+                "filesystem_archive_bytes": backup_b2.get("filesystem_archive_bytes", 0),
+                "total_backup_bytes": backup_b2.get("total_backup_bytes", 0),
                 "database_source_bytes": backup_b2.get("database_source_bytes", 0),
+                "filesystem_source_bytes": backup_b2.get("filesystem_source_bytes", 0),
                 "unique_live_source_bytes": backup_b2.get("unique_live_source_bytes", 0),
                 "total_source_bytes": backup_b2.get("total_source_bytes", 0),
-                "archive_to_source_ratio": backup_b2.get("archive_to_source_ratio", 0),
+                "database_archive_to_source_ratio": backup_b2.get("database_archive_to_source_ratio", 0),
+                "filesystem_archive_to_source_ratio": backup_b2.get("filesystem_archive_to_source_ratio", 0),
+                "full_backup_archive_to_source_ratio": backup_b2.get("full_backup_archive_to_source_ratio", 0),
                 "compression_factor": backup_b2.get("compression_factor", 0),
             },
         },
-        "temporary_peak_measurements": _extract_peak(peak_all) if peak_all else None,
+        "temporary_peak_measurements": {
+            "status": "unavailable",
+            "reason": "Continuous peak sampling would require R8 runtime integration with ingestion pipeline. Cumulative before/after deltas are available in group statistics instead.",
+        },
         "postgresql_reconciliation": _pg_reconciliation(
             baseline, backup_b2, baseline_pg, final_pg
         ),
@@ -198,36 +220,24 @@ def build_aggregate(cohort, baseline, backup_b1, backup_b2, peak_all):
             "LLM: stub (no generation cost measured).",
             "metadata_fidelity: placeholder (truncated field values).",
             "AnalysisRun not available — pipeline subprocess used instead.",
-            "PG database_size includes schema overhead, WAL, autovacuum bloat.",
             "pg_database_size does not shrink after DELETEs.",
-            "Temporary peak measurements are cumulative before/after, not continuous.",
         ],
         "formulas": {
-            "archive_to_source_ratio": "total_backup_bytes / unique_live_source_bytes",
+            "database_archive_to_source_ratio": "postgresql_dump_bytes / database_source_bytes",
+            "filesystem_archive_to_source_ratio": "filesystem_archive_bytes / filesystem_source_bytes",
+            "full_backup_archive_to_source_ratio": "total_backup_bytes / unique_live_source_bytes",
             "compression_factor": "total_source_bytes / total_backup_bytes",
             "coverage_percent": "available_count / count * 100",
             "ingestion_fs_delta_per_case": "filesystem_data_delta_bytes after ingest + chunk + embed",
+            "forecast_backup_compression_ratio": "max(B1.full_backup_archive_to_source_ratio, B2.full_backup_archive_to_source_ratio)",
             "nearest_rank_percentile": "rank = ceil(p/100 * n), index = rank - 1",
             "p50": "nearest_rank(sorted_values, 50)",
             "p75": "nearest_rank(sorted_values, 75)",
             "p90": "nearest_rank(sorted_values, 90)",
+            "utf8_bytes_per_character_ratio": "total_extracted_text_utf8_bytes / total_extracted_text_chars",
         },
     }
     return agg
-
-
-def _extract_peak(peak):
-    if not peak:
-        return None
-    deltas = peak.get("peak_deltas", {})
-    all_d = deltas.get("all", {})
-    return {
-        "total_logical_bytes_peak": all_d.get("peak_logical_bytes"),
-        "total_allocated_bytes_peak": all_d.get("peak_allocated_bytes"),
-        "delta_logical_bytes": all_d.get("peak_delta_logical_bytes"),
-        "delta_allocated_bytes": all_d.get("peak_delta_allocated_bytes"),
-        "limitations": peak.get("limitations", []),
-    }
 
 
 def _pg_reconciliation(baseline, backup_b2, baseline_pg, final_pg):
@@ -237,10 +247,15 @@ def _pg_reconciliation(baseline, backup_b2, baseline_pg, final_pg):
     baseline_rels = baseline.get("relation_sizes", {}) or {}
     b2_rels = backup_b2.get("relation_sizes", {}) or {}
 
-    # Sum relation deltas (only for existing keys in baseline)
+    # Union of all relation keys from baseline and final
+    all_names = set(baseline_rels.keys()) | set(b2_rels.keys())
+
+    total_baseline_bytes = sum(baseline_rels.get(rn, 0) for rn in all_names)
+    total_final_bytes = sum(b2_rels.get(rn, 0) for rn in all_names)
     rel_delta = 0
     keyed_deltas = {}
-    for rname, bsize in baseline_rels.items():
+    for rname in sorted(all_names):
+        bsize = baseline_rels.get(rname, 0)
         fsize = b2_rels.get(rname, 0)
         d = fsize - bsize
         if d != 0:
@@ -251,11 +266,13 @@ def _pg_reconciliation(baseline, backup_b2, baseline_pg, final_pg):
         "pg_database_size_delta_bytes": pg_delta,
         "pg_final_bytes": final_pg,
         "pg_baseline_bytes": baseline_pg,
+        "relation_total_baseline_bytes": total_baseline_bytes,
+        "relation_total_final_bytes": total_final_bytes,
         "relation_total_delta_bytes": rel_delta,
         "relation_deltas_by_table": keyed_deltas,
         "note": (
             "pg_database_size delta includes PostgreSQL block-level allocation, "
-            "WAL overhead, catalog bloat, and unused space from DELETEs. "
+            "catalog bloat, and unused space from DELETEs. "
             "Relation-level deltas are logical bytes and may be smaller."
         ),
     }
@@ -286,9 +303,13 @@ def build_scenario(aggregate, template_path):
 
     # Measured calibration parameters
     ing = aggregate["ingestion_statistics"]
+    b1 = aggregate["backup_measurements"]["B1"]
     b2 = aggregate["backup_measurements"]["B2"]
-    compression = b2.get("archive_to_source_ratio", 1.0)
-    compression_factor = b2.get("compression_factor", 1.0)
+
+    # Forecast compression ratio: max(B1, B2) full_backup_archive_to_source_ratio
+    b1_ratio = b1.get("full_backup_archive_to_source_ratio", 0.1)
+    b2_ratio = b2.get("full_backup_archive_to_source_ratio", 0.1)
+    forecast_compression = min(1.0, max(b1_ratio, b2_ratio))
 
     # Measured: p50/p75/p90
     p50_chunks = ing["chunks_per_procurement"]["p50"] or 0
@@ -307,51 +328,102 @@ def build_scenario(aggregate, template_path):
     p75_docs = ing["documents_per_procurement"]["p75"] or 0
     p90_docs = ing["documents_per_procurement"]["p90"] or 0
 
-    p50_text = ing["extracted_text_bytes_per_procurement"]["p50"] or 0
-    p75_text = ing["extracted_text_bytes_per_procurement"]["p75"] or 0
-    p90_text = ing["extracted_text_bytes_per_procurement"]["p90"] or 0
+    p50_text = ing["extracted_text_chars_per_procurement"]["p50"] or 0
+    p75_text = ing["extracted_text_chars_per_procurement"]["p75"] or 0
+    p90_text = ing["extracted_text_chars_per_procurement"]["p90"] or 0
 
     # Map profiles: pilot=median, commercial_mvp=p75, scaling=p90
     profile_map = {
         "pilot": {
             "documents_per_procurement": p50_docs,
-            "extracted_text_bytes_per_procurement": p50_text,
+            "extracted_text_chars_per_procurement": p50_text,
             "chunks_per_procurement": p50_chunks,
+            "percentile": "p50",
         },
         "commercial_mvp": {
             "documents_per_procurement": p75_docs,
-            "extracted_text_bytes_per_procurement": p75_text,
+            "extracted_text_chars_per_procurement": p75_text,
             "chunks_per_procurement": p75_chunks,
+            "percentile": "p75",
         },
         "scaling": {
             "documents_per_procurement": p90_docs,
-            "extracted_text_bytes_per_procurement": p90_text,
+            "extracted_text_chars_per_procurement": p90_text,
             "chunks_per_procurement": p90_chunks,
+            "percentile": "p90",
         },
     }
-
-    # Apply profile values
-    # Calibrated parameters (override value only, keep source=assumption for forecast compatibility)
-    calibrated_params = [
-        "documents_per_procurement",
-        "extracted_text_bytes_per_procurement",
-        "chunks_per_procurement",
-    ]
 
     if "profiles" in scenario and isinstance(scenario["profiles"], dict):
         for name, profile in scenario["profiles"].items():
             mapped = profile_map.get(name, {})
+            pctl = mapped.pop("percentile", name)
             for k, v in mapped.items():
                 if k in profile and isinstance(profile[k], dict):
                     profile[k]["value"] = v
                     profile[k]["source"] = "assumption"
                     profile[k]["note"] = (
                         "Calibrated from R3/XML metadata ingestion (18-case cohort). "
-                        f"Percentile: {name}. See aggregate notes for full calibration context."
+                        f"Percentile: {pctl} ({name}). "
+                        "See aggregate notes for full calibration context."
                     )
 
-    # Set backup compression ratio: use min(1.0, archive_to_source_ratio)
-    forecast_compression = min(1.0, compression)
+            # Add extracted_text_chars_per_procurement (scenario template has only
+            # extracted_text_bytes_per_procurement; chars replace bytes for accuracy)
+            if "extracted_text_chars_per_procurement" not in profile:
+                profile["extracted_text_chars_per_procurement"] = {
+                    "value": mapped.get("extracted_text_chars_per_procurement", 0),
+                    "source": "assumption",
+                    "note": (
+                        f"Calibrated from R3/XML metadata ingestion (18-case cohort). "
+                        f"Percentile: {pctl} ({name}). Characters (not bytes). "
+                        "UTF-8 overhead ~7.3% for Russian XML data."
+                    ),
+                }
+
+            # Embedding parameters (values and notes)
+            if "vector_dimension" in profile and isinstance(profile["vector_dimension"], dict):
+                profile["vector_dimension"]["value"] = 256
+                profile["vector_dimension"]["source"] = "assumption"
+                profile["vector_dimension"]["note"] = (
+                    "Calibrated from R3/XML metadata ingestion: hashing embeddings (dim=256). "
+                    "Replace with the actual production embedding model dimension."
+                )
+            if "embedding_rows_per_chunk" in profile and isinstance(profile["embedding_rows_per_chunk"], dict):
+                profile["embedding_rows_per_chunk"]["value"] = 1
+                profile["embedding_rows_per_chunk"]["source"] = "assumption"
+                profile["embedding_rows_per_chunk"]["note"] = (
+                    "Calibrated from R3/XML metadata ingestion: 1 embedding row per chunk (hashing). "
+                    "Production models may generate multiple vectors per chunk."
+                )
+            if "vector_bytes_per_component" in profile and isinstance(profile["vector_bytes_per_component"], dict):
+                profile["vector_bytes_per_component"]["value"] = 4
+                profile["vector_bytes_per_component"]["source"] = "assumption"
+                profile["vector_bytes_per_component"]["note"] = (
+                    "float32 per vector component (4 bytes). Standard for embedding models."
+                )
+
+            # Percentile note for calibrated params
+            if "documents_per_procurement" in profile and isinstance(profile["documents_per_procurement"], dict):
+                profile["documents_per_procurement"]["note"] = (
+                    f"Calibrated from R3/XML metadata ingestion (18-case cohort). "
+                    f"Percentile: {pctl} ({name}). "
+                    f"p50=4, p75=4, p90=5 documents per procurement."
+                )
+            if "extracted_text_chars_per_procurement" in profile and isinstance(profile["extracted_text_chars_per_procurement"], dict):
+                profile["extracted_text_chars_per_procurement"]["note"] = (
+                    f"Calibrated from R3/XML metadata ingestion (18-case cohort). "
+                    f"Percentile: {pctl} ({name}). "
+                    f"p50={p50_text}, p75={p75_text}, p90={p90_text} characters per procurement."
+                )
+            if "chunks_per_procurement" in profile and isinstance(profile["chunks_per_procurement"], dict):
+                profile["chunks_per_procurement"]["note"] = (
+                    f"Calibrated from R3/XML metadata ingestion (18-case cohort). "
+                    f"Percentile: {pctl} ({name}). "
+                    f"p50={p50_chunks}, p75={p75_chunks}, p90={p90_chunks} chunks per procurement."
+                )
+
+    # Set backup compression ratio: use max(B1, B2) full_backup_archive_to_source_ratio
     for name, profile in scenario.get("profiles", {}).items():
         if isinstance(profile, dict) and "backup_compression_ratio" in profile:
             br = profile["backup_compression_ratio"]
@@ -359,39 +431,23 @@ def build_scenario(aggregate, template_path):
                 br["value"] = forecast_compression
                 br["source"] = "assumption"
                 br["note"] = (
-                    "Calibrated from B2 backup. Forecast uses "
-                    "min(1.0, archive_to_source_ratio) for conservative estimate."
+                    f"Calibrated from max(B1, B2) full_backup_archive_to_source_ratio "
+                    f"({b1_ratio}, {b2_ratio}). "
+                    f"Forecast uses min(1.0, max(B1, B2)) = {forecast_compression}."
                 )
 
-    # Temporary factor: use compression_factor / forecast_compression
-    observed_factor = round(
-        compression_factor / max(forecast_compression, 0.001), 2
-    )
+    # Temporary factor: keep template values (status=unavailable, use original template defaults)
     for name, profile in scenario.get("profiles", {}).items():
         if isinstance(profile, dict) and "temporary_space_peak_factor" in profile:
             tf = profile["temporary_space_peak_factor"]
             if isinstance(tf, dict):
-                tf["value"] = observed_factor
+                # Keep template values as-is (pilot=1.5, commercial_mvp=1.5, scaling=1.3)
                 tf["source"] = "assumption"
                 tf["note"] = (
-                    "Calibrated from total_source_bytes / total_backup_bytes. "
-                    "Reflects observed temporary storage overhead."
+                    "Temporary peak unavailable (no continuous sampling in R3 metadata ingestion). "
+                    "Template assumption retained. "
+                    "Not calibrated from this measurement run."
                 )
-
-    # Embedding parameters (same for all profiles)
-    emb_params = {
-        "vector_dimension": 256,
-        "embedding_rows_per_chunk": 1,
-        "vector_bytes_per_component": 4,
-    }
-    for name, profile in scenario.get("profiles", {}).items():
-        if isinstance(profile, dict):
-            for pk, pv in emb_params.items():
-                if pk in profile and isinstance(profile[pk], dict):
-                    profile[pk]["value"] = pv
-                    profile[pk]["source"] = "assumption"
-
-    # Business assumption parameters remain unchanged
 
     return scenario, agg_sha256
 
