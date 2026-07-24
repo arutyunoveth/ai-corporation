@@ -94,6 +94,8 @@ def checksums(evidence: Path) -> dict[str,Any]:
 def cleanup_runtime(state: dict[str, Any], evidence: Path) -> dict[str, str]:
     """Best-effort runtime-owned cleanup; no secondary error may stop finalization."""
     failures=state["finalization_failures"]; cleanup=state["cleanup"]
+    for name, default in (("errors", []), ("containers", []), ("networks", []), ("volumes", []), ("container_ids", []), ("network_ids", []), ("volume_ids", []), ("compose_down_returncode", 0), ("container_check_returncode", 0), ("network_check_returncode", 0), ("volume_check_returncode", 0)):
+        cleanup.setdefault(name, default)
     def failed(operation: str, exc: Exception, cleanup_error: bool = False) -> None:
         row={"type":type(exc).__name__,"operation":operation,"message":sanitize(str(exc)),"timestamp":utcnow()}; failures.append(row)
         if cleanup_error: state["cleanup_errors"].append(row)
@@ -132,7 +134,12 @@ def emergency_failed_result(evidence: Path, state: dict[str, Any], exc: BaseExce
     return FinalizationResult("FAILED",2,False,{"valid":False,"emergency":True})
 
 
-def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: set[str] | None = None) -> FinalizationResult:
+def finalize_with_emergency_guard(state: dict[str, Any], evidence: Path, injected_failures: set[str] | None = None, fail_normal_result_rewrite: bool = False) -> FinalizationResult:
+    try: return finalize_evidence(state,evidence,injected_failures,fail_normal_result_rewrite)
+    except BaseException as exc: return emergency_failed_result(evidence,state,exc)
+
+
+def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: set[str] | None = None, fail_normal_result_rewrite: bool = False) -> FinalizationResult:
     """Write, scan and checksum evidence through one fail-closed finalization path."""
     evidence.mkdir(parents=True,exist_ok=True)
     injected_failures = injected_failures or set()
@@ -179,6 +186,7 @@ def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: 
     except Exception as exc: record_failure("rewrite:interrupted-publication-result.json",exc)
     state["stage"]="checksum_validation"; state["operation"]="validate checksums"
     details=checksums(evidence); provisional["sha256sums_validator"]=details
+    if fail_normal_result_rewrite: raise OSError("injected normal result rewrite failure")
     write(evidence/"interrupted-publication-result.json",provisional)
     if failures:
         entries=sorted(p for p in evidence.iterdir() if p.is_file() and p.name!="SHA256SUMS")
@@ -189,16 +197,52 @@ def finalize_evidence(state: dict[str, Any], evidence: Path, injected_failures: 
 
 def self_finalization() -> int:
     root=Path(tempfile.mkdtemp(prefix="r9-finalization-")).resolve()
+    report: dict[str, Any] = {"total_cases":4,"passed_cases":0,"failed_cases":[],"cases":{},"leaked_processes":[]}
     try:
         def state(stage: str, operation: str) -> dict[str,Any]:
             primary={"type":"InjectedWorkflowError","message":"injected workflow failure","traceback":"<traceback-redacted>","stage":stage,"operation":operation,"timestamp":utcnow()}
             payloads={name:{"fixture":name} for name in FILES if name not in {"interrupted-publication-result.json","cleanup.json"}}
             return {"stage":stage,"operation":operation,"primary_failure":primary,"finalization_failures":[],"cleanup_errors":[],"assertions":{"negative_flow":False},"cleanup":{"errors":[]},"payloads":payloads,"temp":None,"process_state":"not_started","compose_state":"not_started","forbidden":[]}
-        before=state("compose_start","before compose startup"); a=finalize_evidence(before,root/"before-compose"); result_a=json.loads((root/"before-compose"/"interrupted-publication-result.json").read_text())
-        write_fail=state("evidence_write","write optional evidence"); b=finalize_evidence(write_fail,root/"write-failure",{"backend-logs.json"}); result_b=json.loads((root/"write-failure"/"interrupted-publication-result.json").read_text())
-        partial=(root/"write-failure"/"SHA256SUMS").read_text().splitlines(); valid=all(digest(root/"write-failure"/line.split("  ",1)[1])==line.split("  ",1)[0] for line in partial)
-        ok=a.exit_code!=0 and b.exit_code!=0 and result_a["primary_failure"]["stage"]=="compose_start" and result_a["process_state"]==result_a["compose_state"]=="not_started" and result_b["primary_failure"]["stage"]=="evidence_write" and result_b["finalization_failures"] and not result_b["evidence_pack_complete"] and valid
-        return 0 if ok else 1
+        def record(name: str, passed: bool, **details: Any) -> None:
+            report["cases"][name]={"passed":passed,**details}
+            if passed: report["passed_cases"]+=1
+            else: report["failed_cases"].append(name)
+
+        missing=state("compose_start","missing cleanup defaults")
+        result=finalize_with_emergency_guard(missing,root/"missing-cleanup-defaults")
+        written=json.loads((root/"missing-cleanup-defaults"/"interrupted-publication-result.json").read_text())
+        defaults=("containers","networks","volumes","container_ids","network_ids","volume_ids","compose_down_returncode","container_check_returncode","network_check_returncode","volume_check_returncode")
+        record("missing_cleanup_defaults",result.exit_code != 0 and written["status"]=="FAILED" and not written["emergency_result"] and not written["final_status_reached"] and written["primary_failure"]==missing["primary_failure"] and all(key in missing["cleanup"] for key in defaults))
+
+        optional=state("evidence_write","optional evidence write")
+        result=finalize_with_emergency_guard(optional,root/"optional-evidence-write",{"backend-logs.json"})
+        directory=root/"optional-evidence-write"; written=json.loads((directory/"interrupted-publication-result.json").read_text()); rows=(directory/"SHA256SUMS").read_text().splitlines()
+        valid_rows=all("  " in line and (directory/line.split("  ",1)[1]).is_file() and digest(directory/line.split("  ",1)[1])==line.split("  ",1)[0] for line in rows)
+        record("optional_evidence_write_failure",result.exit_code != 0 and not (directory/"backend-logs.json").exists() and all((directory/name).is_file() for name in FILES if name not in {"backend-logs.json","interrupted-publication-result.json"}) and (directory/"cleanup.json").is_file() and written["status"]=="FAILED" and not written["emergency_result"] and not written["evidence_pack_complete"] and any(row["operation"]=="write:backend-logs.json" for row in written["finalization_failures"]) and valid_rows)
+
+        emergency=state("result_rewrite","normal result rewrite")
+        result=finalize_with_emergency_guard(emergency,root/"normal-result-rewrite",fail_normal_result_rewrite=True)
+        directory=root/"normal-result-rewrite"; written=json.loads((directory/"interrupted-publication-result.json").read_text())
+        record("normal_result_write_emergency_fallback",result.exit_code==2 and written["status"]=="FAILED" and written["emergency_result"] and not written["final_status_reached"] and written["primary_failure"]==emergency["primary_failure"] and "injected normal result rewrite failure" in written["finalizer_failure"]["message"] and not (directory/"interrupted-publication-result.json.emergency.tmp").exists())
+
+        process=subprocess.Popen([sys.executable,"-c","import time; time.sleep(60)"],text=True)
+        harness_kill_used=False
+        try:
+            subprocess_case=state("process_stop","real subprocess cleanup")
+            lifecycle={"label":"self-test-subprocess","pid":process.pid}
+            subprocess_case["processes"]=[(process,lifecycle)]
+            result=finalize_with_emergency_guard(subprocess_case,root/"real-subprocess-cleanup")
+            directory=root/"real-subprocess-cleanup"; written=json.loads((directory/"interrupted-publication-result.json").read_text())
+            record("real_subprocess_cleanup",result.exit_code != 0 and process.poll() is not None and lifecycle.get("process_exited") is True and lifecycle.get("return_code") is not None and bool(lifecycle.get("termination_method")) and written["status"]=="FAILED" and not written["emergency_result"] and not written["final_status_reached"],harness_kill_used=False)
+        finally:
+            if process.poll() is None:
+                harness_kill_used=True; process.kill(); process.wait(timeout=10)
+                report["leaked_processes"].append("self-test-subprocess")
+                if report["cases"].get("real_subprocess_cleanup",{}).get("passed"): report["passed_cases"]-=1
+                report["cases"]["real_subprocess_cleanup"]={"passed":False,"harness_kill_used":True}
+                if "real_subprocess_cleanup" not in report["failed_cases"]: report["failed_cases"].append("real_subprocess_cleanup")
+        print(json.dumps(report,sort_keys=True))
+        return 0 if report["passed_cases"]==4 and not report["failed_cases"] else 1
     finally: shutil.rmtree(root,ignore_errors=True)
 
 
@@ -378,8 +422,7 @@ def main() -> int:
         scenario_state=scenario_assertions(raw); assertions.update(scenario_state)
         payloads={"fault-matrix-canonical.json":matrix.get("canonical",[]),"fault-matrix-artifact.json":matrix.get("artifact",[]),"canonical-pre-rename.json":raw.get("canonical-pre-rename",{}),"canonical-post-rename.json":raw.get("canonical-post-rename",{}),"artifact-pre-rename.json":raw.get("artifact-pre-rename",{}),"artifact-post-rename-same-bytes.json":raw.get("artifact-post-rename-same-bytes",{}),"artifact-post-rename-conflicting-bytes.json":raw.get("artifact-post-rename-conflicting-bytes",{}),"database-snapshots.json":{k:{s:x["db"] for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"filesystem-snapshots.json":{k:{s:x["fs"] for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"audit-snapshots.json":{k:{s:x["db"].get("audit",[]) for s,x in v.get("snapshots",{}).items()} for k,v in raw.items()},"process-lifecycle.json":lifecycle,"verifier-results.json":verifiers,"commands.log":commands,"backend-logs.json":{}}
         final_state={"stage":stage,"operation":operation,"primary_failure":primary,"finalization_failures":finalization_failures,"cleanup_errors":cleanup_errors,"assertions":assertions,"cleanup":cleanup,"payloads":payloads,"temp":temp,"forbidden":[password,str(temp)],"duration_seconds":time.monotonic()-started,"project":project,"port":port,"process_state":"started","compose_state":"started","processes":[(process,lifecycle.get(next((key for key,value in lifecycle.items() if value.get("pid")==process.pid),""),{})) for process in processes],"compose":compose,"env":env}
-        try: finalized=finalize_evidence(final_state,evidence)
-        except BaseException as exc: finalized=emergency_failed_result(evidence,final_state,exc)
+        finalized=finalize_with_emergency_guard(final_state,evidence)
     print(evidence);return finalized.exit_code
 
 
