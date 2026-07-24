@@ -1,0 +1,41 @@
+{
+  "status_marker": "R9_OPERATIONAL_HARDENING_MERGED_TAGGED_AND_POST_MERGE_VERIFIED",
+  "merge_commit": "58bef2da2342bff1e6f63215ee2697e96fefe6f7",
+  "post_merge_ci": {
+    "run_id": 30126466076,
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "migrations",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "quality",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "r8-acceptance-integration",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "r8-postgres-integration",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "security",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "annotated_tag": {
+    "name": "r9-operational-hardening-2026-07-24",
+    "tag_object": "556cf2d019ea5727057ce39e8819514b469415bf",
+    "peeled_commit": "58bef2da2342bff1e6f63215ee2697e96fefe6f7"
+  }
+}
