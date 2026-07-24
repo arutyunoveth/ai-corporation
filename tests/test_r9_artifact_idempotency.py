@@ -172,3 +172,79 @@ def test_tampered_existing_artifact_replay_fails_closed(
         )
         == 1
     )
+
+
+def test_deterministic_filesystem_only_generation_is_not_rebound(
+    client, session, tmp_path, monkeypatch
+):
+    _customer(session, "R9-ARTIFACT-ORPHAN")
+    _trusted_analysis(monkeypatch, tmp_path, session)
+    config = lambda: type("Config", (), {"data_dir": str(tmp_path)})()
+    monkeypatch.setattr(artifact_publisher, "load_config", config)
+    monkeypatch.setattr(artifacts, "load_config", config)
+    monkeypatch.setattr(canonical_snapshot, "load_config", config)
+    case = _case(client, "R9-ARTIFACT-ORPHAN")
+    base = (
+        f"/api/operator/pilot/customers/R9-ARTIFACT-ORPHAN/"
+        f"cases/{case['id']}/runs"
+    )
+    run = client.post(
+        base, json={}, headers={"Idempotency-Key": "r9-artifact-orphan"}
+    ).json()
+    assert client.post(f"{base}/{run['id']}/complete").status_code == 200
+
+    from src.modules.tender_operator_agent_demo import report_export_service
+
+    candidate = b"%PDF-1.4\nR9-DETERMINISTIC-ORPHAN\n%%EOF\n"
+    calls = {"count": 0}
+
+    def deterministic(_canonical, _title, output):
+        calls["count"] += 1
+        output.write_bytes(candidate)
+
+    monkeypatch.setattr(
+        report_export_service, "_build_pdf_from_canonical", deterministic
+    )
+    endpoint = f"{base}/{run['id']}/artifacts/final-pdf"
+    first = client.post(endpoint)
+    assert first.status_code == 201
+    artifact = session.scalar(select(PilotArtifact))
+    assert artifact is not None
+    pdf_path = tmp_path / artifact.pdf_relative_path
+    manifest_path = tmp_path / artifact.manifest_relative_path
+    baseline = {
+        "pdf_sha256": hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
+        "pdf_mtime_ns": pdf_path.stat().st_mtime_ns,
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "manifest_mtime_ns": manifest_path.stat().st_mtime_ns,
+        "audit_count": session.scalar(
+            select(func.count())
+            .select_from(PilotAuditEvent)
+            .where(PilotAuditEvent.event_type == "artifact_exported")
+        ),
+    }
+    session.delete(artifact)
+    session.commit()
+    assert session.scalar(select(func.count()).select_from(PilotArtifact)) == 0
+
+    retry = client.post(endpoint)
+    assert retry.status_code == 409
+    assert retry.json() == {"detail": "Final PDF generation exists without DB binding"}
+    session.expire_all()
+    assert calls["count"] == 2
+    assert session.scalar(select(func.count()).select_from(PilotArtifact)) == 0
+    assert (
+        session.scalar(
+            select(func.count())
+            .select_from(PilotAuditEvent)
+            .where(PilotAuditEvent.event_type == "artifact_exported")
+        )
+        == baseline["audit_count"]
+    )
+    assert hashlib.sha256(pdf_path.read_bytes()).hexdigest() == baseline["pdf_sha256"]
+    assert pdf_path.stat().st_mtime_ns == baseline["pdf_mtime_ns"]
+    assert (
+        hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        == baseline["manifest_sha256"]
+    )
+    assert manifest_path.stat().st_mtime_ns == baseline["manifest_mtime_ns"]
