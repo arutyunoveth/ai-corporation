@@ -80,7 +80,7 @@ def reconcile_runtime_budget(
     if response.retry_count > limits.max_retries:
         reasons.append("runtime_retry_count_exceeds_limit")
 
-    exceeded = any(reason.endswith("exceed_limit") for reason in reasons)
+    exceeded = any(reason.startswith("runtime_") for reason in reasons)
     return BudgetEvaluation(
         status=BudgetStatus.EXCEEDED if exceeded else BudgetStatus.WITHIN_BUDGET,
         estimated_input_tokens=preflight.estimated_input_tokens,
