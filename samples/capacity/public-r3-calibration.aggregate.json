@@ -16,11 +16,11 @@
       "filesystem_archive_bytes": 610273,
       "filesystem_archive_to_source_ratio": 0.032,
       "filesystem_source_bytes": 19062425,
-      "full_backup_archive_to_source_ratio": 0.1761,
+      "full_backup_archive_to_source_ratio": 0.0572,
+      "notes": "B1 backup from first 9 cohort cases. Full archive ratio = total_backup / total_source = 0.0572. Compression factor = total_source / total_backup = 17.4749. Metadata-only limitation. Aggregate SHA: see scenario file.",
       "postgresql_dump_bytes": 2745932,
       "total_backup_bytes": 3356205,
-      "total_source_bytes": 58649388,
-      "unique_live_source_bytes": 19062425
+      "total_source_bytes": 58649388
     },
     "B2": {
       "case_count": 18,
@@ -30,11 +30,11 @@
       "filesystem_archive_bytes": 3954693,
       "filesystem_archive_to_source_ratio": 0.1104,
       "filesystem_source_bytes": 35810085,
-      "full_backup_archive_to_source_ratio": 0.2336,
+      "full_backup_archive_to_source_ratio": 0.0934,
+      "notes": "B2 backup from all 18 cohort cases. Full archive ratio = total_backup / total_source = 0.0934. Compression factor = total_source / total_backup = 10.7082. Metadata-only limitation. Aggregate SHA: see scenario file.",
       "postgresql_dump_bytes": 4409820,
       "total_backup_bytes": 8364513,
-      "total_source_bytes": 89569208,
-      "unique_live_source_bytes": 35810085
+      "total_source_bytes": 89569208
     }
   },
   "baseline_commit": "9bf0571",
@@ -58,7 +58,8 @@
     "database_archive_to_source_ratio": "postgresql_dump_bytes / database_source_bytes",
     "filesystem_archive_to_source_ratio": "filesystem_archive_bytes / filesystem_source_bytes",
     "forecast_backup_compression_ratio": "max(B1.full_backup_archive_to_source_ratio, B2.full_backup_archive_to_source_ratio)",
-    "full_backup_archive_to_source_ratio": "total_backup_bytes / unique_live_source_bytes",
+    "forecast_ratio_source": "max_observed_full_backup_ratio",
+    "full_backup_archive_to_source_ratio": "total_backup_bytes / total_source_bytes",
     "ingestion_fs_delta_per_case": "filesystem_data_delta_bytes after ingest + chunk + embed",
     "nearest_rank_percentile": "rank = ceil(p/100 * n), index = rank - 1",
     "p50": "nearest_rank(sorted_values, 50)",

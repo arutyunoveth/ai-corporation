@@ -28,6 +28,7 @@ R3/XML metadata ingestion calibration only. No attachments, no full document bod
 |--------|-----|-----|-----|-----|
 | Documents per procurement | 4 | 4 | 5 | 5 |
 | Extracted text chars per procurement | 112,795 | 138,699 | 155,523 | 233,175 |
+| Extracted text UTF-8 bytes per procurement | 121,916 | 144,233 | 162,378 | 244,954 |
 | Chunks per procurement | 832 | 985 | 1,021 | 1,266 |
 | FS delta per procurement (B) | 1,895,971 | 2,214,572 | 2,483,196 | 2,657,169 |
 | PG delta per procurement (B) | 1,611,231 | 1,943,378 | 2,179,107 | 2,367,200 |
@@ -36,28 +37,29 @@ R3/XML metadata ingestion calibration only. No attachments, no full document bod
 - Total extracted chars: 2,186,012
 - Total UTF-8 bytes: 2,346,347
 - Char→byte ratio: **1.073** (7.3% overhead for Russian XML data)
-- `extracted_text_chars_per_procurement` replaces `extracted_text_bytes_per_procurement`.
+The scenario uses `extracted_text_bytes_per_procurement` with UTF-8 encoded byte values (not char counts). The chars-per-procurement statistic remains available in the aggregate for reference.
 
 ### Backup Measurements
 | Metric | B1 (9 cases) | B2 (18 cases) |
 |--------|-------------|---------------|
-| `pg_dump` size | 2.7 MB | 4.4 MB |
+| `pg_dump` size | 2.6 MB | 4.2 MB |
 | Filesystem archive (tar.gz) | 0.6 MB | 3.8 MB |
 | Total backup | 3.2 MB | 8.0 MB |
 | Database source | 37.8 MB | 51.3 MB |
-| Filesystem source | 19.1 MB | 35.8 MB |
+| Filesystem source | 18.2 MB | 34.2 MB |
 | DB archive-to-source ratio | 0.069 | 0.082 |
 | FS archive-to-source ratio | 0.032 | 0.110 |
-| Full backup archive-to-source ratio | 0.176 | 0.234 |
+| Full backup archive-to-source ratio | 0.057 | 0.093 |
 | Compression factor | 17.47 | 10.71 |
 
 **Formulas:**
 - `database_archive_to_source_ratio = postgresql_dump_bytes / database_source_bytes`
 - `filesystem_archive_to_source_ratio = filesystem_archive_bytes / filesystem_source_bytes`
-- `full_backup_archive_to_source_ratio = total_backup_bytes / unique_live_source_bytes`
+- `full_backup_archive_to_source_ratio = total_backup_bytes / total_source_bytes`
 - `compression_factor = total_source_bytes / total_backup_bytes`
 - `forecast_backup_compression_ratio = max(B1.full_backup_archive_to_source_ratio, B2.full_backup_archive_to_source_ratio)`
-- Forecast uses `min(1.0, max(B1, B2))` for conservative backup sizing.
+- `forecast_ratio_source = max_observed_full_backup_ratio`
+- Forecast backup ratio uses `min(1.0, max(B1, B2))` for conservative backup sizing.
 
 ### PostgreSQL Reconciliation
 - `pg_database_size` delta includes PostgreSQL block-level allocation, catalog bloat, and unused space from DELETEs.
@@ -71,9 +73,9 @@ R3/XML metadata ingestion calibration only. No attachments, no full document bod
 
 ## Calibrated Parameters
 - `documents_per_procurement` (p50=4, p75=4, p90=5)
-- `extracted_text_chars_per_procurement` (p50=112,795, p75=138,699, p90=155,523; replaces `extracted_text_bytes_per_procurement`)
+- `extracted_text_bytes_per_procurement` (p50=121,916, p75=144,233, p90=162,378; UTF-8 encoded bytes, not char counts)
 - `chunks_per_procurement` (p50=832, p75=985, p90=1,021)
-- `backup_compression_ratio` (0.234, uses `max(B1, B2).full_backup_archive_to_source_ratio`)
+- `backup_compression_ratio` (0.0934, uses `max(B1, B2).full_backup_archive_to_source_ratio`; B1=0.0572, B2=0.0934)
 - `vector_dimension` (256)
 - `embedding_rows_per_chunk` (1)
 - `temporary_space_peak_factor` (unavailable — template defaults retained: pilot=1.5, commercial_mvp=1.5, scaling=1.3)
@@ -128,5 +130,5 @@ python scripts/capacity/arv_capacity.py forecast \
 
 ## Aggregate SHA-256
 ```
-041f7cab206af6c6a3d737001daa98446ab29a0f255905114576ccbae1098470
+8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58
 ```

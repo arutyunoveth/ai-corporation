@@ -108,16 +108,16 @@ class TestAggregateSchema:
         for bk in ("B1", "B2"):
             b = bm[bk]
             expected_db = round(
-                b["postgresql_dump_bytes"] / max(b["database_source_bytes"], 1), 4
+                b["postgresql_dump_bytes"] / b["database_source_bytes"], 4
             )
             expected_fs = round(
-                b["filesystem_archive_bytes"] / max(b["filesystem_source_bytes"], 1), 4
+                b["filesystem_archive_bytes"] / b["filesystem_source_bytes"], 4
             )
             expected_full = round(
-                b["total_backup_bytes"] / max(b["unique_live_source_bytes"], 1), 4
+                b["total_backup_bytes"] / b["total_source_bytes"], 4
             )
             expected_cf = round(
-                b["total_source_bytes"] / max(b["total_backup_bytes"], 1), 4
+                b["total_source_bytes"] / b["total_backup_bytes"], 4
             )
             assert b["database_archive_to_source_ratio"] == expected_db
             assert b["filesystem_archive_to_source_ratio"] == expected_fs
@@ -146,7 +146,7 @@ class TestAggregateSchema:
         formulas = load_aggregate()["formulas"]
         for k in ("database_archive_to_source_ratio", "filesystem_archive_to_source_ratio",
                    "full_backup_archive_to_source_ratio", "compression_factor",
-                   "forecast_backup_compression_ratio",
+                   "forecast_backup_compression_ratio", "forecast_ratio_source",
                    "utf8_bytes_per_character_ratio",
                    "nearest_rank_percentile", "p50", "p75", "p90"):
             assert k in formulas, f"Missing formula key: {k}"
@@ -243,12 +243,15 @@ class TestScenario:
         for name, profile in sce["profiles"].items():
             for k in ("procurements_per_month", "analysis_runs_per_procurement",
                        "documents_per_procurement", "raw_document_bytes_per_procurement",
-                       "extracted_text_bytes_per_procurement", "extracted_text_chars_per_procurement",
+                       "extracted_text_bytes_per_procurement",
                        "chunks_per_procurement",
                        "backup_compression_ratio", "temporary_space_peak_factor",
                        "vector_dimension", "embedding_rows_per_chunk",
                        "full_backups_retained", "free_space_reserve_percent"):
                 assert k in profile, f"{name} missing {k}"
+            assert "extracted_text_chars_per_procurement" not in profile, (
+                f"{name}: extracted_text_chars_per_procurement should be removed"
+            )
 
     def test_scenario_aggregate_sha(self):
         sce = load_scenario()
@@ -329,15 +332,61 @@ class TestScenario:
             assert "p50=" in cnote, f"{name}: chunks note missing p50"
             assert "p90=" in cnote
 
-    def test_scenario_extracted_text_chars_per_procurement(self):
+    def test_scenario_extracted_text_bytes_use_utf8_percentiles(self):
         sce = load_scenario()
         ing = load_aggregate()["ingestion_statistics"]
-        expected_p50 = ing["extracted_text_chars_per_procurement"]["p50"]
-        expected_p75 = ing["extracted_text_chars_per_procurement"]["p75"]
-        expected_p90 = ing["extracted_text_chars_per_procurement"]["p90"]
-        assert sce["profiles"]["pilot"]["extracted_text_chars_per_procurement"]["value"] == expected_p50
-        assert sce["profiles"]["commercial_mvp"]["extracted_text_chars_per_procurement"]["value"] == expected_p75
-        assert sce["profiles"]["scaling"]["extracted_text_chars_per_procurement"]["value"] == expected_p90
+        utf8k = "extracted_text_utf8_bytes_per_procurement"
+        expected_p50 = ing[utf8k]["p50"]
+        expected_p75 = ing[utf8k]["p75"]
+        expected_p90 = ing[utf8k]["p90"]
+        etbk = "extracted_text_bytes_per_procurement"
+        assert sce["profiles"]["pilot"][etbk]["value"] == expected_p50
+        assert sce["profiles"]["commercial_mvp"][etbk]["value"] == expected_p75
+        assert sce["profiles"]["scaling"][etbk]["value"] == expected_p90
+
+    def test_scenario_extracted_text_bytes_not_stale_mb_values(self):
+        sce = load_scenario()
+        for name in sce["profiles"]:
+            val = sce["profiles"][name]["extracted_text_bytes_per_procurement"]["value"]
+            assert val not in (52428800, 524288000, 5242880000), (
+                f"{name}: extracted_text_bytes_per_procurement still has stale 50/100/500 MB value: {val}"
+            )
+
+    def test_scenario_backup_note_mentions_ratios_and_sha(self):
+        sce = load_scenario()
+        for name in sce["profiles"]:
+            note = sce["profiles"][name]["backup_compression_ratio"]["note"]
+            assert "0.0572" in note, f"{name}: backup note missing B1 value"
+            assert "0.0934" in note, f"{name}: backup note missing B2 value"
+            assert "max(B1, B2)" in note, f"{name}: backup note missing max(B1,B2)"
+            assert "SHA" in note, f"{name}: backup note missing SHA"
+
+    def test_scenario_extracted_text_note_utf8_and_attachments_unavailable(self):
+        sce = load_scenario()
+        for name in sce["profiles"]:
+            note = sce["profiles"][name]["extracted_text_bytes_per_procurement"]["note"]
+            assert "UTF-8" in note, f"{name}: note missing UTF-8"
+            assert "Attachments unavailable" in note, f"{name}: note missing attachments unavailable"
+            note_lower = note.lower()
+            assert "lower-bound" in note_lower, f"{name}: note missing lower-bound"
+
+    def test_scenario_notes_contain_aggregate_sha(self):
+        sce = load_scenario()
+        all_notes = " ".join(sce.get("notes", []))
+        agg = load_aggregate()
+        actual_sha = hashlib.sha256(
+            json.dumps(agg, indent=2, sort_keys=True).encode()
+        ).hexdigest()
+        assert actual_sha in all_notes, "Aggregate SHA-256 not found in scenario notes"
+
+    def test_scenario_notes_contain_calibration_context(self):
+        sce = load_scenario()
+        all_notes = " ".join(sce.get("notes", []))
+        assert "18-case" in all_notes
+        assert "R3" in all_notes
+        assert "XML" in all_notes
+        assert "lower-bound" in all_notes
+        assert "metadata" in all_notes
 
 
 class TestPeakSampler:
@@ -450,12 +499,12 @@ class TestBackupRatios:
             assert b["filesystem_archive_to_source_ratio"] == expected
 
     def test_full_backup_archive_to_source_ratio_definition(self):
-        """full_backup_archive_to_source_ratio = total_backup_bytes / unique_live_source_bytes"""
+        """full_backup_archive_to_source_ratio = total_backup_bytes / total_source_bytes"""
         bm = load_aggregate()["backup_measurements"]
         for bk in ("B1", "B2"):
             b = bm[bk]
             expected = round(
-                b["total_backup_bytes"] / max(b["unique_live_source_bytes"], 1), 4
+                b["total_backup_bytes"] / b["total_source_bytes"], 4
             )
             assert b["full_backup_archive_to_source_ratio"] == expected
 
@@ -475,3 +524,59 @@ class TestBackupRatios:
             b = bm[bk]
             assert b["compression_factor"] >= 1.0, f"{bk}: compression_factor < 1.0"
             assert b["full_backup_archive_to_source_ratio"] > 0
+
+    def test_full_ratio_reciprocal_of_compression_factor(self):
+        bm = load_aggregate()["backup_measurements"]
+        for bk in ("B1", "B2"):
+            b = bm[bk]
+            expected = round(1.0 / b["compression_factor"], 4)
+            assert b["full_backup_archive_to_source_ratio"] == expected, (
+                f"{bk}: full_ratio {b['full_backup_archive_to_source_ratio']} != 1/cf {expected}"
+            )
+
+    def test_b1_ratio_approx_0_0572(self):
+        bm = load_aggregate()["backup_measurements"]
+        assert abs(bm["B1"]["full_backup_archive_to_source_ratio"] - 0.0572) < 0.001
+
+    def test_b2_ratio_approx_0_0934(self):
+        bm = load_aggregate()["backup_measurements"]
+        assert abs(bm["B2"]["full_backup_archive_to_source_ratio"] - 0.0934) < 0.001
+
+    def test_forecast_ratio_formula_string(self):
+        agg = load_aggregate()
+        formulas = agg["formulas"]
+        assert formulas["forecast_ratio_source"] == "max_observed_full_backup_ratio"
+        assert "max(B1.full_backup_archive_to_source_ratio" in formulas["forecast_backup_compression_ratio"]
+
+    def test_scenario_backup_ratio_matches_max_observed(self):
+        sce = load_scenario()
+        agg = load_aggregate()
+        b1r = agg["backup_measurements"]["B1"]["full_backup_archive_to_source_ratio"]
+        b2r = agg["backup_measurements"]["B2"]["full_backup_archive_to_source_ratio"]
+        expected = min(1.0, max(b1r, b2r))
+        for name in sce["profiles"]:
+            actual = sce["profiles"][name]["backup_compression_ratio"]["value"]
+            assert actual == expected, f"{name}: backup ratio {actual} != {expected}"
+
+    def test_no_unique_live_source_bytes_in_backup(self):
+        bm = load_aggregate()["backup_measurements"]
+        for bk in ("B1", "B2"):
+            assert "unique_live_source_bytes" not in bm[bk], f"{bk}: unique_live_source_bytes should not exist"
+
+    def test_backup_notes_present(self):
+        bm = load_aggregate()["backup_measurements"]
+        for bk in ("B1", "B2"):
+            note = bm[bk].get("notes", "")
+            assert len(note) > 0, f"{bk}: notes missing"
+            assert "ratio" in note.lower(), f"{bk}: notes missing ratio description"
+
+    def test_b1_b2_source_positive(self):
+        bm = load_aggregate()["backup_measurements"]
+        for bk in ("B1", "B2"):
+            b = bm[bk]
+            assert b["database_source_bytes"] > 0
+            assert b["postgresql_dump_bytes"] > 0
+            assert b["filesystem_source_bytes"] > 0
+            assert b["filesystem_archive_bytes"] > 0
+            assert b["total_source_bytes"] == b["database_source_bytes"] + b["filesystem_source_bytes"]
+            assert b["total_backup_bytes"] == b["postgresql_dump_bytes"] + b["filesystem_archive_bytes"]

@@ -1,7 +1,7 @@
 {
   "note": "This file contains example assumptions for capacity forecasting. All values are marked source=assumption and do not represent actual Arvectum production data. Replace with measured or derived values before using for procurement decisions.",
   "notes": [
-    "Aggregate SHA-256: 041f7cab206af6c6a3d737001daa98446ab29a0f255905114576ccbae1098470",
+    "Aggregate SHA-256: 8b1a1fd6d0ed994da8b8af04930951d58ba7a1d7b6ef88d256f08e143b527b58",
     "Calibrated from 18-case R3/XML metadata ingestion cohort. Attachments unavailable, placeholder metadata, hashing embeddings, stub LLM. This is a lower-bound estimate. Not a production capacity guarantee."
   ],
   "profiles": {
@@ -12,12 +12,12 @@
         "value": 5
       },
       "backup_compression_ratio": {
-        "note": "Calibrated from max(B1, B2) full_backup_archive_to_source_ratio (0.1761, 0.2336). Forecast uses min(1.0, max(B1, B2)) = 0.2336.",
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
-        "value": 0.2336
+        "value": 0.0934
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=832, p75=985, p90=1021 chunks per procurement.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
         "value": 985
       },
@@ -33,7 +33,7 @@
       },
       "description": "Commercial MVP with moderate procurement volume and automated analysis",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=4, p75=4, p90=5 documents per procurement.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
         "value": 4
       },
@@ -43,14 +43,9 @@
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "100 MB extracted text per procurement",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
-        "value": 104857600
-      },
-      "extracted_text_chars_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p75 (commercial_mvp). p50=112795, p75=138699, p90=155523 characters per procurement.",
-        "source": "assumption",
-        "value": 138699
+        "value": 144233
       },
       "free_space_reserve_percent": {
         "note": "Minimum free space reserve percentage",
@@ -110,12 +105,12 @@
         "value": 3
       },
       "backup_compression_ratio": {
-        "note": "Calibrated from max(B1, B2) full_backup_archive_to_source_ratio (0.1761, 0.2336). Forecast uses min(1.0, max(B1, B2)) = 0.2336.",
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
-        "value": 0.2336
+        "value": 0.0934
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=832, p75=985, p90=1021 chunks per procurement.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
         "value": 832
       },
@@ -131,7 +126,7 @@
       },
       "description": "Controlled pilot with limited procurements and manual analysis runs",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=4, p75=4, p90=5 documents per procurement.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
         "value": 4
       },
@@ -141,14 +136,9 @@
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "50 MB extracted text per procurement",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
-        "value": 52428800
-      },
-      "extracted_text_chars_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p50 (pilot). p50=112795, p75=138699, p90=155523 characters per procurement.",
-        "source": "assumption",
-        "value": 112795
+        "value": 121916
       },
       "free_space_reserve_percent": {
         "note": "Minimum free space reserve percentage",
@@ -208,12 +198,12 @@
         "value": 10
       },
       "backup_compression_ratio": {
-        "note": "Calibrated from max(B1, B2) full_backup_archive_to_source_ratio (0.1761, 0.2336). Forecast uses min(1.0, max(B1, B2)) = 0.2336.",
+        "note": "B1 full ratio: 0.0572. B2 full ratio: 0.0934. Selected max(B1, B2) = 0.0934. Formula: compressed full backup / full live source (total_backup_bytes / total_source_bytes). Metadata-only limitation applies. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
-        "value": 0.2336
+        "value": 0.0934
       },
       "chunks_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=832, p75=985, p90=1021 chunks per procurement.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=832, p75=985, p90=1021 chunks per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
         "value": 1021
       },
@@ -229,7 +219,7 @@
       },
       "description": "Full-scale production with high procurement volume",
       "documents_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=4, p75=4, p90=5 documents per procurement.",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=4, p75=4, p90=5 documents per procurement. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
         "value": 5
       },
@@ -239,14 +229,9 @@
         "value": 1
       },
       "extracted_text_bytes_per_procurement": {
-        "note": "500 MB extracted text per procurement",
+        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). UTF-8 encoded bytes. p50=121916, p75=144233, p90=162378 bytes per procurement. Attachments unavailable. Lower-bound estimate. Aggregate SHA: 8b1a1fd6d0ed994da8b8af0...",
         "source": "assumption",
-        "value": 524288000
-      },
-      "extracted_text_chars_per_procurement": {
-        "note": "Calibrated from R3/XML metadata ingestion (18-case cohort). Percentile: p90 (scaling). p50=112795, p75=138699, p90=155523 characters per procurement.",
-        "source": "assumption",
-        "value": 155523
+        "value": 162378
       },
       "free_space_reserve_percent": {
         "note": "Minimum free space reserve percentage",
